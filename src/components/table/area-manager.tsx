@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { Badge } from '@/components/ui/badge';
 import { createServiceAreaAction, archiveServiceAreaAction } from '@/server/actions/table';
 
@@ -20,6 +22,8 @@ interface AreaManagerProps {
 }
 
 export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [areas, setAreas] = useState<ServiceAreaItem[]>(initialAreas);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -48,7 +52,9 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
       setName('');
       setCode('');
       setDescription('');
-      window.location.reload();
+      startTransition(() => {
+        router.refresh();
+      });
     }
     setLoading(false);
   };
@@ -58,6 +64,9 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
     const res = await archiveServiceAreaAction(areaId);
     if (res.success) {
       setAreas(areas.filter((a) => a.id !== areaId));
+      startTransition(() => {
+        router.refresh();
+      });
     } else {
       alert(res.message);
     }
@@ -102,9 +111,9 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
             onChange={(e) => setDescription(e.target.value)}
             className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
           />
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Creating...' : '+ Create Area'}
-          </Button>
+          <LoadingButton type="submit" loading={loading || isPending} loadingText="Creating Area...">
+            + Create Area
+          </LoadingButton>
         </form>
       </Card>
 

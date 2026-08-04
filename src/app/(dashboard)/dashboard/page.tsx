@@ -17,47 +17,54 @@ export default async function DashboardOverviewPage() {
   const { business, defaultBranch } = context;
   const supabase = await createClient();
 
-  // 1. Fetch Stats from Real Database
-  const { count: categoriesCount } = await supabase
-    .from('menu_categories')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', business.id)
-    .eq('branch_id', defaultBranch.id)
-    .is('deleted_at', null);
+  // 1. Fetch Stats & Audit Logs Concurrently with Promise.all
+  const [
+    { count: categoriesCount },
+    { count: itemsCount },
+    { count: areasCount },
+    { data: tablesData },
+    { data: auditLogs },
+  ] = await Promise.all([
+    supabase
+      .from('menu_categories')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', business.id)
+      .eq('branch_id', defaultBranch.id)
+      .is('deleted_at', null),
 
-  const { count: itemsCount } = await supabase
-    .from('menu_items')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', business.id)
-    .eq('branch_id', defaultBranch.id)
-    .is('deleted_at', null);
+    supabase
+      .from('menu_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', business.id)
+      .eq('branch_id', defaultBranch.id)
+      .is('deleted_at', null),
 
-  const { count: areasCount } = await supabase
-    .from('service_areas')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', business.id)
-    .eq('branch_id', defaultBranch.id)
-    .is('deleted_at', null);
+    supabase
+      .from('service_areas')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', business.id)
+      .eq('branch_id', defaultBranch.id)
+      .is('deleted_at', null),
 
-  const { data: tablesData } = await supabase
-    .from('dining_tables')
-    .select('id, status')
-    .eq('business_id', business.id)
-    .eq('branch_id', defaultBranch.id)
-    .is('deleted_at', null);
+    supabase
+      .from('dining_tables')
+      .select('id, status')
+      .eq('business_id', business.id)
+      .eq('branch_id', defaultBranch.id)
+      .is('deleted_at', null),
+
+    supabase
+      .from('audit_logs')
+      .select('id, action, target_type, created_at')
+      .eq('business_id', business.id)
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ]);
 
   const tablesCount = tablesData?.length || 0;
   const availableTablesCount = tablesData?.filter((t) => t.status === 'available').length || 0;
   const occupiedTablesCount = tablesData?.filter((t) => t.status === 'occupied').length || 0;
   const reservedTablesCount = tablesData?.filter((t) => t.status === 'reserved').length || 0;
-
-  // 2. Fetch Recent Audit Logs
-  const { data: auditLogs } = await supabase
-    .from('audit_logs')
-    .select('id, action, target_type, created_at')
-    .eq('business_id', business.id)
-    .order('created_at', { ascending: false })
-    .limit(5);
 
   // 3. Dynamic Checklist Completion Logic
   const menuComplete = (categoriesCount || 0) > 0 && (itemsCount || 0) > 0;

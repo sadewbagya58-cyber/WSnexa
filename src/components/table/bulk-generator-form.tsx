@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { bulkCreateDiningTablesAction } from '@/server/actions/table';
 import { TableShape } from '@/types/database.types';
 
@@ -178,9 +178,13 @@ export const BulkGeneratorForm: React.FC<BulkGeneratorFormProps> = ({ areas }) =
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="submit" disabled={loading}>
-          {loading ? 'Generating Tables...' : `⚡ Bulk Generate ${formData.count} Tables`}
-        </Button>
+        <LoadingButton
+          type="submit"
+          loading={loading}
+          loadingText={`Generating ${formData.count} Tables...`}
+        >
+          ⚡ Bulk Generate {formData.count} Tables
+        </LoadingButton>
       </div>
     </form>
   );

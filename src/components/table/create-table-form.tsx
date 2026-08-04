@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { createDiningTableAction } from '@/server/actions/table';
 import { TableStatus, TableShape } from '@/types/database.types';
 
@@ -166,9 +166,9 @@ export const CreateTableForm: React.FC<CreateTableFormProps> = ({ areas }) => {
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
-        <Button type="submit" disabled={loading}>
-          {loading ? 'Creating Table...' : 'Save & Add Table'}
-        </Button>
+        <LoadingButton type="submit" loading={loading} loadingText="Creating Table...">
+          Save & Add Table
+        </LoadingButton>
       </div>
     </form>
   );

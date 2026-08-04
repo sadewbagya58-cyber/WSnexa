@@ -101,15 +101,27 @@ async function runTableVerification() {
   ];
 
   for (const [userId, role] of roles) {
-    const { data: member } = await adminClient
+    let { data: member } = await adminClient
       .from('business_memberships')
       .insert({ business_id: bizAId, user_id: userId, role, membership_status: 'active' })
       .select()
-      .single();
+      .maybeSingle();
 
-    await adminClient
-      .from('branch_assignments')
-      .insert({ business_membership_id: member!.id, branch_id: branchAId, is_primary: true });
+    if (!member) {
+      const { data: existing } = await adminClient
+        .from('business_memberships')
+        .select('*')
+        .eq('business_id', bizAId)
+        .eq('user_id', userId)
+        .single();
+      member = existing;
+    }
+
+    if (member) {
+      await adminClient
+        .from('branch_assignments')
+        .insert({ business_membership_id: member.id, branch_id: branchAId, is_primary: true });
+    }
   }
 
   // 1. Owner A creates Service Area A (Main Hall)

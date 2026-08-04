@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { RouteProgress } from '@/components/ui/route-progress';
+import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
 
 interface DashboardShellProps {
   businessName: string;
@@ -151,6 +152,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
       <RouteProgress />
+      <RoutePrefetcher />
 
       {/* Top Bar Header */}
       <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-4 backdrop-blur sm:px-6">

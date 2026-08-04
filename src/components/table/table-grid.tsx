@@ -1,0 +1,181 @@
+'use client';
+
+import React, { useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  updateDiningTableStatusAction,
+  archiveDiningTableAction,
+} from '@/server/actions/table';
+import { TableStatus } from '@/types/database.types';
+
+interface DiningTableItem {
+  id: string;
+  name: string;
+  code: string;
+  table_number: number | null;
+  capacity: number;
+  status: TableStatus;
+  shape: string | null;
+  is_active: boolean;
+  service_area_id: string;
+  service_areas: { name: string; code: string } | { name: string; code: string }[] | null;
+}
+
+interface TableGridProps {
+  initialTables: DiningTableItem[];
+  areas: { id: string; name: string; code: string }[];
+}
+
+export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) => {
+  const [tables, setTables] = useState<DiningTableItem[]>(initialTables);
+  const [selectedArea, setSelectedArea] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  const handleStatusChange = async (tableId: string, status: TableStatus) => {
+    const res = await updateDiningTableStatusAction(tableId, status);
+    if (res.success) {
+      setTables(
+        tables.map((t) => (t.id === tableId ? { ...t, status } : t))
+      );
+    } else {
+      alert(res.message);
+    }
+  };
+
+  const handleArchive = async (tableId: string) => {
+    if (!confirm('Are you sure you want to archive this dining table?')) return;
+    const res = await archiveDiningTableAction(tableId);
+    if (res.success) {
+      setTables(tables.filter((t) => t.id !== tableId));
+    } else {
+      alert(res.message);
+    }
+  };
+
+  const filteredTables = tables.filter((t) => {
+    const matchesArea = selectedArea === 'all' || t.service_area_id === selectedArea;
+    const matchesStatus = selectedStatus === 'all' || t.status === selectedStatus;
+    const matchesSearch =
+      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.table_number && t.table_number.toString().includes(searchTerm));
+    return matchesArea && matchesStatus && matchesSearch;
+  });
+
+  const getStatusBadge = (status: TableStatus) => {
+    switch (status) {
+      case 'available':
+        return <Badge variant="success">Available</Badge>;
+      case 'occupied':
+        return <Badge variant="destructive">Occupied</Badge>;
+      case 'reserved':
+        return <Badge variant="warning">Reserved</Badge>;
+      case 'cleaning':
+        return <Badge variant="neutral">Cleaning</Badge>;
+      case 'unavailable':
+        return <Badge variant="neutral">Unavailable</Badge>;
+      default:
+        return <Badge variant="neutral">{status}</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Filters Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <input
+          type="text"
+          placeholder="Search by table name, code, or number..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full sm:w-72 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+        />
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <select
+            value={selectedArea}
+            onChange={(e) => setSelectedArea(e.target.value)}
+            className="w-full sm:w-48 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+          >
+            <option value="all">All Service Areas</option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.code})
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="w-full sm:w-40 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+          >
+            <option value="all">All Statuses</option>
+            <option value="available">Available</option>
+            <option value="occupied">Occupied</option>
+            <option value="reserved">Reserved</option>
+            <option value="cleaning">Cleaning</option>
+            <option value="unavailable">Unavailable</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Tables Grid */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {filteredTables.map((table) => (
+          <Card key={table.id} className="flex flex-col justify-between p-5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-zinc-950">{table.name}</span>
+                {getStatusBadge(table.status)}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                <Badge variant="neutral">{table.code}</Badge>
+                <span>
+                  Area:{' '}
+                  {Array.isArray(table.service_areas)
+                    ? table.service_areas[0]?.name
+                    : table.service_areas?.name || 'Unassigned'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-xs text-zinc-600">
+                <span>Capacity: 👥 {table.capacity} guests</span>
+                <span className="capitalize">Shape: {table.shape || 'Square'}</span>
+              </div>
+            </div>
+
+            {/* Status Change Selector & Archive */}
+            <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
+              <select
+                value={table.status}
+                onChange={(e) => handleStatusChange(table.id, e.target.value as TableStatus)}
+                className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900 focus:outline-none"
+              >
+                <option value="available">Set Available</option>
+                <option value="occupied">Set Occupied</option>
+                <option value="reserved">Set Reserved</option>
+                <option value="cleaning">Set Cleaning</option>
+                <option value="unavailable">Set Unavailable</option>
+              </select>
+
+              <Button variant="outline" size="sm" onClick={() => handleArchive(table.id)}>
+                Archive
+              </Button>
+            </div>
+          </Card>
+        ))}
+
+        {filteredTables.length === 0 && (
+          <Card className="col-span-full p-8 text-center text-xs text-zinc-500">
+            No dining tables found matching your filters.
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};

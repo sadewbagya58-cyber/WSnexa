@@ -12,7 +12,8 @@
     "verify:tenant": "tsx scripts/verify-tenant.ts",
     "verify:onboarding": "tsx scripts/verify-onboarding.ts",
     "verify:menu": "tsx scripts/verify-menu.ts",
-    "verify:modifiers": "tsx scripts/verify-modifiers.ts"
+    "verify:modifiers": "tsx scripts/verify-modifiers.ts",
+    "verify:tables": "tsx scripts/verify-tables.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

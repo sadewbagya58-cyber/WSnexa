@@ -18,6 +18,8 @@ export type BranchStatus = 'active' | 'inactive' | 'archived';
 export type MembershipStatus = 'invited' | 'active' | 'suspended' | 'revoked';
 export type MenuItemAvailability = 'available' | 'out_of_stock' | 'hidden';
 export type ModifierSelectionType = 'single' | 'multiple';
+export type TableStatus = 'available' | 'occupied' | 'reserved' | 'cleaning' | 'unavailable';
+export type TableShape = 'square' | 'rectangle' | 'round' | 'other';
 
 export interface Database {
   public: {
@@ -491,6 +493,146 @@ export interface Database {
           }
         ];
       };
+      service_areas: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          name: string;
+          code: string;
+          description: string | null;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          name: string;
+          code: string;
+          description?: string | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          name?: string;
+          code?: string;
+          description?: string | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "service_areas_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "service_areas_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      dining_tables: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          service_area_id: string;
+          name: string;
+          code: string;
+          table_number: number | null;
+          capacity: number;
+          status: TableStatus;
+          shape: TableShape | null;
+          position_x: number | null;
+          position_y: number | null;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          service_area_id: string;
+          name: string;
+          code: string;
+          table_number?: number | null;
+          capacity?: number;
+          status?: TableStatus;
+          shape?: TableShape | null;
+          position_x?: number | null;
+          position_y?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          service_area_id?: string;
+          name?: string;
+          code?: string;
+          table_number?: number | null;
+          capacity?: number;
+          status?: TableStatus;
+          shape?: TableShape | null;
+          position_x?: number | null;
+          position_y?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dining_tables_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_tables_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dining_tables_service_area_id_fkey";
+            columns: ["service_area_id"];
+            referencedRelation: "service_areas";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       menu_item_images: {
         Row: {
           id: string;
@@ -782,6 +924,19 @@ export interface Database {
         };
         Returns: Json;
       };
+      bulk_create_dining_tables: {
+        Args: {
+          p_business_id: string;
+          p_branch_id: string;
+          p_service_area_id: string;
+          p_prefix: string;
+          p_start_number: number;
+          p_count: number;
+          p_capacity: number;
+          p_shape?: TableShape;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       user_role: UserRole;
@@ -790,6 +945,8 @@ export interface Database {
       membership_status: MembershipStatus;
       menu_item_availability: MenuItemAvailability;
       modifier_selection_type: ModifierSelectionType;
+      table_status: TableStatus;
+      table_shape: TableShape;
     };
   };
 }

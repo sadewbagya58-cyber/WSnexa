@@ -48,6 +48,7 @@ Apply migrations to your Supabase PostgreSQL database:
 # 4. supabase/migrations/20260804071500_create_menu_schema.sql
 # 5. supabase/migrations/20260804072200_update_menu_storage_policies.sql
 # 6. supabase/migrations/20260804073500_create_modifier_schema.sql
+# 7. supabase/migrations/20260804151500_create_table_schema.sql
 ```
 
 ### 4. Run Development Server
@@ -72,6 +73,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run verify:onboarding` | Runs automated business onboarding verification suite |
 | `npm run verify:menu` | Runs automated menu catalog management verification suite |
 | `npm run verify:modifiers` | Runs automated menu modifiers & item customization verification suite |
+| `npm run verify:tables` | Runs automated dining table & service area management verification suite |
 | `npm run build` | Builds production bundle |
 | `npm run start` | Runs production server |
 
@@ -87,6 +89,7 @@ src/
         business/      # Active Business Profile Placeholder
         branches/      # Active Branch Management Placeholder
         team/          # Team & Memberships Placeholder
+        tables/        # Dining Table & Service Area Management (Areas, Single, Bulk)
         menu/          # Menu Catalog Management (Categories, Items, Modifiers)
           items/
             [item_id]/
@@ -101,19 +104,20 @@ src/
     tenant/            # Business Creation Modal
     onboarding/        # Onboarding Wizard Steps & Form Components
     menu/              # Category Manager, Item List, Item Forms, & Modifier Manager
+    table/             # Area Manager, Table Grid, Create Table Form, & Bulk Generator Form
   features/            # Business Domain Feature Modules
   lib/                 # Core Utilities, Supabase Clients, Validation
     supabase/          # Browser, Server, & Admin Supabase Clients
     tenant/            # Slug Generator & Context Utilities
     utils/             # Money Parser & Utility Helpers
-    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding, Menu, & Modifiers
+    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding, Menu, Modifiers, & Tables
   server/              # Server Actions & Server-Only Services
-    actions/           # Server Actions (auth, tenant, onboarding, menu, modifier)
+    actions/           # Server Actions (auth, tenant, onboarding, menu, modifier, table)
     tenant/            # Server Tenant Resolver & Security Guards
   types/               # Global TypeScript Types & Database Interfaces
   styles/              # Global CSS & Tailwind Design Tokens
 docs/                  # Architecture, Security & Development Standard Docs
-supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding, menu, modifiers)
+supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding, menu, modifiers, tables)
 ```
 
 ---

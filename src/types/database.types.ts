@@ -17,6 +17,7 @@ export type BusinessStatus = 'active' | 'suspended' | 'archived';
 export type BranchStatus = 'active' | 'inactive' | 'archived';
 export type MembershipStatus = 'invited' | 'active' | 'suspended' | 'revoked';
 export type MenuItemAvailability = 'available' | 'out_of_stock' | 'hidden';
+export type ModifierSelectionType = 'single' | 'multiple';
 
 export interface Database {
   public: {
@@ -350,6 +351,146 @@ export interface Database {
           }
         ];
       };
+      modifier_groups: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          menu_item_id: string;
+          name: string;
+          description: string | null;
+          selection_type: ModifierSelectionType;
+          is_required: boolean;
+          min_selections: number;
+          max_selections: number | null;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          menu_item_id: string;
+          name: string;
+          description?: string | null;
+          selection_type?: ModifierSelectionType;
+          is_required?: boolean;
+          min_selections?: number;
+          max_selections?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          menu_item_id?: string;
+          name?: string;
+          description?: string | null;
+          selection_type?: ModifierSelectionType;
+          is_required?: boolean;
+          min_selections?: number;
+          max_selections?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "modifier_groups_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "modifier_groups_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "modifier_groups_menu_item_id_fkey";
+            columns: ["menu_item_id"];
+            referencedRelation: "menu_items";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      modifier_options: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          modifier_group_id: string;
+          name: string;
+          additional_price_cents: number;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          modifier_group_id: string;
+          name: string;
+          additional_price_cents?: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          modifier_group_id?: string;
+          name?: string;
+          additional_price_cents?: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "modifier_options_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "modifier_options_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "modifier_options_modifier_group_id_fkey";
+            columns: ["modifier_group_id"];
+            referencedRelation: "modifier_groups";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       menu_item_images: {
         Row: {
           id: string;
@@ -648,6 +789,7 @@ export interface Database {
       branch_status: BranchStatus;
       membership_status: MembershipStatus;
       menu_item_availability: MenuItemAvailability;
+      modifier_selection_type: ModifierSelectionType;
     };
   };
 }

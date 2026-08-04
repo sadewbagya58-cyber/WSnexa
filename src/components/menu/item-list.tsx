@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -173,7 +174,12 @@ export const ItemList: React.FC<ItemListProps> = ({ initialItems, categories }) 
                 </button>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/dashboard/menu/items/${item.id}/modifiers`}>
+                  <Button variant="outline" size="sm">
+                    Modifiers
+                  </Button>
+                </Link>
                 <Button
                   variant="outline"
                   size="sm"

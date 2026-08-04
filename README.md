@@ -46,6 +46,8 @@ Apply migrations to your Supabase PostgreSQL database:
 # 2. supabase/migrations/20260803171500_create_multi_tenant_schema.sql
 # 3. supabase/migrations/20260804070000_create_onboarding_schema.sql
 # 4. supabase/migrations/20260804071500_create_menu_schema.sql
+# 5. supabase/migrations/20260804072200_update_menu_storage_policies.sql
+# 6. supabase/migrations/20260804073500_create_modifier_schema.sql
 ```
 
 ### 4. Run Development Server
@@ -69,6 +71,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run verify:tenant` | Runs automated multi-tenant isolation & security integration suite |
 | `npm run verify:onboarding` | Runs automated business onboarding verification suite |
 | `npm run verify:menu` | Runs automated menu catalog management verification suite |
+| `npm run verify:modifiers` | Runs automated menu modifiers & item customization verification suite |
 | `npm run build` | Builds production bundle |
 | `npm run start` | Runs production server |
 
@@ -84,7 +87,10 @@ src/
         business/      # Active Business Profile Placeholder
         branches/      # Active Branch Management Placeholder
         team/          # Team & Memberships Placeholder
-        menu/          # Menu Catalog Management (Categories, Items, New Item)
+        menu/          # Menu Catalog Management (Categories, Items, Modifiers)
+          items/
+            [item_id]/
+              modifiers/ # Menu Item Customization (Groups & Options)
     onboarding/        # 5-Step Business Owner Onboarding Wizard
     api/               # Server-Side API Handlers (logout, webhooks)
     auth/callback/     # Supabase Auth Code Exchange Route Handler
@@ -94,20 +100,20 @@ src/
     profile/           # Personal Profile Management Form
     tenant/            # Business Creation Modal
     onboarding/        # Onboarding Wizard Steps & Form Components
-    menu/              # Category Manager, Item List, & Item Forms
+    menu/              # Category Manager, Item List, Item Forms, & Modifier Manager
   features/            # Business Domain Feature Modules
   lib/                 # Core Utilities, Supabase Clients, Validation
     supabase/          # Browser, Server, & Admin Supabase Clients
     tenant/            # Slug Generator & Context Utilities
-    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding, Menu & Env
-    utils/             # Shared Helper Utilities
+    utils/             # Money Parser & Utility Helpers
+    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding, Menu, & Modifiers
   server/              # Server Actions & Server-Only Services
-    actions/           # Server Actions (auth, tenant, onboarding, menu)
+    actions/           # Server Actions (auth, tenant, onboarding, menu, modifier)
     tenant/            # Server Tenant Resolver & Security Guards
   types/               # Global TypeScript Types & Database Interfaces
   styles/              # Global CSS & Tailwind Design Tokens
 docs/                  # Architecture, Security & Development Standard Docs
-supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding, menu schema)
+supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding, menu, modifiers)
 ```
 
 ---
@@ -115,6 +121,6 @@ supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding
 ## 🛡️ Key Security & Architecture Policies
 
 1. **Supabase Auth SSR:** Secure cookie-based authentication managed by `@supabase/ssr` and Next.js middleware.
-2. **Integer Price Storage:** Prices stored in smallest currency unit (`price_cents` BIGINT) to prevent floating-point calculation errors.
-3. **Database Integrity Triggers:** `trg_check_menu_item_category` trigger guarantees category-branch alignment and prevents adding items to archived categories.
-4. **Multi-Tenant Security:** RLS policies restrict menu mutations strictly to `business_owner` or assigned `branch_manager`.
+2. **Integer Price Storage:** Prices stored in smallest currency unit (`price_cents` BIGINT) via deterministic money parsing.
+3. **Modifier Integrity Triggers:** `trg_check_modifier_group_item` and `trg_check_modifier_option_group` enforce item-branch alignment and block additions under archived items/groups.
+4. **Multi-Tenant Security:** RLS policies restrict modifier mutations strictly to `business_owner` or assigned `branch_manager`.

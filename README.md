@@ -45,6 +45,7 @@ Apply migrations to your Supabase PostgreSQL database:
 # 1. supabase/migrations/20260803163000_create_user_profiles.sql
 # 2. supabase/migrations/20260803171500_create_multi_tenant_schema.sql
 # 3. supabase/migrations/20260804070000_create_onboarding_schema.sql
+# 4. supabase/migrations/20260804071500_create_menu_schema.sql
 ```
 
 ### 4. Run Development Server
@@ -67,6 +68,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run verify:auth` | Runs automated authentication & security verification suite |
 | `npm run verify:tenant` | Runs automated multi-tenant isolation & security integration suite |
 | `npm run verify:onboarding` | Runs automated business onboarding verification suite |
+| `npm run verify:menu` | Runs automated menu catalog management verification suite |
 | `npm run build` | Builds production bundle |
 | `npm run start` | Runs production server |
 
@@ -82,13 +84,8 @@ src/
         business/      # Active Business Profile Placeholder
         branches/      # Active Branch Management Placeholder
         team/          # Team & Memberships Placeholder
+        menu/          # Menu Catalog Management (Categories, Items, New Item)
     onboarding/        # 5-Step Business Owner Onboarding Wizard
-      business/        # Step 1: Business Profile
-      location/        # Step 2: Contact & Location
-      hours/           # Step 3: Operating Hours
-      branding/        # Step 4: Logo Upload
-      review/          # Step 5: Review & Submit
-      complete/        # Completion Celebration & Redirect
     api/               # Server-Side API Handlers (logout, webhooks)
     auth/callback/     # Supabase Auth Code Exchange Route Handler
   components/          # Reusable React UI & Layout Components
@@ -97,19 +94,20 @@ src/
     profile/           # Personal Profile Management Form
     tenant/            # Business Creation Modal
     onboarding/        # Onboarding Wizard Steps & Form Components
+    menu/              # Category Manager, Item List, & Item Forms
   features/            # Business Domain Feature Modules
   lib/                 # Core Utilities, Supabase Clients, Validation
     supabase/          # Browser, Server, & Admin Supabase Clients
     tenant/            # Slug Generator & Context Utilities
-    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding & Env
+    validation/        # Zod Schemas for Auth, Profile, Tenant, Onboarding, Menu & Env
     utils/             # Shared Helper Utilities
   server/              # Server Actions & Server-Only Services
-    actions/           # Server Actions (auth, tenant, onboarding)
+    actions/           # Server Actions (auth, tenant, onboarding, menu)
     tenant/            # Server Tenant Resolver & Security Guards
   types/               # Global TypeScript Types & Database Interfaces
   styles/              # Global CSS & Tailwind Design Tokens
 docs/                  # Architecture, Security & Development Standard Docs
-supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding RPC & RLS)
+supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding, menu schema)
 ```
 
 ---
@@ -117,6 +115,6 @@ supabase/              # Migrations (user_profiles, multi-tenant DDL, onboarding
 ## 🛡️ Key Security & Architecture Policies
 
 1. **Supabase Auth SSR:** Secure cookie-based authentication managed by `@supabase/ssr` and Next.js middleware.
-2. **Atomic Onboarding RPC:** Business onboarding executes atomically via PostgreSQL RPC `complete_business_onboarding`.
-3. **Multi-Tenant Security:** All tenant data access strictly enforces Row Level Security (RLS).
-4. **Draft Persistence:** Onboarding progress draft stored server-side per user token.
+2. **Integer Price Storage:** Prices stored in smallest currency unit (`price_cents` BIGINT) to prevent floating-point calculation errors.
+3. **Database Integrity Triggers:** `trg_check_menu_item_category` trigger guarantees category-branch alignment and prevents adding items to archived categories.
+4. **Multi-Tenant Security:** RLS policies restrict menu mutations strictly to `business_owner` or assigned `branch_manager`.

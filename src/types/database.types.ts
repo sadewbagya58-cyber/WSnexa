@@ -16,6 +16,7 @@ export type UserRole =
 export type BusinessStatus = 'active' | 'suspended' | 'archived';
 export type BranchStatus = 'active' | 'inactive' | 'archived';
 export type MembershipStatus = 'invited' | 'active' | 'suspended' | 'revoked';
+export type MenuItemAvailability = 'available' | 'out_of_stock' | 'hidden';
 
 export interface Database {
   public: {
@@ -199,6 +200,195 @@ export interface Database {
             foreignKeyName: "branches_business_id_fkey";
             columns: ["business_id"];
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      menu_categories: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          image_url: string | null;
+          display_order: number;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          image_url?: string | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          image_url?: string | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_categories_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_categories_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      menu_items: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          category_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          price_cents: number;
+          currency: string;
+          preparation_time_minutes: number | null;
+          is_active: boolean;
+          availability_status: MenuItemAvailability;
+          is_featured: boolean;
+          display_order: number;
+          primary_image_url: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          category_id: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          price_cents: number;
+          currency?: string;
+          preparation_time_minutes?: number | null;
+          is_active?: boolean;
+          availability_status?: MenuItemAvailability;
+          is_featured?: boolean;
+          display_order?: number;
+          primary_image_url?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          category_id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          price_cents?: number;
+          currency?: string;
+          preparation_time_minutes?: number | null;
+          is_active?: boolean;
+          availability_status?: MenuItemAvailability;
+          is_featured?: boolean;
+          display_order?: number;
+          primary_image_url?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_business_id_fkey";
+            columns: ["business_id"];
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_items_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "menu_items_category_id_fkey";
+            columns: ["category_id"];
+            referencedRelation: "menu_categories";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      menu_item_images: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          menu_item_id: string;
+          storage_path: string;
+          alt_text: string | null;
+          display_order: number;
+          created_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          menu_item_id: string;
+          storage_path: string;
+          alt_text?: string | null;
+          display_order?: number;
+          created_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          menu_item_id?: string;
+          storage_path?: string;
+          alt_text?: string | null;
+          display_order?: number;
+          created_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_images_menu_item_id_fkey";
+            columns: ["menu_item_id"];
+            referencedRelation: "menu_items";
             referencedColumns: ["id"];
           }
         ];
@@ -457,6 +647,7 @@ export interface Database {
       business_status: BusinessStatus;
       branch_status: BranchStatus;
       membership_status: MembershipStatus;
+      menu_item_availability: MenuItemAvailability;
     };
   };
 }

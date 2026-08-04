@@ -5,33 +5,29 @@ import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuItemsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect('/login');
-
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/onboarding');
+  if (!tenantContext || !tenantContext.defaultBranch) redirect('/login');
 
-  // Fetch categories for filtering
-  const { data: categories } = await supabase
-    .from('menu_categories')
-    .select('id, name')
-    .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
-    .is('deleted_at', null)
-    .order('display_order', { ascending: true });
+  const supabase = await createClient();
 
-  // Fetch items
-  const { data: items } = await supabase
-    .from('menu_items')
-    .select('*, menu_categories(name)')
-    .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
-    .is('deleted_at', null)
-    .order('display_order', { ascending: true });
+  // Fetch categories and items concurrently
+  const [{ data: categories }, { data: items }] = await Promise.all([
+    supabase
+      .from('menu_categories')
+      .select('id, name')
+      .eq('business_id', tenantContext.business.id)
+      .eq('branch_id', tenantContext.defaultBranch.id)
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true }),
+
+    supabase
+      .from('menu_items')
+      .select('*, menu_categories(name)')
+      .eq('business_id', tenantContext.business.id)
+      .eq('branch_id', tenantContext.defaultBranch.id)
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true }),
+  ]);
 
   return (
     <div className="space-y-6">

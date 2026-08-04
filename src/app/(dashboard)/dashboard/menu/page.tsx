@@ -7,28 +7,25 @@ import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect('/login');
-
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext) redirect('/onboarding');
+  if (!tenantContext) redirect('/login');
 
-  // Fetch counts
-  const { count: categoryCount } = await supabase
-    .from('menu_categories')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', tenantContext.business.id)
-    .is('deleted_at', null);
+  const supabase = await createClient();
 
-  const { count: itemCount } = await supabase
-    .from('menu_items')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', tenantContext.business.id)
-    .is('deleted_at', null);
+  // Fetch counts concurrently
+  const [{ count: categoryCount }, { count: itemCount }] = await Promise.all([
+    supabase
+      .from('menu_categories')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', tenantContext.business.id)
+      .is('deleted_at', null),
+
+    supabase
+      .from('menu_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', tenantContext.business.id)
+      .is('deleted_at', null),
+  ]);
 
   return (
     <div className="space-y-6">

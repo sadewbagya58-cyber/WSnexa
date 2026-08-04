@@ -1,6 +1,14 @@
 export * from './database.types';
 
 export interface ActiveTenantContext {
+  user: {
+    id: string;
+    email: string;
+  };
+  profile: {
+    firstName: string;
+    lastName: string | null;
+  } | null;
   business: {
     id: string;
     name: string;

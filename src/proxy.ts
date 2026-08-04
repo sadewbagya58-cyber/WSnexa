@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { startTimer, stopTimer, logPerformanceMetric } from '@/lib/performance/logger';
 
 export async function proxy(request: NextRequest) {
+  const startTime = startTimer();
+  const pathname = request.nextUrl.pathname;
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -30,11 +34,12 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  const authStart = startTimer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const authDuration = stopTimer(authStart);
 
-  const pathname = request.nextUrl.pathname;
   const isDashboardRoute = pathname.startsWith('/dashboard');
   const isOnboardingRoute = pathname.startsWith('/onboarding');
   const isAuthRoute =
@@ -47,45 +52,22 @@ export async function proxy(request: NextRequest) {
   if (!user && (isDashboardRoute || isOnboardingRoute)) {
     const redirectUrl = new URL('/login', request.url);
     redirectUrl.searchParams.set('redirectTo', pathname);
+    logPerformanceMetric('PROXY_REDIRECT_UNAUTH', pathname, stopTimer(startTime));
     return NextResponse.redirect(redirectUrl);
   }
 
-  // 2. Authenticated User Guards
-  if (user) {
-    // Check memberships count
-    const { data: memberships } = await supabase
-      .from('business_memberships')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('membership_status', 'active');
-
-    const hasBusiness = memberships && memberships.length > 0;
-
-    // Check profile onboarding status
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('onboarding_status')
-      .eq('id', user.id)
-      .single();
-
-    const isCompleted = profile?.onboarding_status === 'completed' || hasBusiness;
-
-    if (isAuthRoute) {
-      const redirectUrl = new URL(isCompleted ? '/dashboard' : '/onboarding', request.url);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    if (isOnboardingRoute && isCompleted && !pathname.endsWith('/complete')) {
-      const redirectUrl = new URL('/dashboard', request.url);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    if (isDashboardRoute && !isCompleted) {
-      const redirectUrl = new URL('/onboarding', request.url);
-      return NextResponse.redirect(redirectUrl);
-    }
+  // 2. Authenticated User Guards for Auth Pages
+  if (user && isAuthRoute) {
+    const redirectUrl = new URL('/dashboard', request.url);
+    logPerformanceMetric('PROXY_REDIRECT_AUTH', pathname, stopTimer(startTime));
+    return NextResponse.redirect(redirectUrl);
   }
 
+  const proxyDuration = stopTimer(startTime);
+  logPerformanceMetric('PROXY_EXECUTION', pathname, proxyDuration, { authDuration });
+
+  // Pass Server Timing Header
+  response.headers.set('Server-Timing', `proxy;dur=${proxyDuration}, auth;dur=${authDuration}`);
   return response;
 }
 

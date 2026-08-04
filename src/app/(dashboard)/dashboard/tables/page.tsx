@@ -13,23 +13,24 @@ export default async function TablesDashboardPage() {
 
   const supabase = await createClient();
 
-  // Fetch active service areas
-  const { data: areas } = await supabase
-    .from('service_areas')
-    .select('id, name, code')
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
-    .is('deleted_at', null)
-    .order('display_order', { ascending: true });
+  // Fetch active service areas and dining tables concurrently
+  const [{ data: areas }, { data: tables }] = await Promise.all([
+    supabase
+      .from('service_areas')
+      .select('id, name, code')
+      .eq('business_id', context.business.id)
+      .eq('branch_id', context.defaultBranch.id)
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true }),
 
-  // Fetch active dining tables
-  const { data: tables } = await supabase
-    .from('dining_tables')
-    .select('id, name, code, table_number, capacity, status, shape, is_active, service_area_id, service_areas(name, code)')
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
-    .is('deleted_at', null)
-    .order('display_order', { ascending: true });
+    supabase
+      .from('dining_tables')
+      .select('id, name, code, table_number, capacity, status, shape, is_active, service_area_id, service_areas(name, code)')
+      .eq('business_id', context.business.id)
+      .eq('branch_id', context.defaultBranch.id)
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true }),
+  ]);
 
   return (
     <div className="space-y-6">

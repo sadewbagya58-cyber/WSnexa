@@ -1,6 +1,8 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { ActiveTenantContext } from '@/types';
+import { startTimer, stopTimer, logPerformanceMetric } from '@/lib/performance/logger';
 
 export const ACTIVE_BUSINESS_COOKIE = 'wsnexa_active_business';
 
@@ -77,77 +79,108 @@ export async function requireBusinessRole(businessId: string, allowedRoles: stri
 
 /**
  * Resolves active tenant context for current server request.
+ * Deduplicated per-request via React cache().
  */
-export async function resolveActiveBusinessContext(): Promise<ActiveTenantContext | null> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return null;
+export const resolveActiveBusinessContext = cache(
+  async (): Promise<ActiveTenantContext | null> => {
+    const startTime = startTimer();
+    const user = await getCurrentUser();
+    if (!user) {
+      return null;
+    }
+
+    const supabase = await createClient();
+
+    // Concurrently fetch memberships & profile in 1 parallel batch
+    const [{ data: memberships }, { data: profile }] = await Promise.all([
+      supabase
+        .from('business_memberships')
+        .select('*, businesses(*)')
+        .eq('user_id', user.id)
+        .eq('membership_status', 'active'),
+      supabase
+        .from('user_profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single(),
+    ]);
+
+    if (!memberships || memberships.length === 0) {
+      return null;
+    }
+
+    const cookieStore = await cookies();
+    const requestedBusinessId = cookieStore.get(ACTIVE_BUSINESS_COOKIE)?.value;
+
+    let activeMembership = memberships.find(
+      (m) => m.business_id === requestedBusinessId
+    );
+
+    if (!activeMembership) {
+      activeMembership = memberships[0];
+    }
+
+    const business = activeMembership.businesses as unknown as {
+      id: string;
+      name: string;
+      slug: string;
+      business_type: string;
+      country_code: string;
+      default_currency: string;
+      timezone: string;
+      status: string;
+    };
+
+    if (!business) {
+      return null;
+    }
+
+    // Fetch default branch
+    const { data: defaultBranch } = await supabase
+      .from('branches')
+      .select('*')
+      .eq('business_id', business.id)
+      .eq('is_default', true)
+      .single();
+
+    const duration = stopTimer(startTime);
+    logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email || '',
+      },
+      profile: profile
+        ? {
+            firstName: profile.first_name || '',
+            lastName: profile.last_name || null,
+          }
+        : null,
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        businessType: business.business_type,
+        countryCode: business.country_code,
+        defaultCurrency: business.default_currency,
+        timezone: business.timezone,
+        status: business.status,
+      },
+      defaultBranch: defaultBranch
+        ? {
+            id: defaultBranch.id,
+            name: defaultBranch.name,
+            code: defaultBranch.code,
+            timezone: defaultBranch.timezone,
+            isDefault: defaultBranch.is_default,
+          }
+        : null,
+      membership: {
+        id: activeMembership.id,
+        role: activeMembership.role,
+        status: activeMembership.membership_status,
+      },
+    };
   }
-
-  const memberships = await getUserBusinesses(user.id);
-  if (memberships.length === 0) {
-    return null;
-  }
-
-  const cookieStore = await cookies();
-  const requestedBusinessId = cookieStore.get(ACTIVE_BUSINESS_COOKIE)?.value;
-
-  // Find target membership matching cookie or fallback to first membership
-  let activeMembership = memberships.find(
-    (m) => m.business_id === requestedBusinessId
-  );
-
-  if (!activeMembership) {
-    activeMembership = memberships[0];
-  }
-
-  const business = activeMembership.businesses as unknown as {
-    id: string;
-    name: string;
-    slug: string;
-    business_type: string;
-    country_code: string;
-    default_currency: string;
-    timezone: string;
-    status: string;
-  };
-  if (!business) {
-    return null;
-  }
-
-  // Fetch default branch for this business
-  const supabase = await createClient();
-  const { data: defaultBranch } = await supabase
-    .from('branches')
-    .select('*')
-    .eq('business_id', business.id)
-    .eq('is_default', true)
-    .single();
-
-  return {
-    business: {
-      id: business.id,
-      name: business.name,
-      slug: business.slug,
-      businessType: business.business_type,
-      countryCode: business.country_code,
-      defaultCurrency: business.default_currency,
-      timezone: business.timezone,
-      status: business.status,
-    },
-    defaultBranch: defaultBranch
-      ? {
-          id: defaultBranch.id,
-          name: defaultBranch.name,
-          code: defaultBranch.code,
-          timezone: defaultBranch.timezone,
-          isDefault: defaultBranch.is_default,
-        }
-      : null,
-    membership: {
-      id: activeMembership.id,
-      role: activeMembership.role,
-      status: activeMembership.membership_status,
-    },
-  };
-}
+);

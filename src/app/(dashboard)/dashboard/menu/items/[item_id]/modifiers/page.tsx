@@ -1,10 +1,9 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Badge } from '@/components/ui/badge';
 import { ModifierManager } from '@/components/menu/modifier-manager';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { formatMinorUnitsToDecimal } from '@/lib/utils/money';
+import { PageHeader } from '@/components/ui/page-header';
 
 interface PageProps {
   params: Promise<{ item_id: string }>;
@@ -55,36 +54,23 @@ export default async function MenuItemModifiersPage({ params }: PageProps) {
   }));
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Item Customization
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            Modifiers for &quot;{menuItem.name}&quot;
-          </h1>
-          <p className="text-xs text-zinc-500">
-            Base Price: {menuItem.currency} {formatMinorUnitsToDecimal(menuItem.price_cents)} | Category:{' '}
-            {menuItem.menu_categories?.name || 'Uncategorized'}
-          </p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`Modifiers for "${menuItem.name}"`}
+        description={`Base Price: ${menuItem.currency} ${formatMinorUnitsToDecimal(menuItem.price_cents)} • Category: ${menuItem.menu_categories?.name || 'Uncategorized'}`}
+        breadcrumbs={[
+          { label: 'Menu Catalog', href: '/dashboard/menu' },
+          { label: 'Menu Items', href: '/dashboard/menu/items' },
+          { label: 'Modifiers' },
+        ]}
+        backHref="/dashboard/menu/items"
+      />
 
-        <Link
-          href="/dashboard/menu/items"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-950"
-        >
-          ← Back to Menu Items
-        </Link>
-      </div>
-
-      <div className="mt-8">
-        <ModifierManager
-          menuItemId={menuItem.id}
-          currency={menuItem.currency}
-          initialGroups={activeGroups as unknown as Parameters<typeof ModifierManager>[0]['initialGroups']}
-        />
-      </div>
+      <ModifierManager
+        menuItemId={menuItem.id}
+        currency={menuItem.currency}
+        initialGroups={activeGroups as unknown as Parameters<typeof ModifierManager>[0]['initialGroups']}
+      />
     </div>
   );
 }

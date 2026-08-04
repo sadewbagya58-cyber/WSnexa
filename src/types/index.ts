@@ -15,6 +15,7 @@ export interface ActiveTenantContext {
     id: string;
     name: string;
     code: string;
+    timezone: string;
     isDefault: boolean;
   } | null;
   membership: {

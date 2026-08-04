@@ -1,193 +1,262 @@
+import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ProfileEditor } from '@/components/profile/profile-editor';
-import { CreateBusinessModal } from '@/components/tenant/create-business-modal';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { signOutAction } from '@/server/actions/auth';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+export default async function DashboardOverviewPage() {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.defaultBranch) {
     redirect('/login');
   }
 
-  // Resolve active tenant context
-  const tenantContext = await resolveActiveBusinessContext();
+  const { business, defaultBranch } = context;
+  const supabase = await createClient();
 
-  // Fetch profile row
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  // 1. Fetch Stats from Real Database
+  const { count: categoriesCount } = await supabase
+    .from('menu_categories')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', business.id)
+    .eq('branch_id', defaultBranch.id)
+    .is('deleted_at', null);
 
-  const firstName = profile?.first_name || user.user_metadata?.first_name || 'User';
-  const lastName = profile?.last_name || user.user_metadata?.last_name || null;
+  const { count: itemsCount } = await supabase
+    .from('menu_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', business.id)
+    .eq('branch_id', defaultBranch.id)
+    .is('deleted_at', null);
+
+  const { count: areasCount } = await supabase
+    .from('service_areas')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', business.id)
+    .eq('branch_id', defaultBranch.id)
+    .is('deleted_at', null);
+
+  const { data: tablesData } = await supabase
+    .from('dining_tables')
+    .select('id, status')
+    .eq('business_id', business.id)
+    .eq('branch_id', defaultBranch.id)
+    .is('deleted_at', null);
+
+  const tablesCount = tablesData?.length || 0;
+  const availableTablesCount = tablesData?.filter((t) => t.status === 'available').length || 0;
+  const occupiedTablesCount = tablesData?.filter((t) => t.status === 'occupied').length || 0;
+  const reservedTablesCount = tablesData?.filter((t) => t.status === 'reserved').length || 0;
+
+  // 2. Fetch Recent Audit Logs
+  const { data: auditLogs } = await supabase
+    .from('audit_logs')
+    .select('id, action, target_type, created_at')
+    .eq('business_id', business.id)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  // 3. Dynamic Checklist Completion Logic
+  const menuComplete = (categoriesCount || 0) > 0 && (itemsCount || 0) > 0;
+  const tablesComplete = (areasCount || 0) > 0 && tablesCount > 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Top Header Navigation */}
-      <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Badge variant="success" className="mb-1">
-              Onboarding Completed
-            </Badge>
-            {tenantContext && (
-              <Badge variant="neutral" className="mb-1">
-                Role: {tenantContext.membership.role}
-              </Badge>
-            )}
+    <div className="space-y-8">
+      {/* Page Header */}
+      <PageHeader
+        title={`Welcome to ${business.name}`}
+        description={`Active Branch: ${defaultBranch.name} • Timezone: ${defaultBranch.timezone}`}
+        primaryAction={{
+          label: '+ Add Table',
+          href: '/dashboard/tables/new',
+        }}
+        secondaryAction={{
+          label: '+ Add Menu Item',
+          href: '/dashboard/menu/items',
+        }}
+      />
+
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Categories</span>
+            <Badge variant="neutral">Catalog</Badge>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            {tenantContext ? tenantContext.business.name : `Welcome, ${firstName}`}
-          </h1>
-          <p className="text-xs text-zinc-500">
-            {tenantContext
-              ? `Active Branch: ${tenantContext.defaultBranch?.name || 'Default Branch'} (${tenantContext.defaultBranch?.code || 'MAIN'})`
-              : 'No business assigned yet.'}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <CreateBusinessModal />
-          <form action={signOutAction}>
-            <Button variant="outline" size="sm" type="submit">
-              Sign Out
-            </Button>
-          </form>
-        </div>
-      </div>
-
-      {/* Sub Navigation Bar */}
-      <div className="mt-4 flex border-b border-zinc-200">
-        <Link
-          href="/dashboard"
-          className="border-b-2 border-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-950"
-        >
-          Overview
-        </Link>
-        <Link
-          href="/dashboard/business"
-          className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-950"
-        >
-          Business Profile
-        </Link>
-        <Link
-          href="/dashboard/branches"
-          className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-950"
-        >
-          Branches
-        </Link>
-        <Link
-          href="/dashboard/team"
-          className="border-b-2 border-transparent px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-950"
-        >
-          Team & Memberships
-        </Link>
-      </div>
-
-      {/* Active Business Summary Cards */}
-      {tenantContext ? (
-        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <Card className="p-6">
-            <h3 className="text-sm font-semibold text-zinc-500">Active Business</h3>
-            <p className="mt-2 text-xl font-bold text-zinc-950">{tenantContext.business.name}</p>
-            <p className="mt-1 text-xs text-zinc-400">Slug: {tenantContext.business.slug}</p>
-          </Card>
-
-          <Card className="p-6">
-            <h3 className="text-sm font-semibold text-zinc-500">Default Branch</h3>
-            <p className="mt-2 text-xl font-bold text-zinc-950">
-              {tenantContext.defaultBranch?.name || 'Main Branch'}
-            </p>
-            <p className="mt-1 text-xs text-zinc-400">
-              Code: {tenantContext.defaultBranch?.code || 'MAIN'}
-            </p>
-          </Card>
-
-          <Card className="p-6">
-            <h3 className="text-sm font-semibold text-zinc-500">Your Membership Role</h3>
-            <p className="mt-2 text-xl font-bold text-zinc-950">
-              {tenantContext.membership.role}
-            </p>
-            <p className="mt-1 text-xs text-zinc-400">Status: {tenantContext.membership.status}</p>
-          </Card>
-        </div>
-      ) : (
-        <Card className="mt-8 p-8 text-center">
-          <h3 className="text-lg font-bold text-zinc-900">No Business Created Yet</h3>
-          <p className="mt-2 text-sm text-zinc-500">
-            Complete onboarding to create your first hospitality business.
-          </p>
+          <p className="mt-2 text-3xl font-extrabold text-zinc-950">{categoriesCount || 0}</p>
+          <Link href="/dashboard/menu/categories" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
+            Manage Categories →
+          </Link>
         </Card>
-      )}
 
-      {/* Setup Checklist Placeholder */}
-      <div className="mt-8">
-        <Card className="p-6">
-          <h2 className="text-base font-semibold text-zinc-950">Setup Checklist</h2>
-          <p className="mt-1 text-xs text-zinc-500">Track your business configuration progress.</p>
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Menu Items</span>
+            <Badge variant="neutral">Active</Badge>
+          </div>
+          <p className="mt-2 text-3xl font-extrabold text-zinc-950">{itemsCount || 0}</p>
+          <Link href="/dashboard/menu/items" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
+            Manage Items →
+          </Link>
+        </Card>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <span className="text-xs font-bold text-emerald-800">✅ Business Profile</span>
-              <p className="mt-1 text-xs text-emerald-700">Completed during onboarding</p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
-              <span className="text-xs font-bold text-zinc-700">⬜ Add Menu Items</span>
-              <p className="mt-1 text-[11px] text-zinc-400">Phase 5 (Coming Soon)</p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
-              <span className="text-xs font-bold text-zinc-700">⬜ Setup Dining Tables</span>
-              <p className="mt-1 text-[11px] text-zinc-400">Phase 7 (Coming Soon)</p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
-              <span className="text-xs font-bold text-zinc-700">⬜ Generate QR Codes</span>
-              <p className="mt-1 text-[11px] text-zinc-400">Phase 8 (Coming Soon)</p>
-            </div>
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Service Areas</span>
+            <Badge variant="neutral">Floors</Badge>
+          </div>
+          <p className="mt-2 text-3xl font-extrabold text-zinc-950">{areasCount || 0}</p>
+          <Link href="/dashboard/tables/areas" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
+            Manage Service Areas →
+          </Link>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Dining Tables</span>
+            <Badge variant="success">{availableTablesCount} Free</Badge>
+          </div>
+          <p className="mt-2 text-3xl font-extrabold text-zinc-950">{tablesCount}</p>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
+            <span>🔴 {occupiedTablesCount} Occupied</span>
+            <span>🟡 {reservedTablesCount} Reserved</span>
           </div>
         </Card>
       </div>
 
-      {/* Personal Profile Settings */}
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="space-y-4 p-6">
-          <h2 className="text-base font-semibold text-zinc-950">User Account</h2>
-          <dl className="space-y-3 text-xs">
-            <div>
-              <dt className="font-medium text-zinc-500">User ID</dt>
-              <dd className="font-mono text-zinc-800 break-all">{user.id}</dd>
+      {/* Setup Progress & Quick Actions Grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Setup Progress Checklist (2 Columns) */}
+        <Card className="p-6 lg:col-span-2 space-y-4">
+          <div>
+            <h2 className="text-base font-bold text-zinc-950">Hospitality Setup Progress</h2>
+            <p className="text-xs text-zinc-500">Complete these core modules to prepare your venue for service.</p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Step 1: Business Profile */}
+            <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">✓</span>
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-950">Business Profile & Default Branch</h3>
+                  <p className="text-[11px] text-zinc-500">{business.name} setup completed during onboarding.</p>
+                </div>
+              </div>
+              <Link href="/dashboard/business">
+                <Button variant="outline" size="sm">View Profile</Button>
+              </Link>
             </div>
-            <div>
-              <dt className="font-medium text-zinc-500">Email</dt>
-              <dd className="text-zinc-800">{user.email}</dd>
+
+            {/* Step 2: Menu Setup */}
+            <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4">
+              <div className="flex items-center gap-3">
+                {menuComplete ? (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">✓</span>
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800">!</span>
+                )}
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-950">Menu Catalog & Items</h3>
+                  <p className="text-[11px] text-zinc-500">
+                    {menuComplete ? `${categoriesCount} categories and ${itemsCount} items active.` : 'Create categories and menu items.'}
+                  </p>
+                </div>
+              </div>
+              <Link href="/dashboard/menu">
+                <Button variant={menuComplete ? 'outline' : 'primary'} size="sm">
+                  {menuComplete ? 'Manage Menu' : 'Setup Menu'}
+                </Button>
+              </Link>
             </div>
-          </dl>
+
+            {/* Step 3: Dining Tables */}
+            <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4">
+              <div className="flex items-center gap-3">
+                {tablesComplete ? (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">✓</span>
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-800">!</span>
+                )}
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-950">Service Areas & Dining Tables</h3>
+                  <p className="text-[11px] text-zinc-500">
+                    {tablesComplete ? `${areasCount} areas and ${tablesCount} dining tables configured.` : 'Define service areas and generate dining tables.'}
+                  </p>
+                </div>
+              </div>
+              <Link href="/dashboard/tables">
+                <Button variant={tablesComplete ? 'outline' : 'primary'} size="sm">
+                  {tablesComplete ? 'Manage Tables' : 'Setup Tables'}
+                </Button>
+              </Link>
+            </div>
+
+            {/* Step 4: QR Codes & Customer Menu (Coming Soon) */}
+            <div className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 p-4 opacity-75">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-zinc-600">4</span>
+                <div>
+                  <h3 className="text-xs font-bold text-zinc-950">Table QR Codes & Guest Ordering</h3>
+                  <p className="text-[11px] text-zinc-500">Generate QR stickers for contactless ordering (Phase 8).</p>
+                </div>
+              </div>
+              <Badge variant="neutral">Coming Soon</Badge>
+            </div>
+          </div>
         </Card>
 
-        <Card className="p-6 lg:col-span-2">
-          <h2 className="mb-4 text-base font-semibold text-zinc-950">
-            Personal Profile Settings
-          </h2>
-          <ProfileEditor
-            initialProfile={{
-              firstName: firstName,
-              lastName: lastName,
-              phone: profile?.phone || null,
-              avatarUrl: profile?.avatar_url || null,
-              preferredLanguage: profile?.preferred_language || 'en',
-            }}
-          />
-        </Card>
+        {/* Quick Actions & Recent Activity Column */}
+        <div className="space-y-6">
+          {/* Quick Action Shortcuts */}
+          <Card className="p-6 space-y-3">
+            <h2 className="text-base font-bold text-zinc-950">Quick Actions</h2>
+            <div className="flex flex-col gap-2">
+              <Link href="/dashboard/tables/bulk">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  ⚡ Bulk Generate Tables
+                </Button>
+              </Link>
+              <Link href="/dashboard/tables/areas">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  📁 Create Service Area
+                </Button>
+              </Link>
+              <Link href="/dashboard/menu/categories">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  🏷️ Add Category
+                </Button>
+              </Link>
+              <Link href="/dashboard/menu/items">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  🍔 Add Menu Item
+                </Button>
+              </Link>
+            </div>
+          </Card>
+
+          {/* Audit Activity */}
+          <Card className="p-6 space-y-3">
+            <h2 className="text-base font-bold text-zinc-950">Recent System Activity</h2>
+            <div className="space-y-2">
+              {auditLogs && auditLogs.length > 0 ? (
+                auditLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between border-b border-zinc-100 pb-2 text-xs">
+                    <span className="font-mono text-[11px] text-zinc-800">{log.action}</span>
+                    <span className="text-[10px] text-zinc-400">
+                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-zinc-500">No recent activity recorded.</p>
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

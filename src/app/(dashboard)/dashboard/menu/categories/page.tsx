@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Badge } from '@/components/ui/badge';
 import { CategoryManager } from '@/components/menu/category-manager';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuCategoriesPage() {
   const supabase = await createClient();
@@ -25,24 +24,15 @@ export default async function MenuCategoriesPage() {
     .order('display_order', { ascending: true });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-5">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Category Management
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            Menu Categories
-          </h1>
-        </div>
-        <Link href="/dashboard/menu" className="text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-          ← Back to Menu Hub
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Menu Categories"
+        description={`Organize food, beverage, and item categories for ${tenantContext.defaultBranch.name}.`}
+        breadcrumbs={[{ label: 'Menu Catalog', href: '/dashboard/menu' }, { label: 'Categories' }]}
+        backHref="/dashboard/menu"
+      />
 
-      <div className="mt-8">
-        <CategoryManager initialCategories={categories || []} />
-      </div>
+      <CategoryManager initialCategories={categories || []} />
     </div>
   );
 }

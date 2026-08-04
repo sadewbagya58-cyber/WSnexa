@@ -37,9 +37,7 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
   const handleStatusChange = async (tableId: string, status: TableStatus) => {
     const res = await updateDiningTableStatusAction(tableId, status);
     if (res.success) {
-      setTables(
-        tables.map((t) => (t.id === tableId ? { ...t, status } : t))
-      );
+      setTables(tables.map((t) => (t.id === tableId ? { ...t, status } : t)));
     } else {
       alert(res.message);
     }
@@ -55,6 +53,12 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
     }
   };
 
+  const handleClearFilters = () => {
+    setSelectedArea('all');
+    setSelectedStatus('all');
+    setSearchTerm('');
+  };
+
   const filteredTables = tables.filter((t) => {
     const matchesArea = selectedArea === 'all' || t.service_area_id === selectedArea;
     const matchesStatus = selectedStatus === 'all' || t.status === selectedStatus;
@@ -64,6 +68,14 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
       (t.table_number && t.table_number.toString().includes(searchTerm));
     return matchesArea && matchesStatus && matchesSearch;
   });
+
+  // Calculate Stat Summary
+  const totalCount = tables.length;
+  const availableCount = tables.filter((t) => t.status === 'available').length;
+  const occupiedCount = tables.filter((t) => t.status === 'occupied').length;
+  const reservedCount = tables.filter((t) => t.status === 'reserved').length;
+  const cleaningCount = tables.filter((t) => t.status === 'cleaning').length;
+  const unavailableCount = tables.filter((t) => t.status === 'unavailable').length;
 
   const getStatusBadge = (status: TableStatus) => {
     switch (status) {
@@ -84,8 +96,36 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
 
   return (
     <div className="space-y-6">
+      {/* Table Status Summary Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Card className="p-3 text-center">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Total Tables</span>
+          <p className="mt-1 text-xl font-extrabold text-zinc-950">{totalCount}</p>
+        </Card>
+        <Card className="p-3 text-center border-emerald-200 bg-emerald-50/30">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Available</span>
+          <p className="mt-1 text-xl font-extrabold text-emerald-950">{availableCount}</p>
+        </Card>
+        <Card className="p-3 text-center border-red-200 bg-red-50/30">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-red-800">Occupied</span>
+          <p className="mt-1 text-xl font-extrabold text-red-950">{occupiedCount}</p>
+        </Card>
+        <Card className="p-3 text-center border-amber-200 bg-amber-50/30">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Reserved</span>
+          <p className="mt-1 text-xl font-extrabold text-amber-950">{reservedCount}</p>
+        </Card>
+        <Card className="p-3 text-center">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Cleaning</span>
+          <p className="mt-1 text-xl font-extrabold text-zinc-950">{cleaningCount}</p>
+        </Card>
+        <Card className="p-3 text-center">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Unavailable</span>
+          <p className="mt-1 text-xl font-extrabold text-zinc-950">{unavailableCount}</p>
+        </Card>
+      </div>
+
       {/* Filters Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-y border-zinc-200 py-3">
         <input
           type="text"
           placeholder="Search by table name, code, or number..."
@@ -94,11 +134,11 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
           className="w-full sm:w-72 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={selectedArea}
             onChange={(e) => setSelectedArea(e.target.value)}
-            className="w-full sm:w-48 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+            className="w-full sm:w-44 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
           >
             <option value="all">All Service Areas</option>
             {areas.map((a) => (
@@ -111,7 +151,7 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="w-full sm:w-40 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+            className="w-full sm:w-36 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
           >
             <option value="all">All Statuses</option>
             <option value="available">Available</option>
@@ -120,6 +160,12 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
             <option value="cleaning">Cleaning</option>
             <option value="unavailable">Unavailable</option>
           </select>
+
+          {(selectedArea !== 'all' || selectedStatus !== 'all' || searchTerm) && (
+            <Button variant="outline" size="sm" onClick={handleClearFilters}>
+              Clear Filters
+            </Button>
+          )}
         </div>
       </div>
 

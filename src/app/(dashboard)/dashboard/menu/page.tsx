@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuDashboardPage() {
   const supabase = await createClient();
@@ -31,32 +31,23 @@ export default async function MenuDashboardPage() {
     .is('deleted_at', null);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Menu Catalog Management
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            {tenantContext.business.name} Menu
-          </h1>
-          <p className="text-xs text-zinc-500">
-            Branch: {tenantContext.defaultBranch?.name || 'Default Branch'} ({tenantContext.defaultBranch?.code || 'MAIN'})
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/menu/items/new">
-            <Button>+ Add Menu Item</Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button variant="outline">← Dashboard</Button>
-          </Link>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`${tenantContext.business.name} Menu Catalog`}
+        description={`Branch: ${tenantContext.defaultBranch?.name || 'Default Branch'} (${tenantContext.defaultBranch?.code || 'MAIN'})`}
+        breadcrumbs={[{ label: 'Menu Catalog' }]}
+        primaryAction={{
+          label: '+ Add Menu Item',
+          href: '/dashboard/menu/items/new',
+        }}
+        secondaryAction={{
+          label: 'Manage Categories',
+          href: '/dashboard/menu/categories',
+        }}
+      />
 
       {/* Navigation Sub-Tabs */}
-      <div className="mt-4 flex border-b border-zinc-200">
+      <div className="flex border-b border-zinc-200">
         <Link
           href="/dashboard/menu"
           className="border-b-2 border-zinc-950 px-4 py-2 text-sm font-semibold text-zinc-950"
@@ -78,7 +69,7 @@ export default async function MenuDashboardPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="p-6">
           <h3 className="text-sm font-semibold text-zinc-500">Active Categories</h3>
           <p className="mt-2 text-3xl font-bold text-zinc-950">{categoryCount || 0}</p>

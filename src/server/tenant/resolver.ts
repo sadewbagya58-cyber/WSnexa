@@ -140,6 +140,7 @@ export async function resolveActiveBusinessContext(): Promise<ActiveTenantContex
           id: defaultBranch.id,
           name: defaultBranch.name,
           code: defaultBranch.code,
+          timezone: defaultBranch.timezone,
           isDefault: defaultBranch.is_default,
         }
       : null,

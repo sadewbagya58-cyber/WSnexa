@@ -1,10 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { ItemList } from '@/components/menu/item-list';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuItemsPage() {
   const supabase = await createClient();
@@ -36,33 +34,22 @@ export default async function MenuItemsPage() {
     .order('display_order', { ascending: true });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Menu Item Catalog
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            Menu Items ({items?.length || 0})
-          </h1>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`Menu Items (${items?.length || 0})`}
+        description={`Manage item details, pricing, images, and modifier groups for ${tenantContext.defaultBranch.name}.`}
+        breadcrumbs={[{ label: 'Menu Catalog', href: '/dashboard/menu' }, { label: 'Menu Items' }]}
+        primaryAction={{
+          label: '+ Add Menu Item',
+          href: '/dashboard/menu/items/new',
+        }}
+        backHref="/dashboard/menu"
+      />
 
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/menu/items/new">
-            <Button>+ Add Menu Item</Button>
-          </Link>
-          <Link href="/dashboard/menu">
-            <Button variant="outline">← Menu Hub</Button>
-          </Link>
-        </div>
-      </div>
-
-      <div className="mt-8">
-        <ItemList
-          initialItems={(items as unknown as Parameters<typeof ItemList>[0]['initialItems']) || []}
-          categories={categories || []}
-        />
-      </div>
+      <ItemList
+        initialItems={(items as unknown as Parameters<typeof ItemList>[0]['initialItems']) || []}
+        categories={categories || []}
+      />
     </div>
   );
 }

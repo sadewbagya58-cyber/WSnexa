@@ -1,11 +1,11 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PageHeader } from '@/components/ui/page-header';
 
-export default async function TeamPlaceholderPage() {
+export default async function TeamPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,34 +24,25 @@ export default async function TeamPlaceholderPage() {
     user_id: string;
     user_profiles: { first_name: string; last_name: string | null } | null;
   }[] = [];
+
   if (tenantContext) {
     const { data } = await supabase
       .from('business_memberships')
       .select('*, user_profiles(*)')
       .eq('business_id', tenantContext.business.id);
-    members = data || [];
+    members = (data as unknown as typeof members) || [];
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-5">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Team & Memberships Placeholder
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            Team Members ({members.length})
-          </h1>
-        </div>
-        <Link
-          href="/dashboard"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-950"
-        >
-          ← Back to Dashboard Overview
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`Team Members (${members.length})`}
+        description="Staff members, roles, and branch assignments for your business."
+        breadcrumbs={[{ label: 'Team Members' }]}
+        backHref="/dashboard"
+      />
 
-      <div className="mt-8 space-y-4">
+      <div className="space-y-4">
         {members.map((m) => (
           <Card key={m.id} className="flex items-center justify-between p-6">
             <div>

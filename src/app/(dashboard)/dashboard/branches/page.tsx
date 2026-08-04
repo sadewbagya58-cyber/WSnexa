@@ -1,11 +1,11 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PageHeader } from '@/components/ui/page-header';
 
-export default async function BranchesPlaceholderPage() {
+export default async function BranchesPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,6 +24,7 @@ export default async function BranchesPlaceholderPage() {
     status: string;
     is_default: boolean;
   }[] = [];
+
   if (tenantContext) {
     const { data } = await supabase
       .from('branches')
@@ -33,25 +34,15 @@ export default async function BranchesPlaceholderPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-5">
-        <div>
-          <Badge variant="neutral" className="mb-1">
-            Branch Management Placeholder
-          </Badge>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">
-            Branches ({branches.length})
-          </h1>
-        </div>
-        <Link
-          href="/dashboard"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-950"
-        >
-          ← Back to Dashboard Overview
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={`Branches (${branches.length})`}
+        description="Multi-branch locations for your venue."
+        breadcrumbs={[{ label: 'Branches' }]}
+        backHref="/dashboard"
+      />
 
-      <div className="mt-8 space-y-4">
+      <div className="space-y-4">
         {branches.map((b) => (
           <Card key={b.id} className="flex items-center justify-between p-6">
             <div>

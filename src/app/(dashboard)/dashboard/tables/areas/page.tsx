@@ -1,10 +1,9 @@
 import React from 'react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { createClient } from '@/lib/supabase/server';
-import { Button } from '@/components/ui/button';
 import { AreaManager } from '@/components/table/area-manager';
+import { PageHeader } from '@/components/ui/page-header';
 
 export default async function ServiceAreasPage() {
   const context = await resolveActiveBusinessContext();
@@ -24,20 +23,12 @@ export default async function ServiceAreasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-950">Service Areas</h1>
-          <p className="text-xs text-zinc-500">
-            Define dining sections (Main Hall, Outdoor, VIP, Bar) for {context.defaultBranch.name}.
-          </p>
-        </div>
-
-        <Link href="/dashboard/tables">
-          <Button variant="outline" size="sm">
-            ← Back to Tables
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Service Areas"
+        description={`Organize dining tables by hall, floor, terrace, or service zone in ${context.defaultBranch.name}.`}
+        breadcrumbs={[{ label: 'Tables', href: '/dashboard/tables' }, { label: 'Service Areas' }]}
+        backHref="/dashboard/tables"
+      />
 
       <AreaManager initialAreas={areas || []} />
     </div>

@@ -1,17 +1,15 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return supabaseResponse;
-  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -22,46 +20,73 @@ export async function proxy(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value)
         );
-        supabaseResponse = NextResponse.next({
+        response = NextResponse.next({
           request,
         });
         cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options)
+          response.cookies.set(name, value, options)
         );
       },
     },
   });
 
-  // IMPORTANT: Do not rely solely on getSession() for server-side auth authorization.
-  // getUser() sends a request to the Supabase Auth server to revalidate the user's token.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-
-  // Define protected routes and guest-only routes
-  const isProtectedRoute = pathname.startsWith('/dashboard');
-  const isGuestOnlyRoute =
+  const isDashboardRoute = pathname.startsWith('/dashboard');
+  const isOnboardingRoute = pathname.startsWith('/onboarding');
+  const isAuthRoute =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/forgot-password') ||
-    pathname.startsWith('/verify-email');
+    pathname.startsWith('/reset-password');
 
-  if (isProtectedRoute && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('redirectTo', pathname);
-    return NextResponse.redirect(url);
+  // 1. Unauthenticated Route Guards
+  if (!user && (isDashboardRoute || isOnboardingRoute)) {
+    const redirectUrl = new URL('/login', request.url);
+    redirectUrl.searchParams.set('redirectTo', pathname);
+    return NextResponse.redirect(redirectUrl);
   }
 
-  if (isGuestOnlyRoute && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+  // 2. Authenticated User Guards
+  if (user) {
+    // Check memberships count
+    const { data: memberships } = await supabase
+      .from('business_memberships')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('membership_status', 'active');
+
+    const hasBusiness = memberships && memberships.length > 0;
+
+    // Check profile onboarding status
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('onboarding_status')
+      .eq('id', user.id)
+      .single();
+
+    const isCompleted = profile?.onboarding_status === 'completed' || hasBusiness;
+
+    if (isAuthRoute) {
+      const redirectUrl = new URL(isCompleted ? '/dashboard' : '/onboarding', request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (isOnboardingRoute && isCompleted && !pathname.endsWith('/complete')) {
+      const redirectUrl = new URL('/dashboard', request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (isDashboardRoute && !isCompleted) {
+      const redirectUrl = new URL('/onboarding', request.url);
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
-  return supabaseResponse;
+  return response;
 }
 
 export const config = {

@@ -72,6 +72,11 @@ export interface Database {
           name: string;
           slug: string;
           business_type: string;
+          description: string | null;
+          logo_url: string | null;
+          email: string | null;
+          phone: string | null;
+          website: string | null;
           country_code: string;
           default_currency: string;
           timezone: string;
@@ -86,6 +91,11 @@ export interface Database {
           name: string;
           slug: string;
           business_type?: string;
+          description?: string | null;
+          logo_url?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          website?: string | null;
           country_code?: string;
           default_currency?: string;
           timezone?: string;
@@ -100,6 +110,11 @@ export interface Database {
           name?: string;
           slug?: string;
           business_type?: string;
+          description?: string | null;
+          logo_url?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          website?: string | null;
           country_code?: string;
           default_currency?: string;
           timezone?: string;
@@ -184,6 +199,83 @@ export interface Database {
             foreignKeyName: "branches_business_id_fkey";
             columns: ["business_id"];
             referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      branch_operating_hours: {
+        Row: {
+          id: string;
+          branch_id: string;
+          day_of_week: number;
+          is_closed: boolean;
+          opens_at: string | null;
+          closes_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          branch_id: string;
+          day_of_week: number;
+          is_closed?: boolean;
+          opens_at?: string | null;
+          closes_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          branch_id?: string;
+          day_of_week?: number;
+          is_closed?: boolean;
+          opens_at?: string | null;
+          closes_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "branch_operating_hours_branch_id_fkey";
+            columns: ["branch_id"];
+            referencedRelation: "branches";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      onboarding_drafts: {
+        Row: {
+          id: string;
+          user_id: string;
+          current_step: string;
+          payload: Json;
+          created_at: string;
+          updated_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          current_step?: string;
+          payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+          expires_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          current_step?: string;
+          payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_drafts_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -332,6 +424,30 @@ export interface Database {
           p_timezone?: string;
           p_branch_name?: string;
           p_branch_code?: string;
+        };
+        Returns: Json;
+      };
+      complete_business_onboarding: {
+        Args: {
+          p_name: string;
+          p_slug: string;
+          p_business_type: string;
+          p_description?: string;
+          p_country_code?: string;
+          p_default_currency?: string;
+          p_timezone?: string;
+          p_email?: string;
+          p_phone?: string;
+          p_website?: string;
+          p_logo_url?: string;
+          p_branch_name?: string;
+          p_branch_code?: string;
+          p_branch_address_line_1?: string;
+          p_branch_address_line_2?: string;
+          p_branch_city?: string;
+          p_branch_region?: string;
+          p_branch_postal_code?: string;
+          p_hours?: Json;
         };
         Returns: Json;
       };

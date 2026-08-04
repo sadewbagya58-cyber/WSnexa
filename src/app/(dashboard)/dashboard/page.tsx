@@ -39,7 +39,7 @@ export default async function DashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <Badge variant="success" className="mb-1">
-              Multi-Tenant Session Active
+              Onboarding Completed
             </Badge>
             {tenantContext && (
               <Badge variant="neutral" className="mb-1">
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Sub Navigation Bar for Dashboard Placeholders */}
+      {/* Sub Navigation Bar */}
       <div className="mt-4 flex border-b border-zinc-200">
         <Link
           href="/dashboard"
@@ -95,7 +95,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Active Business Summary */}
+      {/* Active Business Summary Cards */}
       {tenantContext ? (
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
           <Card className="p-6">
@@ -126,15 +126,42 @@ export default async function DashboardPage() {
         <Card className="mt-8 p-8 text-center">
           <h3 className="text-lg font-bold text-zinc-900">No Business Created Yet</h3>
           <p className="mt-2 text-sm text-zinc-500">
-            Create your first hospitality business using the button above to test the multi-tenant architecture.
+            Complete onboarding to create your first hospitality business.
           </p>
         </Card>
       )}
 
-      {/* Account Settings */}
+      {/* Setup Checklist Placeholder */}
+      <div className="mt-8">
+        <Card className="p-6">
+          <h2 className="text-base font-semibold text-zinc-950">Setup Checklist</h2>
+          <p className="mt-1 text-xs text-zinc-500">Track your business configuration progress.</p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <span className="text-xs font-bold text-emerald-800">✅ Business Profile</span>
+              <p className="mt-1 text-xs text-emerald-700">Completed during onboarding</p>
+            </div>
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
+              <span className="text-xs font-bold text-zinc-700">⬜ Add Menu Items</span>
+              <p className="mt-1 text-[11px] text-zinc-400">Phase 5 (Coming Soon)</p>
+            </div>
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
+              <span className="text-xs font-bold text-zinc-700">⬜ Setup Dining Tables</span>
+              <p className="mt-1 text-[11px] text-zinc-400">Phase 7 (Coming Soon)</p>
+            </div>
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-75">
+              <span className="text-xs font-bold text-zinc-700">⬜ Generate QR Codes</span>
+              <p className="mt-1 text-[11px] text-zinc-400">Phase 8 (Coming Soon)</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Personal Profile Settings */}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="space-y-4 p-6">
-          <h2 className="text-base font-semibold text-zinc-950">User Profile</h2>
+          <h2 className="text-base font-semibold text-zinc-950">User Account</h2>
           <dl className="space-y-3 text-xs">
             <div>
               <dt className="font-medium text-zinc-500">User ID</dt>

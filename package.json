@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "verify:auth": "tsx scripts/verify-auth.ts",
-    "verify:tenant": "tsx scripts/verify-tenant.ts"
+    "verify:tenant": "tsx scripts/verify-tenant.ts",
+    "verify:onboarding": "tsx scripts/verify-onboarding.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { generateTablePin, hashTablePin } from '@/lib/qr/security';
 import {
   createServiceAreaSchema,
   updateServiceAreaSchema,
@@ -395,5 +396,205 @@ export async function bulkCreateDiningTablesAction(
     success: true,
     message: `${res.count} dining tables generated successfully!`,
     data: { count: res.count },
+  };
+}
+
+/**
+ * Generates a random Table PIN for a dining table.
+ * Returns the plain PIN ONCE in memory for immediate display/copy/print sticker.
+ */
+export async function generateTablePinAction(tableId: string): Promise<ActionResponse<{ plainPin: string }>> {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.defaultBranch) {
+    return { success: false, message: 'Unauthorized or branch context not found.' };
+  }
+
+  const { role } = context.membership;
+  if (role !== 'business_owner' && role !== 'branch_manager') {
+    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  }
+
+  const pinLength = context.defaultBranch.table_pin_length || 4;
+  const plainPin = generateTablePin(pinLength);
+  const pinHash = hashTablePin(plainPin);
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from('dining_tables')
+    .update({
+      table_pin_hash: pinHash,
+      table_pin_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', tableId)
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.defaultBranch.id);
+
+  if (error) {
+    return { success: false, message: error.message };
+  }
+
+  revalidatePath('/dashboard/tables');
+  return {
+    success: true,
+    message: 'Table PIN generated successfully!',
+    data: { plainPin },
+  };
+}
+
+/**
+ * Sets a custom Table PIN for a dining table.
+ */
+export async function updateTablePinAction(
+  tableId: string,
+  customPin: string
+): Promise<ActionResponse<{ plainPin: string }>> {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.defaultBranch) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const { role } = context.membership;
+  if (role !== 'business_owner' && role !== 'branch_manager') {
+    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  }
+
+  const pinLength = context.defaultBranch.table_pin_length || 4;
+  const trimmed = customPin.trim();
+
+  if (!/^\d+$/.test(trimmed) || trimmed.length !== pinLength) {
+    return { success: false, message: `PIN must contain exactly ${pinLength} digits.` };
+  }
+
+  const pinHash = hashTablePin(trimmed);
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from('dining_tables')
+    .update({
+      table_pin_hash: pinHash,
+      table_pin_updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', tableId)
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.defaultBranch.id);
+
+  if (error) {
+    return { success: false, message: error.message };
+  }
+
+  revalidatePath('/dashboard/tables');
+  return {
+    success: true,
+    message: 'Table PIN updated successfully!',
+    data: { plainPin: trimmed },
+  };
+}
+
+/**
+ * Bulk generates PINs for missing or all tables in the branch.
+ */
+export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = true): Promise<ActionResponse<{ count: number }>> {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.defaultBranch) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const { role } = context.membership;
+  if (role !== 'business_owner' && role !== 'branch_manager') {
+    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  }
+
+  const supabase = await createClient();
+  const branchId = context.defaultBranch.id;
+  const pinLength = context.defaultBranch.table_pin_length || 4;
+
+  let query = supabase
+    .from('dining_tables')
+    .select('id, table_pin_hash')
+    .eq('business_id', context.business.id)
+    .eq('branch_id', branchId)
+    .eq('is_active', true)
+    .is('deleted_at', null);
+
+  if (onlyMissing) {
+    query = query.is('table_pin_hash', null);
+  }
+
+  const { data: tables, error: fetchErr } = await query;
+  if (fetchErr || !tables) {
+    return { success: false, message: fetchErr?.message || 'Failed to fetch tables' };
+  }
+
+  let count = 0;
+  for (const table of tables) {
+    const plainPin = generateTablePin(pinLength);
+    const pinHash = hashTablePin(plainPin);
+
+    await supabase
+      .from('dining_tables')
+      .update({
+        table_pin_hash: pinHash,
+        table_pin_updated_at: new Date().toISOString(),
+      })
+      .eq('id', table.id);
+
+    count++;
+  }
+
+  revalidatePath('/dashboard/tables');
+  revalidatePath('/dashboard/tables/qr');
+  return {
+    success: true,
+    message: `Generated PINs for ${count} table(s).`,
+    data: { count },
+  };
+}
+
+/**
+ * Validates table selection and PIN access during guest checkout.
+ */
+export async function verifyTableAccessAction(
+  branchId: string,
+  tableId: string,
+  inputPin?: string
+): Promise<ActionResponse<{ table?: { id: string; name: string; code: string; table_number: number | null; capacity: number } }>> {
+  const supabase = await createClient();
+
+  const pinHash = inputPin ? hashTablePin(inputPin.trim()) : null;
+
+  const { data, error } = await supabase.rpc('verify_table_checkout_access', {
+    p_branch_id: branchId,
+    p_table_id: tableId,
+    p_pin_hash: pinHash,
+  });
+
+  if (error || !data) {
+    return { success: false, message: error?.message || 'Table verification failed.' };
+  }
+
+  const payload = data as {
+    success: boolean;
+    error?: string;
+    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number };
+    bypass_table?: boolean;
+  };
+
+  if (!payload.success) {
+    if (payload.error === 'INVALID_PIN') {
+      return { success: false, message: 'Invalid Table PIN. Please check the 4-digit PIN on your table.' };
+    }
+    if (payload.error === 'PIN_NOT_CONFIGURED') {
+      return { success: false, message: 'Table PIN is required but has not been set up yet. Please ask your server.' };
+    }
+    return { success: false, message: 'Selected dining table is unavailable or archived.' };
+  }
+
+  return {
+    success: true,
+    message: 'Table access verified!',
+    data: { table: payload.table },
   };
 }

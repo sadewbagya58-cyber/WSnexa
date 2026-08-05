@@ -7,7 +7,7 @@ interface PublicMenuPageProps {
 
 export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
   const { token } = await params;
-  const menuData = await QrService.resolvePublicMenuByToken(token);
+  const menuData = await QrService.resolvePublicBranchMenuByToken(token);
 
   if (!menuData || !menuData.success || typeof menuData.business !== 'object') {
     return (
@@ -18,7 +18,7 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
           </div>
           <h1 className="text-xl font-bold text-zinc-950">Menu Unavailable</h1>
           <p className="text-xs text-zinc-600 leading-relaxed">
-            This QR code is invalid, expired, or has been revoked. Please ask your server for assistance or request a fresh QR code for your table.
+            This QR code is invalid, expired, or has been revoked. Please ask your server for assistance.
           </p>
         </div>
       </div>
@@ -31,8 +31,8 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
     <PublicGuestMenu
       business={payload.business}
       branch={payload.branch}
-      area={payload.area}
-      table={payload.table}
+      service_areas={payload.service_areas}
+      dining_tables={payload.dining_tables}
       categories={payload.categories}
       items={payload.items}
     />

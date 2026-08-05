@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
-import { generateSecureQrToken, hashQrToken } from '@/lib/qr/security';
+import { generateSecureQrToken, hashQrToken, decryptRawToken } from '@/lib/qr/security';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 
-export interface QrGenerationResult {
+export interface BranchQrResult {
   success: boolean;
   message?: string;
   rawToken?: string;
@@ -12,9 +12,9 @@ export interface QrGenerationResult {
 
 export class QrService {
   /**
-   * Generates a new active QR code for a single dining table.
+   * Generates a new active Branch QR code for the current branch.
    */
-  static async generateTableQr(tableId: string): Promise<QrGenerationResult> {
+  static async generateBranchQr(): Promise<BranchQrResult> {
     const tenantContext = await resolveActiveBusinessContext();
     if (!tenantContext || !tenantContext.defaultBranch) {
       return { success: false, message: 'Unauthorized or invalid business context' };
@@ -22,47 +22,35 @@ export class QrService {
 
     const role = tenantContext.membership.role;
     if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, message: 'Forbidden: Insufficient permissions to generate QR codes' };
+      return { success: false, message: 'Forbidden: Insufficient permissions to generate Branch QR code' };
     }
 
     const supabase = await createClient();
-
-    // Verify dining table belongs to tenant & branch and is active
-    const { data: table, error: tableErr } = await supabase
-      .from('dining_tables')
-      .select('id, name, code, is_active, deleted_at, service_area_id')
-      .eq('id', tableId)
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.defaultBranch.id)
-      .single();
-
-    if (tableErr || !table || !table.is_active || table.deleted_at) {
-      return { success: false, message: 'Dining table is inactive, archived, or not found' };
-    }
+    const branchId = tenantContext.defaultBranch.id;
 
     // Generate secure token pair
-    const { rawToken, tokenHash, tokenPrefix } = generateSecureQrToken();
+    const { rawToken, tokenHash, tokenPrefix, encryptedToken } = generateSecureQrToken();
 
-    // Revoke any existing active QR code for this table
+    // Revoke any existing active QR code for this branch
     await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
         revoked_by: tenantContext.user.id,
       })
-      .eq('dining_table_id', tableId)
+      .eq('branch_id', branchId)
       .eq('is_active', true);
 
-    // Insert new active QR record
+    // Insert new active branch QR record
     const { data: qr, error: qrErr } = await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .insert({
         business_id: tenantContext.business.id,
-        branch_id: tenantContext.defaultBranch.id,
-        dining_table_id: tableId,
+        branch_id: branchId,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
+        encrypted_token: encryptedToken,
         version: 1,
         is_active: true,
         generated_by: tenantContext.user.id,
@@ -72,17 +60,17 @@ export class QrService {
       .single();
 
     if (qrErr || !qr) {
-      return { success: false, message: qrErr?.message || 'Failed to create QR record in database' };
+      return { success: false, message: qrErr?.message || 'Failed to create Branch QR record in database' };
     }
 
     // Write Audit Log
     await supabase.from('audit_logs').insert({
       business_id: tenantContext.business.id,
       actor_id: tenantContext.user.id,
-      action: 'qr.generated',
-      target_type: 'table_qr_code',
+      action: 'branch_qr.generated',
+      target_type: 'branch_qr_code',
       target_id: qr.id,
-      payload: { dining_table_id: tableId, version: 1, token_prefix: tokenPrefix },
+      payload: { branch_id: branchId, version: 1, token_prefix: tokenPrefix },
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -97,9 +85,9 @@ export class QrService {
   }
 
   /**
-   * Regenerates a new QR code for a dining table, invalidating the previous version.
+   * Regenerates a new Branch QR code, invalidating the previous version.
    */
-  static async regenerateTableQr(tableId: string): Promise<QrGenerationResult> {
+  static async regenerateBranchQr(): Promise<BranchQrResult> {
     const tenantContext = await resolveActiveBusinessContext();
     if (!tenantContext || !tenantContext.defaultBranch) {
       return { success: false, message: 'Unauthorized or invalid business context' };
@@ -107,16 +95,17 @@ export class QrService {
 
     const role = tenantContext.membership.role;
     if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, message: 'Forbidden: Insufficient permissions to regenerate QR codes' };
+      return { success: false, message: 'Forbidden: Insufficient permissions to regenerate Branch QR code' };
     }
 
     const supabase = await createClient();
+    const branchId = tenantContext.defaultBranch.id;
 
     // Fetch existing QR record for version increment
     const { data: existingQr } = await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .select('version')
-      .eq('dining_table_id', tableId)
+      .eq('branch_id', branchId)
       .eq('is_active', true)
       .maybeSingle();
 
@@ -124,26 +113,26 @@ export class QrService {
 
     // Revoke old QR code
     await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
         revoked_by: tenantContext.user.id,
       })
-      .eq('dining_table_id', tableId)
+      .eq('branch_id', branchId)
       .eq('is_active', true);
 
     // Generate new token pair
-    const { rawToken, tokenHash, tokenPrefix } = generateSecureQrToken();
+    const { rawToken, tokenHash, tokenPrefix, encryptedToken } = generateSecureQrToken();
 
     const { data: qr, error: qrErr } = await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .insert({
         business_id: tenantContext.business.id,
-        branch_id: tenantContext.defaultBranch.id,
-        dining_table_id: tableId,
+        branch_id: branchId,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
+        encrypted_token: encryptedToken,
         version: newVersion,
         is_active: true,
         generated_by: tenantContext.user.id,
@@ -154,17 +143,17 @@ export class QrService {
       .single();
 
     if (qrErr || !qr) {
-      return { success: false, message: qrErr?.message || 'Failed to regenerate QR code' };
+      return { success: false, message: qrErr?.message || 'Failed to regenerate Branch QR code' };
     }
 
     // Write Audit Log
     await supabase.from('audit_logs').insert({
       business_id: tenantContext.business.id,
       actor_id: tenantContext.user.id,
-      action: 'qr.regenerated',
-      target_type: 'table_qr_code',
+      action: 'branch_qr.regenerated',
+      target_type: 'branch_qr_code',
       target_id: qr.id,
-      payload: { dining_table_id: tableId, new_version: newVersion, token_prefix: tokenPrefix },
+      payload: { branch_id: branchId, new_version: newVersion, token_prefix: tokenPrefix },
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -179,29 +168,30 @@ export class QrService {
   }
 
   /**
-   * Revokes/disables the active QR code for a dining table.
+   * Revokes/disables the active Branch QR code.
    */
-  static async disableTableQr(tableId: string): Promise<{ success: boolean; message?: string }> {
+  static async disableBranchQr(): Promise<{ success: boolean; message?: string }> {
     const tenantContext = await resolveActiveBusinessContext();
     if (!tenantContext || !tenantContext.defaultBranch) {
-      return { success: false, message: 'Unauthorized or invalid business context' };
+      return { success: false, message: 'Unauthorized' };
     }
 
     const role = tenantContext.membership.role;
     if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, message: 'Forbidden: Insufficient permissions to disable QR codes' };
+      return { success: false, message: 'Forbidden' };
     }
 
     const supabase = await createClient();
+    const branchId = tenantContext.defaultBranch.id;
 
     const { data: updated, error } = await supabase
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
         revoked_by: tenantContext.user.id,
       })
-      .eq('dining_table_id', tableId)
+      .eq('branch_id', branchId)
       .eq('is_active', true)
       .select();
 
@@ -213,10 +203,10 @@ export class QrService {
       await supabase.from('audit_logs').insert({
         business_id: tenantContext.business.id,
         actor_id: tenantContext.user.id,
-        action: 'qr.disabled',
-        target_type: 'table_qr_code',
+        action: 'branch_qr.disabled',
+        target_type: 'branch_qr_code',
         target_id: updated[0].id,
-        payload: { dining_table_id: tableId },
+        payload: { branch_id: branchId },
       });
     }
 
@@ -224,106 +214,72 @@ export class QrService {
   }
 
   /**
-   * Bulk generates QR codes for all active tables in a branch or service area.
+   * Updates Branch ordering settings (require_table_selection, require_table_pin, table_pin_length).
    */
-  static async bulkGenerateTableQrs(
-    areaId?: string,
-    overrideExisting: boolean = false
-  ): Promise<{ success: boolean; count: number; message?: string }> {
+  static async updateBranchOrderingSettings(settings: {
+    require_table_selection?: boolean;
+    require_table_pin?: boolean;
+    table_pin_length?: number;
+  }): Promise<{ success: boolean; message?: string }> {
     const tenantContext = await resolveActiveBusinessContext();
     if (!tenantContext || !tenantContext.defaultBranch) {
-      return { success: false, count: 0, message: 'Unauthorized' };
+      return { success: false, message: 'Unauthorized' };
     }
 
     const role = tenantContext.membership.role;
     if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, count: 0, message: 'Forbidden' };
+      return { success: false, message: 'Forbidden: Owner or Branch Manager role required' };
+    }
+
+    // Rule: require_table_pin cannot be enabled if require_table_selection is disabled
+    const nextSelection = settings.require_table_selection ?? tenantContext.defaultBranch.require_table_selection ?? true;
+    let nextPin = settings.require_table_pin ?? tenantContext.defaultBranch.require_table_pin ?? false;
+    let nextLength = settings.table_pin_length ?? tenantContext.defaultBranch.table_pin_length ?? 4;
+
+    if (!nextSelection) {
+      nextPin = false; // Bypass PIN if table selection is OFF
+    }
+
+    if (![4, 5, 6].includes(nextLength)) {
+      nextLength = 4;
     }
 
     const supabase = await createClient();
 
-    let query = supabase
-      .from('dining_tables')
-      .select('id, name, code')
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.defaultBranch.id)
-      .eq('is_active', true)
-      .is('deleted_at', null);
+    const { error } = await supabase
+      .from('branches')
+      .update({
+        require_table_selection: nextSelection,
+        require_table_pin: nextPin,
+        table_pin_length: nextLength,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', tenantContext.defaultBranch.id);
 
-    if (areaId) {
-      query = query.eq('service_area_id', areaId);
-    }
-
-    const { data: tables, error: tablesErr } = await query;
-    if (tablesErr || !tables) {
-      return { success: false, count: 0, message: tablesErr?.message || 'Failed to fetch tables' };
-    }
-
-    let generatedCount = 0;
-
-    for (const table of tables) {
-      // Check if table already has active QR
-      const { data: existing } = await supabase
-        .from('table_qr_codes')
-        .select('id')
-        .eq('dining_table_id', table.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (existing && !overrideExisting) {
-        continue; // Skip existing if override not requested
-      }
-
-      // Generate new token pair
-      const { tokenHash, tokenPrefix } = generateSecureQrToken();
-
-      if (existing) {
-        await supabase
-          .from('table_qr_codes')
-          .update({ is_active: false, revoked_at: new Date().toISOString(), revoked_by: tenantContext.user.id })
-          .eq('dining_table_id', table.id)
-          .eq('is_active', true);
-      }
-
-      await supabase.from('table_qr_codes').insert({
-        business_id: tenantContext.business.id,
-        branch_id: tenantContext.defaultBranch.id,
-        dining_table_id: table.id,
-        token_hash: tokenHash,
-        token_prefix: tokenPrefix,
-        version: 1,
-        is_active: true,
-        generated_by: tenantContext.user.id,
-        generated_at: new Date().toISOString(),
-      });
-
-      generatedCount++;
+    if (error) {
+      return { success: false, message: error.message };
     }
 
     await supabase.from('audit_logs').insert({
       business_id: tenantContext.business.id,
       actor_id: tenantContext.user.id,
-      action: 'qr.bulk_generated',
+      action: 'branch.settings_updated',
       target_type: 'branch',
       target_id: tenantContext.defaultBranch.id,
-      payload: { count: generatedCount, area_id: areaId || 'all', override_existing: overrideExisting },
+      payload: { require_table_selection: nextSelection, require_table_pin: nextPin, table_pin_length: nextLength },
     });
 
-    return {
-      success: true,
-      count: generatedCount,
-      message: `Successfully generated ${generatedCount} table QR code(s).`,
-    };
+    return { success: true };
   }
 
   /**
-   * Resolves a raw public QR token to its browse-only public menu payload via RPC.
+   * Resolves a raw public QR token to its branch menu payload via RPC.
    */
-  static async resolvePublicMenuByToken(rawToken: string) {
+  static async resolvePublicBranchMenuByToken(rawToken: string) {
     const tokenHash = hashQrToken(rawToken);
     const supabase = await createClient();
 
-    const { data, error } = await supabase.rpc('resolve_public_table_menu', {
+    const { data, error } = await supabase.rpc('resolve_public_branch_menu', {
       p_token_hash: tokenHash,
     });
 
@@ -331,6 +287,36 @@ export class QrService {
       return { success: false, error: 'INVALID_QR' };
     }
 
-    return data as Record<string, unknown>;
+    // Pass the raw token through to client state for share/copy links
+    const payload = data as Record<string, unknown>;
+    payload.rawToken = rawToken;
+
+    return payload;
+  }
+
+  /**
+   * Fetches active branch QR record for owner management dashboard.
+   */
+  static async getActiveBranchQr() {
+    const tenantContext = await resolveActiveBusinessContext();
+    if (!tenantContext || !tenantContext.defaultBranch) return null;
+
+    const supabase = await createClient();
+
+    const { data: qr } = await supabase
+      .from('branch_qr_codes')
+      .select('*')
+      .eq('branch_id', tenantContext.defaultBranch.id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!qr) return null;
+
+    const rawToken = decryptRawToken(qr.encrypted_token);
+
+    return {
+      ...qr,
+      rawToken,
+    };
   }
 }

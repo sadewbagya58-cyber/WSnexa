@@ -154,6 +154,9 @@ export interface Database {
           timezone: string;
           status: BranchStatus;
           is_default: boolean;
+          require_table_selection: boolean;
+          require_table_pin: boolean;
+          table_pin_length: number;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -174,6 +177,9 @@ export interface Database {
           timezone?: string;
           status?: BranchStatus;
           is_default?: boolean;
+          require_table_selection?: boolean;
+          require_table_pin?: boolean;
+          table_pin_length?: number;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -194,6 +200,9 @@ export interface Database {
           timezone?: string;
           status?: BranchStatus;
           is_default?: boolean;
+          require_table_selection?: boolean;
+          require_table_pin?: boolean;
+          table_pin_length?: number;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -567,6 +576,8 @@ export interface Database {
           position_y: number | null;
           display_order: number;
           is_active: boolean;
+          table_pin_hash: string | null;
+          table_pin_updated_at: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -587,6 +598,8 @@ export interface Database {
           position_y?: number | null;
           display_order?: number;
           is_active?: boolean;
+          table_pin_hash?: string | null;
+          table_pin_updated_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -607,6 +620,8 @@ export interface Database {
           position_y?: number | null;
           display_order?: number;
           is_active?: boolean;
+          table_pin_hash?: string | null;
+          table_pin_updated_at?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -882,6 +897,63 @@ export interface Database {
           }
         ];
       };
+      branch_qr_codes: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          token_hash: string;
+          token_prefix: string | null;
+          encrypted_token: string | null;
+          version: number;
+          is_active: boolean;
+          generated_by: string | null;
+          generated_at: string;
+          last_regenerated_at: string | null;
+          expires_at: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          token_hash: string;
+          token_prefix?: string | null;
+          encrypted_token?: string | null;
+          version?: number;
+          is_active?: boolean;
+          generated_by?: string | null;
+          generated_at?: string;
+          last_regenerated_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          token_hash?: string;
+          token_prefix?: string | null;
+          encrypted_token?: string | null;
+          version?: number;
+          is_active?: boolean;
+          generated_by?: string | null;
+          generated_at?: string;
+          last_regenerated_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       table_qr_codes: {
         Row: {
           id: string;
@@ -989,6 +1061,20 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
+      resolve_public_branch_menu: {
+        Args: {
+          p_token_hash: string;
+        };
+        Returns: Json;
+      };
+      verify_table_checkout_access: {
+        Args: {
+          p_branch_id: string;
+          p_table_id: string;
+          p_pin_hash?: string | null;
+        };
+        Returns: Json;
+      };
       resolve_public_table_menu: {
         Args: {
           p_token_hash: string;

@@ -174,6 +174,9 @@ export const resolveActiveBusinessContext = cache(
             code: defaultBranch.code,
             timezone: defaultBranch.timezone,
             isDefault: defaultBranch.is_default,
+            require_table_selection: (defaultBranch as any).require_table_selection ?? true,
+            require_table_pin: (defaultBranch as any).require_table_pin ?? false,
+            table_pin_length: (defaultBranch as any).table_pin_length ?? 4,
           }
         : null,
       membership: {

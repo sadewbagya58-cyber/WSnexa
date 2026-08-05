@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { verifyTableAccessAction } from '@/server/actions/table';
 
 interface PublicGuestMenuProps {
   business: {
@@ -20,27 +20,33 @@ interface PublicGuestMenuProps {
     phone: string | null;
     address_line1: string | null;
     city: string | null;
+    require_table_selection: boolean;
+    require_table_pin: boolean;
+    table_pin_length: number;
   };
-  area: {
+  service_areas: Array<{
     id: string;
     name: string;
     code: string;
-  };
-  table: {
+    display_order: number;
+  }>;
+  dining_tables: Array<{
     id: string;
     name: string;
     code: string;
     table_number: number | null;
     capacity: number;
-  };
-  categories: {
+    service_area_id: string;
+    has_pin: boolean;
+  }>;
+  categories: Array<{
     id: string;
     name: string;
     slug: string;
     description: string | null;
     display_order: number;
-  }[];
-  items: {
+  }>;
+  items: Array<{
     id: string;
     category_id: string;
     name: string;
@@ -48,256 +54,279 @@ interface PublicGuestMenuProps {
     description: string | null;
     price_cents: number;
     currency: string;
-    availability_status: 'available' | 'out_of_stock' | 'hidden';
+    availability_status: string;
     is_featured: boolean;
     primary_image_url: string | null;
     display_order: number;
-    modifier_groups: {
+    modifier_groups?: Array<{
       id: string;
       name: string;
       description: string | null;
-      selection_type: 'single' | 'multiple';
+      selection_type: string;
       min_selections: number;
-      max_selections: number | null;
+      max_selections: number;
       is_required: boolean;
-      options: {
+      options: Array<{
         id: string;
         name: string;
         price_cents: number;
         is_available: boolean;
-      }[];
-    }[];
-  }[];
+      }>;
+    }>;
+  }>;
 }
 
 export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   business,
   branch,
-  area,
-  table,
+  service_areas,
+  dining_tables,
   categories,
   items,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [activeItemModal, setActiveItemModal] = useState<PublicGuestMenuProps['items'][0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<(typeof items)[0] | null>(null);
 
-  const featuredItems = items.filter((item) => item.is_featured);
+  // Table Selection & PIN Verification State
+  const [tableModalOpen, setTableModalOpen] = useState<boolean>(false);
+  const [selectedTableId, setSelectedTableId] = useState<string>('');
+  const [pinInput, setPinInput] = useState<string>('');
+  const [verifying, setVerifying] = useState<boolean>(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  // Confirmed Table Context for Customer Session
+  const [confirmedTable, setConfirmedTable] = useState<{
+    id: string;
+    name: string;
+    code: string;
+  } | null>(null);
+
+  const formatPrice = (priceCents: number, currency: string) => {
+    const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency + ' ';
+    return `${symbol}${(priceCents / 100).toFixed(2)}`;
+  };
 
   const filteredItems = items.filter((item) => {
-    const matchesCategory =
-      selectedCategory === 'all' || item.category_id === selectedCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
+    if (selectedCategory === 'all') return true;
+    return item.category_id === selectedCategory;
   });
 
+  const handleConfirmTable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTableId) {
+      setVerifyError('Please select a dining table');
+      return;
+    }
+
+    if (branch.require_table_pin && pinInput.length !== (branch.table_pin_length || 4)) {
+      setVerifyError(`Please enter your ${branch.table_pin_length || 4}-digit Table PIN`);
+      return;
+    }
+
+    setVerifying(true);
+    setVerifyError(null);
+
+    const res = await verifyTableAccessAction(branch.id, selectedTableId, pinInput);
+
+    setVerifying(false);
+
+    if (res.success && res.data?.table) {
+      setConfirmedTable({
+        id: res.data.table.id,
+        name: res.data.table.name,
+        code: res.data.table.code,
+      });
+      setTableModalOpen(false);
+      setPinInput('');
+    } else {
+      setVerifyError(res.message || 'Table verification failed');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-50 antialiased pb-12">
-      {/* Header Container */}
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur shadow-xs">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            {business.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={business.logo_url}
-                alt={business.name}
-                className="h-10 w-10 rounded-full object-cover border border-zinc-200"
-              />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900 text-sm font-bold text-white">
-                {business.name.substring(0, 2).toUpperCase()}
-              </div>
-            )}
-            <div>
-              <h1 className="text-base font-bold leading-tight text-zinc-950">{business.name}</h1>
-              <p className="text-[11px] text-zinc-500">{branch.name} • {area.name}</p>
-            </div>
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-20">
+      {/* Top Banner & Header */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 py-3 shadow-xs">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              {business.name}
+            </span>
+            <h1 className="text-base font-black tracking-tight text-zinc-950 flex items-center gap-2">
+              {branch.name}
+              <Badge variant="neutral" className="text-[10px] py-0">
+                Digital Menu
+              </Badge>
+            </h1>
           </div>
 
-          <div className="rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-800">
-            {table.name}
-          </div>
+          {/* Table Selection Status Pill */}
+          {branch.require_table_selection && (
+            <button
+              type="button"
+              onClick={() => setTableModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-all"
+            >
+              <span>📍</span>
+              {confirmedTable ? (
+                <span className="text-emerald-800 font-extrabold">{confirmedTable.name}</span>
+              ) : (
+                <span className="text-zinc-600">Select Table</span>
+              )}
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 pt-4 space-y-6">
-        {/* Search & Category Filter Navigation */}
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Search menu items..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-xs focus:border-zinc-950 focus:outline-hidden"
-          />
-
-          {/* Category Tabs Scroll */}
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                selectedCategory === 'all'
-                  ? 'bg-zinc-950 text-white shadow-xs'
-                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
-              }`}
-            >
-              All Items ({items.length})
-            </button>
-
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                  selectedCategory === cat.id
-                    ? 'bg-zinc-950 text-white shadow-xs'
-                    : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Featured Items Section */}
-        {selectedCategory === 'all' && !searchTerm && featuredItems.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-zinc-900">
-              ⭐ Featured Favorites
-            </h2>
-            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-              {featuredItems.map((item) => (
-                <Card
-                  key={item.id}
-                  onClick={() => setActiveItemModal(item)}
-                  className="min-w-[200px] max-w-[200px] flex-shrink-0 cursor-pointer p-3 transition-transform active:scale-[0.98] space-y-2"
-                >
-                  {item.primary_image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.primary_image_url}
-                      alt={item.name}
-                      className="h-28 w-full rounded-lg object-cover"
-                    />
-                  )}
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-xs text-zinc-950 line-clamp-1">{item.name}</h3>
-                    <p className="text-xs font-black text-zinc-900">
-                      {item.currency} {(item.price_cents / 100).toFixed(2)}
-                    </p>
-                  </div>
-                </Card>
-              ))}
+      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
+        {/* Table Selection Prompt Banner */}
+        {branch.require_table_selection && !confirmedTable && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">
+            <div>
+              <span className="font-bold">Select your Table Number</span>
+              <p className="text-[11px] text-amber-800">
+                Please select your table before ordering {branch.require_table_pin && 'with PIN verification'}.
+              </p>
             </div>
+            <Button size="sm" onClick={() => setTableModalOpen(true)}>
+              Select Table
+            </Button>
           </div>
         )}
 
-        {/* Main Items List */}
+        {/* Categories Horizontal Scroll */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('all')}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+              selectedCategory === 'all'
+                ? 'bg-zinc-950 text-white shadow-xs'
+                : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+            }`}
+          >
+            All Items ({items.length})
+          </button>
+          {categories.map((cat) => {
+            const count = items.filter((i) => i.category_id === cat.id).length;
+            if (count === 0) return null;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                  selectedCategory === cat.id
+                    ? 'bg-zinc-950 text-white shadow-xs'
+                    : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                }`}
+              >
+                {cat.name} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Menu Items List */}
         <div className="space-y-3">
           {filteredItems.map((item) => (
-            <Card
+            <div
               key={item.id}
-              onClick={() => setActiveItemModal(item)}
-              className="flex items-center justify-between p-4 cursor-pointer hover:border-zinc-300 transition-all active:scale-[0.99]"
+              onClick={() => setSelectedItem(item)}
+              className="group cursor-pointer rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs hover:border-zinc-400 hover:shadow-xs transition-all flex items-start justify-between gap-4"
             >
-              <div className="space-y-1 pr-3">
+              <div className="space-y-1.5 flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-zinc-950">{item.name}</h3>
-                  {item.availability_status === 'out_of_stock' && (
-                    <Badge variant="warning">Out of Stock</Badge>
-                  )}
+                  <h3 className="text-sm font-bold text-zinc-950 group-hover:text-zinc-900">
+                    {item.name}
+                  </h3>
+                  {item.is_featured && <Badge variant="warning">Featured</Badge>}
                 </div>
-
                 {item.description && (
-                  <p className="text-xs text-zinc-500 line-clamp-2">{item.description}</p>
+                  <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
+                    {item.description}
+                  </p>
                 )}
-
-                <p className="text-xs font-bold text-zinc-900 pt-1">
-                  {item.currency} {(item.price_cents / 100).toFixed(2)}
-                </p>
+                <div className="pt-1 text-sm font-black text-zinc-950">
+                  {formatPrice(item.price_cents, item.currency)}
+                </div>
               </div>
 
-              {item.primary_image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.primary_image_url}
-                  alt={item.name}
-                  className="h-20 w-20 flex-shrink-0 rounded-lg object-cover border border-zinc-200"
-                />
+              {item.primary_image_url ? (
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
+                  {/* eslint-disable-next-html-element */}
+                  <img
+                    src={item.primary_image_url}
+                    alt={item.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="h-20 w-20 shrink-0 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 flex items-center justify-center text-xl text-zinc-400">
+                  🍽️
+                </div>
               )}
-            </Card>
+            </div>
           ))}
 
           {filteredItems.length === 0 && (
-            <Card className="p-8 text-center text-xs text-zinc-500">
-              No menu items available in this category.
-            </Card>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-xs text-zinc-500">
+              No items available in this category.
+            </div>
           )}
         </div>
       </main>
 
-      {/* Item Detail & Modifiers Preview Modal */}
-      {activeItemModal && (
+      {/* Item Details & Modifiers Modal */}
+      {selectedItem && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto space-y-5">
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-zinc-950">{activeItemModal.name}</h2>
-                <p className="text-sm font-black text-zinc-900">
-                  {activeItemModal.currency} {(activeItemModal.price_cents / 100).toFixed(2)}
+              <div>
+                <h2 className="text-lg font-bold text-zinc-950">{selectedItem.name}</h2>
+                <p className="text-sm font-black text-zinc-950">
+                  {formatPrice(selectedItem.price_cents, selectedItem.currency)}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setActiveItemModal(null)}
+              <button
+                type="button"
+                onClick={() => setSelectedItem(null)}
+                className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
               >
                 ✕
-              </Button>
+              </button>
             </div>
 
-            {activeItemModal.primary_image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={activeItemModal.primary_image_url}
-                alt={activeItemModal.name}
-                className="h-48 w-full rounded-xl object-cover"
-              />
-            )}
-
-            {activeItemModal.description && (
+            {selectedItem.description && (
               <p className="text-xs text-zinc-600 leading-relaxed">
-                {activeItemModal.description}
+                {selectedItem.description}
               </p>
             )}
 
-            {/* Modifier Groups Preview */}
-            {activeItemModal.modifier_groups && activeItemModal.modifier_groups.length > 0 && (
-              <div className="space-y-4 border-t border-zinc-100 pt-4">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-900">
+            {/* Modifier Groups */}
+            {selectedItem.modifier_groups && selectedItem.modifier_groups.length > 0 && (
+              <div className="space-y-4 pt-2 border-t border-zinc-100">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
                   Customization Options
                 </h3>
-                {activeItemModal.modifier_groups.map((group) => (
-                  <div key={group.id} className="space-y-2 rounded-lg border border-zinc-200 p-3 bg-zinc-50">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-zinc-900">{group.name}</span>
-                      {group.is_required ? (
-                        <Badge variant="destructive">Required</Badge>
-                      ) : (
-                        <Badge variant="neutral">Optional</Badge>
-                      )}
+                {selectedItem.modifier_groups.map((group) => (
+                  <div key={group.id} className="rounded-xl border border-zinc-200 p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-zinc-900">{group.name}</span>
+                      {group.is_required && <Badge variant="warning">Required</Badge>}
                     </div>
-                    <div className="space-y-1 pt-1">
+                    <div className="space-y-1.5">
                       {group.options.map((opt) => (
-                        <div key={opt.id} className="flex justify-between text-xs text-zinc-700">
+                        <div
+                          key={opt.id}
+                          className="flex items-center justify-between text-xs text-zinc-700"
+                        >
                           <span>{opt.name}</span>
-                          <span>
-                            {opt.price_cents > 0
-                              ? `+${activeItemModal.currency} ${(opt.price_cents / 100).toFixed(2)}`
-                              : 'Free'}
-                          </span>
+                          {opt.price_cents > 0 && (
+                            <span className="font-bold">
+                              +{formatPrice(opt.price_cents, selectedItem.currency)}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -306,14 +335,94 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               </div>
             )}
 
-            <Button
-              className="w-full"
-              variant="outline"
-              onClick={() => setActiveItemModal(null)}
-            >
-              Close Preview
+            <Button className="w-full" onClick={() => setSelectedItem(null)}>
+              Close Item Details
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Table Selection & PIN Verification Modal */}
+      {tableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <form
+            onSubmit={handleConfirmTable}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-5"
+          >
+            <div className="space-y-1 border-b border-zinc-100 pb-3">
+              <h2 className="text-lg font-bold text-zinc-950">Select Dining Table</h2>
+              <p className="text-xs text-zinc-500">
+                Select your table number to start your guest ordering session at {branch.name}.
+              </p>
+            </div>
+
+            {verifyError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
+                ⚠️ {verifyError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Searchable Select grouped by Service Area */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+                  Dining Table Number *
+                </label>
+                <select
+                  value={selectedTableId}
+                  onChange={(e) => setSelectedTableId(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-zinc-950 focus:border-zinc-950 focus:outline-none"
+                >
+                  <option value="">-- Choose Table Number --</option>
+                  {service_areas.map((area) => {
+                    const areaTables = dining_tables.filter((t) => t.service_area_id === area.id);
+                    if (areaTables.length === 0) return null;
+                    return (
+                      <optgroup key={area.id} label={`${area.name} (${area.code})`}>
+                        {areaTables.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.code})
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* PIN Input field if require_table_pin is ON */}
+              {branch.require_table_pin && (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 mb-1.5">
+                    Table Security PIN ({branch.table_pin_length || 4} Digits) *
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={branch.table_pin_length || 4}
+                    placeholder={`Enter ${branch.table_pin_length || 4}-digit PIN on table sticker`}
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                    className="w-full font-mono text-center text-xl tracking-widest rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setTableModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={verifying}>
+                {verifying ? 'Verifying...' : 'Confirm Table'}
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>

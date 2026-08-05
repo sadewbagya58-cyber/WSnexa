@@ -25,6 +25,9 @@ export interface ActiveTenantContext {
     code: string;
     timezone: string;
     isDefault: boolean;
+    require_table_selection?: boolean;
+    require_table_pin?: boolean;
+    table_pin_length?: number;
   } | null;
   membership: {
     id: string;

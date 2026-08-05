@@ -25,7 +25,7 @@ export default async function TablesDashboardPage() {
 
     supabase
       .from('dining_tables')
-      .select('id, name, code, table_number, capacity, status, shape, is_active, service_area_id, service_areas(name, code)')
+      .select('id, name, code, table_number, capacity, status, shape, is_active, table_pin_hash, table_pin_updated_at, service_area_id, service_areas(name, code)')
       .eq('business_id', context.business.id)
       .eq('branch_id', context.defaultBranch.id)
       .is('deleted_at', null)
@@ -43,12 +43,18 @@ export default async function TablesDashboardPage() {
           href: '/dashboard/tables/new',
         }}
         secondaryAction={{
-          label: '📱 Bulk QR Export',
+          label: '📱 Branch QR & PIN Settings',
           href: '/dashboard/tables/qr',
         }}
       />
 
-      <TableGrid initialTables={tables || []} areas={areas || []} />
+      <TableGrid
+        businessName={context.business.name}
+        branchName={context.defaultBranch.name}
+        tablePinLength={context.defaultBranch.table_pin_length ?? 4}
+        initialTables={(tables as unknown as React.ComponentProps<typeof TableGrid>['initialTables']) || []}
+        areas={areas || []}
+      />
     </div>
   );
 }

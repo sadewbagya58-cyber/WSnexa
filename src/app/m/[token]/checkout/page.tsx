@@ -1,12 +1,12 @@
 import { QrService } from '@/server/services/qr.service';
-import { PublicGuestMenu } from '@/components/qr/public-guest-menu';
+import { CheckoutPreview } from '@/components/guest/checkout-preview';
 import { CartProvider } from '@/features/cart/cart-context';
 
-interface PublicMenuPageProps {
+interface CheckoutPageProps {
   params: Promise<{ token: string }>;
 }
 
-export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
+export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { token } = await params;
   const menuData = await QrService.resolvePublicBranchMenuByToken(token);
 
@@ -26,20 +26,20 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
     );
   }
 
-  const payload = menuData as unknown as React.ComponentProps<typeof PublicGuestMenu>;
+  const payload = menuData as unknown as {
+    business: { name: string; currency: string };
+    branch: { id: string; name: string; currency?: string };
+  };
+
   const branchId = payload.branch.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
 
   return (
     <CartProvider branchId={branchId} currency={currency}>
-      <PublicGuestMenu
+      <CheckoutPreview
         token={token}
-        business={payload.business}
-        branch={payload.branch}
-        service_areas={payload.service_areas}
-        dining_tables={payload.dining_tables}
-        categories={payload.categories}
-        items={payload.items}
+        branchName={payload.branch.name}
+        businessName={payload.business.name}
       />
     </CartProvider>
   );

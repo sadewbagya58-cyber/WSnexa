@@ -4,8 +4,15 @@ import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { verifyTableAccessAction } from '@/server/actions/table';
+import { useCart } from '@/features/cart/cart-context';
+import { ItemDetailSheet } from '../guest/item-detail-sheet';
+import { FloatingCartBar } from '../guest/floating-cart-bar';
+import { CartDrawer } from '../guest/cart-drawer';
+import { formatCurrency } from '@/features/cart/cart-calculations';
+import { CartLine } from '@/features/cart/cart-types';
 
 interface PublicGuestMenuProps {
+  token: string;
   business: {
     id: string;
     name: string;
@@ -23,6 +30,7 @@ interface PublicGuestMenuProps {
     require_table_selection: boolean;
     require_table_pin: boolean;
     table_pin_length: number;
+    currency?: string;
   };
   service_areas: Array<{
     id: string;
@@ -77,6 +85,7 @@ interface PublicGuestMenuProps {
 }
 
 export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
+  token,
   business,
   branch,
   service_areas,
@@ -84,27 +93,30 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   categories,
   items,
 }) => {
+  const { state, addLine, editLine, setConfirmedTable } = useCart();
+
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedItem, setSelectedItem] = useState<(typeof items)[0] | null>(null);
+  const [editingCartLine, setEditingCartLine] = useState<{
+    lineId: string;
+    quantity: number;
+    selectedModifiers: Array<{
+      groupId: string;
+      groupName: string;
+      optionId: string;
+      optionName: string;
+      additionalPriceCents: number;
+    }>;
+    specialInstructions?: string;
+  } | null>(null);
 
-  // Table Selection & PIN Verification State
+  // Cart Drawer & Table Modal state
+  const [cartDrawerOpen, setCartDrawerOpen] = useState<boolean>(false);
   const [tableModalOpen, setTableModalOpen] = useState<boolean>(false);
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [pinInput, setPinInput] = useState<string>('');
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-
-  // Confirmed Table Context for Customer Session
-  const [confirmedTable, setConfirmedTable] = useState<{
-    id: string;
-    name: string;
-    code: string;
-  } | null>(null);
-
-  const formatPrice = (priceCents: number, currency: string) => {
-    const symbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency + ' ';
-    return `${symbol}${(priceCents / 100).toFixed(2)}`;
-  };
 
   const filteredItems = items.filter((item) => {
     if (selectedCategory === 'all') return true;
@@ -132,9 +144,11 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
     if (res.success && res.data?.table) {
       setConfirmedTable({
-        id: res.data.table.id,
-        name: res.data.table.name,
-        code: res.data.table.code,
+        branchId: branch.id,
+        tableId: res.data.table.id,
+        tableName: res.data.table.name,
+        tableCode: res.data.table.code,
+        verifiedAt: new Date().toISOString(),
       });
       setTableModalOpen(false);
       setPinInput('');
@@ -143,8 +157,64 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     }
   };
 
+  const handleAddToCart = (configuredItem: {
+    menuItemId: string;
+    itemName: string;
+    imageUrl?: string | null;
+    quantity: number;
+    basePriceCents: number;
+    selectedModifiers: Array<{
+      groupId: string;
+      groupName: string;
+      optionId: string;
+      optionName: string;
+      additionalPriceCents: number;
+    }>;
+    specialInstructions?: string;
+    editingLineId?: string;
+  }) => {
+    if (configuredItem.editingLineId) {
+      editLine(
+        configuredItem.editingLineId,
+        configuredItem.quantity,
+        configuredItem.selectedModifiers,
+        configuredItem.specialInstructions
+      );
+    } else {
+      addLine({
+        menuItemId: configuredItem.menuItemId,
+        itemName: configuredItem.itemName,
+        imageUrl: configuredItem.imageUrl,
+        quantity: configuredItem.quantity,
+        basePriceCents: configuredItem.basePriceCents,
+        selectedModifiers: configuredItem.selectedModifiers,
+        specialInstructions: configuredItem.specialInstructions,
+      });
+    }
+
+    setSelectedItem(null);
+    setEditingCartLine(null);
+  };
+
+  const handleEditCartLine = (line: CartLine) => {
+    const itemCatalog = items.find((i) => i.id === line.menuItemId);
+    if (!itemCatalog) {
+      alert('This item is no longer available in the branch menu.');
+      return;
+    }
+
+    setEditingCartLine({
+      lineId: line.lineId,
+      quantity: line.quantity,
+      selectedModifiers: line.selectedModifiers,
+      specialInstructions: line.specialInstructions,
+    });
+    setSelectedItem(itemCatalog);
+    setCartDrawerOpen(false);
+  };
+
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-20">
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-24">
       {/* Top Banner & Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 py-3 shadow-xs">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -160,27 +230,41 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
             </h1>
           </div>
 
-          {/* Table Selection Status Pill */}
-          {branch.require_table_selection && (
-            <button
-              type="button"
-              onClick={() => setTableModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-all"
-            >
-              <span>📍</span>
-              {confirmedTable ? (
-                <span className="text-emerald-800 font-extrabold">{confirmedTable.name}</span>
-              ) : (
-                <span className="text-zinc-600">Select Table</span>
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Table Selection Status Pill */}
+            {branch.require_table_selection && (
+              <button
+                type="button"
+                onClick={() => setTableModalOpen(true)}
+                className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-all"
+              >
+                <span>📍</span>
+                {state.confirmedTable ? (
+                  <span className="text-emerald-800 font-extrabold">{state.confirmedTable.tableName}</span>
+                ) : (
+                  <span className="text-zinc-600">Select Table</span>
+                )}
+              </button>
+            )}
+
+            {/* Cart Icon Action Button */}
+            {state.isHydrated && state.totalQuantity > 0 && (
+              <button
+                type="button"
+                onClick={() => setCartDrawerOpen(true)}
+                className="flex items-center justify-center rounded-full bg-zinc-950 p-2 text-white shadow-xs hover:bg-zinc-800 transition-all"
+                aria-label="Open cart"
+              >
+                🛒
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {/* Table Selection Prompt Banner */}
-        {branch.require_table_selection && !confirmedTable && (
+        {branch.require_table_selection && !state.confirmedTable && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">
             <div>
               <span className="font-bold">Select your Table Number</span>
@@ -229,45 +313,54 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
         {/* Menu Items List */}
         <div className="space-y-3">
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => setSelectedItem(item)}
-              className="group cursor-pointer rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs hover:border-zinc-400 hover:shadow-xs transition-all flex items-start justify-between gap-4"
-            >
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-zinc-950 group-hover:text-zinc-900">
-                    {item.name}
-                  </h3>
-                  {item.is_featured && <Badge variant="warning">Featured</Badge>}
-                </div>
-                {item.description && (
-                  <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
-                    {item.description}
-                  </p>
-                )}
-                <div className="pt-1 text-sm font-black text-zinc-950">
-                  {formatPrice(item.price_cents, item.currency)}
-                </div>
-              </div>
+          {filteredItems.map((item) => {
+            const isOutOfStock = item.availability_status === 'out_of_stock';
 
-              {item.primary_image_url ? (
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.primary_image_url}
-                    alt={item.name}
-                    className="h-full w-full object-cover"
-                  />
+            return (
+              <div
+                key={item.id}
+                onClick={() => {
+                  setEditingCartLine(null);
+                  setSelectedItem(item);
+                }}
+                className="group cursor-pointer rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs hover:border-zinc-400 hover:shadow-xs transition-all flex items-start justify-between gap-4"
+              >
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-zinc-950 group-hover:text-zinc-900">
+                      {item.name}
+                    </h3>
+                    {item.is_featured && <Badge variant="warning">Featured</Badge>}
+                    {isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
+                  </div>
+                  {item.description && (
+                    <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
+                      {item.description}
+                    </p>
+                  )}
+                  <div className="pt-1 text-sm font-black text-zinc-950">
+                    {formatCurrency(item.price_cents, item.currency)}
+                  </div>
                 </div>
-              ) : (
-                <div className="h-20 w-20 shrink-0 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 flex items-center justify-center text-xl text-zinc-400">
-                  🍽️
-                </div>
-              )}
-            </div>
-          ))}
+
+                {item.primary_image_url ? (
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.primary_image_url}
+                      alt={item.name}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="h-20 w-20 shrink-0 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 flex items-center justify-center text-xl text-zinc-400">
+                    🍽️
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {filteredItems.length === 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-xs text-zinc-500">
@@ -277,70 +370,36 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         </div>
       </main>
 
-      {/* Item Details & Modifiers Modal */}
+      {/* Item Details & Modifiers Sheet */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-zinc-950">{selectedItem.name}</h2>
-                <p className="text-sm font-black text-zinc-950">
-                  {formatPrice(selectedItem.price_cents, selectedItem.currency)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedItem(null)}
-                className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            {selectedItem.description && (
-              <p className="text-xs text-zinc-600 leading-relaxed">
-                {selectedItem.description}
-              </p>
-            )}
-
-            {/* Modifier Groups */}
-            {selectedItem.modifier_groups && selectedItem.modifier_groups.length > 0 && (
-              <div className="space-y-4 pt-2 border-t border-zinc-100">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                  Customization Options
-                </h3>
-                {selectedItem.modifier_groups.map((group) => (
-                  <div key={group.id} className="rounded-xl border border-zinc-200 p-3 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-zinc-900">{group.name}</span>
-                      {group.is_required && <Badge variant="warning">Required</Badge>}
-                    </div>
-                    <div className="space-y-1.5">
-                      {group.options.map((opt) => (
-                        <div
-                          key={opt.id}
-                          className="flex items-center justify-between text-xs text-zinc-700"
-                        >
-                          <span>{opt.name}</span>
-                          {opt.price_cents > 0 && (
-                            <span className="font-bold">
-                              +{formatPrice(opt.price_cents, selectedItem.currency)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <Button className="w-full" onClick={() => setSelectedItem(null)}>
-              Close Item Details
-            </Button>
-          </div>
-        </div>
+        <ItemDetailSheet
+          item={selectedItem}
+          currency={branch.currency || business.currency || 'USD'}
+          editingLine={editingCartLine}
+          onClose={() => {
+            setSelectedItem(null);
+            setEditingCartLine(null);
+          }}
+          onAddToCart={handleAddToCart}
+        />
       )}
+
+      {/* Sticky Floating Mobile Cart Bar */}
+      <FloatingCartBar onOpenCart={() => setCartDrawerOpen(true)} />
+
+      {/* Slide-Over Cart Drawer */}
+      <CartDrawer
+        token={token}
+        requireTableSelection={branch.require_table_selection}
+        requireTablePin={branch.require_table_pin}
+        isOpen={cartDrawerOpen}
+        onClose={() => setCartDrawerOpen(false)}
+        onSelectTable={() => {
+          setCartDrawerOpen(false);
+          setTableModalOpen(true);
+        }}
+        onEditLine={handleEditCartLine}
+      />
 
       {/* Table Selection & PIN Verification Modal */}
       {tableModalOpen && (
@@ -363,7 +422,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
             )}
 
             <div className="space-y-4">
-              {/* Searchable Select grouped by Service Area */}
+              {/* Select grouped by Service Area */}
               <div>
                 <label className="block text-xs font-bold text-zinc-700 mb-1.5">
                   Dining Table Number *

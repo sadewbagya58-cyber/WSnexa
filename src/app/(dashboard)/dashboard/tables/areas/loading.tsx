@@ -1,29 +1,40 @@
 import React from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ListRowSkeleton } from '@/components/ui/skeletons';
 
 export default function AreasLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="space-y-2 pb-2 border-b border-zinc-200">
-        <div className="h-8 w-48 bg-zinc-200 rounded-md" />
-        <div className="h-4 w-80 bg-zinc-200 rounded-md" />
+    <div className="space-y-6">
+      {/* Real Page Header & Actions */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Service Areas</h1>
+          <p className="text-xs text-zinc-500">Configure dining zones, rooms, and seating floors</p>
+        </div>
+        <Link href="/dashboard/tables">
+          <Button variant="outline" size="sm">Manage Tables</Button>
+        </Link>
       </div>
 
-      <Card className="p-6 space-y-4">
-        <div className="h-5 w-44 bg-zinc-200 rounded" />
-        <div className="h-10 w-full bg-zinc-100 rounded" />
+      {/* Real Form Frame */}
+      <Card className="p-5 space-y-3">
+        <h2 className="text-sm font-bold text-zinc-950">Create New Service Area</h2>
+        <div className="flex gap-2">
+          <input
+            disabled
+            placeholder="Area name (e.g. Main Hall)..."
+            className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm bg-zinc-50 cursor-not-allowed"
+          />
+          <Button disabled size="sm">Add Area</Button>
+        </div>
       </Card>
 
-      <div className="space-y-3">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i} className="p-4 flex justify-between items-center">
-            <div className="space-y-2">
-              <div className="h-5 w-32 bg-zinc-200 rounded" />
-              <div className="h-3 w-48 bg-zinc-200 rounded" />
-            </div>
-            <div className="h-8 w-20 bg-zinc-200 rounded" />
-          </Card>
-        ))}
+      {/* Service Area List Skeleton */}
+      <div className="space-y-2">
+        <h2 className="text-sm font-bold text-zinc-950">Existing Service Areas</h2>
+        <ListRowSkeleton count={3} />
       </div>
     </div>
   );

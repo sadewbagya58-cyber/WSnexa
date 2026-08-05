@@ -1,39 +1,35 @@
 import React from 'react';
-import { Card } from '@/components/ui/card';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { TableGridSkeleton, StatsSkeleton } from '@/components/ui/skeletons';
 
 export default function TablesLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
-      {/* Header Skeleton */}
-      <div className="space-y-2 pb-2 border-b border-zinc-200">
-        <div className="h-8 w-64 bg-zinc-200 rounded-md" />
-        <div className="h-4 w-96 bg-zinc-200 rounded-md" />
+    <div className="space-y-6">
+      {/* Real Page Header & Actions */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Dining Tables</h1>
+          <p className="text-xs text-zinc-500">Manage seating layout, service areas, and table status</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/dashboard/tables/areas">
+            <Button variant="outline" size="sm">Service Areas</Button>
+          </Link>
+          <Link href="/dashboard/tables/bulk">
+            <Button variant="outline" size="sm">Bulk Generator</Button>
+          </Link>
+          <Link href="/dashboard/tables/new">
+            <Button size="sm">+ Add Table</Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Summary Stat Cards Skeleton */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Card key={i} className="p-3 text-center space-y-2">
-            <div className="h-3 w-16 bg-zinc-200 rounded mx-auto" />
-            <div className="h-6 w-10 bg-zinc-200 rounded mx-auto" />
-          </Card>
-        ))}
-      </div>
+      {/* Summary Stats Skeletons */}
+      <StatsSkeleton count={4} />
 
-      {/* Table Cards Grid Skeleton */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <Card key={i} className="p-5 space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="h-5 w-24 bg-zinc-200 rounded" />
-              <div className="h-4 w-16 bg-zinc-200 rounded" />
-            </div>
-            <div className="h-3 w-20 bg-zinc-200 rounded" />
-            <div className="h-3 w-32 bg-zinc-200 rounded" />
-            <div className="h-8 w-full bg-zinc-100 rounded" />
-          </Card>
-        ))}
-      </div>
+      {/* Table Grid Skeleton */}
+      <TableGridSkeleton count={4} />
     </div>
   );
 }

@@ -13,7 +13,8 @@
     "verify:onboarding": "tsx scripts/verify-onboarding.ts",
     "verify:menu": "tsx scripts/verify-menu.ts",
     "verify:modifiers": "tsx scripts/verify-modifiers.ts",
-    "verify:tables": "tsx scripts/verify-tables.ts"
+    "verify:tables": "tsx scripts/verify-tables.ts",
+    "verify:qr": "tsx scripts/verify-qr.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

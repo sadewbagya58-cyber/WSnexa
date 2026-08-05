@@ -882,11 +882,119 @@ export interface Database {
           }
         ];
       };
+      table_qr_codes: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string;
+          dining_table_id: string;
+          token_hash: string;
+          token_prefix: string | null;
+          version: number;
+          is_active: boolean;
+          generated_by: string | null;
+          generated_at: string;
+          last_regenerated_at: string | null;
+          expires_at: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          business_id: string;
+          branch_id: string;
+          dining_table_id: string;
+          token_hash: string;
+          token_prefix?: string | null;
+          version?: number;
+          is_active?: boolean;
+          generated_by?: string | null;
+          generated_at?: string;
+          last_regenerated_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          business_id?: string;
+          branch_id?: string;
+          dining_table_id?: string;
+          token_hash?: string;
+          token_prefix?: string | null;
+          version?: number;
+          is_active?: boolean;
+          generated_by?: string | null;
+          generated_at?: string;
+          last_regenerated_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      qr_scan_events: {
+        Row: {
+          id: number;
+          qr_code_id: string | null;
+          business_id: string | null;
+          branch_id: string | null;
+          dining_table_id: string | null;
+          scanned_at: string;
+          user_agent_hash: string | null;
+          ip_hash: string | null;
+          referrer: string | null;
+          session_fingerprint_hash: string | null;
+          is_valid: boolean;
+          failure_reason: string | null;
+        };
+        Insert: {
+          id?: number;
+          qr_code_id?: string | null;
+          business_id?: string | null;
+          branch_id?: string | null;
+          dining_table_id?: string | null;
+          scanned_at?: string;
+          user_agent_hash?: string | null;
+          ip_hash?: string | null;
+          referrer?: string | null;
+          session_fingerprint_hash?: string | null;
+          is_valid?: boolean;
+          failure_reason?: string | null;
+        };
+        Update: {
+          id?: number;
+          qr_code_id?: string | null;
+          business_id?: string | null;
+          branch_id?: string | null;
+          dining_table_id?: string | null;
+          scanned_at?: string;
+          user_agent_hash?: string | null;
+          ip_hash?: string | null;
+          referrer?: string | null;
+          session_fingerprint_hash?: string | null;
+          is_valid?: boolean;
+          failure_reason?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
+      resolve_public_table_menu: {
+        Args: {
+          p_token_hash: string;
+        };
+        Returns: Json;
+      };
       create_business_with_default_branch: {
         Args: {
           p_name: string;

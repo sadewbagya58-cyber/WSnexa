@@ -13,7 +13,7 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  const { user, profile, business, defaultBranch, membership } = context;
+  const { user, profile, business, activeBranch, branches, membership } = context;
   const userName = profile
     ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
     : '';
@@ -21,7 +21,8 @@ export default async function DashboardLayout({
   return (
     <DashboardShell
       businessName={business.name}
-      branchName={defaultBranch.name}
+      activeBranch={activeBranch}
+      branches={branches}
       userEmail={user.email || ''}
       userName={userName || user.email || ''}
       userRole={membership.role}

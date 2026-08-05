@@ -7,9 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { RouteProgress } from '@/components/ui/route-progress';
 import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
 
+import { ActiveBranchSwitcher } from './active-branch-switcher';
+import { BranchInfo } from '@/types';
+
 interface DashboardShellProps {
   businessName: string;
-  branchName: string;
+  activeBranch: BranchInfo | null;
+  branches: BranchInfo[];
   userEmail: string;
   userName: string;
   userRole: string;
@@ -30,7 +34,8 @@ interface NavSection {
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({
   businessName,
-  branchName,
+  activeBranch,
+  branches,
   userEmail,
   userName,
   userRole,
@@ -182,14 +187,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
           <span className="hidden text-zinc-300 sm:inline">|</span>
 
-          {/* Active Business & Branch context */}
+          {/* Active Business & Branch Switcher */}
           <div className="hidden items-center gap-2 sm:flex">
             <Badge variant="neutral" className="font-semibold text-zinc-900">
               🏢 {businessName}
             </Badge>
-            <Badge variant="neutral" className="text-zinc-600">
-              📍 {branchName}
-            </Badge>
+
+            <ActiveBranchSwitcher
+              activeBranch={activeBranch}
+              branches={branches}
+              isOwner={userRole === 'business_owner'}
+            />
           </div>
         </div>
 
@@ -261,7 +269,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               {/* Mobile Business & Branch Header */}
               <div className="rounded-md bg-zinc-50 p-3 space-y-1">
                 <p className="text-xs font-bold text-zinc-950">🏢 {businessName}</p>
-                <p className="text-xs text-zinc-500">📍 {branchName}</p>
+                <p className="text-xs text-zinc-500">📍 {activeBranch?.name || 'Primary Branch'}</p>
               </div>
 
               {renderNavLinks()}

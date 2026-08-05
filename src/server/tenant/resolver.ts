@@ -5,6 +5,7 @@ import { ActiveTenantContext } from '@/types';
 import { startTimer, stopTimer, logPerformanceMetric } from '@/lib/performance/logger';
 
 export const ACTIVE_BUSINESS_COOKIE = 'wsnexa_active_business';
+export const ACTIVE_BRANCH_COOKIE = 'wsnexa_active_branch';
 
 /**
  * Resolves current authenticated user from server session.
@@ -135,13 +136,35 @@ export const resolveActiveBusinessContext = cache(
       return null;
     }
 
-    // Fetch default branch
-    const { data: defaultBranch } = await supabase
+    // Fetch all active/non-deleted branches for the business
+    const { data: allBranches } = await supabase
       .from('branches')
       .select('*')
       .eq('business_id', business.id)
-      .eq('is_default', true)
-      .single();
+      .is('deleted_at', null)
+      .order('is_default', { ascending: false });
+
+    const formattedBranches = (allBranches || []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      code: b.code,
+      phone: b.phone || null,
+      email: b.email || null,
+      address_line1: b.address_line_1 || null,
+      city: b.city || null,
+      timezone: b.timezone,
+      currency: (b as unknown as { currency?: string }).currency || business.default_currency,
+      isDefault: b.is_default,
+      status: b.status,
+      require_table_selection: (b as unknown as { require_table_selection?: boolean }).require_table_selection ?? true,
+      require_table_pin: (b as unknown as { require_table_pin?: boolean }).require_table_pin ?? false,
+      table_pin_length: (b as unknown as { table_pin_length?: number }).table_pin_length ?? 4,
+    }));
+
+    const defaultBranchInfo = formattedBranches.find((b) => b.isDefault) || formattedBranches[0] || null;
+    const requestedBranchId = cookieStore.get(ACTIVE_BRANCH_COOKIE)?.value;
+
+    const activeBranchInfo = formattedBranches.find((b) => b.id === requestedBranchId) || defaultBranchInfo;
 
     const duration = stopTimer(startTime);
     logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);
@@ -167,21 +190,9 @@ export const resolveActiveBusinessContext = cache(
         timezone: business.timezone,
         status: business.status,
       },
-      defaultBranch: defaultBranch
-        ? {
-            id: defaultBranch.id,
-            name: defaultBranch.name,
-            code: defaultBranch.code,
-            timezone: defaultBranch.timezone,
-            isDefault: defaultBranch.is_default,
-            require_table_selection:
-              (defaultBranch as unknown as { require_table_selection?: boolean }).require_table_selection ?? true,
-            require_table_pin:
-              (defaultBranch as unknown as { require_table_pin?: boolean }).require_table_pin ?? false,
-            table_pin_length:
-              (defaultBranch as unknown as { table_pin_length?: number }).table_pin_length ?? 4,
-          }
-        : null,
+      defaultBranch: defaultBranchInfo,
+      activeBranch: activeBranchInfo,
+      branches: formattedBranches,
       membership: {
         id: activeMembership.id,
         role: activeMembership.role,

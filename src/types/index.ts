@@ -1,4 +1,19 @@
-export * from './database.types';
+export interface BranchInfo {
+  id: string;
+  name: string;
+  code: string;
+  phone?: string | null;
+  email?: string | null;
+  address_line1?: string | null;
+  city?: string | null;
+  timezone: string;
+  currency?: string | null;
+  isDefault: boolean;
+  status: string;
+  require_table_selection?: boolean;
+  require_table_pin?: boolean;
+  table_pin_length?: number;
+}
 
 export interface ActiveTenantContext {
   user: {
@@ -19,16 +34,9 @@ export interface ActiveTenantContext {
     timezone: string;
     status: string;
   };
-  defaultBranch: {
-    id: string;
-    name: string;
-    code: string;
-    timezone: string;
-    isDefault: boolean;
-    require_table_selection?: boolean;
-    require_table_pin?: boolean;
-    table_pin_length?: number;
-  } | null;
+  defaultBranch: BranchInfo | null;
+  activeBranch: BranchInfo | null;
+  branches: BranchInfo[];
   membership: {
     id: string;
     role: string;

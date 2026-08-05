@@ -202,16 +202,18 @@ export default async function DashboardOverviewPage() {
               </Link>
             </div>
 
-            {/* Step 4: QR Codes & Customer Menu (Coming Soon) */}
-            <div className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 p-4 opacity-75">
+            {/* Step 4: QR Codes & Customer Menu */}
+            <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-zinc-600">4</span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">✓</span>
                 <div>
-                  <h3 className="text-xs font-bold text-zinc-950">Table QR Codes & Guest Ordering</h3>
-                  <p className="text-[11px] text-zinc-500">Generate QR stickers for contactless ordering (Phase 8).</p>
+                  <h3 className="text-xs font-bold text-zinc-950">Table QR Codes & Digital Menu</h3>
+                  <p className="text-[11px] text-zinc-500">Generate secure QR stickers for guest digital menu access.</p>
                 </div>
               </div>
-              <Badge variant="neutral">Coming Soon</Badge>
+              <Link href="/dashboard/tables/qr">
+                <Button variant="outline" size="sm">Manage QR Codes</Button>
+              </Link>
             </div>
           </div>
         </Card>
@@ -222,6 +224,11 @@ export default async function DashboardOverviewPage() {
           <Card className="p-6 space-y-3">
             <h2 className="text-base font-bold text-zinc-950">Quick Actions</h2>
             <div className="flex flex-col gap-2">
+              <Link href="/dashboard/tables/qr">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  📱 Manage & Export Table QRs
+                </Button>
+              </Link>
               <Link href="/dashboard/tables/bulk">
                 <Button variant="outline" size="sm" className="w-full justify-start">
                   ⚡ Bulk Generate Tables

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -228,7 +229,7 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
                 </div>
               </div>
 
-              {/* Status Change Selector & Archive */}
+              {/* Status Change Selector & Actions */}
               <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
                 <select
                   value={table.status}
@@ -243,14 +244,22 @@ export const TableGrid: React.FC<TableGridProps> = ({ initialTables, areas }) =>
                   <option value="unavailable">Set Unavailable</option>
                 </select>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isPending}
-                  onClick={() => handleArchive(table.id)}
-                >
-                  Archive
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Link href={`/dashboard/tables/${table.id}/qr`}>
+                    <Button variant="outline" size="sm">
+                      📱 QR
+                    </Button>
+                  </Link>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => handleArchive(table.id)}
+                  >
+                    Archive
+                  </Button>
+                </div>
               </div>
             </Card>
           );

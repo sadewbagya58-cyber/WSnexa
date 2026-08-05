@@ -68,12 +68,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         { label: 'Service Areas', href: '/dashboard/tables/areas' },
         { label: 'Add Table', href: '/dashboard/tables/new' },
         { label: 'Bulk Generator', href: '/dashboard/tables/bulk' },
+        { label: 'QR Codes & Cards', href: '/dashboard/tables/qr' },
       ],
     },
     {
       sectionTitle: 'Upcoming Features',
       items: [
-        { label: 'QR Codes', href: '#', badge: 'Soon', disabled: true },
         { label: 'Orders & POS', href: '#', badge: 'Soon', disabled: true },
         { label: 'Kitchen Display', href: '#', badge: 'Soon', disabled: true },
         { label: 'Reports & Analytics', href: '#', badge: 'Soon', disabled: true },

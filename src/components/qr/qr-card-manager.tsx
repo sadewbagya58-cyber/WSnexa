@@ -117,6 +117,36 @@ export const QrCardManager: React.FC<QrCardManagerProps> = ({
     window.print();
   };
 
+  const handleDownloadPng = () => {
+    const svgElement = document.querySelector('.lg\\:col-span-2 svg');
+    if (!svgElement) return;
+
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    canvas.width = 1024;
+    canvas.height = 1024;
+
+    img.onload = () => {
+      if (!ctx) return;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 1024, 1024);
+      ctx.drawImage(img, 0, 0, 1024, 1024);
+      const pngUrl = canvas.toDataURL('image/png');
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = pngUrl;
+      downloadLink.download = `QR-${tableCode || tableName}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    };
+
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left Column: Management Controls */}
@@ -160,6 +190,14 @@ export const QrCardManager: React.FC<QrCardManagerProps> = ({
                 onClick={handlePrint}
               >
                 🖨️ Print Single Card
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleDownloadPng}
+              >
+                💾 Download High-Res PNG
               </Button>
 
               <Button

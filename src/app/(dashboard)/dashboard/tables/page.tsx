@@ -43,8 +43,8 @@ export default async function TablesDashboardPage() {
           href: '/dashboard/tables/new',
         }}
         secondaryAction={{
-          label: '⚡ Bulk Generator',
-          href: '/dashboard/tables/bulk',
+          label: '📱 Bulk QR Export',
+          href: '/dashboard/tables/qr',
         }}
       />
 

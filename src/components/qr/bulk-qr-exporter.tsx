@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,7 @@ export const BulkQrExporter: React.FC<BulkQrExporterProps> = ({
   const [selectedTableIds, setSelectedTableIds] = useState<Set<string>>(new Set());
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [svgMap, setSvgMap] = useState<Record<string, string>>({});
 
   const filteredTables = tablesList.filter(
     (t) => selectedArea === 'all' || t.service_area_id === selectedArea
@@ -49,6 +50,28 @@ export const BulkQrExporter: React.FC<BulkQrExporterProps> = ({
 
   const activeQrCount = filteredTables.filter((t) => t.hasActiveQr).length;
   const totalCount = filteredTables.length;
+
+  useEffect(() => {
+    let isMounted = true;
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+
+    async function loadSvgs() {
+      const newMap: Record<string, string> = {};
+      for (const table of filteredTables) {
+        const sampleUrl = `${baseUrl}/m/${table.tokenPrefix || 'SAMPLE'}`;
+        newMap[table.id] = await generateQrSvgString(sampleUrl, 150);
+      }
+      if (isMounted) {
+        setSvgMap(newMap);
+      }
+    }
+
+    loadSvgs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filteredTables]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -81,7 +104,6 @@ export const BulkQrExporter: React.FC<BulkQrExporterProps> = ({
 
     if (res.success) {
       setFeedback(res.message || 'Bulk QR generation completed');
-      // Update local active state for all items
       setTablesList((prev) =>
         prev.map((t) => ({ ...t, hasActiveQr: true }))
       );
@@ -232,9 +254,6 @@ export const BulkQrExporter: React.FC<BulkQrExporterProps> = ({
 
         <div className="grid grid-cols-2 gap-6">
           {filteredTables.map((table) => {
-            const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-            const sampleUrl = `${baseUrl}/m/${table.tokenPrefix || 'SAMPLE'}`;
-
             return (
               <div
                 key={table.id}
@@ -246,8 +265,8 @@ export const BulkQrExporter: React.FC<BulkQrExporterProps> = ({
                 </div>
 
                 <div
-                  className="mx-auto h-40 w-40 p-1 border border-zinc-200 rounded-md"
-                  dangerouslySetInnerHTML={{ __html: generateQrSvgString(sampleUrl, 150) }}
+                  className="mx-auto h-40 w-40 p-1 border border-zinc-200 rounded-md flex items-center justify-center"
+                  dangerouslySetInnerHTML={{ __html: svgMap[table.id] || '' }}
                 />
 
                 <div className="space-y-0.5 text-[11px]">

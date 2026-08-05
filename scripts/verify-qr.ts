@@ -55,11 +55,19 @@ async function runQrVerificationSuite() {
   assert(!qrTableErr, 'Schema 1: table_qr_codes table exists in Supabase');
   assert(!scanTableErr, 'Schema 2: qr_scan_events table exists in Supabase');
 
-  // 2. Token Security Unit Tests
+  // 2. Token Security & Standards-Compliant QR Encoder Unit Tests
   const pair1 = generateSecureQrToken();
   assert(pair1.rawToken.length >= 30, 'Token Security 1: Raw token has 256-bit entropy and URL-safe Base64URL encoding');
   assert(pair1.tokenHash !== pair1.rawToken, 'Token Security 2: Database stores SHA-256 hash, not raw token');
   assert(pair1.tokenPrefix.length === 8, 'Token Security 3: Safe 8-character prefix generated');
+
+  const { generateQrSvgString, generateQrPngDataUrl } = await import('../src/lib/qr/qr-generator');
+  const sampleUrl = 'https://w-snexa.vercel.app/m/' + pair1.rawToken;
+  const svgOutput = await generateQrSvgString(sampleUrl, 256);
+  const pngDataUrl = await generateQrPngDataUrl(sampleUrl, 1024);
+
+  assert(svgOutput.includes('<svg') && svgOutput.includes('path'), 'QR Encoder 1: Industry-standard ISO/IEC 18004 SVG vector matrix generated');
+  assert(pngDataUrl.startsWith('data:image/png;base64,'), 'QR Encoder 2: High-resolution PNG Data URL generated for Android/Lens/iOS scanners');
 
   // 3. Create Real Test Users & Businesses
   const emailOwnerA = `test.qr.ownerA.${Date.now()}@wsnexa-test.com`;

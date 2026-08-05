@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import {
   regenerateTableQrAction,
   disableTableQrAction,
 } from '@/server/actions/qr';
-import { generateQrSvgString } from '@/lib/qr/qr-generator';
+import { generateQrSvgString, generateQrPngDataUrl } from '@/lib/qr/qr-generator';
 
 interface QrCardManagerProps {
   businessName: string;
@@ -40,12 +40,25 @@ export const QrCardManager: React.FC<QrCardManagerProps> = ({
   const [rawToken, setRawToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [svgHtml, setSvgHtml] = useState<string>('');
 
   const baseUrl =
     typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
   
   // Public URL string
-  const publicUrl = rawToken ? `${baseUrl}/m/${rawToken}` : `${baseUrl}/m/${qr?.token_prefix || 'SAMPLE'}`;
+  const publicUrl = rawToken
+    ? `${baseUrl}/m/${rawToken}`
+    : `${baseUrl}/m/${qr?.token_prefix || 'SAMPLE'}`;
+
+  useEffect(() => {
+    let isMounted = true;
+    generateQrSvgString(publicUrl, 216).then((svg) => {
+      if (isMounted) setSvgHtml(svg);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [publicUrl]);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -117,34 +130,18 @@ export const QrCardManager: React.FC<QrCardManagerProps> = ({
     window.print();
   };
 
-  const handleDownloadPng = () => {
-    const svgElement = document.querySelector('.lg\\:col-span-2 svg');
-    if (!svgElement) return;
-
-    const svgData = new XMLSerializer().serializeToString(svgElement);
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-
-    canvas.width = 1024;
-    canvas.height = 1024;
-
-    img.onload = () => {
-      if (!ctx) return;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 1024, 1024);
-      ctx.drawImage(img, 0, 0, 1024, 1024);
-      const pngUrl = canvas.toDataURL('image/png');
-
+  const handleDownloadPng = async () => {
+    try {
+      const pngUrl = await generateQrPngDataUrl(publicUrl, 1024);
       const downloadLink = document.createElement('a');
       downloadLink.href = pngUrl;
       downloadLink.download = `QR-${tableCode || tableName}.png`;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
-    };
-
-    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    } catch (err) {
+      alert('Failed to generate PNG download: ' + err);
+    }
   };
 
   return (
@@ -252,8 +249,8 @@ export const QrCardManager: React.FC<QrCardManagerProps> = ({
           <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-6 space-y-3">
             {qr?.is_active ? (
               <div
-                className="h-56 w-56 bg-white p-2 border border-zinc-200 rounded-lg shadow-sm"
-                dangerouslySetInnerHTML={{ __html: generateQrSvgString(publicUrl, 216) }}
+                className="h-56 w-56 bg-white p-2 border border-zinc-200 rounded-lg shadow-sm flex items-center justify-center"
+                dangerouslySetInnerHTML={{ __html: svgHtml }}
               />
             ) : (
               <div className="h-56 w-56 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 text-center text-xs text-zinc-400 p-4">

@@ -85,6 +85,9 @@ async function runQrVerificationSuite() {
   }).select().single();
 
   try {
+    // Deactivate any pre-existing QR code on test branch
+    await admin.from('branch_qr_codes').update({ is_active: false, revoked_at: new Date().toISOString() }).eq('branch_id', branch.id).eq('is_active', true);
+
     // 1. Branch QR generated securely
     const tokenPair = generateSecureQrToken();
     assertTest('Branch QR token pair generated with 256-bit entropy', tokenPair.rawToken.length >= 40 && tokenPair.tokenPrefix.length === 8);

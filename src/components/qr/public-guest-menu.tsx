@@ -254,7 +254,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
               {item.primary_image_url ? (
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
-                  {/* eslint-disable-next-html-element */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.primary_image_url}
                     alt={item.name}

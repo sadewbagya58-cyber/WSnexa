@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS public.branch_qr_codes (
     CONSTRAINT chk_branch_qr_revoked_not_active CHECK (NOT (is_active = true AND revoked_at IS NOT NULL))
 );
 
+-- Drop legacy table_qr_codes foreign key constraint on scan events table
+ALTER TABLE public.qr_scan_events DROP CONSTRAINT IF EXISTS qr_scan_events_qr_code_id_fkey;
+
 -- Guarantee at most one active QR code per branch
 CREATE UNIQUE INDEX IF NOT EXISTS idx_active_qr_per_branch 
     ON public.branch_qr_codes(branch_id) 
@@ -166,8 +169,8 @@ BEGIN
       AND deleted_at IS NULL;
 
     IF v_branch.id IS NULL THEN
-        INSERT INTO public.qr_scan_events (qr_code_id, business_id, branch_id, is_valid, failure_reason)
-        VALUES (v_qr.id, v_qr.business_id, v_qr.branch_id, false, 'Branch inactive or archived');
+        INSERT INTO public.qr_scan_events (business_id, branch_id, is_valid, failure_reason)
+        VALUES (v_qr.business_id, v_qr.branch_id, false, 'Branch inactive or archived');
 
         RETURN jsonb_build_object('success', false, 'error', 'BRANCH_UNAVAILABLE');
     END IF;
@@ -182,8 +185,8 @@ BEGIN
     END IF;
 
     -- 4. Record Valid Scan Event
-    INSERT INTO public.qr_scan_events (qr_code_id, business_id, branch_id, is_valid)
-    VALUES (v_qr.id, v_qr.business_id, v_qr.branch_id, true);
+    INSERT INTO public.qr_scan_events (business_id, branch_id, is_valid)
+    VALUES (v_qr.business_id, v_qr.branch_id, true);
 
     -- 5. Fetch Active Service Areas
     SELECT COALESCE(jsonb_agg(

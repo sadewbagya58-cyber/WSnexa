@@ -65,12 +65,14 @@ export class BranchService {
       throw new Error(`Branch code "${input.code.toUpperCase()}" already exists in this business.`);
     }
 
-    const { data: newBranch, error: insertErr } = await supabase
+    const branchCode = input.code.toUpperCase().trim();
+
+    const { error: insertErr } = await supabase
       .from('branches')
       .insert({
         business_id: businessId,
         name: input.name.trim(),
-        code: input.code.toUpperCase().trim(),
+        code: branchCode,
         phone: input.phone || null,
         email: input.email || null,
         address_line_1: input.address_line_1 || null,
@@ -81,12 +83,21 @@ export class BranchService {
         require_table_selection: input.require_table_selection ?? true,
         require_table_pin: input.require_table_pin ?? false,
         table_pin_length: input.table_pin_length ?? 4,
-      })
+      });
+
+    if (insertErr) {
+      throw new Error(`Failed to create branch: ${insertErr.message}`);
+    }
+
+    const { data: newBranch, error: fetchErr } = await supabase
+      .from('branches')
       .select('*')
+      .eq('business_id', businessId)
+      .eq('code', branchCode)
       .single();
 
-    if (insertErr || !newBranch) {
-      throw new Error(`Failed to create branch: ${insertErr?.message}`);
+    if (fetchErr || !newBranch) {
+      throw new Error(`Failed to retrieve created branch: ${fetchErr?.message}`);
     }
 
     // Initialize 7 default operating hours records (Monday-Sunday)

@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { hashQrToken, hashTablePin } from '@/lib/qr/security';
 import { verifySignedTableAccessProof } from '@/lib/qr/table-access-proof';
@@ -88,31 +88,47 @@ export class OrderService {
     // Compute peppered token hash
     const tokenHash = hashQrToken(rawQrToken);
     const supabase = await createClient();
+    const admin = createAdminClient();
 
     let pinHash: string | null = null;
+    let proofLogData: Record<string, unknown> = {
+      tableId,
+      signedTableAccessProofExists: Boolean(signedTableAccessProof),
+      inputPinExists: Boolean(inputPin && inputPin.trim().length > 0),
+    };
 
-    // 1. If signed table access proof is provided, verify proof integrity, branch, table, and expiration
+    // 1. If signed table access proof is provided, verify proof integrity with admin client
     if (signedTableAccessProof && tableId) {
-      // First resolve branchId associated with QR code
-      const { data: qrData } = await supabase
-        .from('branch_qr_codes')
-        .select('branch_id')
-        .eq('token_hash', tokenHash)
-        .eq('is_active', true)
-        .is('revoked_at', null)
+      // Resolve table & branch details using admin client to bypass guest RLS restriction
+      const { data: tableData } = await admin
+        .from('dining_tables')
+        .select('branch_id, table_pin_hash')
+        .eq('id', tableId)
         .maybeSingle();
 
-      if (!qrData) {
-        return { success: false, message: 'Invalid or revoked QR code.' };
+      if (!tableData) {
+        console.error('[OrderService.createGuestOrder] Dining table not found for proof resolution:', tableId);
+        return { success: false, message: 'Selected dining table is unavailable.' };
       }
 
       const proofResult = verifySignedTableAccessProof(
         signedTableAccessProof,
-        qrData.branch_id,
+        tableData.branch_id,
         tableId
       );
 
+      proofLogData = {
+        ...proofLogData,
+        branchId: tableData.branch_id,
+        proofVerified: proofResult.valid,
+        proofError: proofResult.error || null,
+        proofExpired: proofResult.error === 'EXPIRED',
+        proofBranchMatches: proofResult.error !== 'BRANCH_MISMATCH',
+        proofTableMatches: proofResult.error !== 'TABLE_MISMATCH',
+      };
+
       if (!proofResult.valid) {
+        console.warn('[OrderService.createGuestOrder] Signed Table Access Proof invalid:', proofLogData);
         if (proofResult.error === 'EXPIRED') {
           return {
             success: false,
@@ -127,22 +143,19 @@ export class OrderService {
         };
       }
 
-      // Proof is valid! Retrieve table_pin_hash from database so RPC receives verified pinHash
-      const { data: tableData } = await supabase
-        .from('dining_tables')
-        .select('table_pin_hash')
-        .eq('id', tableId)
-        .eq('branch_id', qrData.branch_id)
-        .maybeSingle();
-
-      if (!tableData) {
-        return { success: false, message: 'Selected dining table is unavailable.' };
-      }
-
+      // Proof is valid! Pass the verified table_pin_hash to create_guest_order RPC
       pinHash = tableData.table_pin_hash;
+      proofLogData.p_pin_hash = pinHash ? `${pinHash.substring(0, 8)}...` : null;
     } else if (inputPin && inputPin.trim().length > 0) {
       pinHash = hashTablePin(inputPin.trim());
+      proofLogData.p_pin_hash = pinHash ? `${pinHash.substring(0, 8)}...` : null;
+      proofLogData.p_input_pin_sent = true;
+    } else {
+      proofLogData.p_pin_hash = null;
+      proofLogData.p_input_pin_sent = false;
     }
+
+    console.log('[OrderService.createGuestOrder] Executing create_guest_order RPC with params:', proofLogData);
 
     // Invoke atomic create_guest_order RPC
     const { data, error } = await supabase.rpc('create_guest_order', {
@@ -155,6 +168,8 @@ export class OrderService {
       p_idempotency_key: idempotencyKey,
       p_cart_items: cartItems,
     });
+
+    console.log('[OrderService.createGuestOrder] RPC Response:', { data, error });
 
     if (error || !data) {
       return {

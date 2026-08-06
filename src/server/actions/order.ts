@@ -11,7 +11,22 @@ import { ActionResponse } from './auth';
 export async function submitGuestOrderAction(
   input: CreateGuestOrderInput
 ): Promise<ActionResponse<{ orderId: string; accessToken: string; orderNumberFormatted: string; status: OrderStatus }>> {
+  console.log('[submitGuestOrderAction] Received order submission request:', {
+    rawQrTokenPrefix: input.rawQrToken ? input.rawQrToken.substring(0, 10) : null,
+    tableId: input.tableId,
+    signedTableAccessProofExists: Boolean(input.signedTableAccessProof),
+    inputPinExists: Boolean(input.inputPin && input.inputPin.trim().length > 0),
+    cartItemsCount: input.cartItems?.length || 0,
+    idempotencyKey: input.idempotencyKey,
+  });
+
   const result = await OrderService.createGuestOrder(input);
+
+  console.log('[submitGuestOrderAction] Outcome:', {
+    success: result.success,
+    message: result.message,
+    orderId: result.data?.orderId,
+  });
 
   if (!result.success || !result.data) {
     return {

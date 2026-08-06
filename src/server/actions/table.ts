@@ -605,10 +605,18 @@ export async function verifyTableAccessAction(
     return { success: false, message: 'Selected dining table is unavailable or archived.' };
   }
 
+  console.log('[verifyTableAccessAction] Request:', { branchId, tableId, inputPinProvided: Boolean(inputPin) });
+
   // Generate signed table access proof for secure order submission without persisting raw PIN
   const proofData = payload.table
     ? createSignedTableAccessProof(branchId, payload.table.id)
     : undefined;
+
+  console.log('[verifyTableAccessAction] Generated Proof:', {
+    tableId: payload.table?.id,
+    branchId,
+    proofGenerated: Boolean(proofData?.proof),
+  });
 
   return {
     success: true,

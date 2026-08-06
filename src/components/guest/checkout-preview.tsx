@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/features/cart/cart-context';
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
 import { submitGuestOrderAction } from '@/server/actions/order';
 
 interface CheckoutPreviewProps {
@@ -113,11 +114,23 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         sessionStorage.removeItem(`wsnexa_checkout_key_${state.branchId}`);
       }
 
-      // Clear cart state
+      // Save safe active order metadata to sessionStorage for recovery
+      saveActiveOrderToStorage({
+        orderId: res.data.orderId,
+        orderNumberFormatted: res.data.orderNumberFormatted,
+        branchId: state.branchId,
+        tableId: state.confirmedTable?.tableId || null,
+        tableName: state.confirmedTable?.tableName || null,
+        createdAt: new Date().toISOString(),
+        latestStatus: res.data.status,
+        accessToken: res.data.accessToken,
+      });
+
+      // Clear local cart state
       clearCart();
 
-      // Redirect to confirmation status page
-      router.push(`/m/${token}/order/${res.data.orderId}`);
+      // Redirect to confirmation status page with access_token security parameter
+      router.push(`/m/${token}/order/${res.data.orderId}?access_token=${res.data.accessToken}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'An unexpected error occurred.';
       setErrorMessage(msg);

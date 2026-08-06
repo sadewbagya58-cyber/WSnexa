@@ -33,6 +33,7 @@ export interface OrderRecord {
   order_number: number;
   order_number_formatted: string;
   idempotency_key: string;
+  access_token: string;
   status: OrderStatus;
   payment_status: string;
   payment_method: string;
@@ -110,6 +111,7 @@ export class OrderService {
       success: boolean;
       error?: string;
       order_id?: string;
+      access_token?: string;
       order_number_formatted?: string;
       status?: OrderStatus;
       total_cents?: number;
@@ -148,6 +150,7 @@ export class OrderService {
       success: true,
       data: {
         orderId: res.order_id!,
+        accessToken: res.access_token!,
         orderNumberFormatted: res.order_number_formatted!,
         status: res.status!,
         totalCents: res.total_cents!,
@@ -158,12 +161,12 @@ export class OrderService {
   }
 
   /**
-   * Fetches full guest order confirmation details by ID.
+   * Fetches full guest order confirmation details by ID with access_token security check.
    */
-  static async getOrderById(orderId: string): Promise<OrderRecord | null> {
+  static async getOrderById(orderId: string, accessToken?: string): Promise<OrderRecord | null> {
     const supabase = await createClient();
 
-    const { data: order, error } = await supabase
+    let query = supabase
       .from('orders')
       .select(`
         *,
@@ -184,8 +187,13 @@ export class OrderService {
           )
         )
       `)
-      .eq('id', orderId)
-      .maybeSingle();
+      .eq('id', orderId);
+
+    if (accessToken) {
+      query = query.eq('access_token', accessToken);
+    }
+
+    const { data: order, error } = await query.maybeSingle();
 
     if (error || !order) return null;
     return order as unknown as OrderRecord;

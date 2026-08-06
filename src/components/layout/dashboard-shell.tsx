@@ -80,6 +80,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       sectionTitle: 'Orders & Kitchen',
       items: [
         { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
+        { label: 'Waiter Assistance', href: '/dashboard/waiter' },
       ],
     },
     {

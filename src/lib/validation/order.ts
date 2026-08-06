@@ -47,6 +47,11 @@ export const createGuestOrderSchema = z.object({
   cartItems: z.array(cartItemInputSchema).min(1, 'Cart cannot be empty'),
 });
 
+export const orderAccessSchema = z.object({
+  orderId: z.string().uuid(),
+  accessToken: z.string().min(1, 'Access token is required'),
+});
+
 export const updateOrderStatusSchema = z.object({
   orderId: z.string().uuid(),
   status: orderStatusEnum,

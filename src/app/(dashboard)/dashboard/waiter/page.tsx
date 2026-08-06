@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { OrderService } from '@/server/services/order.service';
+import { WaiterService } from '@/server/services/waiter.service';
 import { PageHeader } from '@/components/ui/page-header';
-import { KitchenOrderQueue } from '@/components/kitchen/kitchen-order-queue';
+import { WaiterRequestCenter } from '@/components/waiter/waiter-request-center';
 
-export default async function KitchenPage() {
+export default async function WaiterPage() {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) {
     redirect('/login');
@@ -21,21 +21,21 @@ export default async function KitchenPage() {
     redirect('/dashboard');
   }
 
-  const initialOrders = await OrderService.getKitchenQueue();
+  const initialRequests = await WaiterService.getBranchWaiterRequests();
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kitchen Display Queue"
-        description={`Active orders for ${context.activeBranch.name} (${context.activeBranch.code || 'Main'}).`}
+        title="Waiter Request Center"
+        description={`Realtime customer table assistance requests for ${context.activeBranch.name}.`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Kitchen Queue' },
+          { label: 'Waiter Assistance' },
         ]}
       />
 
-      <KitchenOrderQueue
-        initialOrders={initialOrders}
+      <WaiterRequestCenter
+        initialRequests={initialRequests}
         branchName={context.activeBranch.name}
         branchId={context.activeBranch.id}
       />

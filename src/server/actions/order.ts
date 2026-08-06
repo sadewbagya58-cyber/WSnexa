@@ -10,7 +10,7 @@ import { ActionResponse } from './auth';
  */
 export async function submitGuestOrderAction(
   input: CreateGuestOrderInput
-): Promise<ActionResponse<{ orderId: string; orderNumberFormatted: string; status: OrderStatus }>> {
+): Promise<ActionResponse<{ orderId: string; accessToken: string; orderNumberFormatted: string; status: OrderStatus }>> {
   const result = await OrderService.createGuestOrder(input);
 
   if (!result.success || !result.data) {
@@ -26,6 +26,7 @@ export async function submitGuestOrderAction(
     message: 'Order placed successfully!',
     data: {
       orderId: result.data.orderId,
+      accessToken: result.data.accessToken,
       orderNumberFormatted: result.data.orderNumberFormatted,
       status: result.data.status,
     },

@@ -54,18 +54,37 @@ async function runOrdersVerificationSuite() {
       ordersErr?.message || 'Tables not found'
     );
 
+    // Setup Test Owner User
+    const timestamp = Date.now();
+    const { data: authUser, error: authErr } = await admin.auth.admin.createUser({
+      email: `order_owner_${timestamp}@test.com`,
+      password: 'TestPassword123!',
+      email_confirm: true,
+    });
+
+    if (authErr || !authUser.user) {
+      throw new Error(`Failed to create test owner user: ${authErr?.message}`);
+    }
+
+    const testUserId = authUser.user.id;
+
     // Setup Isolated Test Business and Branches
-    const testSlug = `order-test-${Date.now()}`;
-    const { data: biz } = await admin
+    const testSlug = `order-test-${timestamp}`;
+    const { data: biz, error: bizErr } = await admin
       .from('businesses')
       .insert({
         name: 'Order Security Test Cafe',
         slug: testSlug,
         default_currency: 'LKR',
         timezone: 'Asia/Colombo',
+        created_by: testUserId,
       })
       .select('*')
       .single();
+
+    if (bizErr || !biz) {
+      throw new Error(`Failed to create test business: ${bizErr?.message}`);
+    }
 
     bizId = biz.id;
 

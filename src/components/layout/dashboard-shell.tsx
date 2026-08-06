@@ -77,11 +77,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       ],
     },
     {
+      sectionTitle: 'Orders & Kitchen',
+      items: [
+        { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
+      ],
+    },
+    {
       sectionTitle: 'Upcoming Features',
       items: [
-        { label: 'Orders & POS', href: '#', badge: 'Soon', disabled: true },
-        { label: 'Kitchen Display', href: '#', badge: 'Soon', disabled: true },
-        { label: 'Reports & Analytics', href: '#', badge: 'Soon', disabled: true },
+        { label: 'POS Billing', href: '#', badge: 'Phase 11', disabled: true },
+        { label: 'Reports & Analytics', href: '#', badge: 'Phase 12', disabled: true },
       ],
     },
   ];

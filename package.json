@@ -16,7 +16,8 @@
     "verify:tables": "tsx scripts/verify-tables.ts",
     "verify:qr": "tsx scripts/verify-qr.ts",
     "verify:cart": "tsx scripts/verify-cart.ts",
-    "verify:branches": "tsx scripts/verify-branches.ts"
+    "verify:branches": "tsx scripts/verify-branches.ts",
+    "verify:orders": "tsx scripts/verify-orders.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -83,6 +83,7 @@ export class OrderService {
       guestName,
       guestPhone,
       guestNotes,
+      paymentMethod,
       idempotencyKey,
       cartItems,
     } = parsed.data;
@@ -165,6 +166,7 @@ export class OrderService {
       p_guest_notes: guestNotes || null,
       p_idempotency_key: idempotencyKey,
       p_cart_items: cartItems,
+      p_payment_method: paymentMethod || 'pay_at_counter',
     });
 
     const rpcPayload = data as { success?: boolean; error?: string } | null;

@@ -277,6 +277,42 @@ async function runOrdersVerificationSuite() {
       'Test 11: Cart storage preserves signedTableAccessProof across serialization & hydration'
     );
 
+    // TEST 12: Default Payment Method is pay_at_counter and status is unpaid
+    const { data: defaultPayRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_guest_name: 'Default Payment Guest',
+      p_idempotency_key: `idemp_def_pay_${timestamp}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
+      p_payment_method: 'pay_at_counter',
+    });
+
+    assert(
+      defaultPayRes?.success === true &&
+        defaultPayRes?.payment_method === 'pay_at_counter' &&
+        defaultPayRes?.payment_status === 'unpaid',
+      'Test 12: Order created with default payment method (pay_at_counter) and remains unpaid'
+    );
+
+    // TEST 13: Order created with explicit preferred payment method (cash / card / qr_pay) remains unpaid
+    const { data: cardPrefRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_guest_name: 'Card Preferred Guest',
+      p_idempotency_key: `idemp_card_pref_${timestamp}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
+      p_payment_method: 'card',
+    });
+
+    assert(
+      cardPrefRes?.success === true &&
+        cardPrefRes?.payment_method === 'card' &&
+        cardPrefRes?.payment_status === 'unpaid',
+      'Test 13: Order created with preferred payment method (card) saves preference in DB and status remains unpaid'
+    );
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error during verification';
     console.error('❌ Verification Error:', msg);

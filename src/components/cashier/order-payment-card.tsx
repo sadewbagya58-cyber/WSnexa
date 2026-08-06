@@ -107,6 +107,11 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
       <div className="flex items-center gap-2 flex-wrap">
         {getKitchenBadge(order.status)}
         {getPaymentBadge(order.payment_status)}
+        {order.payment_method && (
+          <span className="text-[11px] font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-full border border-zinc-200">
+            Preferred: {order.payment_method === 'cash' ? '💵 Cash' : order.payment_method === 'card' ? '💳 Card' : order.payment_method === 'qr_pay' ? '📱 QR Pay' : '🏪 Pay at Counter'}
+          </span>
+        )}
         {order.guest_name && (
           <span className="text-xs font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-full">
             👤 {order.guest_name}

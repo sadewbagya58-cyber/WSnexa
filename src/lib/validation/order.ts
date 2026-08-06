@@ -44,6 +44,7 @@ export const createGuestOrderSchema = z.object({
   guestName: z.string().max(100).optional().nullable(),
   guestPhone: z.string().max(30).optional().nullable(),
   guestNotes: z.string().max(500).optional().nullable(),
+  paymentMethod: paymentMethodEnum.default('pay_at_counter'),
   idempotencyKey: z.string().min(8).max(100),
   cartItems: z.array(cartItemInputSchema).min(1, 'Cart cannot be empty'),
 });

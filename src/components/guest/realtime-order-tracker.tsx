@@ -346,7 +346,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             >
               {order.payment_status === 'paid' && '💵 Payment Completed'}
               {order.payment_status === 'partially_paid' && '⚖️ Partially Paid'}
-              {order.payment_status === 'unpaid' && '🔴 Pay at Counter'}
+              {order.payment_status === 'unpaid' && '🔴 Unpaid'}
               {!['paid', 'partially_paid', 'unpaid'].includes(order.payment_status) &&
                 order.payment_status.toUpperCase()}
             </Badge>

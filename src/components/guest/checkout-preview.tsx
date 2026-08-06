@@ -28,6 +28,9 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [guestNotes, setGuestNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<
+    'pay_at_counter' | 'cash' | 'card' | 'qr_pay' | 'online'
+  >('pay_at_counter');
   const [inputPin, setInputPin] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -101,6 +104,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         guestName: guestName.trim() || null,
         guestPhone: guestPhone.trim() || null,
         guestNotes: guestNotes.trim() || null,
+        paymentMethod,
         idempotencyKey: getOrCreateIdempotencyKey(),
         cartItems: cartItemsPayload,
       });
@@ -276,6 +280,107 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                   />
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Payment Method Selection Card */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
+            <div>
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
+                Payment Method
+              </h2>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                Select your preferred payment method
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {[
+                {
+                  value: 'pay_at_counter',
+                  icon: '🏪',
+                  title: 'Pay at Counter',
+                  description: 'Pay when you are ready at the cashier.',
+                  disabled: false,
+                },
+                {
+                  value: 'cash',
+                  icon: '💵',
+                  title: 'Cash',
+                  description: 'Pay cash to the cashier or waiter.',
+                  disabled: false,
+                },
+                {
+                  value: 'card',
+                  icon: '💳',
+                  title: 'Card',
+                  description: 'Pay using the venue card terminal.',
+                  disabled: false,
+                },
+                {
+                  value: 'qr_pay',
+                  icon: '📱',
+                  title: 'QR Pay',
+                  description: 'Scan the venue’s external payment QR at the counter.',
+                  disabled: false,
+                },
+                {
+                  value: 'online',
+                  icon: '🌐',
+                  title: 'Online Payment',
+                  description: 'Coming Soon',
+                  disabled: true,
+                },
+              ].map((method) => {
+                const isSelected = paymentMethod === method.value;
+
+                return (
+                  <button
+                    key={method.value}
+                    type="button"
+                    disabled={method.disabled}
+                    onClick={() => setPaymentMethod(method.value as typeof paymentMethod)}
+                    className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-center justify-between touch-manipulation ${
+                      method.disabled
+                        ? 'opacity-50 cursor-not-allowed bg-zinc-100 border-zinc-200 text-zinc-400'
+                        : isSelected
+                        ? 'border-zinc-950 bg-zinc-950 text-white shadow-sm ring-1 ring-zinc-950'
+                        : 'border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl shrink-0">{method.icon}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold">{method.title}</span>
+                          {method.disabled && (
+                            <Badge variant="neutral" className="text-[10px] py-0 px-1.5 font-semibold bg-zinc-200 text-zinc-700 border-zinc-300">
+                              Coming Soon
+                            </Badge>
+                          )}
+                        </div>
+                        <p
+                          className={`text-[11px] mt-0.5 ${
+                            isSelected ? 'text-zinc-300' : 'text-zinc-500'
+                          }`}
+                        >
+                          {method.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'border-white bg-white'
+                          : 'border-zinc-300 bg-transparent'
+                      }`}
+                    >
+                      {isSelected && <div className="h-2 w-2 rounded-full bg-zinc-950" />}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { hashQrToken, hashTablePin } from '@/lib/qr/security';
 import {
   CreateGuestOrderInput,
   createGuestOrderSchema,
@@ -81,12 +82,16 @@ export class OrderService {
       cartItems,
     } = parsed.data;
 
+    // Compute peppered token hash and table PIN hash
+    const tokenHash = hashQrToken(rawQrToken);
+    const pinHash = inputPin && inputPin.trim().length > 0 ? hashTablePin(inputPin.trim()) : null;
+
     const supabase = await createClient();
 
     const { data, error } = await supabase.rpc('create_guest_order', {
-      p_raw_qr_token: rawQrToken,
+      p_token_hash: tokenHash,
       p_table_id: tableId || null,
-      p_input_pin: inputPin || null,
+      p_pin_hash: pinHash,
       p_guest_name: guestName || null,
       p_guest_phone: guestPhone || null,
       p_guest_notes: guestNotes || null,
@@ -113,25 +118,27 @@ export class OrderService {
     };
 
     if (!res.success) {
-      // Map specific error codes to user-friendly messages
       let message = 'Order placement failed.';
-      if (res.error === 'INVALID_QR_TOKEN' || res.error === 'INVALID_OR_REVOKED_QR') {
+      const errCode = res.error || '';
+
+      if (errCode === 'INVALID_QR_TOKEN' || errCode === 'INVALID_OR_REVOKED_QR') {
         message = 'Invalid or expired venue QR code. Please rescan the QR on your table.';
-      } else if (res.error === 'TABLE_REQUIRED') {
+      } else if (errCode === 'TABLE_REQUIRED') {
         message = 'Please select your dining table before placing your order.';
-      } else if (res.error === 'INVALID_TABLE_PIN' || res.error === 'PIN_REQUIRED') {
+      } else if (errCode === 'INVALID_TABLE_PIN' || errCode === 'PIN_REQUIRED') {
         message = 'Invalid Table PIN. Please check the PIN displayed on your table sticker.';
-      } else if (res.error === 'EMPTY_CART') {
+      } else if (errCode === 'EMPTY_CART') {
         message = 'Your cart is empty. Please add menu items before submitting.';
-      } else if (res.error?.startsWith('ITEM_OUT_OF_STOCK')) {
-        const itemName = res.error.split(':')[1]?.trim() || 'One of your items';
+      } else if (errCode.startsWith('ITEM_OUT_OF_STOCK')) {
+        const itemName = errCode.split(':')[1]?.trim() || 'One of your items';
         message = `${itemName} is currently out of stock. Please remove it from your cart.`;
-      } else if (res.error?.startsWith('ITEM_NOT_FOUND_OR_INACTIVE')) {
-        message = 'One of the items in your cart is no longer available on this menu.';
-      } else if (res.error?.startsWith('MODIFIER_OPTION_UNAVAILABLE')) {
-        message = 'One of your selected item customization options is no longer available.';
+      } else if (errCode.startsWith('REQUIRED_MODIFIER_GROUP_MISSING')) {
+        const grpName = errCode.split(':')[1]?.trim() || 'Required customization';
+        message = `Please select options for required modifier group: "${grpName}".`;
+      } else if (errCode.startsWith('CROSS_ITEM_MODIFIER_INJECTION')) {
+        message = 'Security alert: Invalid modifier customization selection detected.';
       } else {
-        message = res.error || message;
+        message = errCode || message;
       }
 
       return { success: false, message };
@@ -244,7 +251,6 @@ export class OrderService {
 
     const supabase = await createClient();
 
-    // Fetch existing order to verify status and branch isolation
     const { data: existing } = await supabase
       .from('orders')
       .select('id, status, business_id, branch_id')

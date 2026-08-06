@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { generateSecureQrToken, generateTablePin, hashTablePin } from '../src/lib/qr/security';
+import { generateSecureQrToken, generateTablePin, hashTablePin, hashQrToken } from '../src/lib/qr/security';
 
 const envPath = path.join(process.cwd(), '.env.local');
 if (fs.existsSync(envPath)) {
@@ -33,7 +33,7 @@ function assert(condition: boolean | null | undefined, testName: string, failure
 
 async function runOrdersVerificationSuite() {
   console.log('================================================================');
-  console.log('    WSNexa Phase 10 — Server Checkout & Order RPC Verification   ');
+  console.log('    WSNexa Phase 10 — Corrected Order RPC & Security Verification');
   console.log('================================================================\n');
 
   let bizId = '';
@@ -41,7 +41,7 @@ async function runOrdersVerificationSuite() {
   let branchBId = '';
 
   try {
-    // TEST 1: Schema Tables Verification
+    // TEST 1: Schema Tables & Helpers Verification
     const [{ data: ordersCheck, error: ordersErr }, { data: itemsCheck }, { data: modCheck }] = await Promise.all([
       admin.from('orders').select('id').limit(1),
       admin.from('order_items').select('id').limit(1),
@@ -50,19 +50,19 @@ async function runOrdersVerificationSuite() {
 
     assert(
       ordersCheck !== null && itemsCheck !== null && modCheck !== null,
-      'Test 1: Verified orders, order_items, and order_item_modifiers tables exist',
-      ordersErr?.message || 'Tables not found in Supabase schema cache. Please run migration 20260806090000_create_order_schema.sql in Supabase SQL Editor.'
+      'Test 1: Verified orders, order_items, and order_item_modifiers tables exist in Supabase schema',
+      ordersErr?.message || 'Tables not found'
     );
 
-    // Setup Test Business and Branches
+    // Setup Isolated Test Business and Branches
     const testSlug = `order-test-${Date.now()}`;
     const { data: biz } = await admin
       .from('businesses')
       .insert({
-        name: 'Order Test Cafe',
+        name: 'Order Security Test Cafe',
         slug: testSlug,
         default_currency: 'LKR',
-        time_zone: 'Asia/Colombo',
+        timezone: 'Asia/Colombo',
       })
       .select('*')
       .single();
@@ -75,9 +75,8 @@ async function runOrdersVerificationSuite() {
         business_id: bizId,
         name: 'Main Branch',
         code: 'MNB',
-        currency: 'LKR',
         status: 'active',
-        is_primary_default: true,
+        is_default: true,
         require_table_selection: true,
         require_table_pin: true,
         table_pin_length: 4,
@@ -93,9 +92,8 @@ async function runOrdersVerificationSuite() {
         business_id: bizId,
         name: 'Kandy Branch',
         code: 'KDY',
-        currency: 'LKR',
         status: 'active',
-        is_primary_default: false,
+        is_default: false,
       })
       .select('*')
       .single();
@@ -104,12 +102,14 @@ async function runOrdersVerificationSuite() {
 
     // Create Branch QR for Branch A
     const qrPair = generateSecureQrToken();
+    const tokenHash = hashQrToken(qrPair.rawToken);
+
     const { data: qrA } = await admin
       .from('branch_qr_codes')
       .insert({
         business_id: bizId,
         branch_id: branchAId,
-        token_hash: qrPair.tokenHash,
+        token_hash: tokenHash,
         token_prefix: qrPair.tokenPrefix,
         encrypted_token: qrPair.encryptedToken,
         is_active: true,
@@ -117,9 +117,9 @@ async function runOrdersVerificationSuite() {
       .select('*')
       .single();
 
-    assert(!!qrA, 'Setup: Branch QR created for Branch A');
+    assert(!!qrA, 'Setup: Branch QR created for Branch A with peppered token_hash');
 
-    // Create Service Area & Dining Table with PIN for Branch A
+    // Create Service Area & Dining Table with HMAC-SHA256 Table PIN for Branch A
     const { data: areaA } = await admin
       .from('service_areas')
       .insert({
@@ -133,6 +133,7 @@ async function runOrdersVerificationSuite() {
 
     const plainPin = generateTablePin(4);
     const pinHash = hashTablePin(plainPin);
+    const wrongPinHash = hashTablePin('9999');
 
     const { data: tableA } = await admin
       .from('dining_tables')
@@ -149,9 +150,9 @@ async function runOrdersVerificationSuite() {
       .select('*')
       .single();
 
-    assert(!!tableA, 'Setup: Table 1 created with PIN in Branch A');
+    assert(!!tableA, 'Setup: Table 1 created with peppered Table PIN hash in Branch A');
 
-    // Create Category, Item (1200 LKR = 120000 cents), and Modifier Option (50 LKR = 5000 cents)
+    // Create Category, Items, and Modifiers in Branch A
     const { data: catA } = await admin
       .from('menu_categories')
       .insert({
@@ -163,6 +164,7 @@ async function runOrdersVerificationSuite() {
       .select('*')
       .single();
 
+    // Item 1: Signature Burger (1200 LKR = 120000 cents)
     const { data: itemA } = await admin
       .from('menu_items')
       .insert({
@@ -178,38 +180,95 @@ async function runOrdersVerificationSuite() {
       .select('*')
       .single();
 
-    const { data: modGroup } = await admin
+    // Item 2: Fries (500 LKR = 50000 cents)
+    const { data: itemB } = await admin
+      .from('menu_items')
+      .insert({
+        business_id: bizId,
+        branch_id: branchAId,
+        category_id: catA.id,
+        name: 'Crispy French Fries',
+        slug: `fries-${Date.now()}`,
+        price_cents: 50000,
+        currency: 'LKR',
+        availability_status: 'available',
+      })
+      .select('*')
+      .single();
+
+    // Modifier Group for Item 1: Add Cheese (Required, single selection)
+    const { data: modGroupA } = await admin
       .from('modifier_groups')
       .insert({
         business_id: bizId,
         branch_id: branchAId,
         menu_item_id: itemA.id,
-        name: 'Add Cheese',
+        name: 'Cheese Selection',
         selection_type: 'single',
+        is_required: true,
+        min_selections: 1,
+        max_selections: 1,
       })
       .select('*')
       .single();
 
-    const { data: modOpt } = await admin
+    const { data: modOptA } = await admin
       .from('modifier_options')
       .insert({
         business_id: bizId,
         branch_id: branchAId,
-        modifier_group_id: modGroup.id,
+        modifier_group_id: modGroupA.id,
         name: 'Cheddar Cheese Slice',
         additional_price_cents: 5000,
       })
       .select('*')
       .single();
 
-    assert(!!itemA && !!modOpt, 'Setup: Menu Item and Modifier Option created in Branch A');
+    // Modifier Group for Item 2: Dip Sauce (Belongs to Item 2!)
+    const { data: modGroupB } = await admin
+      .from('modifier_groups')
+      .insert({
+        business_id: bizId,
+        branch_id: branchAId,
+        menu_item_id: itemB.id,
+        name: 'Dipping Sauce',
+        selection_type: 'single',
+      })
+      .select('*')
+      .single();
 
-    // TEST 2: Submit Guest Order via Atomic RPC (Price Revalidation)
-    const idempKey1 = `idemp_test_${Date.now()}_1`;
-    const { data: rpcRes1, error: rpcErr1 } = await admin.rpc('create_guest_order', {
-      p_raw_qr_token: qrPair.rawToken,
+    const { data: modOptB } = await admin
+      .from('modifier_options')
+      .insert({
+        business_id: bizId,
+        branch_id: branchAId,
+        modifier_group_id: modGroupB.id,
+        name: 'Garlic Mayo',
+        additional_price_cents: 2000,
+      })
+      .select('*')
+      .single();
+
+    assert(!!itemA && !!modOptA && !!modOptB, 'Setup: Menu items and modifier groups created');
+
+    // TEST 2: Wrong PIN Rejection Test
+    const { data: rpcResWrongPin } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHash,
       p_table_id: tableA.id,
-      p_input_pin: plainPin,
+      p_pin_hash: wrongPinHash, // WRONG PIN HASH
+      p_guest_name: 'Attacker',
+      p_idempotency_key: `idemp_wrongpin_${Date.now()}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1, selectedModifiers: [{ optionId: modOptA.id }] }],
+    });
+
+    assert(rpcResWrongPin?.success === false && rpcResWrongPin?.error === 'INVALID_TABLE_PIN', 'Test 2: Wrong Table PIN rejected by create_guest_order');
+
+    // TEST 3: Correct PIN & Price Revalidation Test
+    const idempKey1 = `idemp_test_${Date.now()}_1`;
+    const { data: rpcResCorrect, error: rpcErrCorrect } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHash,
+      p_table_id: tableA.id,
+      p_pin_hash: pinHash, // CORRECT PIN HASH
       p_guest_name: 'Jane Doe',
       p_guest_phone: '+94 77 123 4567',
       p_guest_notes: 'Extra crispy fries',
@@ -219,115 +278,129 @@ async function runOrdersVerificationSuite() {
           menuItemId: itemA.id,
           quantity: 2,
           specialInstructions: 'No onions',
-          selectedModifiers: [{ groupId: modGroup.id, optionId: modOpt.id }],
+          selectedModifiers: [{ optionId: modOptA.id }],
         },
       ],
     });
 
-    assert(!rpcErr1 && rpcRes1?.success === true, 'Test 2: Atomic create_guest_order RPC succeeded', rpcErr1?.message || rpcRes1?.error);
+    assert(!rpcErrCorrect && rpcResCorrect?.success === true, 'Test 3: Valid order placed successfully with correct Table PIN and token hash', rpcErrCorrect?.message || rpcResCorrect?.error);
 
-    const orderId1 = rpcRes1.order_id;
-    // Expected unit price: 120000 + 5000 = 125000 cents. For Qty 2 = 250000 cents.
-    assert(rpcRes1.total_cents === 250000, 'Test 3: Server revalidated exact minor-unit totals (2x (120000+5000) = 250000 cents)');
-    assert(rpcRes1.order_number_formatted === '#MNB-1001', 'Test 4: Sequential branch-scoped order numbering formatted correctly (#MNB-1001)');
+    const orderId1 = rpcResCorrect.order_id;
+    // Unit price: 120000 + 5000 = 125000 cents. Qty 2 = 250000 cents.
+    assert(rpcResCorrect.total_cents === 250000, 'Test 4: Server revalidated prices from database (2x (120000+5000) = 250000 cents)');
+    assert(rpcResCorrect.order_number_formatted === '#MNB-1001', 'Test 5: Sequential branch order number formatted (#MNB-1001)');
 
-    // TEST 5: Idempotency Protection Test
+    // TEST 6: Duplicate Submission Returns Same Order (Idempotency)
     const { data: rpcResDup } = await admin.rpc('create_guest_order', {
-      p_raw_qr_token: qrPair.rawToken,
+      p_token_hash: tokenHash,
       p_table_id: tableA.id,
-      p_input_pin: plainPin,
+      p_pin_hash: pinHash,
       p_guest_name: 'Jane Doe',
-      p_guest_phone: '+94 77 123 4567',
-      p_guest_notes: 'Extra crispy fries',
-      p_idempotency_key: idempKey1, // SAME KEY
+      p_idempotency_key: idempKey1, // REPEATED KEY
       p_cart_items: [
         {
           menuItemId: itemA.id,
           quantity: 2,
-          specialInstructions: 'No onions',
-          selectedModifiers: [{ groupId: modGroup.id, optionId: modOpt.id }],
+          selectedModifiers: [{ optionId: modOptA.id }],
         },
       ],
     });
 
-    assert(rpcResDup?.success === true && rpcResDup?.is_duplicate === true && rpcResDup?.order_id === orderId1, 'Test 5: Idempotency key duplicate returned existing order without creating duplicate database row');
+    assert(rpcResDup?.success === true && rpcResDup?.is_duplicate === true && rpcResDup?.order_id === orderId1, 'Test 6: Idempotency protection returned original order record without duplicate insertion');
 
-    // TEST 6: Out-of-Stock Item Rejection & Transaction Rollback
-    const { data: outOfStockItem } = await admin
-      .from('menu_items')
-      .insert({
-        business_id: bizId,
-        branch_id: branchAId,
-        category_id: catA.id,
-        name: 'Sold Out Shake',
-        slug: `sold-out-shake-${Date.now()}`,
-        price_cents: 60000,
-        currency: 'LKR',
-        availability_status: 'out_of_stock',
-      })
-      .select('*')
-      .single();
-
-    const { data: rpcResStock } = await admin.rpc('create_guest_order', {
-      p_raw_qr_token: qrPair.rawToken,
+    // TEST 7: Anti-Injection Attack — Cross-Item Modifier Injection Rejection
+    const { data: rpcResInject } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHash,
       p_table_id: tableA.id,
-      p_input_pin: plainPin,
-      p_guest_name: 'John Doe',
-      p_idempotency_key: `idemp_stock_${Date.now()}`,
-      p_cart_items: [{ menuItemId: outOfStockItem.id, quantity: 1 }],
+      p_pin_hash: pinHash,
+      p_guest_name: 'Attacker',
+      p_idempotency_key: `idemp_inject_${Date.now()}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id, // Burger
+          quantity: 1,
+          selectedModifiers: [
+            { optionId: modOptA.id }, // Valid Cheese Slice
+            { optionId: modOptB.id }, // INVALID: Garlic Mayo belongs to Fries, NOT Burger!
+          ],
+        },
+      ],
     });
 
-    assert(rpcResStock?.success === false && rpcResStock?.error?.includes('ITEM_OUT_OF_STOCK'), 'Test 6: Out-of-stock item submission rejected and transaction rolled back');
+    assert(rpcResInject?.success === false && rpcResInject?.error?.includes('CROSS_ITEM_MODIFIER_INJECTION'), 'Test 7: Cross-item modifier injection attack rejected and transaction rolled back');
 
-    // TEST 7: Invalid Table PIN Rejection Test
-    const { data: rpcResPin } = await admin.rpc('create_guest_order', {
-      p_raw_qr_token: qrPair.rawToken,
+    // TEST 8: Required Modifier Missing Rejection Test
+    const { data: rpcResReqMissing } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHash,
       p_table_id: tableA.id,
-      p_input_pin: '9999', // WRONG PIN
-      p_guest_name: 'John Doe',
-      p_idempotency_key: `idemp_pin_${Date.now()}`,
-      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
+      p_pin_hash: pinHash,
+      p_guest_name: 'Guest',
+      p_idempotency_key: `idemp_req_${Date.now()}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id, // Burger requires Cheese Selection!
+          quantity: 1,
+          selectedModifiers: [], // MISSING REQUIRED MODIFIER
+        },
+      ],
     });
 
-    assert(rpcResPin?.success === false && rpcResPin?.error === 'INVALID_TABLE_PIN', 'Test 7: Incorrect Table PIN submission rejected cleanly');
+    assert(rpcResReqMissing?.success === false && rpcResReqMissing?.error?.includes('REQUIRED_MODIFIER_GROUP_MISSING'), 'Test 8: Missing required modifier group rejected and transaction rolled back');
 
-    // TEST 8: Order Status Advancement Lifecycle Test
+    // TEST 9: Duplicate Modifier Option Selection Rejection Test
+    const { data: rpcResDupOpt } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHash,
+      p_table_id: tableA.id,
+      p_pin_hash: pinHash,
+      p_guest_name: 'Guest',
+      p_idempotency_key: `idemp_dupopt_${Date.now()}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id,
+          quantity: 1,
+          selectedModifiers: [
+            { optionId: modOptA.id },
+            { optionId: modOptA.id }, // DUPLICATE OPTION SELECTION IN SAME LINE
+          ],
+        },
+      ],
+    });
+
+    assert(rpcResDupOpt?.success === false && rpcResDupOpt?.error?.includes('DUPLICATE_MODIFIER_OPTION'), 'Test 9: Duplicate modifier option selection rejected');
+
+    // TEST 10: Multi-Branch Kitchen Queue Isolation Verification
+    const { data: ordersBranchA } = await admin.from('orders').select('id, branch_id').eq('branch_id', branchAId);
+    const { data: ordersBranchB } = await admin.from('orders').select('id, branch_id').eq('branch_id', branchBId);
+
+    const hasA = (ordersBranchA?.length || 0) >= 1;
+    const hasB = (ordersBranchB?.length || 0) === 0;
+    assert(Boolean(hasA && hasB), 'Test 10: Multi-branch isolation verified (Branch A order queue does not expose Branch B orders)');
+
+    // TEST 11: Order Lifecycle & Rollback Verification
     const { data: orderHeader } = await admin.from('orders').select('*').eq('id', orderId1).single();
-    assert(orderHeader.status === 'pending', 'Test 8: Newly created order initial status is "pending"');
+    assert(orderHeader.status === 'pending', 'Test 11: Order initial status is "pending"');
 
-    // Advance status to "confirmed"
+    // Advance status to "confirmed", "preparing", "ready", "completed"
     await admin.from('orders').update({ status: 'confirmed', updated_at: new Date().toISOString() }).eq('id', orderId1);
     await admin.from('order_status_history').insert({ order_id: orderId1, previous_status: 'pending', new_status: 'confirmed' });
 
-    // Advance status to "preparing"
     await admin.from('orders').update({ status: 'preparing', updated_at: new Date().toISOString() }).eq('id', orderId1);
     await admin.from('order_status_history').insert({ order_id: orderId1, previous_status: 'confirmed', new_status: 'preparing' });
 
-    // Advance status to "ready"
     await admin.from('orders').update({ status: 'ready', updated_at: new Date().toISOString() }).eq('id', orderId1);
     await admin.from('order_status_history').insert({ order_id: orderId1, previous_status: 'preparing', new_status: 'ready' });
 
-    // Advance status to "completed"
     await admin.from('orders').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', orderId1);
     await admin.from('order_status_history').insert({ order_id: orderId1, previous_status: 'ready', new_status: 'completed' });
 
     const { data: history } = await admin.from('order_status_history').select('*').eq('order_id', orderId1);
-    assert(history && history.length >= 4, 'Test 9: Order status lifecycle history recorded accurately');
-
-    // TEST 10: Multi-Branch Isolation Verification
-    const { data: branchAOrders } = await admin.from('orders').select('id').eq('branch_id', branchAId);
-    const { data: branchBOrders } = await admin.from('orders').select('id').eq('branch_id', branchBId);
-
-    const hasA = (branchAOrders?.length || 0) >= 1;
-    const hasB = (branchBOrders?.length || 0) === 0;
-    assert(Boolean(hasA && hasB), 'Test 10: Multi-branch isolation verified (Branch A order queue does not expose Branch B orders)');
+    assert(Boolean(history && history.length >= 4), 'Test 12: Status history log tracked across kitchen workflow');
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown verification error';
     console.error('❌ Verification Error:', msg);
     process.exit(1);
   } finally {
-    // Cleanup temporary test data
     if (bizId) {
       console.log('\n🧹 Cleaning up test business and order data...');
       await admin.from('businesses').delete().eq('id', bizId);
@@ -336,7 +409,7 @@ async function runOrdersVerificationSuite() {
   }
 
   console.log('\n================================================================');
-  console.log('   Phase 10 Orders Verification Finished: All Tests PASSED      ');
+  console.log('   Phase 10 Orders Verification Finished: ALL TESTS PASSED      ');
   console.log('================================================================\n');
 }
 

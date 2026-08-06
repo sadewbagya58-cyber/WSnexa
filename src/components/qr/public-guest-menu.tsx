@@ -9,7 +9,7 @@ import { ItemDetailSheet } from '../guest/item-detail-sheet';
 import { FloatingCartBar } from '../guest/floating-cart-bar';
 import { CartDrawer } from '../guest/cart-drawer';
 import { formatCurrency } from '@/features/cart/cart-calculations';
-import { CartLine } from '@/features/cart/cart-types';
+import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
 
 interface PublicGuestMenuProps {
   token: string;
@@ -241,8 +241,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                 className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-all"
               >
                 <span>📍</span>
-                {state.confirmedTable ? (
-                  <span className="text-emerald-800 font-extrabold">{state.confirmedTable.tableName}</span>
+                {isTableAccessVerified(state.confirmedTable) ? (
+                  <span className="text-emerald-800 font-extrabold">{state.confirmedTable!.tableName}</span>
                 ) : (
                   <span className="text-zinc-600">Select Table</span>
                 )}
@@ -266,7 +266,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {/* Table Selection Prompt Banner */}
-        {branch.require_table_selection && !state.confirmedTable && (
+        {branch.require_table_selection && !isTableAccessVerified(state.confirmedTable) && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">
             <div>
               <span className="font-bold">Select your Table Number</span>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/features/cart/cart-context';
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { isTableAccessVerified } from '@/features/cart/cart-types';
 import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
 import { submitGuestOrderAction } from '@/server/actions/order';
 
@@ -197,12 +198,10 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
           </div>
           <div className="flex items-center justify-between text-sm font-bold text-zinc-950">
             <span>Table Status:</span>
-            {state.confirmedTable ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800 border border-emerald-200">
-                <span>📍</span> Table Verified ({state.confirmedTable.tableName})
-              </span>
+            {isTableAccessVerified(state.confirmedTable) ? (
+              <Badge variant="success">📍 Table Verified ({state.confirmedTable!.tableName})</Badge>
             ) : (
-              <span className="text-zinc-500 font-normal">No Table Selected (Direct Ordering)</span>
+              <Badge variant="warning">No Valid Table Verification</Badge>
             )}
           </div>
         </div>

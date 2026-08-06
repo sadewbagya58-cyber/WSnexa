@@ -36,7 +36,9 @@ export function saveCartToStorage(branchId: string, state: CartState): void {
           tableId: state.confirmedTable.tableId,
           tableName: state.confirmedTable.tableName,
           tableCode: state.confirmedTable.tableCode,
+          signedTableAccessProof: state.confirmedTable.signedTableAccessProof,
           verifiedAt: state.confirmedTable.verifiedAt,
+          expiresAt: state.confirmedTable.expiresAt,
         }
       : null;
 
@@ -58,7 +60,7 @@ export function saveCartToStorage(branchId: string, state: CartState): void {
       return;
     }
 
-    sessionStorage.setItem(getCartStorageKey(branchId), jsonStr);
+    window.sessionStorage.setItem(getCartStorageKey(branchId), jsonStr);
   } catch (err) {
     console.error('Failed to save cart to sessionStorage:', err);
   }
@@ -71,12 +73,12 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
   if (typeof window === 'undefined' || !window.sessionStorage || !branchId) return null;
 
   const key = getCartStorageKey(branchId);
-  const jsonStr = sessionStorage.getItem(key);
+  const jsonStr = window.sessionStorage.getItem(key);
   if (!jsonStr) return null;
 
   try {
     if (new Blob([jsonStr]).size > MAX_STORAGE_BYTES) {
-      sessionStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
       return null;
     }
 
@@ -89,14 +91,29 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
 
     // Expiry Check (4 Hours)
     if (typeof payload.expiresAt !== 'number' || Date.now() > payload.expiresAt) {
-      sessionStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
       return null;
     }
 
     // Currency Mismatch Check
     if (expectedCurrency && payload.currency.toUpperCase() !== expectedCurrency.toUpperCase()) {
-      sessionStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
       return null;
+    }
+
+    // Table Proof Expiry & Presence Validation
+    let validTable: ConfirmedTableContext | null = payload.confirmedTable || null;
+    if (validTable) {
+      const proofMissing = !validTable.signedTableAccessProof || validTable.signedTableAccessProof.trim().length === 0;
+      const proofExpired = validTable.expiresAt ? new Date(validTable.expiresAt).getTime() < Date.now() : false;
+
+      if (proofMissing || proofExpired) {
+        console.warn('[loadCartFromStorage] Table context discarded due to missing or expired proof:', {
+          proofMissing,
+          proofExpired,
+        });
+        validTable = null;
+      }
     }
 
     if (!Array.isArray(payload.lines)) return null;
@@ -128,7 +145,7 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
     return {
       branchId,
       currency: payload.currency.toUpperCase(),
-      confirmedTable: payload.confirmedTable || null,
+      confirmedTable: validTable,
       lines: validLines,
       subtotalCents,
       totalQuantity,
@@ -137,7 +154,7 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
     };
   } catch (err) {
     console.error('Corrupt cart payload in sessionStorage. Clearing:', err);
-    sessionStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
     return null;
   }
 }
@@ -147,5 +164,5 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
  */
 export function clearCartStorage(branchId: string): void {
   if (typeof window === 'undefined' || !window.sessionStorage || !branchId) return;
-  sessionStorage.removeItem(getCartStorageKey(branchId));
+  window.sessionStorage.removeItem(getCartStorageKey(branchId));
 }

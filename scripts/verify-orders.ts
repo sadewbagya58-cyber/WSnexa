@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { generateSecureQrToken, generateTablePin, hashTablePin, hashQrToken } from '../src/lib/qr/security';
 import { createSignedTableAccessProof, verifySignedTableAccessProof } from '../src/lib/qr/table-access-proof';
+import { saveCartToStorage, loadCartFromStorage } from '../src/features/cart/cart-storage';
+import { CartState } from '../src/features/cart/cart-types';
 
 const envPath = path.join(process.cwd(), '.env.local');
 if (fs.existsSync(envPath)) {
@@ -237,6 +239,42 @@ async function runOrdersVerificationSuite() {
     assert(
       verifiedOrderRes?.success === true && verifiedOrderRes?.order_id !== undefined,
       'Test 10: Guest checkout with p_table_access_verified = true via private RPC succeeded without re-verifying PIN hash'
+    );
+
+    // TEST 11: Storage Proof Preservation & Hydration Safety Test
+    const mockStorage: Record<string, string> = {};
+    global.window = {
+      sessionStorage: {
+        getItem: (k: string) => mockStorage[k] || null,
+        setItem: (k: string, v: string) => { mockStorage[k] = v; },
+        removeItem: (k: string) => { delete mockStorage[k]; },
+      },
+    } as unknown as Window & typeof globalThis;
+
+    const mockState: CartState = {
+      branchId: branchA.id,
+      currency: 'LKR',
+      confirmedTable: {
+        branchId: branchA.id,
+        tableId: tableA1.id,
+        tableName: 'Table 1',
+        tableCode: 'T1',
+        signedTableAccessProof: proofDataA1.proof,
+        verifiedAt: proofDataA1.verifiedAt,
+        expiresAt: proofDataA1.expiresAt,
+      },
+      lines: [],
+      subtotalCents: 0,
+      totalQuantity: 0,
+      updatedAt: new Date().toISOString(),
+      isHydrated: true,
+    };
+
+    saveCartToStorage(branchA.id, mockState);
+    const loadedState = loadCartFromStorage(branchA.id, 'LKR');
+    assert(
+      loadedState?.confirmedTable?.signedTableAccessProof === proofDataA1.proof,
+      'Test 11: Cart storage preserves signedTableAccessProof across serialization & hydration'
     );
 
   } catch (err: unknown) {

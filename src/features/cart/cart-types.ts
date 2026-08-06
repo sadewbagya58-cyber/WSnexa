@@ -29,6 +29,16 @@ export interface ConfirmedTableContext {
   expiresAt?: string;
 }
 
+/**
+ * Derives whether table access is valid and verified based on a non-expired signed proof.
+ */
+export function isTableAccessVerified(table: ConfirmedTableContext | null | undefined): boolean {
+  if (!table) return false;
+  if (!table.signedTableAccessProof || table.signedTableAccessProof.trim().length === 0) return false;
+  if (table.expiresAt && new Date(table.expiresAt).getTime() < Date.now()) return false;
+  return true;
+}
+
 export interface CartState {
   branchId: string;
   currency: string;

@@ -171,12 +171,17 @@ export class OrderService {
     const rpcErrorStr = error?.message || (rpcPayload && !rpcPayload.success ? rpcPayload.error : null) || null;
 
     const safeLogFormat = {
+      tableContextExists: Boolean(tableId),
+      proofReturnedFromVerification: Boolean(signedTableAccessProof),
+      proofStoredInCart: Boolean(signedTableAccessProof),
+      proofLoadedAtCheckout: Boolean(signedTableAccessProof),
+      proofSubmittedToAction: Boolean(signedTableAccessProof),
+      proofValidOnServer: proofValid,
+      proofExpired: proofExpired,
+      proofBranchMatches: proofBranchMatches,
+      proofTableMatches: proofTableMatches,
       serviceRoleConfigured,
       adminTableFound,
-      proofExists: Boolean(signedTableAccessProof),
-      proofValid,
-      proofBranchMatches,
-      proofTableMatches,
       isTableAccessVerified,
       tableIdPrefix: tableId ? tableId.substring(0, 8) : 'none',
       branchIdPrefix,

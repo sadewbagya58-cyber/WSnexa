@@ -10,11 +10,11 @@ import { PageHeader } from '@/components/ui/page-header';
 
 export default async function DashboardOverviewPage() {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     redirect('/login');
   }
 
-  const { business, defaultBranch } = context;
+  const { business, activeBranch } = context;
   const supabase = await createClient();
 
   // 1. Fetch Stats & Audit Logs Concurrently with Promise.all
@@ -29,28 +29,28 @@ export default async function DashboardOverviewPage() {
       .from('menu_categories')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', business.id)
-      .eq('branch_id', defaultBranch.id)
+      .eq('branch_id', activeBranch.id)
       .is('deleted_at', null),
 
     supabase
       .from('menu_items')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', business.id)
-      .eq('branch_id', defaultBranch.id)
+      .eq('branch_id', activeBranch.id)
       .is('deleted_at', null),
 
     supabase
       .from('service_areas')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', business.id)
-      .eq('branch_id', defaultBranch.id)
+      .eq('branch_id', activeBranch.id)
       .is('deleted_at', null),
 
     supabase
       .from('dining_tables')
       .select('id, status')
       .eq('business_id', business.id)
-      .eq('branch_id', defaultBranch.id)
+      .eq('branch_id', activeBranch.id)
       .is('deleted_at', null),
 
     supabase
@@ -75,7 +75,7 @@ export default async function DashboardOverviewPage() {
       {/* Page Header */}
       <PageHeader
         title={`Welcome to ${business.name}`}
-        description={`Active Branch: ${defaultBranch.name} • Timezone: ${defaultBranch.timezone}`}
+        description={`Active Branch: ${activeBranch.name} • Timezone: ${activeBranch.timezone}`}
         primaryAction={{
           label: '+ Add Table',
           href: '/dashboard/tables/new',

@@ -25,7 +25,7 @@ export async function createServiceAreaAction(
   formData: CreateServiceAreaInput
 ): Promise<ActionResponse<{ areaId: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -50,7 +50,7 @@ export async function createServiceAreaAction(
     .from('service_areas')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       name,
       code,
       description: description || null,
@@ -70,7 +70,7 @@ export async function createServiceAreaAction(
     action: 'table.area_created',
     target_type: 'service_area',
     target_id: area.id,
-    payload: { name, code, branch_id: context.defaultBranch.id },
+    payload: { name, code, branch_id: context.activeBranch.id },
   });
 
   revalidatePath('/dashboard/tables');
@@ -89,7 +89,7 @@ export async function updateServiceAreaAction(
   formData: UpdateServiceAreaInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateServiceAreaSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -111,7 +111,8 @@ export async function updateServiceAreaAction(
     .from('service_areas')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -132,14 +133,15 @@ export async function updateServiceAreaAction(
  */
 export async function archiveServiceAreaAction(areaId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('service_areas')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', areaId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -162,7 +164,7 @@ export async function createDiningTableAction(
   formData: CreateDiningTableInput
 ): Promise<ActionResponse<{ tableId: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -191,7 +193,7 @@ export async function createDiningTableAction(
     .select('id, deleted_at')
     .eq('id', serviceAreaId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .single();
 
   if (!area || area.deleted_at !== null) {
@@ -202,7 +204,7 @@ export async function createDiningTableAction(
     .from('dining_tables')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       service_area_id: serviceAreaId,
       name,
       code,
@@ -244,7 +246,7 @@ export async function updateDiningTableAction(
   formData: UpdateDiningTableInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateDiningTableSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -270,7 +272,8 @@ export async function updateDiningTableAction(
     .from('dining_tables')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -293,14 +296,15 @@ export async function updateDiningTableStatusAction(
   status: 'available' | 'occupied' | 'reserved' | 'cleaning' | 'unavailable'
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('dining_tables')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', tableId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -321,14 +325,15 @@ export async function updateDiningTableStatusAction(
  */
 export async function archiveDiningTableAction(tableId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('dining_tables')
     .update({ deleted_at: new Date().toISOString(), is_active: false, status: 'unavailable' })
     .eq('id', tableId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -350,7 +355,7 @@ export async function bulkCreateDiningTablesAction(
   formData: BulkCreateDiningTablesInput
 ): Promise<ActionResponse<{ count: number }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -373,7 +378,7 @@ export async function bulkCreateDiningTablesAction(
 
   const { data: rpcRes, error } = await supabase.rpc('bulk_create_dining_tables', {
     p_business_id: context.business.id,
-    p_branch_id: context.defaultBranch.id,
+    p_branch_id: context.activeBranch.id,
     p_service_area_id: serviceAreaId,
     p_prefix: prefix,
     p_start_number: startNumber,
@@ -405,7 +410,7 @@ export async function bulkCreateDiningTablesAction(
  */
 export async function generateTablePinAction(tableId: string): Promise<ActionResponse<{ plainPin: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -414,7 +419,7 @@ export async function generateTablePinAction(tableId: string): Promise<ActionRes
     return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
   }
 
-  const pinLength = context.defaultBranch.table_pin_length || 4;
+  const pinLength = context.activeBranch.table_pin_length || 4;
   const plainPin = generateTablePin(pinLength);
   const pinHash = hashTablePin(plainPin);
 
@@ -429,7 +434,7 @@ export async function generateTablePinAction(tableId: string): Promise<ActionRes
     })
     .eq('id', tableId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id);
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) {
     return { success: false, message: error.message };
@@ -451,7 +456,7 @@ export async function updateTablePinAction(
   customPin: string
 ): Promise<ActionResponse<{ plainPin: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized.' };
   }
 
@@ -460,7 +465,7 @@ export async function updateTablePinAction(
     return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
   }
 
-  const pinLength = context.defaultBranch.table_pin_length || 4;
+  const pinLength = context.activeBranch.table_pin_length || 4;
   const trimmed = customPin.trim();
 
   if (!/^\d+$/.test(trimmed) || trimmed.length !== pinLength) {
@@ -479,7 +484,7 @@ export async function updateTablePinAction(
     })
     .eq('id', tableId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id);
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) {
     return { success: false, message: error.message };
@@ -498,7 +503,7 @@ export async function updateTablePinAction(
  */
 export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = true): Promise<ActionResponse<{ count: number }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized.' };
   }
 
@@ -508,8 +513,8 @@ export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = t
   }
 
   const supabase = await createClient();
-  const branchId = context.defaultBranch.id;
-  const pinLength = context.defaultBranch.table_pin_length || 4;
+  const branchId = context.activeBranch.id;
+  const pinLength = context.activeBranch.table_pin_length || 4;
 
   let query = supabase
     .from('dining_tables')

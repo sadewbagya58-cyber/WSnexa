@@ -23,7 +23,7 @@ export async function createModifierGroupAction(
   formData: CreateModifierGroupInput
 ): Promise<ActionResponse<{ groupId: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -61,7 +61,7 @@ export async function createModifierGroupAction(
     .select('id, deleted_at')
     .eq('id', menuItemId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .single();
 
   if (!item || item.deleted_at !== null) {
@@ -72,7 +72,7 @@ export async function createModifierGroupAction(
     .from('modifier_groups')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       menu_item_id: menuItemId,
       name,
       description: description || null,
@@ -114,7 +114,7 @@ export async function updateModifierGroupAction(
   formData: UpdateModifierGroupInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateModifierGroupSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -140,6 +140,7 @@ export async function updateModifierGroupAction(
     .update(updateData)
     .eq('id', id)
     .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
     .select('menu_item_id')
     .single();
 
@@ -161,7 +162,7 @@ export async function updateModifierGroupAction(
  */
 export async function archiveModifierGroupAction(groupId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { data: group, error } = await supabase
@@ -169,6 +170,7 @@ export async function archiveModifierGroupAction(groupId: string): Promise<Actio
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', groupId)
     .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
     .select('menu_item_id')
     .single();
 
@@ -192,7 +194,7 @@ export async function createModifierOptionAction(
   formData: CreateModifierOptionInput
 ): Promise<ActionResponse<{ optionId: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -219,7 +221,7 @@ export async function createModifierOptionAction(
     .select('id, menu_item_id, deleted_at')
     .eq('id', modifierGroupId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .single();
 
   if (!group || group.deleted_at !== null) {
@@ -232,7 +234,7 @@ export async function createModifierOptionAction(
     .from('modifier_options')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       modifier_group_id: modifierGroupId,
       name,
       additional_price_cents: additionalPriceCents,
@@ -270,7 +272,7 @@ export async function updateModifierOptionAction(
   formData: UpdateModifierOptionInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateModifierOptionSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -292,6 +294,7 @@ export async function updateModifierOptionAction(
     .update(updateData)
     .eq('id', id)
     .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
     .select('modifier_groups(menu_item_id)')
     .single();
 
@@ -315,7 +318,7 @@ export async function updateModifierOptionAction(
  */
 export async function archiveModifierOptionAction(optionId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { data: opt, error } = await supabase
@@ -323,6 +326,7 @@ export async function archiveModifierOptionAction(optionId: string): Promise<Act
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', optionId)
     .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
     .select('modifier_groups(menu_item_id)')
     .single();
 

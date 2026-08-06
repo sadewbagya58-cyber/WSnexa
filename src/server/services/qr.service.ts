@@ -16,7 +16,7 @@ export class QrService {
    */
   static async generateBranchQr(): Promise<BranchQrResult> {
     const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.defaultBranch) {
+    if (!tenantContext || !tenantContext.activeBranch) {
       return { success: false, message: 'Unauthorized or invalid business context' };
     }
 
@@ -26,7 +26,7 @@ export class QrService {
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.defaultBranch.id;
+    const branchId = tenantContext.activeBranch.id;
 
     // Generate secure token pair
     const { rawToken, tokenHash, tokenPrefix, encryptedToken } = generateSecureQrToken();
@@ -89,7 +89,7 @@ export class QrService {
    */
   static async regenerateBranchQr(): Promise<BranchQrResult> {
     const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.defaultBranch) {
+    if (!tenantContext || !tenantContext.activeBranch) {
       return { success: false, message: 'Unauthorized or invalid business context' };
     }
 
@@ -99,7 +99,7 @@ export class QrService {
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.defaultBranch.id;
+    const branchId = tenantContext.activeBranch.id;
 
     // Fetch existing QR record for version increment
     const { data: existingQr } = await supabase
@@ -172,7 +172,7 @@ export class QrService {
    */
   static async disableBranchQr(): Promise<{ success: boolean; message?: string }> {
     const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.defaultBranch) {
+    if (!tenantContext || !tenantContext.activeBranch) {
       return { success: false, message: 'Unauthorized' };
     }
 
@@ -182,7 +182,7 @@ export class QrService {
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.defaultBranch.id;
+    const branchId = tenantContext.activeBranch.id;
 
     const { data: updated, error } = await supabase
       .from('branch_qr_codes')
@@ -222,7 +222,7 @@ export class QrService {
     table_pin_length?: number;
   }): Promise<{ success: boolean; message?: string }> {
     const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.defaultBranch) {
+    if (!tenantContext || !tenantContext.activeBranch) {
       return { success: false, message: 'Unauthorized' };
     }
 
@@ -232,9 +232,9 @@ export class QrService {
     }
 
     // Rule: require_table_pin cannot be enabled if require_table_selection is disabled
-    const nextSelection = settings.require_table_selection ?? tenantContext.defaultBranch.require_table_selection ?? true;
-    let nextPin = settings.require_table_pin ?? tenantContext.defaultBranch.require_table_pin ?? false;
-    let nextLength = settings.table_pin_length ?? tenantContext.defaultBranch.table_pin_length ?? 4;
+    const nextSelection = settings.require_table_selection ?? tenantContext.activeBranch.require_table_selection ?? true;
+    let nextPin = settings.require_table_pin ?? tenantContext.activeBranch.require_table_pin ?? false;
+    let nextLength = settings.table_pin_length ?? tenantContext.activeBranch.table_pin_length ?? 4;
 
     if (!nextSelection) {
       nextPin = false; // Bypass PIN if table selection is OFF
@@ -254,7 +254,7 @@ export class QrService {
         table_pin_length: nextLength,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', tenantContext.defaultBranch.id);
+      .eq('id', tenantContext.activeBranch.id);
 
     if (error) {
       return { success: false, message: error.message };
@@ -265,7 +265,7 @@ export class QrService {
       actor_id: tenantContext.user.id,
       action: 'branch.settings_updated',
       target_type: 'branch',
-      target_id: tenantContext.defaultBranch.id,
+      target_id: tenantContext.activeBranch.id,
       payload: { require_table_selection: nextSelection, require_table_pin: nextPin, table_pin_length: nextLength },
     });
 
@@ -299,14 +299,14 @@ export class QrService {
    */
   static async getActiveBranchQr() {
     const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.defaultBranch) return null;
+    if (!tenantContext || !tenantContext.activeBranch) return null;
 
     const supabase = await createClient();
 
     const { data: qr } = await supabase
       .from('branch_qr_codes')
       .select('*')
-      .eq('branch_id', tenantContext.defaultBranch.id)
+      .eq('branch_id', tenantContext.activeBranch.id)
       .eq('is_active', true)
       .maybeSingle();
 

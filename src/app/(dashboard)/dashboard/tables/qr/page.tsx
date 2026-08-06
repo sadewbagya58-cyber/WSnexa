@@ -7,15 +7,15 @@ import { QrService } from '@/server/services/qr.service';
 
 export default async function BranchQrPage() {
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/login');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/login');
 
   const supabase = await createClient();
-  const branchId = tenantContext.defaultBranch.id;
+  const branchId = tenantContext.activeBranch.id;
 
-  // Fetch active Branch QR record
+  // Fetch active Branch QR record for the active branch
   const activeQr = await QrService.getActiveBranchQr();
 
-  // Fetch dining tables summary (total, with PIN, missing PIN)
+  // Fetch dining tables summary (total, with PIN, missing PIN) for the active branch
   const { data: tables } = await supabase
     .from('dining_tables')
     .select('id, table_pin_hash')
@@ -32,7 +32,7 @@ export default async function BranchQrPage() {
     <div className="space-y-6">
       <PageHeader
         title="Branch QR Code & Ordering Settings"
-        description={`Manage venue QR code and guest table PIN settings for ${tenantContext.defaultBranch.name}.`}
+        description={`Manage venue QR code and guest table PIN settings for ${tenantContext.activeBranch.name}.`}
         breadcrumbs={[
           { label: 'Tables', href: '/dashboard/tables' },
           { label: 'Branch QR & PIN' },
@@ -42,11 +42,11 @@ export default async function BranchQrPage() {
 
       <BranchQrManager
         businessName={tenantContext.business.name}
-        branchName={tenantContext.defaultBranch.name}
-        branchCode={tenantContext.defaultBranch.code}
-        requireTableSelection={tenantContext.defaultBranch.require_table_selection ?? true}
-        requireTablePin={tenantContext.defaultBranch.require_table_pin ?? false}
-        tablePinLength={tenantContext.defaultBranch.table_pin_length ?? 4}
+        branchName={tenantContext.activeBranch.name}
+        branchCode={tenantContext.activeBranch.code}
+        requireTableSelection={tenantContext.activeBranch.require_table_selection ?? true}
+        requireTablePin={tenantContext.activeBranch.require_table_pin ?? false}
+        tablePinLength={tenantContext.activeBranch.table_pin_length ?? 4}
         tablesSummary={{ total, withPin, missingPin }}
         initialQr={activeQr}
       />

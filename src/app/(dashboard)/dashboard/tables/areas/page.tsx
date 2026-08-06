@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 
 export default async function ServiceAreasPage() {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     redirect('/login');
   }
 
@@ -17,7 +17,7 @@ export default async function ServiceAreasPage() {
     .from('service_areas')
     .select('id, name, code, description, display_order, is_active')
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .is('deleted_at', null)
     .order('display_order', { ascending: true });
 
@@ -25,7 +25,7 @@ export default async function ServiceAreasPage() {
     <div className="space-y-6">
       <PageHeader
         title="Service Areas"
-        description={`Organize dining tables by hall, floor, terrace, or service zone in ${context.defaultBranch.name}.`}
+        description={`Organize dining tables by hall, floor, terrace, or service zone in ${context.activeBranch.name}.`}
         breadcrumbs={[{ label: 'Tables', href: '/dashboard/tables' }, { label: 'Service Areas' }]}
         backHref="/dashboard/tables"
       />

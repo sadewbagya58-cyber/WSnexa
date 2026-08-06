@@ -24,7 +24,7 @@ export async function createMenuCategoryAction(
   formData: CreateMenuCategoryInput
 ): Promise<ActionResponse<{ categoryId: string; slug: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or active business branch not found.' };
   }
 
@@ -54,7 +54,7 @@ export async function createMenuCategoryAction(
     const { data: existing } = await supabase
       .from('menu_categories')
       .select('id')
-      .eq('branch_id', context.defaultBranch.id)
+      .eq('branch_id', context.activeBranch.id)
       .eq('slug', slug)
       .is('deleted_at', null)
       .single();
@@ -71,7 +71,7 @@ export async function createMenuCategoryAction(
     .from('menu_categories')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       name,
       slug,
       description: description || null,
@@ -92,7 +92,7 @@ export async function createMenuCategoryAction(
     action: 'menu.category_created',
     target_type: 'menu_category',
     target_id: category.id,
-    payload: { name, slug, branch_id: context.defaultBranch.id },
+    payload: { name, slug, branch_id: context.activeBranch.id },
   });
 
   revalidatePath('/dashboard/menu');
@@ -110,7 +110,7 @@ export async function updateMenuCategoryAction(
   formData: UpdateMenuCategoryInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized.' };
   }
 
@@ -136,7 +136,8 @@ export async function updateMenuCategoryAction(
     .from('menu_categories')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) {
     return { success: false, message: error.message };
@@ -151,14 +152,15 @@ export async function updateMenuCategoryAction(
  */
 export async function archiveMenuCategoryAction(categoryId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_categories')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', categoryId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -180,7 +182,7 @@ export async function createMenuItemAction(
   formData: CreateMenuItemInput
 ): Promise<ActionResponse<{ itemId: string; slug: string }>> {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
@@ -219,7 +221,7 @@ export async function createMenuItemAction(
     .select('id, deleted_at')
     .eq('id', categoryId)
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .single();
 
   if (!category || category.deleted_at !== null) {
@@ -235,7 +237,7 @@ export async function createMenuItemAction(
     const { data: existing } = await supabase
       .from('menu_items')
       .select('id')
-      .eq('branch_id', context.defaultBranch.id)
+      .eq('branch_id', context.activeBranch.id)
       .eq('slug', slug)
       .is('deleted_at', null)
       .single();
@@ -254,7 +256,7 @@ export async function createMenuItemAction(
     .from('menu_items')
     .insert({
       business_id: context.business.id,
-      branch_id: context.defaultBranch.id,
+      branch_id: context.activeBranch.id,
       category_id: categoryId,
       name,
       slug,
@@ -298,7 +300,7 @@ export async function updateMenuItemAction(
   formData: UpdateMenuItemInput
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateMenuItemSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -323,7 +325,8 @@ export async function updateMenuItemAction(
     .from('menu_items')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -339,14 +342,15 @@ export async function updateMenuItemAvailabilityAction(
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden'
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_items')
     .update({ availability_status: availabilityStatus, updated_at: new Date().toISOString() })
     .eq('id', itemId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -362,14 +366,15 @@ export async function toggleMenuItemFeaturedAction(
   isFeatured: boolean
 ): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_items')
     .update({ is_featured: isFeatured, updated_at: new Date().toISOString() })
     .eq('id', itemId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 
@@ -382,14 +387,15 @@ export async function toggleMenuItemFeaturedAction(
  */
 export async function archiveMenuItemAction(itemId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Unauthorized.' };
+  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_items')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', itemId)
-    .eq('business_id', context.business.id);
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id);
 
   if (error) return { success: false, message: error.message };
 

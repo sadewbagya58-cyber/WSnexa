@@ -15,14 +15,14 @@ export default async function NewMenuItemPage() {
   if (!user) redirect('/login');
 
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/onboarding');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/onboarding');
 
-  // Fetch active categories for dropdown
+  // Fetch active categories for dropdown for active branch
   const { data: categories } = await supabase
     .from('menu_categories')
     .select('id, name')
     .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
+    .eq('branch_id', tenantContext.activeBranch.id)
     .is('deleted_at', null)
     .order('display_order', { ascending: true });
 
@@ -48,7 +48,7 @@ export default async function NewMenuItemPage() {
             categories={categories || []}
             currency={tenantContext.business.defaultCurrency}
             businessId={tenantContext.business.id}
-            branchId={tenantContext.defaultBranch.id}
+            branchId={tenantContext.activeBranch.id}
           />
         </Card>
       </div>

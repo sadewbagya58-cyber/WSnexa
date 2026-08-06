@@ -10,7 +10,7 @@ import Link from 'next/link';
 
 export default async function BulkGeneratorPage() {
   const context = await resolveActiveBusinessContext();
-  if (!context || !context.defaultBranch) {
+  if (!context || !context.activeBranch) {
     redirect('/login');
   }
 
@@ -20,7 +20,7 @@ export default async function BulkGeneratorPage() {
     .from('service_areas')
     .select('id, name, code')
     .eq('business_id', context.business.id)
-    .eq('branch_id', context.defaultBranch.id)
+    .eq('branch_id', context.activeBranch.id)
     .is('deleted_at', null)
     .order('display_order', { ascending: true });
 

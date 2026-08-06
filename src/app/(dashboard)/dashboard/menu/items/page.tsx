@@ -6,17 +6,17 @@ import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuItemsPage() {
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/login');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/login');
 
   const supabase = await createClient();
 
-  // Fetch categories and items concurrently
+  // Fetch categories and items concurrently for active branch
   const [{ data: categories }, { data: items }] = await Promise.all([
     supabase
       .from('menu_categories')
       .select('id, name')
       .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.defaultBranch.id)
+      .eq('branch_id', tenantContext.activeBranch.id)
       .is('deleted_at', null)
       .order('display_order', { ascending: true }),
 
@@ -24,7 +24,7 @@ export default async function MenuItemsPage() {
       .from('menu_items')
       .select('*, menu_categories(name)')
       .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.defaultBranch.id)
+      .eq('branch_id', tenantContext.activeBranch.id)
       .is('deleted_at', null)
       .order('display_order', { ascending: true }),
   ]);
@@ -33,7 +33,7 @@ export default async function MenuItemsPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Menu Items (${items?.length || 0})`}
-        description={`Manage item details, pricing, images, and modifier groups for ${tenantContext.defaultBranch.name}.`}
+        description={`Manage item details, pricing, images, and modifier groups for ${tenantContext.activeBranch.name}.`}
         breadcrumbs={[{ label: 'Menu Catalog', href: '/dashboard/menu' }, { label: 'Menu Items' }]}
         primaryAction={{
           label: '+ Add Menu Item',

@@ -8,22 +8,24 @@ import { PageHeader } from '@/components/ui/page-header';
 
 export default async function MenuDashboardPage() {
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext) redirect('/login');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/login');
 
   const supabase = await createClient();
 
-  // Fetch counts concurrently
+  // Fetch counts concurrently for the active branch
   const [{ count: categoryCount }, { count: itemCount }] = await Promise.all([
     supabase
       .from('menu_categories')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', tenantContext.business.id)
+      .eq('branch_id', tenantContext.activeBranch.id)
       .is('deleted_at', null),
 
     supabase
       .from('menu_items')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', tenantContext.business.id)
+      .eq('branch_id', tenantContext.activeBranch.id)
       .is('deleted_at', null),
   ]);
 
@@ -31,7 +33,7 @@ export default async function MenuDashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={`${tenantContext.business.name} Menu Catalog`}
-        description={`Branch: ${tenantContext.defaultBranch?.name || 'Default Branch'} (${tenantContext.defaultBranch?.code || 'MAIN'})`}
+        description={`Branch: ${tenantContext.activeBranch.name} (${tenantContext.activeBranch.code})`}
         breadcrumbs={[{ label: 'Menu Catalog' }]}
         primaryAction={{
           label: '+ Add Menu Item',

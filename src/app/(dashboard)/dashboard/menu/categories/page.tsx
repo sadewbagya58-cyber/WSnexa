@@ -13,13 +13,13 @@ export default async function MenuCategoriesPage() {
   if (!user) redirect('/login');
 
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/onboarding');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/onboarding');
 
   const { data: categories } = await supabase
     .from('menu_categories')
     .select('*')
     .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
+    .eq('branch_id', tenantContext.activeBranch.id)
     .is('deleted_at', null)
     .order('display_order', { ascending: true });
 
@@ -27,7 +27,7 @@ export default async function MenuCategoriesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Menu Categories"
-        description={`Organize food, beverage, and item categories for ${tenantContext.defaultBranch.name}.`}
+        description={`Organize food, beverage, and item categories for ${tenantContext.activeBranch.name}.`}
         breadcrumbs={[{ label: 'Menu Catalog', href: '/dashboard/menu' }, { label: 'Categories' }]}
         backHref="/dashboard/menu"
       />

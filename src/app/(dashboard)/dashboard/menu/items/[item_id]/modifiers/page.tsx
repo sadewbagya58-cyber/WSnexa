@@ -19,15 +19,15 @@ export default async function MenuItemModifiersPage({ params }: PageProps) {
   if (!user) redirect('/login');
 
   const tenantContext = await resolveActiveBusinessContext();
-  if (!tenantContext || !tenantContext.defaultBranch) redirect('/onboarding');
+  if (!tenantContext || !tenantContext.activeBranch) redirect('/onboarding');
 
-  // Fetch target menu item
+  // Fetch target menu item for active branch
   const { data: menuItem } = await supabase
     .from('menu_items')
     .select('*, menu_categories(name)')
     .eq('id', menuItemId)
     .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
+    .eq('branch_id', tenantContext.activeBranch.id)
     .is('deleted_at', null)
     .single();
 
@@ -35,13 +35,13 @@ export default async function MenuItemModifiersPage({ params }: PageProps) {
     redirect('/dashboard/menu/items');
   }
 
-  // Fetch modifier groups & options
+  // Fetch modifier groups & options for active branch
   const { data: modifierGroups } = await supabase
     .from('modifier_groups')
     .select('*, modifier_options(*)')
     .eq('menu_item_id', menuItemId)
     .eq('business_id', tenantContext.business.id)
-    .eq('branch_id', tenantContext.defaultBranch.id)
+    .eq('branch_id', tenantContext.activeBranch.id)
     .is('deleted_at', null)
     .order('display_order', { ascending: true });
 

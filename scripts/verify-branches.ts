@@ -124,7 +124,23 @@ async function runBranchesVerification() {
 
   assert(!updateBErr && updatedB.name === 'Kandy Flagship Branch', 'Updated Branch B name and settings');
 
-  // 5. Data Isolation: Create Category & Table in Branch B
+  // 5. Data Isolation: Verify newly created Branch B starts completely empty
+  const [{ data: bCats0 }, { data: bItems0 }, { data: bAreas0 }, { data: bTables0 }] = await Promise.all([
+    admin.from('menu_categories').select('id').eq('branch_id', branchB.id),
+    admin.from('menu_items').select('id').eq('branch_id', branchB.id),
+    admin.from('service_areas').select('id').eq('branch_id', branchB.id),
+    admin.from('dining_tables').select('id').eq('branch_id', branchB.id),
+  ]);
+
+  assert(
+    (bCats0?.length || 0) === 0 &&
+      (bItems0?.length || 0) === 0 &&
+      (bAreas0?.length || 0) === 0 &&
+      (bTables0?.length || 0) === 0,
+    'Data Isolation: Newly created Branch B starts completely empty (0 categories, items, areas, tables)'
+  );
+
+  // 6. Create Category, Item, Area, and Table isolated to Branch B
   const { data: catB } = await admin
     .from('menu_categories')
     .insert({
@@ -132,6 +148,20 @@ async function runBranchesVerification() {
       branch_id: branchB.id,
       name: 'Kandy Specials',
       slug: `kandy-specials-${Date.now()}`,
+    })
+    .select('*')
+    .single();
+
+  const { data: itemB } = await admin
+    .from('menu_items')
+    .insert({
+      business_id: bizId,
+      branch_id: branchB.id,
+      category_id: catB.id,
+      name: 'Kandy Kottu',
+      slug: `kandy-kottu-${Date.now()}`,
+      price_cents: 120000,
+      currency: 'LKR',
     })
     .select('*')
     .single();
@@ -161,17 +191,22 @@ async function runBranchesVerification() {
     .select('*')
     .single();
 
-  assert(!!catB && !!tableB, 'Created Category and Table isolated to Branch B', tableBErr?.message);
+  assert(!!catB && !!itemB && !!areaB && !!tableB, 'Created Category, Item, Area, and Table in Branch B', tableBErr?.message);
 
-  // Verify Branch A query does not return Branch B items
-  const { data: branchACats } = await admin
-    .from('menu_categories')
-    .select('*')
-    .eq('branch_id', branchA.id);
+  // Verify Branch A queries exclude Branch B items
+  const [{ data: branchACats }, { data: branchAItems }, { data: branchAAreas }, { data: branchATables }] = await Promise.all([
+    admin.from('menu_categories').select('*').eq('branch_id', branchA.id),
+    admin.from('menu_items').select('*').eq('branch_id', branchA.id),
+    admin.from('service_areas').select('*').eq('branch_id', branchA.id),
+    admin.from('dining_tables').select('*').eq('branch_id', branchA.id),
+  ]);
 
   assert(
-    !branchACats?.some((c) => c.id === catB.id),
-    'Data Isolation: Branch A category query excludes Branch B categories'
+    !branchACats?.some((c) => c.id === catB.id) &&
+      !branchAItems?.some((i) => i.id === itemB.id) &&
+      !branchAAreas?.some((a) => a.id === areaB.id) &&
+      !branchATables?.some((t) => t.id === tableB.id),
+    'Data Isolation: Branch A queries strictly exclude all Branch B data'
   );
 
   // 6. Independent Branch QR Codes Enforcement

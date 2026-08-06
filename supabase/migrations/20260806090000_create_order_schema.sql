@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   order_number INTEGER NOT NULL CHECK (order_number >= 1),
   order_number_formatted TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
+  access_token TEXT NOT NULL DEFAULT gen_random_uuid()::text,
   status public.order_status NOT NULL DEFAULT 'pending',
   payment_status public.payment_status NOT NULL DEFAULT 'unpaid',
   payment_method public.payment_method NOT NULL DEFAULT 'pay_at_counter',
@@ -99,6 +100,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_branch_status_created
 
 CREATE INDEX IF NOT EXISTS idx_orders_business_created
   ON public.orders (business_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_orders_id_access_token 
+  ON public.orders (id, access_token);
 
 -- 5. Order Items Table
 CREATE TABLE IF NOT EXISTS public.order_items (
@@ -238,6 +242,7 @@ DECLARE
   v_next_order_num INTEGER;
   v_order_num_formatted TEXT;
   v_order_id UUID;
+  v_access_token TEXT;
   v_cart_item JSONB;
   v_modifier_item JSONB;
   v_item RECORD;
@@ -296,7 +301,7 @@ BEGIN
   END IF;
 
   -- 4. Check Idempotency Protection for duplicate order submission
-  SELECT id, order_number_formatted, status, total_cents, currency
+  SELECT id, order_number_formatted, status, total_cents, currency, access_token
   INTO v_existing_order
   FROM public.orders
   WHERE branch_id = v_branch.id AND idempotency_key = p_idempotency_key;
@@ -306,6 +311,7 @@ BEGIN
       'success', true,
       'is_duplicate', true,
       'order_id', v_existing_order.id,
+      'access_token', v_existing_order.access_token,
       'order_number_formatted', v_existing_order.order_number_formatted,
       'status', v_existing_order.status,
       'total_cents', v_existing_order.total_cents,
@@ -358,6 +364,7 @@ BEGIN
     order_number,
     order_number_formatted,
     idempotency_key,
+    access_token,
     status,
     payment_status,
     payment_method,
@@ -376,6 +383,7 @@ BEGIN
     v_next_order_num,
     v_order_num_formatted,
     p_idempotency_key,
+    v_access_token,
     'pending',
     'unpaid',
     'pay_at_counter',
@@ -548,6 +556,7 @@ BEGIN
     'success', true,
     'is_duplicate', false,
     'order_id', v_order_id,
+    'access_token', v_access_token,
     'order_number_formatted', v_order_num_formatted,
     'status', 'pending',
     'total_cents', v_order_subtotal,

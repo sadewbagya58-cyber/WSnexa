@@ -329,6 +329,46 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           </div>
         </div>
 
+        {/* Payment Summary Card */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
+              Payment Summary
+            </span>
+            <Badge
+              variant={
+                order.payment_status === 'paid'
+                  ? 'success'
+                  : order.payment_status === 'partially_paid'
+                  ? 'warning'
+                  : 'destructive'
+              }
+            >
+              {order.payment_status === 'paid' && '💵 Payment Completed'}
+              {order.payment_status === 'partially_paid' && '⚖️ Partially Paid'}
+              {order.payment_status === 'unpaid' && '🔴 Pay at Counter'}
+              {!['paid', 'partially_paid', 'unpaid'].includes(order.payment_status) &&
+                order.payment_status.toUpperCase()}
+            </Badge>
+          </div>
+
+          <div className="space-y-1.5 text-xs text-zinc-700 font-bold">
+            <div className="flex justify-between">
+              <span>Payment Method:</span>
+              <span className="capitalize">{order.payment_method.replace('_', ' ')}</span>
+            </div>
+            {order.payment_status === 'paid' ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center text-xs font-black text-emerald-800">
+                ✅ Payment Completed. Thank you!
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-xs font-bold text-amber-900">
+                Please settle payment at the cashier counter.
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Return to Menu Button */}
         <div className="space-y-3">
           <Link href={`/m/${token}`}>

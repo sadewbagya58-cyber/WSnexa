@@ -45,6 +45,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+  const canAccessCashier = ['business_owner', 'branch_manager', 'cashier'].includes(userRole);
+
   const navSections: NavSection[] = [
     {
       sectionTitle: 'Overview',
@@ -81,12 +83,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       items: [
         { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
         { label: 'Waiter Assistance', href: '/dashboard/waiter' },
+        ...(canAccessCashier ? [{ label: 'Cashier POS', href: '/dashboard/cashier' }] : []),
       ],
     },
     {
       sectionTitle: 'Upcoming Features',
       items: [
-        { label: 'POS Billing', href: '#', badge: 'Phase 11', disabled: true },
         { label: 'Reports & Analytics', href: '#', badge: 'Phase 12', disabled: true },
       ],
     },

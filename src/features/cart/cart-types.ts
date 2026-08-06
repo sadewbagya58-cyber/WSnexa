@@ -24,7 +24,9 @@ export interface ConfirmedTableContext {
   tableId: string;
   tableName: string;
   tableCode: string;
+  signedTableAccessProof?: string;
   verifiedAt: string;
+  expiresAt?: string;
 }
 
 export interface CartState {

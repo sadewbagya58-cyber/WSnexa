@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { hashQrToken, hashTablePin } from '@/lib/qr/security';
+import { verifySignedTableAccessProof } from '@/lib/qr/table-access-proof';
 import {
   CreateGuestOrderInput,
   createGuestOrderSchema,
@@ -76,6 +77,7 @@ export class OrderService {
       rawQrToken,
       tableId,
       inputPin,
+      signedTableAccessProof,
       guestName,
       guestPhone,
       guestNotes,
@@ -83,12 +85,66 @@ export class OrderService {
       cartItems,
     } = parsed.data;
 
-    // Compute peppered token hash and table PIN hash
+    // Compute peppered token hash
     const tokenHash = hashQrToken(rawQrToken);
-    const pinHash = inputPin && inputPin.trim().length > 0 ? hashTablePin(inputPin.trim()) : null;
-
     const supabase = await createClient();
 
+    let pinHash: string | null = null;
+
+    // 1. If signed table access proof is provided, verify proof integrity, branch, table, and expiration
+    if (signedTableAccessProof && tableId) {
+      // First resolve branchId associated with QR code
+      const { data: qrData } = await supabase
+        .from('branch_qr_codes')
+        .select('branch_id')
+        .eq('token_hash', tokenHash)
+        .eq('is_active', true)
+        .is('revoked_at', null)
+        .maybeSingle();
+
+      if (!qrData) {
+        return { success: false, message: 'Invalid or revoked QR code.' };
+      }
+
+      const proofResult = verifySignedTableAccessProof(
+        signedTableAccessProof,
+        qrData.branch_id,
+        tableId
+      );
+
+      if (!proofResult.valid) {
+        if (proofResult.error === 'EXPIRED') {
+          return {
+            success: false,
+            message: 'Table verification expired. Please verify your table again.',
+            errorType: 'TABLE_VERIFICATION_EXPIRED',
+          };
+        }
+        return {
+          success: false,
+          message: 'Invalid or tampered table verification proof.',
+          errorType: 'INVALID_TABLE_PROOF',
+        };
+      }
+
+      // Proof is valid! Retrieve table_pin_hash from database so RPC receives verified pinHash
+      const { data: tableData } = await supabase
+        .from('dining_tables')
+        .select('table_pin_hash')
+        .eq('id', tableId)
+        .eq('branch_id', qrData.branch_id)
+        .maybeSingle();
+
+      if (!tableData) {
+        return { success: false, message: 'Selected dining table is unavailable.' };
+      }
+
+      pinHash = tableData.table_pin_hash;
+    } else if (inputPin && inputPin.trim().length > 0) {
+      pinHash = hashTablePin(inputPin.trim());
+    }
+
+    // Invoke atomic create_guest_order RPC
     const { data, error } = await supabase.rpc('create_guest_order', {
       p_token_hash: tokenHash,
       p_table_id: tableId || null,

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { generateTablePin, hashTablePin } from '@/lib/qr/security';
+import { createSignedTableAccessProof } from '@/lib/qr/table-access-proof';
 import {
   createServiceAreaSchema,
   updateServiceAreaSchema,
@@ -565,7 +566,14 @@ export async function verifyTableAccessAction(
   branchId: string,
   tableId: string,
   inputPin?: string
-): Promise<ActionResponse<{ table?: { id: string; name: string; code: string; table_number: number | null; capacity: number } }>> {
+): Promise<
+  ActionResponse<{
+    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number };
+    signedTableAccessProof?: string;
+    verifiedAt?: string;
+    expiresAt?: string;
+  }>
+> {
   const supabase = await createClient();
 
   const pinHash = inputPin ? hashTablePin(inputPin.trim()) : null;
@@ -597,9 +605,19 @@ export async function verifyTableAccessAction(
     return { success: false, message: 'Selected dining table is unavailable or archived.' };
   }
 
+  // Generate signed table access proof for secure order submission without persisting raw PIN
+  const proofData = payload.table
+    ? createSignedTableAccessProof(branchId, payload.table.id)
+    : undefined;
+
   return {
     success: true,
-    message: 'Table access verified!',
-    data: { table: payload.table },
+    message: 'Table verified successfully.',
+    data: {
+      table: payload.table,
+      signedTableAccessProof: proofData?.proof,
+      verifiedAt: proofData?.verifiedAt,
+      expiresAt: proofData?.expiresAt,
+    },
   };
 }

@@ -40,6 +40,7 @@ export const createGuestOrderSchema = z.object({
   rawQrToken: z.string().min(1, 'Branch QR token is required'),
   tableId: z.string().uuid().optional().nullable(),
   inputPin: z.string().optional().nullable(),
+  signedTableAccessProof: z.string().optional().nullable(),
   guestName: z.string().max(100).optional().nullable(),
   guestPhone: z.string().max(30).optional().nullable(),
   guestNotes: z.string().max(500).optional().nullable(),

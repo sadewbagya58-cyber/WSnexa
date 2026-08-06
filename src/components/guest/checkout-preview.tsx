@@ -96,6 +96,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         rawQrToken: token,
         tableId: state.confirmedTable?.tableId || null,
         inputPin: inputPin.trim() || null,
+        signedTableAccessProof: state.confirmedTable?.signedTableAccessProof || null,
         guestName: guestName.trim() || null,
         guestPhone: guestPhone.trim() || null,
         guestNotes: guestNotes.trim() || null,
@@ -166,12 +167,22 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {/* Error Alert */}
         {errorMessage && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-900 shadow-2xs space-y-1">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-900 shadow-2xs space-y-2">
             <div className="flex items-center gap-2 font-bold text-sm text-red-950">
               <span>⚠️</span>
               <span>Order Submission Failed</span>
             </div>
             <p className="leading-relaxed text-red-800">{errorMessage}</p>
+
+            {(errorMessage.includes('expired') || errorMessage.includes('tampered') || errorMessage.includes('PIN')) && (
+              <div className="pt-2">
+                <Link href={`/m/${token}`}>
+                  <Button variant="outline" size="sm" className="text-xs font-bold bg-white text-zinc-950 border-red-300">
+                    Verify Table Again →
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -185,9 +196,11 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
             <span className="font-semibold">{branchName}</span>
           </div>
           <div className="flex items-center justify-between text-sm font-bold text-zinc-950">
-            <span>Confirmed Table:</span>
+            <span>Table Status:</span>
             {state.confirmedTable ? (
-              <span className="text-emerald-800 font-extrabold">📍 {state.confirmedTable.tableName}</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-800 border border-emerald-200">
+                <span>📍</span> Table Verified ({state.confirmedTable.tableName})
+              </span>
             ) : (
               <span className="text-zinc-500 font-normal">No Table Selected (Direct Ordering)</span>
             )}

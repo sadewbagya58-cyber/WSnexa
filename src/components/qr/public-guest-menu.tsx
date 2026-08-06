@@ -148,7 +148,9 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         tableId: res.data.table.id,
         tableName: res.data.table.name,
         tableCode: res.data.table.code,
-        verifiedAt: new Date().toISOString(),
+        signedTableAccessProof: res.data.signedTableAccessProof,
+        verifiedAt: res.data.verifiedAt || new Date().toISOString(),
+        expiresAt: res.data.expiresAt,
       });
       setTableModalOpen(false);
       setPinInput('');

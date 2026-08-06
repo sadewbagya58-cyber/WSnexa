@@ -88,74 +88,70 @@ export class OrderService {
     // Compute peppered token hash
     const tokenHash = hashQrToken(rawQrToken);
     const supabase = await createClient();
-    const admin = createAdminClient();
+
+    const serviceRoleConfigured = Boolean(
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY.trim().length > 0
+    );
 
     let pinHash: string | null = null;
-    let proofLogData: Record<string, unknown> = {
-      tableId,
-      signedTableAccessProofExists: Boolean(signedTableAccessProof),
-      inputPinExists: Boolean(inputPin && inputPin.trim().length > 0),
-    };
+    let adminTableFound = false;
+    let dbPinHashExists = false;
+    let proofValid = false;
+    let proofBranchMatches = false;
+    let proofTableMatches = false;
+    let proofExpired = false;
+    let fetchedTablePinHash: string | null = null;
+    let branchIdPrefix = 'none';
 
     // 1. If signed table access proof is provided, verify proof integrity with admin client
     if (signedTableAccessProof && tableId) {
-      // Resolve table & branch details using admin client to bypass guest RLS restriction
-      const { data: tableData } = await admin
-        .from('dining_tables')
-        .select('branch_id, table_pin_hash')
-        .eq('id', tableId)
-        .maybeSingle();
+      try {
+        const admin = createAdminClient();
+        const { data: tableData } = await admin
+          .from('dining_tables')
+          .select('branch_id, table_pin_hash')
+          .eq('id', tableId)
+          .maybeSingle();
 
-      if (!tableData) {
-        console.error('[OrderService.createGuestOrder] Dining table not found for proof resolution:', tableId);
-        return { success: false, message: 'Selected dining table is unavailable.' };
+        if (tableData) {
+          adminTableFound = true;
+          dbPinHashExists = Boolean(tableData.table_pin_hash);
+          fetchedTablePinHash = tableData.table_pin_hash || null;
+          branchIdPrefix = tableData.branch_id ? tableData.branch_id.substring(0, 8) : 'none';
+
+          const proofResult = verifySignedTableAccessProof(
+            signedTableAccessProof,
+            tableData.branch_id,
+            tableId
+          );
+
+          proofValid = proofResult.valid;
+          proofExpired = proofResult.error === 'EXPIRED';
+          proofBranchMatches = proofResult.error !== 'BRANCH_MISMATCH';
+          proofTableMatches = proofResult.error !== 'TABLE_MISMATCH';
+
+          if (proofResult.valid && tableData.table_pin_hash) {
+            pinHash = tableData.table_pin_hash;
+          }
+        } else {
+          console.error('[OrderService.createGuestOrder] Admin client table query returned no row for tableId:', tableId);
+        }
+      } catch (adminErr: unknown) {
+        const errMsg = adminErr instanceof Error ? adminErr.message : 'Unknown admin client error';
+        console.error('[OrderService.createGuestOrder] Admin client query error:', errMsg);
       }
 
-      const proofResult = verifySignedTableAccessProof(
-        signedTableAccessProof,
-        tableData.branch_id,
-        tableId
-      );
-
-      proofLogData = {
-        ...proofLogData,
-        branchId: tableData.branch_id,
-        proofVerified: proofResult.valid,
-        proofError: proofResult.error || null,
-        proofExpired: proofResult.error === 'EXPIRED',
-        proofBranchMatches: proofResult.error !== 'BRANCH_MISMATCH',
-        proofTableMatches: proofResult.error !== 'TABLE_MISMATCH',
-      };
-
-      if (!proofResult.valid) {
-        console.warn('[OrderService.createGuestOrder] Signed Table Access Proof invalid:', proofLogData);
-        if (proofResult.error === 'EXPIRED') {
-          return {
-            success: false,
-            message: 'Table verification expired. Please verify your table again.',
-            errorType: 'TABLE_VERIFICATION_EXPIRED',
-          };
-        }
+      if (proofExpired) {
         return {
           success: false,
-          message: 'Invalid or tampered table verification proof.',
-          errorType: 'INVALID_TABLE_PROOF',
+          message: 'Table verification expired. Please verify your table again.',
+          errorType: 'TABLE_VERIFICATION_EXPIRED',
         };
       }
-
-      // Proof is valid! Pass the verified table_pin_hash to create_guest_order RPC
-      pinHash = tableData.table_pin_hash;
-      proofLogData.p_pin_hash = pinHash ? `${pinHash.substring(0, 8)}...` : null;
     } else if (inputPin && inputPin.trim().length > 0) {
       pinHash = hashTablePin(inputPin.trim());
-      proofLogData.p_pin_hash = pinHash ? `${pinHash.substring(0, 8)}...` : null;
-      proofLogData.p_input_pin_sent = true;
-    } else {
-      proofLogData.p_pin_hash = null;
-      proofLogData.p_input_pin_sent = false;
     }
-
-    console.log('[OrderService.createGuestOrder] Executing create_guest_order RPC with params:', proofLogData);
 
     // Invoke atomic create_guest_order RPC
     const { data, error } = await supabase.rpc('create_guest_order', {
@@ -169,7 +165,25 @@ export class OrderService {
       p_cart_items: cartItems,
     });
 
-    console.log('[OrderService.createGuestOrder] RPC Response:', { data, error });
+    const rpcPayload = data as { success?: boolean; error?: string } | null;
+    const rpcErrorStr = error?.message || (rpcPayload && !rpcPayload.success ? rpcPayload.error : null) || null;
+
+    const safeLogFormat = {
+      serviceRoleConfigured,
+      adminTableFound,
+      dbPinHashExists,
+      proofExists: Boolean(signedTableAccessProof),
+      proofValid,
+      proofBranchMatches,
+      proofTableMatches,
+      rpcPinHashExists: Boolean(pinHash),
+      pinHashesMatch: Boolean(pinHash && fetchedTablePinHash && pinHash === fetchedTablePinHash),
+      tableIdPrefix: tableId ? tableId.substring(0, 8) : 'none',
+      branchIdPrefix,
+      rpcError: rpcErrorStr,
+    };
+
+    console.log('[OrderService.createGuestOrder Safe Diagnostics]:', JSON.stringify(safeLogFormat, null, 2));
 
     if (error || !data) {
       return {

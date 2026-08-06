@@ -1,6 +1,12 @@
 import crypto from 'crypto';
 
-const PROOF_SECRET = process.env.TABLE_PIN_PEPPER || process.env.SUPABASE_SERVICE_ROLE_KEY || 'wsnexa_table_access_proof_secret_key_v1';
+function getProofSecret(): string {
+  return (
+    process.env.TABLE_PIN_PEPPER ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    'wsnexa_table_access_proof_secret_key_v1'
+  );
+}
 
 export interface TableAccessProofPayload {
   branchId: string;
@@ -40,7 +46,7 @@ export function createSignedTableAccessProof(
   const payloadBase64 = Buffer.from(payloadString, 'utf8').toString('base64url');
 
   const signature = crypto
-    .createHmac('sha256', PROOF_SECRET)
+    .createHmac('sha256', getProofSecret())
     .update(payloadBase64)
     .digest('hex');
 
@@ -74,7 +80,7 @@ export function verifySignedTableAccessProof(
 
   // Recompute expected HMAC signature
   const expectedSignature = crypto
-    .createHmac('sha256', PROOF_SECRET)
+    .createHmac('sha256', getProofSecret())
     .update(payloadBase64)
     .digest('hex');
 

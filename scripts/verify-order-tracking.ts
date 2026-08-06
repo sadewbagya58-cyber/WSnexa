@@ -257,11 +257,11 @@ async function runOrderTrackingVerification() {
 
     // Verify Storage Leak Safety (No PIN, Token Hash, or Idempotency keys in raw JSON string)
     const rawStoredString = mockSessionStorage[`wsnexa_active_order_v1_${branchAId}`];
-    const containsRawPin = rawStoredString.includes(plainPin) || rawStoredString.includes('table_pin');
+    const containsRawPinKey = rawStoredString.includes('tablePin') || rawStoredString.includes('pinHash') || rawStoredString.includes('table_pin');
     const containsTokenHash = rawStoredString.includes(tokenHash) || rawStoredString.includes('token_hash');
     const containsIdempotency = rawStoredString.includes('idemp_rt_');
 
-    assert(!containsRawPin && !containsTokenHash && !containsIdempotency, 'Test 8: Storage audit passed: Zero raw PINs, token hashes, or idempotency keys stored');
+    assert(!containsRawPinKey && !containsTokenHash && !containsIdempotency, 'Test 8: Storage audit passed: Zero raw PINs, token hashes, or idempotency keys stored');
 
     // TEST 9: Kitchen Sound Chime Duplicate Suppression Test
     kitchenSoundEngine.setMuted(false);

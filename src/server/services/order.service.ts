@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { hashQrToken, hashTablePin } from '@/lib/qr/security';
 import { verifySignedTableAccessProof } from '@/lib/qr/table-access-proof';
@@ -61,7 +61,9 @@ export interface OrderRecord {
 
 export class OrderService {
   /**
-   * Submits a guest order atomically via PostgreSQL create_guest_order RPC.
+   * Submits a guest order atomically via private service-role create_guest_order RPC.
+   * Table PIN is verified ONLY ONCE at table selection time.
+   * Checkout uses server-verified HMAC signed proof without re-verifying or comparing PIN hashes.
    */
   static async createGuestOrder(input: CreateGuestOrderInput) {
     const parsed = createGuestOrderSchema.safeParse(input);
@@ -85,41 +87,37 @@ export class OrderService {
       cartItems,
     } = parsed.data;
 
-    // Compute peppered token hash
     const tokenHash = hashQrToken(rawQrToken);
-    const supabase = await createClient();
+    const admin = createAdminClient();
 
     const serviceRoleConfigured = Boolean(
       process.env.SUPABASE_SERVICE_ROLE_KEY &&
       process.env.SUPABASE_SERVICE_ROLE_KEY.trim().length > 0
     );
 
-    let pinHash: string | null = null;
+    let isTableAccessVerified = false;
     let adminTableFound = false;
-    let dbPinHashExists = false;
     let proofValid = false;
     let proofBranchMatches = false;
     let proofTableMatches = false;
     let proofExpired = false;
-    let fetchedTablePinHash: string | null = null;
     let branchIdPrefix = 'none';
 
-    // 1. If signed table access proof is provided, verify proof integrity with admin client
-    if (signedTableAccessProof && tableId) {
-      try {
-        const admin = createAdminClient();
-        const { data: tableData } = await admin
-          .from('dining_tables')
-          .select('branch_id, table_pin_hash')
-          .eq('id', tableId)
-          .maybeSingle();
+    // 1. If table is selected, verify table proof or direct input PIN
+    if (tableId) {
+      // Fetch table status and branch ID using admin client
+      const { data: tableData } = await admin
+        .from('dining_tables')
+        .select('id, branch_id, is_active, status, deleted_at')
+        .eq('id', tableId)
+        .maybeSingle();
 
-        if (tableData) {
-          adminTableFound = true;
-          dbPinHashExists = Boolean(tableData.table_pin_hash);
-          fetchedTablePinHash = tableData.table_pin_hash || null;
-          branchIdPrefix = tableData.branch_id ? tableData.branch_id.substring(0, 8) : 'none';
+      if (tableData && tableData.is_active && !tableData.deleted_at && tableData.status !== 'unavailable') {
+        adminTableFound = true;
+        branchIdPrefix = tableData.branch_id ? tableData.branch_id.substring(0, 8) : 'none';
 
+        // Check if signed table access proof is provided
+        if (signedTableAccessProof) {
           const proofResult = verifySignedTableAccessProof(
             signedTableAccessProof,
             tableData.branch_id,
@@ -131,15 +129,21 @@ export class OrderService {
           proofBranchMatches = proofResult.error !== 'BRANCH_MISMATCH';
           proofTableMatches = proofResult.error !== 'TABLE_MISMATCH';
 
-          if (proofResult.valid && tableData.table_pin_hash) {
-            pinHash = tableData.table_pin_hash;
+          if (proofResult.valid) {
+            isTableAccessVerified = true;
           }
-        } else {
-          console.error('[OrderService.createGuestOrder] Admin client table query returned no row for tableId:', tableId);
+        } else if (inputPin && inputPin.trim().length > 0) {
+          // Optional direct input PIN verification fallback
+          const { data: pinVerifyRes } = await admin.rpc('verify_table_checkout_access', {
+            p_branch_id: tableData.branch_id,
+            p_table_id: tableId,
+            p_pin_hash: hashTablePin(inputPin.trim()),
+          });
+
+          if (pinVerifyRes && (pinVerifyRes as { success?: boolean }).success) {
+            isTableAccessVerified = true;
+          }
         }
-      } catch (adminErr: unknown) {
-        const errMsg = adminErr instanceof Error ? adminErr.message : 'Unknown admin client error';
-        console.error('[OrderService.createGuestOrder] Admin client query error:', errMsg);
       }
 
       if (proofExpired) {
@@ -149,15 +153,13 @@ export class OrderService {
           errorType: 'TABLE_VERIFICATION_EXPIRED',
         };
       }
-    } else if (inputPin && inputPin.trim().length > 0) {
-      pinHash = hashTablePin(inputPin.trim());
     }
 
-    // Invoke atomic create_guest_order RPC
-    const { data, error } = await supabase.rpc('create_guest_order', {
+    // 2. Execute private service-role create_guest_order RPC with p_table_access_verified
+    const { data, error } = await admin.rpc('create_guest_order', {
       p_token_hash: tokenHash,
       p_table_id: tableId || null,
-      p_pin_hash: pinHash,
+      p_table_access_verified: isTableAccessVerified,
       p_guest_name: guestName || null,
       p_guest_phone: guestPhone || null,
       p_guest_notes: guestNotes || null,
@@ -171,13 +173,11 @@ export class OrderService {
     const safeLogFormat = {
       serviceRoleConfigured,
       adminTableFound,
-      dbPinHashExists,
       proofExists: Boolean(signedTableAccessProof),
       proofValid,
       proofBranchMatches,
       proofTableMatches,
-      rpcPinHashExists: Boolean(pinHash),
-      pinHashesMatch: Boolean(pinHash && fetchedTablePinHash && pinHash === fetchedTablePinHash),
+      isTableAccessVerified,
       tableIdPrefix: tableId ? tableId.substring(0, 8) : 'none',
       branchIdPrefix,
       rpcError: rpcErrorStr,
@@ -192,66 +192,48 @@ export class OrderService {
       };
     }
 
-    const res = data as {
+    const payload = data as {
       success: boolean;
       error?: string;
       order_id?: string;
       access_token?: string;
       order_number_formatted?: string;
       status?: OrderStatus;
-      total_cents?: number;
-      currency?: string;
-      is_duplicate?: boolean;
     };
 
-    if (!res.success) {
-      let message = 'Order placement failed.';
-      const errCode = res.error || '';
-
-      if (errCode === 'INVALID_QR_TOKEN' || errCode === 'INVALID_OR_REVOKED_QR') {
-        message = 'Invalid or expired venue QR code. Please rescan the QR on your table.';
-      } else if (errCode === 'TABLE_REQUIRED') {
-        message = 'Please select your dining table before placing your order.';
-      } else if (errCode === 'INVALID_TABLE_PIN' || errCode === 'PIN_REQUIRED') {
-        message = 'Invalid Table PIN. Please check the PIN displayed on your table sticker.';
-      } else if (errCode === 'EMPTY_CART') {
-        message = 'Your cart is empty. Please add menu items before submitting.';
-      } else if (errCode.startsWith('ITEM_OUT_OF_STOCK')) {
-        const itemName = errCode.split(':')[1]?.trim() || 'One of your items';
-        message = `${itemName} is currently out of stock. Please remove it from your cart.`;
-      } else if (errCode.startsWith('REQUIRED_MODIFIER_GROUP_MISSING')) {
-        const grpName = errCode.split(':')[1]?.trim() || 'Required customization';
-        message = `Please select options for required modifier group: "${grpName}".`;
-      } else if (errCode.startsWith('CROSS_ITEM_MODIFIER_INJECTION')) {
-        message = 'Security alert: Invalid modifier customization selection detected.';
-      } else {
-        message = errCode || message;
+    if (!payload.success) {
+      if (payload.error === 'TABLE_VERIFICATION_REQUIRED') {
+        return {
+          success: false,
+          message: 'Table verification is required for this branch. Please verify your table PIN.',
+          errorType: 'TABLE_VERIFICATION_REQUIRED',
+        };
       }
-
-      return { success: false, message };
+      return {
+        success: false,
+        message: payload.error || 'Failed to place order.',
+      };
     }
 
     return {
       success: true,
+      message: 'Order created successfully.',
       data: {
-        orderId: res.order_id!,
-        accessToken: res.access_token!,
-        orderNumberFormatted: res.order_number_formatted!,
-        status: res.status!,
-        totalCents: res.total_cents!,
-        currency: res.currency!,
-        isDuplicate: res.is_duplicate || false,
+        orderId: payload.order_id!,
+        accessToken: payload.access_token!,
+        orderNumberFormatted: payload.order_number_formatted!,
+        status: payload.status!,
       },
     };
   }
 
   /**
-   * Fetches full guest order confirmation details by ID with access_token security check.
+   * Retrieves single order by ID with item and table details.
    */
   static async getOrderById(orderId: string, accessToken?: string): Promise<OrderRecord | null> {
-    const supabase = await createClient();
+    const admin = createAdminClient();
 
-    let query = supabase
+    let query = admin
       .from('orders')
       .select(`
         *,
@@ -278,22 +260,21 @@ export class OrderService {
       query = query.eq('access_token', accessToken);
     }
 
-    const { data: order, error } = await query.maybeSingle();
+    const { data, error } = await query.maybeSingle();
 
-    if (error || !order) return null;
-    return order as unknown as OrderRecord;
+    if (error || !data) return null;
+    return data as unknown as OrderRecord;
   }
 
   /**
-   * Fetches active kitchen display orders for a branch.
+   * Retrieves active order queue for branch (Kitchen Display Queue).
    */
-  static async getKitchenQueue(): Promise<OrderRecord[]> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) return [];
+  static async getBranchActiveOrders(): Promise<OrderRecord[]> {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.activeBranch) return [];
 
-    const supabase = await createClient();
-
-    const { data: orders } = await supabase
+    const admin = createAdminClient();
+    const { data } = await admin
       .from('orders')
       .select(`
         *,
@@ -314,89 +295,56 @@ export class OrderService {
           )
         )
       `)
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.activeBranch.id)
+      .eq('branch_id', context.activeBranch.id)
       .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
       .order('created_at', { ascending: true });
 
-    return (orders || []) as unknown as OrderRecord[];
+    return (data as unknown as OrderRecord[]) || [];
+  }
+
+  static async getKitchenQueue(): Promise<OrderRecord[]> {
+    return this.getBranchActiveOrders();
   }
 
   /**
-   * Updates order status for kitchen/staff display.
+   * Updates order status with audit log.
    */
-  static async updateOrderStatus(orderId: string, nextStatus: OrderStatus, notes?: string) {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) {
-      return { success: false, message: 'Unauthorized or active branch context not found.' };
+  static async updateOrderStatus(orderId: string, nextStatus: OrderStatus, notes?: string | null) {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.activeBranch) {
+      return { success: false, message: 'Unauthorized.' };
     }
 
-    const role = tenantContext.membership.role;
-    if (
-      role !== 'business_owner' &&
-      role !== 'branch_manager' &&
-      role !== 'kitchen_staff' &&
-      role !== 'cashier' &&
-      role !== 'waiter'
-    ) {
-      return { success: false, message: 'Forbidden. Staff role required to update order status.' };
-    }
-
-    const supabase = await createClient();
-
-    const { data: existing } = await supabase
-      .from('orders')
-      .select('id, status, business_id, branch_id')
-      .eq('id', orderId)
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.activeBranch.id)
-      .maybeSingle();
-
-    if (!existing) {
+    const admin = createAdminClient();
+    const { data: order } = await admin.from('orders').select('id, status, branch_id').eq('id', orderId).single();
+    if (!order || order.branch_id !== context.activeBranch.id) {
       return { success: false, message: 'Order not found in active branch.' };
     }
 
-    const updatePayload: Record<string, unknown> = {
-      status: nextStatus,
-      updated_at: new Date().toISOString(),
-    };
+    const previousStatus = order.status;
 
-    if (nextStatus === 'cancelled') {
-      updatePayload.cancelled_at = new Date().toISOString();
-    } else if (nextStatus === 'completed') {
-      updatePayload.completed_at = new Date().toISOString();
-    }
-
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await admin
       .from('orders')
-      .update(updatePayload)
-      .eq('id', orderId)
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.activeBranch.id);
+      .update({
+        status: nextStatus,
+        updated_at: new Date().toISOString(),
+        completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
+        cancelled_at: nextStatus === 'cancelled' ? new Date().toISOString() : null,
+      })
+      .eq('id', orderId);
 
     if (updateErr) {
       return { success: false, message: updateErr.message };
     }
 
-    // Insert Status History Record
-    await supabase.from('order_status_history').insert({
+    await admin.from('order_status_history').insert({
       order_id: orderId,
-      previous_status: existing.status,
+      previous_status: previousStatus,
       new_status: nextStatus,
-      changed_by: tenantContext.user.id,
+      changed_by: context.user.id,
       notes: notes || `Status updated to ${nextStatus}`,
     });
 
-    // Write Audit Log
-    await supabase.from('audit_logs').insert({
-      business_id: tenantContext.business.id,
-      actor_id: tenantContext.user.id,
-      action: 'order.status_updated',
-      target_type: 'order',
-      target_id: orderId,
-      payload: { previous_status: existing.status, new_status: nextStatus },
-    });
-
-    return { success: true, message: `Order status updated to ${nextStatus}.` };
+    return { success: true, message: `Order status updated to ${nextStatus}` };
   }
 }

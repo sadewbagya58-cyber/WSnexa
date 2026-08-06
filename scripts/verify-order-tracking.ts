@@ -205,7 +205,7 @@ async function runOrderTrackingVerification() {
     const { data: rpcRes, error: rpcErr } = await admin.rpc('create_guest_order', {
       p_token_hash: tokenHash,
       p_table_id: tableA.id,
-      p_pin_hash: pinHash,
+      p_table_access_verified: true,
       p_guest_name: 'Tracker Guest',
       p_idempotency_key: `idemp_rt_${timestamp}`,
       p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],

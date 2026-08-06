@@ -1,8 +1,12 @@
--- Run this in Supabase SQL Editor to update create_guest_order RPC
+-- Migration: update_create_guest_order_access_token.sql
+-- Run this in Supabase SQL Editor to update create_guest_order RPC with p_table_access_verified and service_role security.
+
+DROP FUNCTION IF EXISTS public.create_guest_order(text, uuid, text, text, text, text, text, jsonb);
+
 CREATE OR REPLACE FUNCTION public.create_guest_order(
   p_token_hash TEXT,
   p_table_id UUID DEFAULT NULL,
-  p_pin_hash TEXT DEFAULT NULL,
+  p_table_access_verified BOOLEAN DEFAULT false,
   p_guest_name TEXT DEFAULT NULL,
   p_guest_phone TEXT DEFAULT NULL,
   p_guest_notes TEXT DEFAULT NULL,
@@ -100,13 +104,13 @@ BEGIN
     );
   END IF;
 
-  -- 5. Dining Table & Table PIN Verification
+  -- 5. Dining Table Verification
   IF v_branch.require_table_selection = true THEN
     IF p_table_id IS NULL THEN
       RETURN jsonb_build_object('success', false, 'error', 'TABLE_REQUIRED');
     END IF;
 
-    SELECT id, name, code, table_number, capacity, branch_id, table_pin_hash, is_active, status, deleted_at
+    SELECT id, name, code, table_number, capacity, branch_id, is_active, status, deleted_at
     INTO v_table
     FROM public.dining_tables
     WHERE id = p_table_id;
@@ -115,14 +119,8 @@ BEGIN
       RETURN jsonb_build_object('success', false, 'error', 'TABLE_NOT_FOUND');
     END IF;
 
-    IF v_branch.require_table_pin = true THEN
-      IF v_table.table_pin_hash IS NULL THEN
-        RETURN jsonb_build_object('success', false, 'error', 'PIN_NOT_CONFIGURED');
-      END IF;
-
-      IF p_pin_hash IS NULL OR p_pin_hash <> v_table.table_pin_hash THEN
-        RETURN jsonb_build_object('success', false, 'error', 'INVALID_TABLE_PIN');
-      END IF;
+    IF v_branch.require_table_pin = true AND COALESCE(p_table_access_verified, false) = false THEN
+      RETURN jsonb_build_object('success', false, 'error', 'TABLE_VERIFICATION_REQUIRED');
     END IF;
   END IF;
 
@@ -186,7 +184,6 @@ BEGIN
       RAISE EXCEPTION 'INVALID_QUANTITY';
     END IF;
 
-    -- Fetch and verify menu item
     SELECT id, name, price_cents, availability_status, is_active, deleted_at
     INTO v_item
     FROM public.menu_items
@@ -205,7 +202,6 @@ BEGIN
     v_unit_price := v_item.price_cents;
     v_item_modifiers_total := 0;
 
-    -- Insert Order Item Snapshot
     INSERT INTO public.order_items (
       order_id,
       menu_item_id,
@@ -226,7 +222,6 @@ BEGIN
 
     v_selected_opt_ids := '{}';
 
-    -- Validate and process selected modifiers
     IF v_cart_item->'selectedModifiers' IS NOT NULL AND jsonb_array_length(v_cart_item->'selectedModifiers') > 0 THEN
       FOR v_modifier_item IN SELECT * FROM jsonb_array_elements(v_cart_item->'selectedModifiers')
       LOOP
@@ -272,7 +267,6 @@ BEGIN
       END LOOP;
     END IF;
 
-    -- Validate Group Selection Rules
     FOR v_group IN
       SELECT mg.id, mg.name, mg.selection_type, mg.is_required, mg.min_selections, mg.max_selections
       FROM public.modifier_groups mg
@@ -345,3 +339,6 @@ EXCEPTION WHEN OTHERS THEN
   );
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.create_guest_order(text, uuid, boolean, text, text, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_guest_order(text, uuid, boolean, text, text, text, text, jsonb) TO service_role;

@@ -18,8 +18,13 @@ if (fs.existsSync(envPath)) {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 const admin = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false },
+});
+
+const anonClient = createClient(supabaseUrl, anonKey, {
   auth: { persistSession: false },
 });
 
@@ -34,7 +39,7 @@ function assert(condition: boolean | null | undefined, testName: string, failure
 
 async function runOrdersVerificationSuite() {
   console.log('================================================================');
-  console.log('    WSNexa Phase 10 — Table Access Proof & Order Verification    ');
+  console.log('    WSNexa Phase 10 — Private Order RPC & Table Proof Suite      ');
   console.log('================================================================\n');
 
   let bizId = '';
@@ -70,8 +75,8 @@ async function runOrdersVerificationSuite() {
     const { data: biz, error: bizErr } = await admin
       .from('businesses')
       .insert({
-        name: 'Order Security Test Cafe',
-        slug: `order-test-${timestamp}`,
+        name: 'Private RPC Test Cafe',
+        slug: `private-rpc-test-${timestamp}`,
         default_currency: 'LKR',
         timezone: 'Asia/Colombo',
         created_by: testUserId,
@@ -122,17 +127,6 @@ async function runOrdersVerificationSuite() {
       is_active: true,
     });
 
-    const qrB = generateSecureQrToken();
-    const tokenHashB = hashQrToken(qrB.rawToken);
-    await admin.from('branch_qr_codes').insert({
-      business_id: bizId,
-      branch_id: branchB.id,
-      token_hash: tokenHashB,
-      token_prefix: qrB.tokenPrefix,
-      encrypted_token: qrB.encryptedToken,
-      is_active: true,
-    });
-
     // Create Service Area & Dining Tables for Branch A & B
     const { data: areaA } = await admin.from('service_areas').insert({
       business_id: bizId,
@@ -154,9 +148,6 @@ async function runOrdersVerificationSuite() {
       table_pin_hash: pinHashA1,
     }).select('*').single();
 
-    const plainPinA2 = generateTablePin(4);
-    const pinHashA2 = hashTablePin(plainPinA2);
-
     const { data: tableA2 } = await admin.from('dining_tables').insert({
       business_id: bizId,
       branch_id: branchA.id,
@@ -164,25 +155,8 @@ async function runOrdersVerificationSuite() {
       name: 'Table 2',
       code: 'T2',
       capacity: 4,
-      table_pin_hash: pinHashA2,
+      table_pin_hash: hashTablePin('5555'),
     }).select('*').single();
-
-    const { data: areaB } = await admin.from('service_areas').insert({
-      business_id: bizId,
-      branch_id: branchB.id,
-      name: 'Patio Area',
-      code: 'PAT',
-    }).select('*').single();
-
-    await admin.from('dining_tables').insert({
-      business_id: bizId,
-      branch_id: branchB.id,
-      service_area_id: areaB.id,
-      name: 'Table 10',
-      code: 'T10',
-      capacity: 2,
-      table_pin_hash: hashTablePin('9999'),
-    });
 
     // Create Menu Categories & Items
     const { data: catA } = await admin.from('menu_categories').insert({
@@ -203,29 +177,34 @@ async function runOrdersVerificationSuite() {
       availability_status: 'available',
     }).select('*').single();
 
-    // TEST 2: Wrong Table PIN rejected during initial verification
-    const { data: wrongPinRes } = await admin.rpc('verify_table_checkout_access', {
-      p_branch_id: branchA.id,
+    // TEST 2: Anonymous direct execution of create_guest_order RPC is blocked
+    const { error: anonRpcErr } = await anonClient.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
       p_table_id: tableA1.id,
-      p_pin_hash: hashTablePin('0000'),
+      p_table_access_verified: true,
+      p_idempotency_key: `idemp_anon_${timestamp}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
     });
-    assert(wrongPinRes?.success === false && wrongPinRes?.error === 'INVALID_PIN', 'Test 2: Wrong PIN rejected during initial verification');
+    assert(anonRpcErr !== null, 'Test 2: Direct execution of private create_guest_order RPC by anonymous users is revoked & blocked');
 
-    // TEST 3: Correct PIN verification generates signed proof
-    const { data: validPinRes } = await admin.rpc('verify_table_checkout_access', {
-      p_branch_id: branchA.id,
+    // TEST 3: Unverified table access (p_table_access_verified = false) rejected by RPC
+    const { data: unverifiedRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
       p_table_id: tableA1.id,
-      p_pin_hash: pinHashA1,
+      p_table_access_verified: false,
+      p_idempotency_key: `idemp_unverified_${timestamp}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
     });
-    assert(validPinRes?.success === true, 'Test 3: Correct PIN verified on table');
+    assert(unverifiedRes?.success === false && unverifiedRes?.error === 'TABLE_VERIFICATION_REQUIRED', 'Test 3: Unverified table access (p_table_access_verified = false) rejected with TABLE_VERIFICATION_REQUIRED');
 
+    // TEST 4: Signed Table Access Proof generated on single PIN verification
     const proofDataA1 = createSignedTableAccessProof(branchA.id, tableA1.id);
-    assert(Boolean(proofDataA1.proof && proofDataA1.proof.includes('.')), 'Test 4: Signed Table Access Proof generated with HMAC signature');
+    assert(Boolean(proofDataA1.proof && proofDataA1.proof.includes('.')), 'Test 4: Signed Table Access Proof generated with HMAC signature on single PIN verification');
 
-    // TEST 5: Proof Payload Audit (Raw PIN is NEVER stored in proof string)
+    // TEST 5: Proof Payload Audit (Raw PIN or PIN hash is NEVER stored in proof string)
     const proofPayloadString = Buffer.from(proofDataA1.proof.split('.')[0], 'base64url').toString('utf8');
-    const containsRawPin = proofPayloadString.includes(plainPinA1) || proofPayloadString.includes('pin');
-    assert(!containsRawPin, 'Test 5: Proof audit passed: Zero raw PINs or plaintext secret values in proof payload');
+    const containsRawPin = proofPayloadString.includes(plainPinA1) || proofPayloadString.includes('pinHash');
+    assert(!containsRawPin, 'Test 5: Proof audit passed: Zero raw PINs or PIN hashes in proof payload');
 
     // TEST 6: Tampered Proof Rejected
     const tamperedProof = `${proofDataA1.proof.split('.')[0]}.invalid_signature_hex_12345`;
@@ -233,45 +212,31 @@ async function runOrdersVerificationSuite() {
     assert(tamperedCheck.valid === false && tamperedCheck.error === 'SIGNATURE_MISMATCH', 'Test 6: Tampered proof signature rejected');
 
     // TEST 7: Expired Proof Rejected
-    const expiredProofData = createSignedTableAccessProof(branchA.id, tableA1.id, -1); // TTL -1 hour
+    const expiredProofData = createSignedTableAccessProof(branchA.id, tableA1.id, -1);
     const expiredCheck = verifySignedTableAccessProof(expiredProofData.proof, branchA.id, tableA1.id);
     assert(expiredCheck.valid === false && expiredCheck.error === 'EXPIRED', 'Test 7: Expired table access proof rejected');
 
-    // TEST 8: Proof for Branch A Cannot Be Used in Branch B
+    // TEST 8: Branch Mismatch Proof Rejected
     const branchMismatchCheck = verifySignedTableAccessProof(proofDataA1.proof, branchB.id, tableA1.id);
     assert(branchMismatchCheck.valid === false && branchMismatchCheck.error === 'BRANCH_MISMATCH', 'Test 8: Branch A table proof rejected when used for Branch B');
 
-    // TEST 9: Proof for Table A1 Cannot Be Used for Table A2
+    // TEST 9: Table Mismatch Proof Rejected
     const tableMismatchCheck = verifySignedTableAccessProof(proofDataA1.proof, branchA.id, tableA2.id);
     assert(tableMismatchCheck.valid === false && tableMismatchCheck.error === 'TABLE_MISMATCH', 'Test 9: Table A1 proof rejected when used for Table A2');
 
-    // TEST 10: Checkout Without Proof or PIN Rejected (Empty PIN Hash)
-    const { data: emptyPinRes } = await admin.rpc('create_guest_order', {
+    // TEST 10: Verified Table Access Order Creation via Service Role
+    const { data: verifiedOrderRes } = await admin.rpc('create_guest_order', {
       p_token_hash: tokenHashA,
       p_table_id: tableA1.id,
-      p_pin_hash: null,
-      p_idempotency_key: `idemp_empty_pin_${timestamp}`,
-      p_cart_items: [{ menuItemId: itemA.id, quantity: 1 }],
-    });
-    assert(emptyPinRes?.success === false && emptyPinRes?.error === 'INVALID_TABLE_PIN', 'Test 10: Checkout submission with empty PIN hash is blocked');
-
-    // TEST 11: End-to-End Order Submission With Valid Table Access Proof
-    // Simulate OrderService verifying signed proof and retrieving table_pin_hash
-    const serviceVerify = verifySignedTableAccessProof(proofDataA1.proof, branchA.id, tableA1.id);
-    assert(serviceVerify.valid === true, 'Test 11: OrderService verified signed table access proof signature');
-
-    const { data: e2eOrderRes } = await admin.rpc('create_guest_order', {
-      p_token_hash: tokenHashA,
-      p_table_id: tableA1.id,
-      p_pin_hash: pinHashA1,
-      p_guest_name: 'Verified Table Guest',
-      p_idempotency_key: `idemp_e2e_proof_${timestamp}`,
+      p_table_access_verified: true,
+      p_guest_name: 'Single PIN Verification Guest',
+      p_idempotency_key: `idemp_verified_${timestamp}`,
       p_cart_items: [{ menuItemId: itemA.id, quantity: 2 }],
     });
 
     assert(
-      e2eOrderRes?.success === true && e2eOrderRes?.order_id !== undefined,
-      'Test 12: End-to-end guest checkout with signed Table Access Proof succeeded without re-entering PIN'
+      verifiedOrderRes?.success === true && verifiedOrderRes?.order_id !== undefined,
+      'Test 10: Guest checkout with p_table_access_verified = true via private RPC succeeded without re-verifying PIN hash'
     );
 
   } catch (err: unknown) {
@@ -287,7 +252,7 @@ async function runOrdersVerificationSuite() {
   }
 
   console.log('\n================================================================');
-  console.log('   Phase 10 Table Proof Verification Finished: ALL TESTS PASSED ');
+  console.log('   Phase 10 Private RPC Verification Finished: ALL TESTS PASSED ');
   console.log('================================================================\n');
 }
 

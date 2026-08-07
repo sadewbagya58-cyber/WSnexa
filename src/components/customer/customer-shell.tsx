@@ -18,6 +18,7 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
   const navItems = [
     { label: 'Home', href: '/customer' },
     { label: 'My Orders', href: '/customer/orders' },
+    { label: 'Venues', href: '/customer/venues' },
     { label: 'Favorites', href: '/customer/favorites' },
     { label: 'Profile', href: '/customer/profile' },
   ];

@@ -26,11 +26,14 @@ export default async function CustomerPage() {
     .from('business_memberships')
     .select('id')
     .eq('user_id', user.id)
-    .eq('membership_status', 'active')
-    .limit(1);
-
   const customerData = await AccountService.getCustomerProfile(user.id);
   const hasBusinessAccess = !!(memberships && memberships.length > 0);
+
+  const { CustomerOrderService } = await import('@/server/services/customer-order.service');
+  const [analytics, recentOrders] = await Promise.all([
+    CustomerOrderService.getCustomerAnalytics(user.id),
+    CustomerOrderService.getCustomerOrders(user.id, 'all'),
+  ]);
 
   return (
     <CustomerShell
@@ -38,7 +41,12 @@ export default async function CustomerPage() {
       email={customerData.email}
       hasBusinessAccess={hasBusinessAccess}
     >
-      <CustomerDashboard displayName={customerData.displayName} email={customerData.email} />
+      <CustomerDashboard
+        displayName={customerData.displayName}
+        email={customerData.email}
+        analytics={analytics}
+        recentOrders={recentOrders}
+      />
     </CustomerShell>
   );
 }

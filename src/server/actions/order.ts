@@ -35,6 +35,19 @@ export async function submitGuestOrderAction(
     };
   }
 
+  // Server-side optional auto-link for authenticated customers placing guest orders
+  try {
+    const { createClient } = await import('@/lib/supabase/server');
+    const { CustomerOrderService } = await import('@/server/services/customer-order.service');
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && result.data.orderId && result.data.accessToken) {
+      await CustomerOrderService.claimOrder(user.id, result.data.orderId, result.data.accessToken);
+    }
+  } catch (err) {
+    console.warn('[submitGuestOrderAction] Optional auto-link skipped:', err);
+  }
+
   revalidatePath(`/m/${input.rawQrToken}/checkout`);
   return {
     success: true,

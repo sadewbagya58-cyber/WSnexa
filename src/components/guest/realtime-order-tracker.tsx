@@ -9,6 +9,7 @@ import { useRealtimeOrder } from '@/hooks/use-realtime-order';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { submitCustomerAssistanceAction } from '@/server/actions/waiter';
 import { WaiterRequestType } from '@/lib/validation/waiter';
+import { SaveOrderButton } from '@/components/guest/save-order-button';
 
 interface RealtimeOrderTrackerProps {
   initialOrder: OrderRecord;
@@ -367,6 +368,22 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Optional Account Upgrade Banner */}
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-2xs space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-xl">
+              ⭐
+            </span>
+            <div>
+              <h4 className="text-xs font-bold text-zinc-950">Save this order to your WSNexa account</h4>
+              <p className="text-[11px] text-zinc-500">
+                Keep your order history, view digital receipts anytime, and track lifetime venue visits.
+              </p>
+            </div>
+          </div>
+          <SaveOrderButton orderId={order.id} accessToken={accessToken || ''} />
         </div>
 
         {/* Return to Menu Button */}

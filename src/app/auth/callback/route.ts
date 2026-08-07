@@ -54,10 +54,21 @@ export async function GET(request: Request) {
           profile as MinimalUserProfile,
           membership as MinimalMembership
         );
-      }
 
-      const safeRedirect = getSafeRedirectUrl(next, targetRoute, origin);
-      return NextResponse.redirect(safeRedirect);
+        // Execute pending customer order claim intent if present
+        try {
+          const { executePendingClaimIntentAction } = await import('@/server/actions/customer-order');
+          const claimRes = await executePendingClaimIntentAction();
+          if (claimRes.executed && claimRes.claimed && claimRes.returnUrl) {
+            targetRoute = claimRes.returnUrl;
+          }
+        } catch (err) {
+          console.warn('[auth/callback] Pending claim intent execution skipped:', err);
+        }
+
+        const safeRedirect = getSafeRedirectUrl(next, targetRoute, origin);
+        return NextResponse.redirect(safeRedirect);
+      }
     }
   }
 

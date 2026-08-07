@@ -1,13 +1,22 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { CustomerAnalyticsSummary, FormattedCustomerOrder } from '@/server/services/customer-order.service';
+import { formatCurrency } from '@/features/cart/cart-calculations';
 
 interface CustomerDashboardProps {
   displayName: string;
   email: string;
+  analytics: CustomerAnalyticsSummary;
+  recentOrders: FormattedCustomerOrder[];
 }
 
-export function CustomerDashboard({ displayName, email }: CustomerDashboardProps) {
+export function CustomerDashboard({ displayName, email, analytics, recentOrders }: CustomerDashboardProps) {
+  const activeOrders = recentOrders.filter((o) =>
+    ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
+  );
+
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
@@ -23,56 +32,179 @@ export function CustomerDashboard({ displayName, email }: CustomerDashboardProps
         </div>
       </div>
 
-      {/* KPI Cards Placeholder */}
+      {/* Analytics KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-2">
-          <div className="text-xs font-bold text-zinc-400 uppercase">Active Orders</div>
-          <div className="text-2xl font-black font-mono text-white">0</div>
-          <div className="text-[10px] text-zinc-500">Live guest orders in progress</div>
-        </div>
+        <Link href="/customer/orders?filter=active" className="block">
+          <div className="bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 transition-all rounded-2xl p-5 space-y-2">
+            <div className="text-xs font-bold text-zinc-400 uppercase">Active Orders</div>
+            <div className="text-2xl font-black font-mono text-amber-400">
+              {analytics.activeOrdersCount}
+            </div>
+            <div className="text-[10px] text-zinc-500">Orders currently in service</div>
+          </div>
+        </Link>
+
+        <Link href="/customer/orders" className="block">
+          <div className="bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-all rounded-2xl p-5 space-y-2">
+            <div className="text-xs font-bold text-zinc-400 uppercase">Completed Orders</div>
+            <div className="text-2xl font-black font-mono text-white">
+              {analytics.ordersCompletedCount}
+            </div>
+            <div className="text-[10px] text-zinc-500">Fulfilled hospitality orders</div>
+          </div>
+        </Link>
 
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-2">
-          <div className="text-xs font-bold text-zinc-400 uppercase">Total Orders</div>
-          <div className="text-2xl font-black font-mono text-white">0</div>
-          <div className="text-[10px] text-zinc-500">Completed hospitality visits</div>
+          <div className="text-xs font-bold text-zinc-400 uppercase">Lifetime Spend</div>
+          <div className="text-2xl font-black font-mono text-emerald-400">
+            {formatCurrency(analytics.lifetimeSpendCents, analytics.currency)}
+          </div>
+          <div className="text-[10px] text-zinc-500">Settled order total</div>
         </div>
 
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-2">
-          <div className="text-xs font-bold text-zinc-400 uppercase">Total Spend</div>
-          <div className="text-2xl font-black font-mono text-emerald-400">LKR 0</div>
-          <div className="text-[10px] text-zinc-500">Combined order history total</div>
-        </div>
-
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-2">
-          <div className="text-xs font-bold text-zinc-400 uppercase">Saved Venues</div>
-          <div className="text-2xl font-black font-mono text-amber-400">0</div>
-          <div className="text-[10px] text-zinc-500">Favorite restaurants & hotels</div>
-        </div>
-      </div>
-
-      {/* Activity & Order History Placeholder */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <span>🧾</span> Recent Order Activity
-          </h3>
-          <div className="p-8 text-center text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-            <div>No guest orders linked to your customer profile yet.</div>
-            <div className="text-[10px] text-zinc-600">
-              * Order linkage engine will be available in Phase 15.
+        <Link href="/customer/venues" className="block">
+          <div className="bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-all rounded-2xl p-5 space-y-2">
+            <div className="text-xs font-bold text-zinc-400 uppercase">Venues Visited</div>
+            <div className="text-2xl font-black font-mono text-amber-400">
+              {analytics.venuesVisitedCount}
+            </div>
+            <div className="text-[10px] text-zinc-500">
+              {analytics.mostVisitedVenueName
+                ? `Top: ${analytics.mostVisitedVenueName}`
+                : 'Restaurants & hotels'}
             </div>
           </div>
+        </Link>
+      </div>
+
+      {/* Live Active Orders Banner */}
+      {activeOrders.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+              <span>🔥</span> Live Active Orders ({activeOrders.length})
+            </h3>
+            <Link
+              href="/customer/orders?filter=active"
+              className="text-xs font-bold text-amber-400 hover:underline"
+            >
+              View All Active →
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {activeOrders.map((o) => (
+              <div
+                key={o.id}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between gap-3"
+              >
+                <div>
+                  <div className="font-extrabold text-white text-xs">
+                    {o.businessName} ({o.branchName})
+                  </div>
+                  <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                    {o.orderNumberFormatted} • {o.tableName || 'Direct'}
+                  </div>
+                </div>
+                <Link
+                  href={`/customer/orders/${o.id}`}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-black font-bold text-xs hover:bg-amber-400 transition-colors"
+                >
+                  Track Order
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Activity & Order History Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span>🧾</span> Recent Order Activity
+            </h3>
+            <Link href="/customer/orders" className="text-xs font-semibold text-amber-400 hover:underline">
+              View History →
+            </Link>
+          </div>
+
+          {recentOrders.length > 0 ? (
+            <div className="space-y-2.5">
+              {recentOrders.slice(0, 5).map((o) => (
+                <Link
+                  key={o.id}
+                  href={`/customer/orders/${o.id}`}
+                  className="block p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 hover:bg-zinc-800/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-white">{o.businessName}</span>
+                    <span className="font-mono text-zinc-400">{o.orderNumberFormatted}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-1">
+                    <span>
+                      {new Date(o.createdAt).toLocaleDateString()} • {o.itemCount} items
+                    </span>
+                    <span className="font-extrabold text-amber-400">
+                      {formatCurrency(o.totalCents, o.currency)}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+              <div>No claimed guest orders found.</div>
+              <div className="text-[10px] text-zinc-600">
+                Scan a table QR code and click &quot;Save Order to My Account&quot; to build your history!
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Quick Links Card */}
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-4">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            <span>🏬</span> Venues Visited
+            <span>⚡</span> Quick Links
           </h3>
-          <div className="p-8 text-center text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-            <div>Your visited hospitality venues will appear here.</div>
-            <div className="text-[10px] text-zinc-600">
-              * Restaurant & hotel discovery foundation.
-            </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/customer/orders"
+              className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800/60 transition-colors space-y-1 block"
+            >
+              <div className="text-lg">🧾</div>
+              <div className="text-xs font-bold text-white">All Orders</div>
+              <div className="text-[11px] text-zinc-500">View complete order history & receipts</div>
+            </Link>
+
+            <Link
+              href="/customer/venues"
+              className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800/60 transition-colors space-y-1 block"
+            >
+              <div className="text-lg">🏬</div>
+              <div className="text-xs font-bold text-white">Venues Visited</div>
+              <div className="text-[11px] text-zinc-500">See all restaurants & hotels visited</div>
+            </Link>
+
+            <Link
+              href="/customer/favorites"
+              className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800/60 transition-colors space-y-1 block"
+            >
+              <div className="text-lg">⭐</div>
+              <div className="text-xs font-bold text-white">Favorites</div>
+              <div className="text-[11px] text-zinc-500">Manage saved venues & items</div>
+            </Link>
+
+            <Link
+              href="/customer/profile"
+              className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800/60 transition-colors space-y-1 block"
+            >
+              <div className="text-lg">👤</div>
+              <div className="text-xs font-bold text-white">Profile & Preferences</div>
+              <div className="text-[11px] text-zinc-500">Update account details</div>
+            </Link>
           </div>
         </div>
       </div>

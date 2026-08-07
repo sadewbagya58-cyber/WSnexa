@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AccountService } from '@/server/services/account.service';
 import { CustomerShell } from '@/components/customer/customer-shell';
+import { CustomerOrdersList } from '@/components/customer/customer-orders-list';
 
 export const metadata: Metadata = {
   title: 'My Orders | WSNexa Customer',
@@ -31,22 +32,16 @@ export default async function CustomerOrdersPage() {
   const customerData = await AccountService.getCustomerProfile(user.id);
   const hasBusinessAccess = !!(memberships && memberships.length > 0);
 
+  const { CustomerOrderService } = await import('@/server/services/customer-order.service');
+  const orders = await CustomerOrderService.getCustomerOrders(user.id, 'all');
+
   return (
     <CustomerShell
       displayName={customerData.displayName}
       email={customerData.email}
       hasBusinessAccess={hasBusinessAccess}
     >
-      <div className="space-y-6">
-        <h1 className="text-xl font-black text-white uppercase tracking-wider">My Orders</h1>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center text-zinc-500 text-xs space-y-2">
-          <div className="text-3xl mb-2">🧾</div>
-          <div>No orders linked to your profile yet.</div>
-          <div className="text-[10px] text-zinc-600">
-            Guest order linking engine will be enabled in Phase 15.
-          </div>
-        </div>
-      </div>
+      <CustomerOrdersList initialOrders={orders} />
     </CustomerShell>
   );
 }

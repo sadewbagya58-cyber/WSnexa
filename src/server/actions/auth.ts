@@ -110,7 +110,37 @@ export async function signInAction(
     };
   }
 
-  redirect('/dashboard');
+  const { data: { user } } = await supabase.auth.getUser();
+  let targetRoute = '/onboarding/account-type';
+
+  if (user) {
+    const { AccountService } = await import('@/server/services/account.service');
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const admin = createAdminClient();
+
+    const [{ data: profile }, { data: membership }] = await Promise.all([
+      admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at')
+        .eq('id', user.id)
+        .single(),
+      admin
+        .from('business_memberships')
+        .select('id, business_id, role, membership_status')
+        .eq('user_id', user.id)
+        .eq('membership_status', 'active')
+        .limit(1)
+        .single(),
+    ]);
+
+    targetRoute = AccountService.resolveAccountRoute(
+      user,
+      profile,
+      membership
+    );
+  }
+
+  redirect(targetRoute);
 }
 
 /**

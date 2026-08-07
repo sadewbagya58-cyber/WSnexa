@@ -10,7 +10,24 @@ export default async function DashboardLayout({
 }) {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) {
-    redirect('/login');
+    const { createClient, createAdminClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect('/login');
+    }
+
+    const { AccountService } = await import('@/server/services/account.service');
+    const admin = createAdminClient();
+    const { data: userProfile } = await admin
+      .from('user_profiles')
+      .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at')
+      .eq('id', user.id)
+      .single();
+
+    const targetRoute = AccountService.resolveAccountRoute(user, userProfile, null);
+    redirect(targetRoute);
   }
 
   const { user, profile, business, activeBranch, branches, membership } = context;

@@ -4,7 +4,8 @@ import { OnboardingIntent } from '@/lib/validation/account';
 export interface MinimalUserProfile {
   id: string;
   email?: string | null;
-  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   onboarding_intent?: OnboardingIntent | null;
   preferred_workspace?: string | null;
   customer_profile_created_at?: string | null;
@@ -14,20 +15,32 @@ export interface MinimalMembership {
   id: string;
   business_id: string;
   role: string;
-  membership_status: string;
+  membership_status?: string;
+  status?: string;
 }
 
 export class AccountService {
   /**
    * Resolves target redirect path based on verified server-side business membership and user intent.
+   * PRIORITY ORDER:
+   * 1. Active Business Membership (Always authoritative for B2B accounts)
+   * 2. Customer intent or initialized customer profile -> /customer
+   * 3. Unverified Manager/Staff intent -> /account/pending-access
+   * 4. Unverified Owner intent -> /onboarding
+   * 5. Unclassified account (no intent) -> /onboarding/account-type
    */
   static resolveAccountRoute(
     user: { id: string },
     profile: MinimalUserProfile | null,
     membership: MinimalMembership | null
   ): string {
-    // 1. Verified Active Business Membership Routing (Server-Side Verified)
-    if (membership && membership.membership_status === 'active') {
+    const isMembershipActive = membership && (
+      membership.membership_status === 'active' ||
+      membership.status === 'active'
+    );
+
+    // 1. Verified Active Business Membership Routing (Highest Priority)
+    if (isMembershipActive && membership) {
       switch (membership.role) {
         case 'business_owner':
         case 'branch_manager':
@@ -45,22 +58,22 @@ export class AccountService {
 
     const intent = profile?.onboarding_intent;
 
-    // 2. Manager/Staff intent WITHOUT verified server-side membership ➔ Pending Access
-    if (intent === 'branch_manager' || intent === 'staff') {
-      return '/account/pending-access';
-    }
-
-    // 3. Customer intent or initialized Customer Profile ➔ Customer Workspace
+    // 2. Customer intent or initialized Customer Profile
     if (intent === 'customer' || profile?.customer_profile_created_at) {
       return '/customer';
     }
 
-    // 4. Business Owner intent without registered business ➔ Onboarding Flow
+    // 3. Manager/Staff intent WITHOUT verified server-side membership -> Pending Access
+    if (intent === 'branch_manager' || intent === 'staff') {
+      return '/account/pending-access';
+    }
+
+    // 4. Business Owner intent without registered business -> Onboarding Flow
     if (intent === 'business_owner') {
       return '/onboarding';
     }
 
-    // 5. Unclassified Account ➔ Account-Type Selection
+    // 5. Unclassified Account (Missing intent and missing business membership) -> Account-Type Selection
     return '/onboarding/account-type';
   }
 

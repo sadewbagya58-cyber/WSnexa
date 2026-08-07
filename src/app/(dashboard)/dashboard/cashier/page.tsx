@@ -1,17 +1,17 @@
 import { redirect } from 'next/navigation';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PaymentService } from '@/server/services/payment.service';
 import { CashierDashboard } from '@/components/cashier/cashier-dashboard';
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function CashierDashboardPage() {
-  const context = await resolveActiveBusinessContext();
+  const { allowed, context } = await requireRoutePermission('/dashboard/cashier');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+  }
   if (!context || !context.activeBranch) {
     redirect('/onboarding');
-  }
-
-  const { role } = context.membership;
-  if (!['business_owner', 'branch_manager', 'cashier'].includes(role)) {
-    redirect('/dashboard');
   }
 
   const initialOrders = await PaymentService.getCashierOrders();

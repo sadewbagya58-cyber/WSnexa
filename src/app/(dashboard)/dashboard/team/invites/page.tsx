@@ -1,7 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { StaffInvitationService } from '@/server/services/staff-invitation.service';
 import { StaffInvitesManagement } from '@/components/team/staff-invites-management';
 
@@ -10,8 +9,14 @@ export const metadata: Metadata = {
   description: 'Manage secure manager and staff invitation codes for your active business',
 };
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function StaffInvitesPage() {
-  const context = await resolveActiveBusinessContext();
+  const { allowed, context } = await requireRoutePermission('/dashboard/team/invites');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+  }
   if (!context || !context.business) {
     redirect('/login');
   }
@@ -20,7 +25,7 @@ export default async function StaffInvitesPage() {
 
   const invitations = await StaffInvitationService.listInvitations(business.id);
 
-  const formattedBranches = branches.map((b) => ({
+  const formattedBranches = branches.map((b: { id: string; name: string; isDefault: boolean }) => ({
     id: b.id,
     name: b.name,
     isDefault: b.isDefault,

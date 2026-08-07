@@ -35,6 +35,11 @@ export default async function DashboardLayout({
     ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
     : '';
 
+  const { PermissionService } = await import('@/server/services/permission.service');
+  const userPermissions = membership.role === 'business_owner'
+    ? undefined
+    : await PermissionService.getMemberEffectivePermissions(user.id, business.id, activeBranch?.id || null);
+
   return (
     <DashboardShell
       businessName={business.name}
@@ -43,6 +48,7 @@ export default async function DashboardLayout({
       userEmail={user.email || ''}
       userName={userName || user.email || ''}
       userRole={membership.role}
+      userPermissions={userPermissions}
     >
       {children}
     </DashboardShell>

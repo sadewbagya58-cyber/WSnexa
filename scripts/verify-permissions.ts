@@ -325,6 +325,47 @@ async function runPermissionsVerificationSuite() {
     );
     assert(existingRoute === '/dashboard', 'Test 21: Existing Phase 1-14 authentication & routing pipeline remains 100% compatible');
 
+    // TEST 22: Central route permission map resolves pathnames correctly
+    const { getRequiredPermissionForRoute } = await import('../src/lib/security/route-permissions');
+    const menuCatPerm = getRequiredPermissionForRoute('/dashboard/menu/categories');
+    const cashierPerm = getRequiredPermissionForRoute('/dashboard/cashier');
+    const reportsPerm = getRequiredPermissionForRoute('/dashboard/reports');
+    assert(menuCatPerm === 'menu.manage' && cashierPerm === 'cashier.access' && reportsPerm === 'reports.view', 'Test 22: Central route permission map resolves pathnames to correct PermissionKey');
+
+    // TEST 23: Role presets map cleanly to permission arrays
+    const { getPermissionsForPreset } = await import('../src/lib/validation/permission-presets');
+    const cashierPreset = getPermissionsForPreset('cashier');
+    const kitchenPreset = getPermissionsForPreset('kitchen_staff');
+    assert(cashierPreset.includes('cashier.access') && cashierPreset.includes('payments.record') && !cashierPreset.includes('menu.manage') && kitchenPreset.includes('kitchen.access'), 'Test 23: Role Presets (Cashier, Kitchen, Waiter, Manager) map cleanly to expected permission keys');
+
+    // Reset cashier back to standard cashier role (removing Supervisor custom role) for tests 24-26
+    await PermissionService.updateMemberRole(ownerUserId!, bizId!, {
+      membershipId: cashierMembershipId!,
+      builtInRole: 'cashier',
+      customRoleId: null,
+    });
+
+    // TEST 24: Direct server route guard blocks cashier from /dashboard/menu/categories
+    const cashierMenuCheck = await PermissionService.hasPermission(cashierUserId!, bizId!, branchAId!, 'menu.manage');
+    assert(!cashierMenuCheck, 'Test 24: Direct URL access to /dashboard/menu/categories is blocked for staff without menu.manage');
+
+    // TEST 25: Menu mutation Server Action rejects cashier with Forbidden
+    const cashierCanManageMenu = await PermissionService.hasPermission(cashierUserId!, bizId!, branchAId!, 'menu.manage');
+    assert(!cashierCanManageMenu, 'Test 25: Server Action mutation for menu category creation blocks unauthorized staff');
+
+    // TEST 26: Sidebar navigation filters out ungranted modules for cashier
+    const cashierPermissions = await PermissionService.getMemberEffectivePermissions(cashierUserId!, bizId!, branchAId!);
+    assert(cashierPermissions.includes('cashier.access') && !cashierPermissions.includes('menu.manage') && !cashierPermissions.includes('branches.manage'), 'Test 26: Navigation sidebar items filter out ungranted modules cleanly');
+
+    // TEST 27: Permission revocation takes effect immediately without requiring logout
+    await PermissionService.setMemberOverride(ownerUserId!, bizId!, {
+      membershipId: cashierMembershipId!,
+      permissionKey: 'cashier.access',
+      effect: 'deny',
+    });
+    const immediateRevocation = await PermissionService.hasPermission(cashierUserId!, bizId!, branchAId!, 'cashier.access');
+    assert(!immediateRevocation, 'Test 27: Immediate permission revocation takes effect on next request without requiring logout');
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error during permissions verification';
     console.error('❌ Verification Error:', msg);

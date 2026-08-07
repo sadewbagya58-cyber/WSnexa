@@ -3,11 +3,16 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PageHeader } from '@/components/ui/page-header';
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function MenuDashboardPage() {
-  const tenantContext = await resolveActiveBusinessContext();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/menu');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
+  }
   if (!tenantContext || !tenantContext.activeBranch) redirect('/login');
 
   const supabase = await createClient();

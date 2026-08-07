@@ -1,19 +1,18 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { CategoryManager } from '@/components/menu/category-manager';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PageHeader } from '@/components/ui/page-header';
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function MenuCategoriesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect('/login');
-
-  const tenantContext = await resolveActiveBusinessContext();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/menu/categories');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
+  }
   if (!tenantContext || !tenantContext.activeBranch) redirect('/onboarding');
+  const supabase = await createClient();
 
   const { data: categories } = await supabase
     .from('menu_categories')

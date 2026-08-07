@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { PermissionMatrix } from '@/components/team/permission-matrix';
+import { SimplePermissionEditor } from '@/components/team/simple-permission-editor';
 import {
   FormattedMemberDetail,
   FormattedCustomRole,
@@ -394,7 +394,7 @@ export function TeamManagement({
               💡 Checking a permission grants an explicit <strong>allow</strong> override. Unchecking a permission applies an explicit <strong>deny</strong> override, revoking that specific capability regardless of role defaults.
             </div>
 
-            <PermissionMatrix
+            <SimplePermissionEditor
               catalog={catalog}
               selectedPermissions={memberPermissions}
               onChange={handleToggleOverride}

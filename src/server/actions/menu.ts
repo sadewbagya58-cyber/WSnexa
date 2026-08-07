@@ -17,6 +17,8 @@ import {
 import { parseDecimalToMinorUnits } from '@/lib/utils/money';
 import { ActionResponse } from './auth';
 
+import { PermissionService } from '@/server/services/permission.service';
+
 /**
  * Creates a new menu category for the active business & default branch.
  */
@@ -28,9 +30,14 @@ export async function createMenuCategoryAction(
     return { success: false, message: 'Unauthorized or active business branch not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'menu.manage'
+  );
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Missing required permission menu.manage.' };
   }
 
   const parsed = createMenuCategorySchema.safeParse(formData);
@@ -114,6 +121,14 @@ export async function updateMenuCategoryAction(
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'menu.manage'
+  );
+  if (!canManage) return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
+
   const parsed = updateMenuCategorySchema.safeParse(formData);
   if (!parsed.success) {
     return { success: false, message: 'Validation failed.' };
@@ -154,6 +169,14 @@ export async function archiveMenuCategoryAction(categoryId: string): Promise<Act
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'menu.manage'
+  );
+  if (!canManage) return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_categories')
@@ -186,9 +209,14 @@ export async function createMenuItemAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'menu.manage'
+  );
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
   }
 
   const parsed = createMenuItemSchema.safeParse(formData);

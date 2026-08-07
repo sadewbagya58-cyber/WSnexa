@@ -1,15 +1,20 @@
 import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function DashboardOverviewPage() {
-  const context = await resolveActiveBusinessContext();
+  const { allowed, context } = await requireRoutePermission('/dashboard');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+  }
   if (!context || !context.activeBranch) {
     redirect('/login');
   }

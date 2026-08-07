@@ -1,6 +1,4 @@
-import React from 'react';
 import { Metadata } from 'next';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { redirect } from 'next/navigation';
 import { ReportsDashboard } from '@/components/reports/reports-dashboard';
 
@@ -9,15 +7,16 @@ export const metadata: Metadata = {
   description: 'Real-time sales summary, revenue trend, kitchen efficiency, and multi-dimension reporting',
 };
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function ReportsPage() {
-  const context = await resolveActiveBusinessContext();
+  const { allowed, context } = await requireRoutePermission('/dashboard/reports');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+  }
   if (!context || !context.user) {
     redirect('/login');
-  }
-
-  const { role } = context.membership;
-  if (!['business_owner', 'branch_manager', 'cashier', 'kitchen_staff', 'waiter'].includes(role)) {
-    redirect('/dashboard');
   }
 
   return (

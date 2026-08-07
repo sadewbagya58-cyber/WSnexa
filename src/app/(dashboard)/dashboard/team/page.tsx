@@ -1,7 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PermissionService } from '@/server/services/permission.service';
 import { TeamManagement } from '@/components/team/team-management';
 
@@ -10,8 +9,14 @@ export const metadata: Metadata = {
   description: 'Manage staff members, roles, permission overrides, and account authorization',
 };
 
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
+
 export default async function TeamDirectoryPage() {
-  const context = await resolveActiveBusinessContext();
+  const { allowed, context } = await requireRoutePermission('/dashboard/team');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+  }
   if (!context || !context.business) {
     redirect('/login');
   }

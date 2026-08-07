@@ -19,6 +19,8 @@ import {
 } from '@/lib/validation/table';
 import { ActionResponse } from './auth';
 
+import { PermissionService } from '@/server/services/permission.service';
+
 /**
  * Creates a new service area for the active business & default branch.
  */
@@ -30,9 +32,14 @@ export async function createServiceAreaAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'tables.manage'
+  );
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Missing required tables.manage permission.' };
   }
 
   const parsed = createServiceAreaSchema.safeParse(formData);

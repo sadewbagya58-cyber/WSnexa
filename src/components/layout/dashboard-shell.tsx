@@ -10,6 +10,8 @@ import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
 import { ActiveBranchSwitcher } from './active-branch-switcher';
 import { BranchInfo } from '@/types';
 
+import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
+
 interface DashboardShellProps {
   businessName: string;
   activeBranch: BranchInfo | null;
@@ -17,6 +19,7 @@ interface DashboardShellProps {
   userEmail: string;
   userName: string;
   userRole: string;
+  userPermissions?: string[];
   children: React.ReactNode;
 }
 
@@ -39,15 +42,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   userEmail,
   userName,
   userRole,
+  userPermissions,
   children,
 }) => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const canAccessCashier = ['business_owner', 'branch_manager', 'cashier'].includes(userRole);
-
-  const navSections: NavSection[] = [
+  const rawNavSections: NavSection[] = [
     {
       sectionTitle: 'Overview',
       items: [
@@ -83,14 +85,28 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       ],
     },
     {
-      sectionTitle: 'Orders & Kitchen',
+      sectionTitle: 'Orders & POS',
       items: [
+        { label: 'Cashier POS', href: '/dashboard/cashier' },
         { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
         { label: 'Waiter Assistance', href: '/dashboard/waiter' },
-        ...(canAccessCashier ? [{ label: 'Cashier POS', href: '/dashboard/cashier' }] : []),
       ],
     },
   ];
+
+  // Filter sections by granted user permissions
+  const navSections: NavSection[] = userRole === 'business_owner'
+    ? rawNavSections
+    : rawNavSections
+        .map((sec) => {
+          const filteredItems = sec.items.filter((item) => {
+            const reqKey = getRequiredPermissionForRoute(item.href);
+            if (!reqKey) return true;
+            return userPermissions ? userPermissions.includes(reqKey) : true;
+          });
+          return { ...sec, items: filteredItems };
+        })
+        .filter((sec) => sec.items.length > 0);
 
   const formatRoleLabel = (role: string) => {
     switch (role) {

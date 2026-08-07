@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PermissionMatrix } from '@/components/team/permission-matrix';
+import { SimplePermissionEditor } from '@/components/team/simple-permission-editor';
 import { FormattedCustomRole, FormattedPermission } from '@/server/services/permission.service';
 import { createCustomRoleAction, updateCustomRoleAction } from '@/server/actions/permission';
 import { PermissionKey } from '@/lib/validation/permission';
@@ -349,7 +349,7 @@ export function RolesManagement({
                 <label className="block text-zinc-700 font-bold text-xs mb-2">
                   Configure Granted Permissions *
                 </label>
-                <PermissionMatrix
+                <SimplePermissionEditor
                   catalog={catalog}
                   selectedPermissions={selectedPermissions}
                   onChange={setSelectedPermissions}

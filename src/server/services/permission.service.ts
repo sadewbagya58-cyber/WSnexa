@@ -132,6 +132,25 @@ export class PermissionService {
   }
 
   /**
+   * Helper to return all effective permission keys for a user in a business/branch.
+   */
+  static async getMemberEffectivePermissions(
+    userId: string,
+    businessId: string,
+    branchId: string | null
+  ): Promise<PermissionKey[]> {
+    const catalog = await this.listPermissionCatalog();
+    const allKeys = catalog.map((c) => c.key);
+    const result: PermissionKey[] = [];
+
+    for (const key of allKeys) {
+      const allowed = await this.hasPermission(userId, businessId, branchId, key);
+      if (allowed) result.push(key);
+    }
+    return result;
+  }
+
+  /**
    * Helper to verify if a membership has assignment to a given branch.
    */
   private static async verifyBranchBoundary(

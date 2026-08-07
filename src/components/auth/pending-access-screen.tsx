@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { claimInvitationAction } from '@/server/actions/staff-invitation';
 
 interface PendingAccessScreenProps {
   intent: string;
@@ -10,13 +11,32 @@ interface PendingAccessScreenProps {
 
 export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenProps) {
   const [inviteCode, setInviteCode] = useState('');
-  const [isCodeSubmitted, setIsCodeSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const formattedIntent = intent === 'branch_manager' ? 'Branch Manager' : 'Staff Member';
 
-  const handleClaimSubmit = (e: React.FormEvent) => {
+  const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsCodeSubmitted(true);
+    if (!inviteCode.trim()) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const res = await claimInvitationAction({ code: inviteCode.trim() });
+
+    setIsSubmitting(false);
+
+    if (res.success && res.data) {
+      setSuccessMsg(res.message || 'Invitation claimed successfully! Redirecting to workspace...');
+      setTimeout(() => {
+        window.location.href = res.data!.targetRoute;
+      }, 1000);
+    } else {
+      setErrorMsg(res.message || 'Unable to claim invitation code. Please verify and retry.');
+    }
   };
 
   return (
@@ -35,44 +55,52 @@ export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenPr
       <div className="p-4 bg-zinc-950 rounded-xl border border-zinc-800 text-left text-xs space-y-2">
         <div className="font-bold text-zinc-200 uppercase text-[10px] tracking-wider">Security Authorization Rule</div>
         <p className="text-zinc-400 leading-relaxed">
-          Staff and Manager privileges must be authorized server-side by a Business Owner. Selecting a role does not grant access automatically.
+          Staff and Manager privileges must be authorized server-side by a Business Owner. Enter your single-use invitation code below to activate access.
         </p>
       </div>
 
-      {/* Invitation Code Placeholder Form */}
+      {/* Invitation Code Claim Form */}
       <form onSubmit={handleClaimSubmit} className="space-y-3 pt-2">
         <div className="text-left">
           <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-            Have an Invitation Code?
+            Invitation Code
           </label>
           <input
             type="text"
-            placeholder="WSN-MGR-XXXXXX"
+            placeholder="WSN-MGR-K7P4-X2Q9"
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value)}
-            className="w-full bg-zinc-950 text-white font-mono text-sm border border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase"
+            disabled={isSubmitting || !!successMsg}
+            className="w-full bg-zinc-950 text-white font-mono text-sm border border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase selection:bg-amber-500 selection:text-black"
+            required
           />
         </div>
 
-        {isCodeSubmitted && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-mono">
-            ℹ️ Invitation code claim engine is coming in Phase 14. Your code has been recorded.
+        {errorMsg && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium text-left">
+            ⚠️ {errorMsg}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-semibold text-left">
+            ✅ {successMsg}
           </div>
         )}
 
         <button
           type="submit"
-          disabled={!inviteCode.trim()}
-          className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-40"
+          disabled={!inviteCode.trim() || isSubmitting || !!successMsg}
+          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-40 shadow-lg"
         >
-          Claim Invitation Code
+          {isSubmitting ? 'Validating & Claiming Code...' : 'Claim Invitation Code'}
         </button>
       </form>
 
       <div className="border-t border-zinc-800 pt-4 flex flex-col gap-2">
         <Link
           href="/customer"
-          className="py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all block text-center"
+          className="py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs uppercase tracking-wider rounded-xl transition-all block text-center"
         >
           Continue as Customer
         </Link>

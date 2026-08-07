@@ -48,7 +48,7 @@ Apply migrations to your Supabase PostgreSQL database:
 # 4. supabase/migrations/20260804071500_create_menu_schema.sql
 # 5. supabase/migrations/20260804072200_update_menu_storage_policies.sql
 # 6. supabase/migrations/20260804073500_create_modifier_schema.sql
-# 7. supabase/migrations/20260804151500_create_table_schema.sql
+# 14. supabase/migrations/20260807060000_create_staff_invitations_schema.sql
 ```
 
 ### 4. Run Development Server
@@ -74,6 +74,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run verify:menu` | Runs automated menu catalog management verification suite |
 | `npm run verify:modifiers` | Runs automated menu modifiers & item customization verification suite |
 | `npm run verify:tables` | Runs automated dining table & service area management verification suite |
+| `npm run verify:staff-invitations` | Runs automated secure manager & staff invitation verification suite |
 | `npm run build` | Builds production bundle |
 | `npm run start` | Runs production server |
 

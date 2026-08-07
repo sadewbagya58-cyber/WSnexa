@@ -21,7 +21,8 @@
     "verify:order-tracking": "tsx scripts/verify-order-tracking.ts",
     "verify:payments": "tsx scripts/verify-payments.ts",
     "verify:reports": "tsx scripts/verify-reports.ts",
-    "verify:account-onboarding": "tsx scripts/verify-account-onboarding.ts"
+    "verify:account-onboarding": "tsx scripts/verify-account-onboarding.ts",
+    "verify:staff-invitations": "tsx scripts/verify-staff-invitations.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

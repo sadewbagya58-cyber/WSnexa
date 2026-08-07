@@ -1,19 +1,51 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { OrderRecord } from '@/server/services/order.service';
 import { updateActiveOrderStatusInStorage } from '@/features/cart/active-order-storage';
+import { getPublicOrderTrackingStateAction } from '@/server/actions/order';
 
 export type RealtimeConnectionStatus = 'connected' | 'connecting' | 'reconnecting' | 'offline';
 
 export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string) {
   const [order, setOrder] = useState<OrderRecord>(initialOrder);
   const [connectionStatus, setConnectionStatus] = useState<RealtimeConnectionStatus>('connecting');
-  const supabase = createClient();
+  const tokenToUse = accessToken || initialOrder.access_token;
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const refetchOrderState = useCallback(async () => {
+    if (!initialOrder.id || !tokenToUse) return;
+    try {
+      const res = await getPublicOrderTrackingStateAction(initialOrder.id, tokenToUse);
+      if (res.success && res.data) {
+        const data = res.data;
+        setOrder((prev) => {
+          const nextOrder: OrderRecord = {
+            ...prev,
+            status: data.status,
+            payment_status: data.payment_status,
+            payment_method: data.payment_method,
+            total_cents: data.total_cents,
+            subtotal_cents: data.subtotal_cents,
+            tax_cents: data.tax_cents,
+            service_charge_cents: data.service_charge_cents,
+            amount_paid_cents: data.amount_paid_cents,
+            balance_due_cents: data.balance_due_cents,
+            customer_user_id: data.customer_user_id,
+            updated_at: data.updated_at,
+          };
+          updateActiveOrderStatusInStorage(nextOrder.branch_id, nextOrder.id, nextOrder.status);
+          return nextOrder;
+        });
+      }
+    } catch (err) {
+      console.warn('[useRealtimeOrder] Order tracking refetch warning:', err);
+    }
+  }, [initialOrder.id, tokenToUse]);
+
   useEffect(() => {
+    const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const setupSubscription = () => {
@@ -29,20 +61,26 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
             table: 'orders',
             filter: `id=eq.${initialOrder.id}`,
           },
-          (payload) => {
-            const updatedRow = payload.new as Partial<OrderRecord>;
-            if (updatedRow.status) {
-              setOrder((prev) => {
-                const nextOrder = { ...prev, ...updatedRow } as OrderRecord;
-                updateActiveOrderStatusInStorage(nextOrder.branch_id, nextOrder.id, nextOrder.status);
-                return nextOrder;
-              });
-            }
+          () => {
+            refetchOrderState();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'payments',
+            filter: `order_id=eq.${initialOrder.id}`,
+          },
+          () => {
+            refetchOrderState();
           }
         )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             setConnectionStatus('connected');
+            refetchOrderState();
           } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
             setConnectionStatus('reconnecting');
           } else if (status === 'CLOSED') {
@@ -53,29 +91,17 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
 
     setupSubscription();
 
-    // Fallback polling every 8 seconds to ensure updates are never missed
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        let query = supabase.from('orders').select('*').eq('id', initialOrder.id);
-        if (accessToken) {
-          query = query.eq('access_token', accessToken);
-        }
-        const { data } = await query.maybeSingle();
+    // 5-second polling fallback
+    pollTimerRef.current = setInterval(() => {
+      refetchOrderState();
+    }, 5000);
 
-        if (data && data.status) {
-          setOrder((prev) => {
-            if (prev.status !== data.status || prev.updated_at !== data.updated_at) {
-              const nextOrder = { ...prev, ...data } as OrderRecord;
-              updateActiveOrderStatusInStorage(nextOrder.branch_id, nextOrder.id, nextOrder.status);
-              return nextOrder;
-            }
-            return prev;
-          });
-        }
-      } catch (err: unknown) {
-        console.warn('Order polling fallback encountered error:', err);
-      }
-    }, 8000);
+    const handleFocus = () => {
+      refetchOrderState();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
 
     return () => {
       if (channel) {
@@ -84,8 +110,10 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
       }
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
-  }, [initialOrder.id, initialOrder.branch_id, accessToken, supabase]);
+  }, [initialOrder.id, refetchOrderState]);
 
-  return { order, connectionStatus };
+  return { order, connectionStatus, refetchOrderState };
 }

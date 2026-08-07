@@ -46,6 +46,9 @@ export interface OrderRecord {
   service_charge_cents: number;
   total_cents: number;
   currency: string;
+  customer_user_id?: string | null;
+  amount_paid_cents?: number;
+  balance_due_cents?: number;
   created_at: string;
   updated_at: string;
   cancelled_at: string | null;

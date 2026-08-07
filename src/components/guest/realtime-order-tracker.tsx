@@ -16,6 +16,7 @@ interface RealtimeOrderTrackerProps {
   token: string;
   businessName: string;
   accessToken?: string;
+  currentUserId?: string | null;
 }
 
 export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
@@ -23,6 +24,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   token,
   businessName,
   accessToken,
+  currentUserId,
 }) => {
   const { order, connectionStatus } = useRealtimeOrder(initialOrder, accessToken);
   const [isPending, startTransition] = useTransition();
@@ -353,11 +355,23 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             </Badge>
           </div>
 
-          <div className="space-y-1.5 text-xs text-zinc-700 font-bold">
+          <div className="space-y-2 text-xs text-zinc-700 font-bold">
             <div className="flex justify-between">
               <span>Payment Method:</span>
               <span className="capitalize">{order.payment_method.replace('_', ' ')}</span>
             </div>
+            {typeof order.amount_paid_cents === 'number' && (
+              <div className="flex justify-between text-emerald-700">
+                <span>Amount Paid:</span>
+                <span className="font-mono">{formatCurrency(order.amount_paid_cents, order.currency)}</span>
+              </div>
+            )}
+            {typeof order.balance_due_cents === 'number' && order.balance_due_cents > 0 && (
+              <div className="flex justify-between text-rose-700">
+                <span>Balance Due:</span>
+                <span className="font-mono font-extrabold">{formatCurrency(order.balance_due_cents, order.currency)}</span>
+              </div>
+            )}
             {order.payment_status === 'paid' ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center text-xs font-black text-emerald-800">
                 ✅ Payment Completed. Thank you!
@@ -370,21 +384,13 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           </div>
         </div>
 
-        {/* Optional Account Upgrade Banner */}
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5 shadow-2xs space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-xl">
-              ⭐
-            </span>
-            <div>
-              <h4 className="text-xs font-bold text-zinc-950">Save this order to your WSNexa account</h4>
-              <p className="text-[11px] text-zinc-500">
-                Keep your order history, view digital receipts anytime, and track lifetime venue visits.
-              </p>
-            </div>
-          </div>
-          <SaveOrderButton orderId={order.id} accessToken={accessToken || ''} />
-        </div>
+        {/* Optional Account Upgrade Banner / Card */}
+        <SaveOrderButton
+          orderId={order.id}
+          accessToken={accessToken || order.access_token}
+          customerUserId={order.customer_user_id}
+          currentUserId={currentUserId}
+        />
 
         {/* Return to Menu Button */}
         <div className="space-y-3">

@@ -37,6 +37,12 @@ export default async function OrderConfirmationPage({ params, searchParams }: Or
     );
   }
 
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const businessName =
     menuData && typeof menuData.business === 'object' && menuData.business !== null
       ? (menuData.business as { name: string }).name
@@ -47,7 +53,8 @@ export default async function OrderConfirmationPage({ params, searchParams }: Or
       initialOrder={order}
       token={token}
       businessName={businessName}
-      accessToken={access_token}
+      accessToken={access_token || order.access_token}
+      currentUserId={user ? user.id : null}
     />
   );
 }

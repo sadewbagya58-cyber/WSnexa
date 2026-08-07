@@ -274,6 +274,46 @@ async function runOrderTrackingVerification() {
     const updatedActive = getActiveOrdersFromStorage(branchAId);
     assert(updatedActive[0].latestStatus === 'confirmed', 'Test 10: Active order recovery status updated dynamically to "confirmed"');
 
+    // TEST 11: getPublicOrderTrackingStateAction with valid token returns public safe state
+    const { getPublicOrderTrackingStateAction } = await import('../src/server/actions/order');
+    const trackingStateRes = await getPublicOrderTrackingStateAction(createdOrderId, createdAccessToken);
+    assert(
+      trackingStateRes.success && trackingStateRes.data && trackingStateRes.data.id === createdOrderId,
+      'Test 11: getPublicOrderTrackingStateAction returns public safe order state'
+    );
+
+    // TEST 12: getPublicOrderTrackingStateAction with invalid token is blocked
+    const invalidTrackingRes = await getPublicOrderTrackingStateAction(createdOrderId, 'invalid_fake_token');
+    assert(!invalidTrackingRes.success, 'Test 12: getPublicOrderTrackingStateAction blocks invalid access_token');
+
+    // TEST 13: Recording payment updates tracking state amount_paid_cents and payment_status
+    await admin.from('payments').insert({
+      business_id: bizId,
+      branch_id: branchAId,
+      order_id: createdOrderId,
+      payment_reference: `REF_PAY_${Date.now()}`,
+      idempotency_key: `IDEM_PAY_${Date.now()}`,
+      payment_method: 'cash',
+      payment_status: 'completed',
+      amount_cents: 10000,
+      currency: 'LKR',
+      paid_at: new Date().toISOString(),
+    });
+
+    const updatedPaymentStateRes = await getPublicOrderTrackingStateAction(createdOrderId, createdAccessToken);
+    const expectedTotal = trackingStateRes.data!.total_cents;
+    console.log('[Test 13 Diagnostics]:', {
+      expectedTotal,
+      amount_paid_cents: updatedPaymentStateRes.data?.amount_paid_cents,
+      balance_due_cents: updatedPaymentStateRes.data?.balance_due_cents,
+    });
+    assert(
+      updatedPaymentStateRes.success &&
+        updatedPaymentStateRes.data?.amount_paid_cents === 10000 &&
+        updatedPaymentStateRes.data?.balance_due_cents === expectedTotal - 10000,
+      'Test 13: Recording payment updates public tracking state amount_paid_cents and balance_due_cents dynamically'
+    );
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown verification error';
     console.error('❌ Verification Error:', msg);

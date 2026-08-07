@@ -1,5 +1,6 @@
--- Migration: 20260807010000_add_payment_method_to_create_guest_order.sql
--- Description: Adds p_payment_method parameter to create_guest_order RPC and fixes modifier column mappings.
+-- Migration: 20260807020000_fix_create_guest_order_modifier_schema.sql
+-- Description: Fixes column names in create_guest_order RPC for modifier lookup and insertion.
+-- Corrects modifier_options.modifier_group_id, modifier_options.additional_price_cents, and modifier_options.is_active column mappings.
 
 DROP FUNCTION IF EXISTS public.create_guest_order(text, uuid, boolean, text, text, text, text, jsonb);
 DROP FUNCTION IF EXISTS public.create_guest_order(text, uuid, boolean, text, text, text, text, jsonb, public.payment_method);

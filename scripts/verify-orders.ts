@@ -313,6 +313,129 @@ async function runOrdersVerificationSuite() {
       'Test 13: Order created with preferred payment method (card) saves preference in DB and status remains unpaid'
     );
 
+    // Setup Modifier Groups & Options for Item A
+    const { data: modGroupSize } = await admin.from('modifier_groups').insert({
+      business_id: bizId,
+      branch_id: branchA.id,
+      menu_item_id: itemA.id,
+      name: 'Size Preference',
+      selection_type: 'single',
+      is_required: false,
+      min_selections: 0,
+      max_selections: 1,
+      is_active: true,
+    }).select('*').single();
+
+    const { data: modOptLarge } = await admin.from('modifier_options').insert({
+      business_id: bizId,
+      branch_id: branchA.id,
+      modifier_group_id: modGroupSize.id,
+      name: 'Large (+300 LKR)',
+      additional_price_cents: 30000,
+      is_active: true,
+    }).select('*').single();
+
+    const { data: modOptInactive } = await admin.from('modifier_options').insert({
+      business_id: bizId,
+      branch_id: branchA.id,
+      modifier_group_id: modGroupSize.id,
+      name: 'Super Size (Inactive)',
+      additional_price_cents: 50000,
+      is_active: false,
+    }).select('*').single();
+
+    // TEST 14: Valid selected modifier checkout succeeds and total price includes modifier price
+    const { data: modOrderRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_guest_name: 'Modifier Guest',
+      p_idempotency_key: `idemp_mod_succ_${timestamp}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id,
+          quantity: 1,
+          selectedModifiers: [{ groupId: modGroupSize.id, optionId: modOptLarge.id }],
+        },
+      ],
+      p_payment_method: 'cash',
+    });
+
+    assert(
+      modOrderRes?.success === true &&
+        modOrderRes?.total_cents === 150000, // 120,000 base + 30,000 modifier = 150,000
+      'Test 14: Valid selected modifier checkout succeeds and total price accurately includes database modifier price (150,000 cents)'
+    );
+
+    // TEST 15: Required modifier missing selection fails
+    await admin.from('modifier_groups').insert({
+      business_id: bizId,
+      branch_id: branchA.id,
+      menu_item_id: itemA.id,
+      name: 'Milk Choice (Required)',
+      selection_type: 'single',
+      is_required: true,
+      min_selections: 1,
+      max_selections: 1,
+      is_active: true,
+    }).select('*').single();
+
+    const { data: reqModErrRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_idempotency_key: `idemp_req_err_${timestamp}`,
+      p_cart_items: [{ menuItemId: itemA.id, quantity: 1, selectedModifiers: [] }],
+    });
+
+    assert(
+      reqModErrRes?.success === false && reqModErrRes?.error?.includes('MODIFIER_SELECTION_REQUIRED'),
+      'Test 15: Missing required modifier selection rejected with MODIFIER_SELECTION_REQUIRED'
+    );
+
+    // TEST 16: Inactive modifier option selection fails
+    const { data: inactiveOptRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_idempotency_key: `idemp_inact_err_${timestamp}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id,
+          quantity: 1,
+          selectedModifiers: [{ groupId: modGroupSize.id, optionId: modOptInactive.id }],
+        },
+      ],
+    });
+
+    assert(
+      inactiveOptRes?.success === false && inactiveOptRes?.error?.includes('MODIFIER_UNAVAILABLE'),
+      'Test 16: Inactive modifier option selection rejected with MODIFIER_UNAVAILABLE'
+    );
+
+    // TEST 17: Duplicate option selection fails
+    const { data: dupModRes } = await admin.rpc('create_guest_order', {
+      p_token_hash: tokenHashA,
+      p_table_id: tableA1.id,
+      p_table_access_verified: true,
+      p_idempotency_key: `idemp_dup_mod_${timestamp}`,
+      p_cart_items: [
+        {
+          menuItemId: itemA.id,
+          quantity: 1,
+          selectedModifiers: [
+            { groupId: modGroupSize.id, optionId: modOptLarge.id },
+            { groupId: modGroupSize.id, optionId: modOptLarge.id },
+          ],
+        },
+      ],
+    });
+
+    assert(
+      dupModRes?.success === false && dupModRes?.error?.includes('DUPLICATE_MODIFIER'),
+      'Test 17: Duplicate modifier option selection rejected with DUPLICATE_MODIFIER'
+    );
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error during verification';
     console.error('❌ Verification Error:', msg);

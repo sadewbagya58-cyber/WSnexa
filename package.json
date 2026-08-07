@@ -19,7 +19,8 @@
     "verify:branches": "tsx scripts/verify-branches.ts",
     "verify:orders": "tsx scripts/verify-orders.ts",
     "verify:order-tracking": "tsx scripts/verify-order-tracking.ts",
-    "verify:payments": "tsx scripts/verify-payments.ts"
+    "verify:payments": "tsx scripts/verify-payments.ts",
+    "verify:reports": "tsx scripts/verify-reports.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

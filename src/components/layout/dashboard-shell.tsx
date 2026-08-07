@@ -50,7 +50,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const navSections: NavSection[] = [
     {
       sectionTitle: 'Overview',
-      items: [{ label: 'Dashboard', href: '/dashboard' }],
+      items: [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Reports & Analytics', href: '/dashboard/reports' },
+      ],
     },
     {
       sectionTitle: 'Business',
@@ -84,12 +87,6 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
         { label: 'Waiter Assistance', href: '/dashboard/waiter' },
         ...(canAccessCashier ? [{ label: 'Cashier POS', href: '/dashboard/cashier' }] : []),
-      ],
-    },
-    {
-      sectionTitle: 'Upcoming Features',
-      items: [
-        { label: 'Reports & Analytics', href: '#', badge: 'Phase 12', disabled: true },
       ],
     },
   ];

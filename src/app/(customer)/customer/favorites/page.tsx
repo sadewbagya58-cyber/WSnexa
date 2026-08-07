@@ -1,7 +1,7 @@
 import React from 'react';
 import { Metadata } from 'next';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 import { AccountService } from '@/server/services/account.service';
 import { CustomerShell } from '@/components/customer/customer-shell';
 
@@ -11,11 +11,25 @@ export const metadata: Metadata = {
 };
 
 export default async function CustomerFavoritesPage() {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user) redirect('/login');
+  const supabase = await createClient();
 
-  const customerData = await AccountService.getCustomerProfile(context.user.id);
-  const hasBusinessAccess = !!(context.membership && context.membership.status === 'active');
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const { data: memberships } = await supabase
+    .from('business_memberships')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('membership_status', 'active')
+    .limit(1);
+
+  const customerData = await AccountService.getCustomerProfile(user.id);
+  const hasBusinessAccess = !!(memberships && memberships.length > 0);
 
   return (
     <CustomerShell

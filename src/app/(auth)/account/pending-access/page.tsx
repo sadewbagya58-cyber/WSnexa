@@ -1,7 +1,7 @@
 import React from 'react';
 import { Metadata } from 'next';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 import { PendingAccessScreen } from '@/components/auth/pending-access-screen';
 
 export const metadata: Metadata = {
@@ -10,21 +10,40 @@ export const metadata: Metadata = {
 };
 
 export default async function PendingAccessPage() {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     redirect('/login');
   }
 
-  // If user actually has verified active membership, redirect to dashboard
-  if (context.membership && context.membership.status === 'active') {
+  // 1. If user has a verified active business membership, redirect to dashboard
+  const { data: memberships } = await supabase
+    .from('business_memberships')
+    .select('role, membership_status')
+    .eq('user_id', user.id)
+    .eq('membership_status', 'active')
+    .limit(1);
+
+  if (memberships && memberships.length > 0) {
     redirect('/dashboard');
   }
 
-  const intent = 'staff';
+  // 2. Fetch onboarding intent from user_profiles
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('onboarding_intent')
+    .eq('id', user.id)
+    .single();
+
+  const intent = profile?.onboarding_intent || 'staff';
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-      <PendingAccessScreen intent={intent} userEmail={context.user.email || 'User'} />
+      <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} />
     </div>
   );
 }

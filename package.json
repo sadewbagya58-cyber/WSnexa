@@ -22,7 +22,8 @@
     "verify:payments": "tsx scripts/verify-payments.ts",
     "verify:reports": "tsx scripts/verify-reports.ts",
     "verify:account-onboarding": "tsx scripts/verify-account-onboarding.ts",
-    "verify:staff-invitations": "tsx scripts/verify-staff-invitations.ts"
+    "verify:staff-invitations": "tsx scripts/verify-staff-invitations.ts",
+    "verify:permissions": "tsx scripts/verify-permissions.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

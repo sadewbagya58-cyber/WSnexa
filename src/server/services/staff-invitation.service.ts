@@ -263,6 +263,7 @@ export class StaffInvitationService {
         .from('business_memberships')
         .update({
           role: invite.assigned_role,
+          custom_role_id: invite.custom_role_id || null,
           membership_status: 'active',
           updated_at: now.toISOString(),
         })
@@ -282,6 +283,7 @@ export class StaffInvitationService {
           business_id: invite.business_id,
           user_id: userId,
           role: invite.assigned_role,
+          custom_role_id: invite.custom_role_id || null,
           membership_status: 'active',
           joined_at: now.toISOString(),
           created_at: now.toISOString(),

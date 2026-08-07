@@ -3,14 +3,14 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PermissionService } from '@/server/services/permission.service';
-import { TeamManagement } from '@/components/team/team-management';
+import { RolesManagement } from '@/components/team/roles-management';
 
 export const metadata: Metadata = {
-  title: 'Team & Staff | WSNexa Business',
-  description: 'Manage staff members, roles, permission overrides, and account authorization',
+  title: 'Roles & Permissions | WSNexa Business',
+  description: 'Manage custom roles and granular permission matrices for your business',
 };
 
-export default async function TeamDirectoryPage() {
+export default async function TeamRolesPage() {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.business) {
     redirect('/login');
@@ -18,17 +18,15 @@ export default async function TeamDirectoryPage() {
 
   const { business, membership } = context;
 
-  const [catalog, members, customRoles] = await Promise.all([
+  const [catalog, customRoles] = await Promise.all([
     PermissionService.listPermissionCatalog(),
-    PermissionService.listTeamMembers(business.id),
     PermissionService.listCustomRoles(business.id),
   ]);
 
   return (
-    <TeamManagement
+    <RolesManagement
       catalog={catalog}
-      initialMembers={members}
-      customRoles={customRoles}
+      initialCustomRoles={customRoles}
       userRole={membership.role}
     />
   );

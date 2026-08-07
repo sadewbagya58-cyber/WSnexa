@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { AccountService, MinimalUserProfile, MinimalMembership } from '@/server/services/account.service';
 
-/**
- * Validates whether a redirect path is a safe internal relative path.
- * Prevents Open Redirect vulnerabilities.
- */
-function getSafeRedirectUrl(next: string | null, origin: string): string {
+function getSafeRedirectUrl(next: string | null, defaultTarget: string, origin: string): string {
   if (!next) {
-    return `${origin}/dashboard`;
+    return `${origin}${defaultTarget}`;
   }
 
   // Reject external protocols, protocol-relative URLs, and path traversal
@@ -17,7 +14,7 @@ function getSafeRedirectUrl(next: string | null, origin: string): string {
     next.includes('://') ||
     !next.startsWith('/')
   ) {
-    return `${origin}/dashboard`;
+    return `${origin}${defaultTarget}`;
   }
 
   return `${origin}${next}`;
@@ -33,7 +30,33 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      const safeRedirect = getSafeRedirectUrl(next, origin);
+      const { data: { user } } = await supabase.auth.getUser();
+
+      let targetRoute = '/dashboard';
+      if (user) {
+        const admin = createAdminClient();
+        const { data: profile } = await admin
+          .from('user_profiles')
+          .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at')
+          .eq('id', user.id)
+          .single();
+
+        const { data: membership } = await admin
+          .from('business_memberships')
+          .select('id, business_id, role, membership_status')
+          .eq('user_id', user.id)
+          .eq('membership_status', 'active')
+          .limit(1)
+          .single();
+
+        targetRoute = AccountService.resolveAccountRoute(
+          user,
+          profile as MinimalUserProfile,
+          membership as MinimalMembership
+        );
+      }
+
+      const safeRedirect = getSafeRedirectUrl(next, targetRoute, origin);
       return NextResponse.redirect(safeRedirect);
     }
   }

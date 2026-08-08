@@ -25,6 +25,11 @@ export const permissionKeyEnum = z.enum([
   'branches.manage',
   'business.settings.manage',
   'owner.transfer',
+  'venue_profile.view',
+  'venue_profile.manage',
+  'reviews.view',
+  'reviews.respond',
+  'reviews.moderate',
 ]);
 
 export type PermissionKey = z.infer<typeof permissionKeyEnum>;

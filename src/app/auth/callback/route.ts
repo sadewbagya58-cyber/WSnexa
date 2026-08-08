@@ -66,6 +66,17 @@ export async function GET(request: Request) {
           console.warn('[auth/callback] Pending claim intent execution skipped:', err);
         }
 
+        // Execute pending customer favorite intent if present
+        try {
+          const { executePendingFavoriteIntentAction } = await import('@/server/actions/venue-discovery');
+          const favRes = await executePendingFavoriteIntentAction();
+          if (favRes.executed && favRes.saved && favRes.returnUrl) {
+            targetRoute = favRes.returnUrl;
+          }
+        } catch (err) {
+          console.warn('[auth/callback] Pending favorite intent execution skipped:', err);
+        }
+
         const safeRedirect = getSafeRedirectUrl(next, targetRoute, origin);
         return NextResponse.redirect(safeRedirect);
       }

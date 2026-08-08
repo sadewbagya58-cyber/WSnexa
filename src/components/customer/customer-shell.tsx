@@ -17,9 +17,11 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
 
   const navItems = [
     { label: 'Home', href: '/customer' },
+    { label: 'Explore', href: '/explore' },
     { label: 'My Orders', href: '/customer/orders' },
     { label: 'Venues', href: '/customer/venues' },
     { label: 'Favorites', href: '/customer/favorites' },
+    { label: 'Reviews', href: '/customer/reviews' },
     { label: 'Profile', href: '/customer/profile' },
   ];
 

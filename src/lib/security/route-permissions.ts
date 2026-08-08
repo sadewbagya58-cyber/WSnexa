@@ -25,6 +25,8 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/team/roles', permission: 'staff.manage' },
   { prefix: '/dashboard/team', permission: 'staff.view' },
   { prefix: '/dashboard/waiter', permission: 'waiter.requests.view' },
+  { prefix: '/dashboard/venue-profile', permission: 'venue_profile.manage' },
+  { prefix: '/dashboard/reviews', permission: 'reviews.respond' },
   { prefix: '/dashboard', permission: 'orders.view', exact: true },
 ];
 

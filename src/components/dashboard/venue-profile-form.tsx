@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { VenuePublicProfileRecord } from '@/server/services/venue-discovery.service';
-import { upsertVenueProfileAction, toggleVenuePublishedStatusAction } from '@/server/actions/venue-discovery';
+import {
+  upsertVenueProfileAction,
+  toggleVenuePublishedStatusAction,
+  uploadVenueImageAction,
+  removeVenueImageAction,
+} from '@/server/actions/venue-discovery';
+import { normalizeVenueSlug } from '@/lib/validation/venue';
+import { ImageUploadDropzone } from '@/components/ui/image-upload-dropzone';
 
 interface VenueProfileFormProps {
   businessId: string;
@@ -34,8 +41,27 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     featuredBranchId: initialProfile?.featured_branch_id || '',
   });
 
+  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(Boolean(initialProfile?.slug));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      displayName: val,
+      slug: !isSlugManuallyEdited ? normalizeVenueSlug(val) : prev.slug,
+    }));
+  };
+
+  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsSlugManuallyEdited(true);
+    const val = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      slug: normalizeVenueSlug(val),
+    }));
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -53,6 +79,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
 
     const payload = {
       ...formData,
+      slug: normalizeVenueSlug(formData.slug || formData.displayName),
       venueType: formData.venueType as 'restaurant' | 'hotel' | 'cafe' | 'resort' | 'villa' | 'guest_house' | 'food_court' | 'cloud_kitchen' | 'other',
       isPublished: shouldPublish !== undefined ? shouldPublish : formData.isPublished,
       priceLevel: Number(formData.priceLevel),
@@ -63,7 +90,11 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
 
     if (res.success) {
       setMessage({ success: true, text: res.message || 'Profile saved successfully.' });
-      setFormData((prev) => ({ ...prev, isPublished: payload.isPublished }));
+      setFormData((prev) => ({
+        ...prev,
+        slug: payload.slug,
+        isPublished: payload.isPublished,
+      }));
     } else {
       setMessage({ success: false, text: res.message || 'Failed to save profile.' });
     }
@@ -153,7 +184,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               name="displayName"
               type="text"
               value={formData.displayName}
-              onChange={handleChange}
+              onChange={handleDisplayNameChange}
               placeholder="e.g. Aura Boutique Hotel & Cafe"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
               required
@@ -162,21 +193,24 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
 
           {/* URL Slug */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">URL Slug *</label>
+            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Venue Web Address (Slug) *</label>
             <input
               name="slug"
               type="text"
               value={formData.slug}
-              onChange={handleChange}
+              onChange={handleSlugChange}
               placeholder="e.g. aura-boutique-hotel"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-mono font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
               required
             />
+            <p className="text-[11px] text-zinc-500 font-medium">
+              Web Address: <span className="font-mono text-amber-700 font-bold">w-snexa.vercel.app/venues/{formData.slug || 'your-slug'}</span>
+            </p>
           </div>
 
           {/* Venue Type */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Venue Type *</label>
+            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Venue Category *</label>
             <select
               name="venueType"
               value={formData.venueType}
@@ -212,6 +246,37 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           </div>
         </div>
 
+        {/* Media Upload Section */}
+        <div className="border-t border-b border-zinc-100 py-6 space-y-6">
+          <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">Venue Photos & Media</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Logo Dropzone */}
+            <ImageUploadDropzone
+              label="Venue Logo"
+              recommendedText="Square photo • PNG, JPG, or WEBP • Max 5 MB"
+              currentUrl={formData.logoUrl}
+              imageType="logo"
+              uploadAction={uploadVenueImageAction}
+              removeAction={removeVenueImageAction}
+              onUploadSuccess={(url) => setFormData((prev) => ({ ...prev, logoUrl: url }))}
+              onRemoveSuccess={() => setFormData((prev) => ({ ...prev, logoUrl: '' }))}
+            />
+
+            {/* Cover Photo Dropzone */}
+            <ImageUploadDropzone
+              label="Cover Photo"
+              recommendedText="Landscape banner photo (16:9) • PNG, JPG, or WEBP • Max 8 MB"
+              currentUrl={formData.coverImageUrl}
+              imageType="cover"
+              uploadAction={uploadVenueImageAction}
+              removeAction={removeVenueImageAction}
+              onUploadSuccess={(url) => setFormData((prev) => ({ ...prev, coverImageUrl: url }))}
+              onRemoveSuccess={() => setFormData((prev) => ({ ...prev, coverImageUrl: '' }))}
+            />
+          </div>
+        </div>
+
         {/* Descriptions */}
         <div className="space-y-4">
           <div className="space-y-1">
@@ -237,33 +302,6 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               placeholder="Detailed description of your venue, cuisine, atmosphere, and services."
               maxLength={2000}
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-medium text-zinc-950 focus:border-amber-500 focus:outline-hidden"
-            />
-          </div>
-        </div>
-
-        {/* Media URLs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Logo Image URL</label>
-            <input
-              name="logoUrl"
-              type="url"
-              value={formData.logoUrl}
-              onChange={handleChange}
-              placeholder="https://example.com/logo.png"
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Cover Banner Image URL</label>
-            <input
-              name="coverImageUrl"
-              type="url"
-              value={formData.coverImageUrl}
-              onChange={handleChange}
-              placeholder="https://example.com/cover.jpg"
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
             />
           </div>
         </div>

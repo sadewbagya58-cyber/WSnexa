@@ -25,7 +25,8 @@
     "verify:staff-invitations": "tsx scripts/verify-staff-invitations.ts",
     "verify:permissions": "tsx scripts/verify-permissions.ts",
     "verify:customer-orders": "tsx scripts/verify-customer-orders.ts",
-    "verify:venue-discovery": "tsx scripts/verify-venue-discovery.ts"
+    "verify:venue-discovery": "tsx scripts/verify-venue-discovery.ts",
+    "verify:venue-media-slug": "tsx scripts/verify-venue-media-and-slug.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

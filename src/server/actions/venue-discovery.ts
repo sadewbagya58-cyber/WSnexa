@@ -316,3 +316,97 @@ export async function respondToReviewAction(input: OwnerReviewResponseInput): Pr
   return result;
 }
 
+/**
+ * Upload Venue Logo or Cover Photo Action.
+ */
+export async function uploadVenueImageAction(formData: FormData): Promise<{
+  success: boolean;
+  message?: string;
+  publicUrl?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, message: 'Unauthorized. Please log in.' };
+
+  const file = formData.get('file') as File | null;
+  const imageType = (formData.get('imageType') as string) || 'logo';
+
+  if (!file) {
+    return { success: false, message: 'No image file provided.' };
+  }
+
+  if (imageType !== 'logo' && imageType !== 'cover') {
+    return { success: false, message: 'Invalid image category.' };
+  }
+
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const context = await resolveActiveBusinessContext();
+
+  if (!context) {
+    return { success: false, message: 'Active business context required.' };
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const { VenueMediaService } = await import('@/server/services/venue-media.service');
+
+  const res = await VenueMediaService.uploadImage({
+    userId: user.id,
+    businessId: context.business.id,
+    imageType,
+    fileBuffer: buffer,
+    fileName: file.name,
+    mimeType: file.type,
+    fileSizeBytes: file.size,
+  });
+
+  if (res.success) {
+    revalidatePath('/dashboard/venue-profile');
+    revalidatePath('/explore');
+    if (context.business.slug) {
+      revalidatePath(`/venues/${context.business.slug}`);
+    }
+  }
+
+  return res;
+}
+
+/**
+ * Remove Venue Logo or Cover Photo Action.
+ */
+export async function removeVenueImageAction(imageType: 'logo' | 'cover'): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, message: 'Unauthorized.' };
+
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const context = await resolveActiveBusinessContext();
+
+  if (!context) {
+    return { success: false, message: 'Active business context required.' };
+  }
+
+  const { VenueMediaService } = await import('@/server/services/venue-media.service');
+  const res = await VenueMediaService.removeImage(user.id, context.business.id, imageType);
+
+  if (res.success) {
+    revalidatePath('/dashboard/venue-profile');
+    revalidatePath('/explore');
+    if (context.business.slug) {
+      revalidatePath(`/venues/${context.business.slug}`);
+    }
+  }
+
+  return res;
+}
+

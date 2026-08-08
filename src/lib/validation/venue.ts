@@ -14,6 +14,17 @@ export const venueTypeEnum = z.enum([
 
 export type VenueType = z.infer<typeof venueTypeEnum>;
 
+export function normalizeVenueSlug(input: string): string {
+  if (!input) return '';
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[_]/g, '-')
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export const venueProfileSchema = z.object({
   displayName: z
     .string()
@@ -23,14 +34,17 @@ export const venueProfileSchema = z.object({
   slug: z
     .string()
     .trim()
-    .min(2, 'Slug must be at least 2 characters')
-    .max(120, 'Slug too long')
-    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
+    .transform((val) => normalizeVenueSlug(val))
+    .refine((val) => val.length >= 2, { message: 'Venue URL slug must be at least 2 characters' })
+    .refine((val) => val.length <= 120, { message: 'Venue URL slug too long' })
+    .refine((val) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(val), {
+      message: 'Please enter a valid venue URL (letters, numbers, single hyphens only)',
+    }),
   shortDescription: z.string().max(300, 'Short description too long').optional().nullable(),
   description: z.string().max(2000, 'Description too long').optional().nullable(),
   venueType: venueTypeEnum.default('restaurant'),
-  logoUrl: z.string().url('Invalid logo URL').optional().nullable().or(z.literal('')),
-  coverImageUrl: z.string().url('Invalid cover image URL').optional().nullable().or(z.literal('')),
+  logoUrl: z.string().optional().nullable().or(z.literal('')),
+  coverImageUrl: z.string().optional().nullable().or(z.literal('')),
   phonePublic: z.string().max(30, 'Phone too long').optional().nullable().or(z.literal('')),
   emailPublic: z.string().email('Invalid public email').optional().nullable().or(z.literal('')),
   websiteUrl: z.string().url('Invalid website URL').optional().nullable().or(z.literal('')),

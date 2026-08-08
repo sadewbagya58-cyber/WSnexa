@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { VenueProfileInput } from '@/lib/validation/venue';
+import { VenueProfileInput, normalizeVenueSlug } from '@/lib/validation/venue';
 import { VenuePublicProfileRecord } from './venue-discovery.service';
 
 export class VenueProfileService {
@@ -28,17 +28,27 @@ export class VenueProfileService {
   ): Promise<{ success: boolean; message: string; data?: VenuePublicProfileRecord }> {
     const admin = createAdminClient();
 
+    // Always normalize slug server-side regardless of client input
+    const normalizedSlug = normalizeVenueSlug(input.slug || input.displayName);
+
+    if (!normalizedSlug || normalizedSlug.length < 2) {
+      return {
+        success: false,
+        message: 'Please enter a valid venue URL (letters, numbers, single hyphens only).',
+      };
+    }
+
     // Check slug uniqueness across other businesses
     const { data: existingSlug } = await admin
       .from('venue_public_profiles')
       .select('id, business_id')
-      .eq('slug', input.slug)
+      .eq('slug', normalizedSlug)
       .maybeSingle();
 
     if (existingSlug && existingSlug.business_id !== businessId) {
       return {
         success: false,
-        message: 'This venue URL slug is already taken. Please choose a unique slug.',
+        message: 'This venue URL is already in use. Please choose another one.',
       };
     }
 
@@ -60,7 +70,7 @@ export class VenueProfileService {
 
     const payload = {
       business_id: businessId,
-      slug: input.slug,
+      slug: normalizedSlug,
       display_name: input.displayName,
       short_description: input.shortDescription || null,
       description: input.description || null,
@@ -90,7 +100,24 @@ export class VenueProfileService {
 
     if (error || !data) {
       console.error('[VenueProfileService.upsertProfile] Database error:', error);
-      return { success: false, message: error?.message || 'Failed to save venue profile.' };
+      const code = error?.code;
+      const msg = error?.message || '';
+
+      if (code === '23505' || msg.includes('unique constraint') || msg.includes('already exists')) {
+        return {
+          success: false,
+          message: 'This venue URL is already in use. Please choose another one.',
+        };
+      }
+
+      if (code === '23514' || msg.includes('check constraint') || msg.includes('venue_public_profiles_slug_check')) {
+        return {
+          success: false,
+          message: 'Please enter a valid venue URL (letters, numbers, single hyphens only).',
+        };
+      }
+
+      return { success: false, message: 'Unable to save venue profile. Please check your information and try again.' };
     }
 
     return {

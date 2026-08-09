@@ -64,6 +64,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         { label: 'Public Venue Profile', href: '/dashboard/venue-profile' },
         { label: 'Customer Reviews', href: '/dashboard/reviews' },
         { label: 'Reputation & Rankings', href: '/dashboard/reputation' },
+        { label: 'Loyalty & Rewards', href: '/dashboard/loyalty' },
         { label: 'Branches', href: '/dashboard/branches' },
         { label: 'Team & Members', href: '/dashboard/team' },
         { label: 'Staff Invitations', href: '/dashboard/team/invites' },

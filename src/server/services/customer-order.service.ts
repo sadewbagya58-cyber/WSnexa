@@ -220,6 +220,10 @@ export class CustomerOrderService {
       payload: { customer_user_id: userId },
     });
 
+    // Retroactively process points for completed order
+    const { LoyaltyService } = await import('@/server/services/loyalty.service');
+    await LoyaltyService.processOrderPointsEarning(order.id);
+
     return {
       success: true,
       claimed: true,

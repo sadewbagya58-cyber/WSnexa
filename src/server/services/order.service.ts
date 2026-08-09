@@ -355,6 +355,11 @@ export class OrderService {
       notes: notes || `Status updated to ${nextStatus}`,
     });
 
+    if (nextStatus === 'completed') {
+      const { LoyaltyService } = await import('@/server/services/loyalty.service');
+      await LoyaltyService.processOrderPointsEarning(orderId);
+    }
+
     return { success: true, message: `Order status updated to ${nextStatus}` };
   }
 }

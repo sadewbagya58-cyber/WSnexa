@@ -32,6 +32,11 @@ export const permissionKeyEnum = z.enum([
   'reviews.moderate',
   'reputation.view',
   'reputation.export',
+  'loyalty.view',
+  'loyalty.manage',
+  'loyalty.rewards.manage',
+  'loyalty.customers.view',
+  'loyalty.points.adjust',
 ]);
 
 export type PermissionKey = z.infer<typeof permissionKeyEnum>;

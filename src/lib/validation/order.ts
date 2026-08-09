@@ -47,6 +47,7 @@ export const createGuestOrderSchema = z.object({
   paymentMethod: paymentMethodEnum.default('pay_at_counter'),
   idempotencyKey: z.string().min(8).max(100),
   cartItems: z.array(cartItemInputSchema).min(1, 'Cart cannot be empty'),
+  selectedRewardId: z.string().uuid().optional().nullable(),
 });
 
 export const orderAccessSchema = z.object({

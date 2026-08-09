@@ -65,7 +65,7 @@ export class PermissionService {
       .select('id, role, membership_status, custom_role_id')
       .eq('business_id', businessId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (!membership || membership.membership_status !== 'active') {
       return false;
@@ -87,7 +87,7 @@ export class PermissionService {
       .select('effect')
       .eq('business_membership_id', membership.id)
       .eq('permission_key', permissionKey)
-      .single();
+      .maybeSingle();
 
     if (override) {
       if (override.effect === 'deny') return false;

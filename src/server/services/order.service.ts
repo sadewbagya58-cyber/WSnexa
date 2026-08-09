@@ -44,6 +44,10 @@ export interface OrderRecord {
   subtotal_cents: number;
   tax_cents: number;
   service_charge_cents: number;
+  discount_cents?: number;
+  reward_id?: string | null;
+  reward_title_snapshot?: string | null;
+  reward_points_redeemed_snapshot?: number;
   total_cents: number;
   currency: string;
   customer_user_id?: string | null;
@@ -68,7 +72,7 @@ export class OrderService {
    * Table PIN is verified ONLY ONCE at table selection time.
    * Checkout uses server-verified HMAC signed proof without re-verifying or comparing PIN hashes.
    */
-  static async createGuestOrder(input: CreateGuestOrderInput) {
+  static async createGuestOrder(input: CreateGuestOrderInput, userIdInput?: string | null) {
     const parsed = createGuestOrderSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -223,6 +227,47 @@ export class OrderService {
         success: false,
         message: payload.error || 'Failed to place order.',
       };
+    }
+
+    // Optional Loyalty Reward Redemption for authenticated customers
+    if (parsed.data.selectedRewardId && payload.order_id) {
+      let activeUserId = userIdInput || null;
+      if (!activeUserId) {
+        try {
+          const { createClient } = await import('@/lib/supabase/server');
+          const supabase = await createClient().catch(() => null);
+          if (supabase) {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            activeUserId = user?.id || null;
+          }
+        } catch {
+          // Called outside Next.js request context (e.g. CLI test script)
+        }
+      }
+
+      if (activeUserId) {
+        const { LoyaltyService } = await import('@/server/services/loyalty.service');
+        const redeemRes = await LoyaltyService.redeemRewardForOrder(
+          activeUserId,
+          payload.order_id,
+          parsed.data.selectedRewardId
+        );
+
+        if (!redeemRes.success) {
+          // Cancel order if reward redemption failed security/points check
+          await admin
+            .from('orders')
+            .update({ status: 'cancelled', guest_notes: `Reward redemption failed: ${redeemRes.message}` })
+            .eq('id', payload.order_id);
+
+          return {
+            success: false,
+            message: redeemRes.message || 'Failed to apply selected reward.',
+          };
+        }
+      }
     }
 
     return {

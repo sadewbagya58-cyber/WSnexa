@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/features/cart/cart-context';
-import { formatCurrency } from '@/features/cart/cart-calculations';
+import { formatCurrency, calculateRewardDiscountCents } from '@/features/cart/cart-calculations';
 import { isTableAccessVerified } from '@/features/cart/cart-types';
 import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
 import { submitGuestOrderAction } from '@/server/actions/order';
@@ -107,6 +107,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         paymentMethod,
         idempotencyKey: getOrCreateIdempotencyKey(),
         cartItems: cartItemsPayload,
+        selectedRewardId: state.selectedReward?.id || null,
       });
 
       if (!res.success || !res.data) {
@@ -425,12 +426,38 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
 
             <div className="pt-4 border-t border-zinc-200 space-y-2">
               <div className="flex justify-between text-xs text-zinc-600">
-                <span>Items Subtotal</span>
+                <span>Subtotal</span>
                 <span className="font-mono font-bold">{formatCurrency(state.subtotalCents, state.currency)}</span>
               </div>
+              {state.selectedReward && (
+                <>
+                  <div className="flex justify-between text-xs text-emerald-600 font-bold">
+                    <span>Reward — {state.selectedReward.title}</span>
+                    <span className="font-mono">
+                      -{formatCurrency(
+                        calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines),
+                        state.currency
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-amber-700 italic">
+                    <span>Points to redeem</span>
+                    <span className="font-mono font-bold">{state.selectedReward.pointsRequired} pts</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-base font-black text-zinc-950 pt-2 border-t border-zinc-100">
                 <span>Total Amount</span>
-                <span>{formatCurrency(state.subtotalCents, state.currency)}</span>
+                <span>
+                  {formatCurrency(
+                    Math.max(
+                      0,
+                      state.subtotalCents -
+                        calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                    ),
+                    state.currency
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -439,10 +466,19 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
           <div className="space-y-3">
             <Button
               type="submit"
-              className="w-full text-sm font-extrabold py-3.5 shadow-md"
+              className="w-full text-sm font-extrabold py-3.5 shadow-md bg-zinc-950 hover:bg-zinc-800 text-white"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Placing Order...' : `Confirm & Submit Order (${formatCurrency(state.subtotalCents, state.currency)})`}
+              {isSubmitting
+                ? 'Placing Order...'
+                : `Confirm & Submit Order (${formatCurrency(
+                    Math.max(
+                      0,
+                      state.subtotalCents -
+                        calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                    ),
+                    state.currency
+                  )})`}
             </Button>
 
             <Link href={`/m/${token}`} className="block text-center">

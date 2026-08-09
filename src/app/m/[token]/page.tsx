@@ -1,4 +1,6 @@
+import { createClient } from '@/lib/supabase/server';
 import { QrService } from '@/server/services/qr.service';
+import { LoyaltyService } from '@/server/services/loyalty.service';
 import { PublicGuestMenu } from '@/components/qr/public-guest-menu';
 import { GuestActiveOrderBanner } from '@/components/guest/guest-active-order-banner';
 import { CartProvider } from '@/features/cart/cart-context';
@@ -29,7 +31,16 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
 
   const payload = menuData as unknown as React.ComponentProps<typeof PublicGuestMenu>;
   const branchId = payload.branch.id;
+  const businessId = payload.business.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const availableRewards = await LoyaltyService.getAvailableRewards(businessId);
+  const loyaltyAccount = user ? await LoyaltyService.getCustomerAccount(user.id, businessId) : null;
 
   return (
     <CartProvider branchId={branchId} currency={currency}>
@@ -41,6 +52,9 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
         dining_tables={payload.dining_tables}
         categories={payload.categories}
         items={payload.items}
+        isAuthenticated={!!user}
+        loyaltyAccount={loyaltyAccount}
+        availableRewards={availableRewards}
       />
       <GuestActiveOrderBanner branchId={branchId} token={token} />
     </CartProvider>

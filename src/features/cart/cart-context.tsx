@@ -5,6 +5,7 @@ import { CartState, CartLine, ConfirmedTableContext, SelectedModifierSnapshot } 
 import { generateCartLineKey, normalizeNotes } from './cart-line-key';
 import { calculateLineUnitPriceCents, calculateLineTotalCents, calculateCartTotals } from './cart-calculations';
 import { saveCartToStorage, loadCartFromStorage, clearCartStorage } from './cart-storage';
+import type { LoyaltyRewardRecord } from '@/server/services/loyalty.service';
 
 type CartAction =
   | { type: 'HYDRATE_CART'; payload: CartState }
@@ -32,12 +33,14 @@ type CartAction =
     }
   | { type: 'REMOVE_LINE'; payload: { lineId: string } }
   | { type: 'CLEAR_CART' }
-  | { type: 'SET_TABLE_CONTEXT'; payload: ConfirmedTableContext | null };
+  | { type: 'SET_TABLE_CONTEXT'; payload: ConfirmedTableContext | null }
+  | { type: 'SET_SELECTED_REWARD'; payload: LoyaltyRewardRecord | null };
 
 const initialCartState: CartState = {
   branchId: '',
   currency: 'USD',
   confirmedTable: null,
+  selectedReward: null,
   lines: [],
   subtotalCents: 0,
   totalQuantity: 0,
@@ -242,6 +245,15 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       break;
     }
 
+    case 'SET_SELECTED_REWARD': {
+      nextState = {
+        ...state,
+        selectedReward: action.payload,
+        updatedAt: new Date().toISOString(),
+      };
+      break;
+    }
+
     default:
       return state;
   }
@@ -275,6 +287,7 @@ interface CartContextValue {
   removeLine: (lineId: string) => void;
   clearCart: () => void;
   setConfirmedTable: (table: ConfirmedTableContext | null) => void;
+  setSelectedReward: (reward: LoyaltyRewardRecord | null) => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -348,6 +361,10 @@ export const CartProvider: React.FC<{
     dispatch({ type: 'SET_TABLE_CONTEXT', payload: table });
   };
 
+  const setSelectedReward = (reward: LoyaltyRewardRecord | null) => {
+    dispatch({ type: 'SET_SELECTED_REWARD', payload: reward });
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -358,6 +375,7 @@ export const CartProvider: React.FC<{
         removeLine,
         clearCart,
         setConfirmedTable,
+        setSelectedReward,
       }}
     >
       {children}

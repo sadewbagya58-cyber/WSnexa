@@ -325,6 +325,22 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
                 {formatCurrency(order.subtotal_cents, order.currency)}
               </span>
             </div>
+            {order.reward_title_snapshot && (
+              <>
+                <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                  <span>🎁 Reward Used: {order.reward_title_snapshot}</span>
+                  <span className="font-mono">
+                    -{formatCurrency(order.discount_cents || 0, order.currency)}
+                  </span>
+                </div>
+                {order.reward_points_redeemed_snapshot ? (
+                  <div className="flex justify-between text-[11px] text-amber-800 italic px-1">
+                    <span>Points Redeemed</span>
+                    <span className="font-mono font-bold">{order.reward_points_redeemed_snapshot} pts</span>
+                  </div>
+                ) : null}
+              </>
+            )}
             <div className="flex justify-between text-base font-black text-zinc-950 pt-2 border-t border-zinc-100">
               <span>Total Amount</span>
               <span>{formatCurrency(order.total_cents, order.currency)}</span>

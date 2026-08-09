@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import {
+import type {
   LoyaltyProgramSettingsInput,
   CreateRewardInput,
   AdjustPointsInput,
@@ -7,6 +7,15 @@ import {
   LoyaltyRewardRecord,
   LoyaltyLedgerRecord,
 } from '@/lib/validation/loyalty';
+
+export type {
+  LoyaltyProgramSettingsInput,
+  CreateRewardInput,
+  AdjustPointsInput,
+  CustomerLoyaltyAccountRecord,
+  LoyaltyRewardRecord,
+  LoyaltyLedgerRecord,
+};
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 
 export class LoyaltyService {
@@ -444,6 +453,159 @@ export class LoyaltyService {
       .single();
 
     return { success: true, redemptionId: redemption?.id, pointsDeducted: reward.points_required, newBalance };
+  }
+
+  /**
+   * Server-side redemption of a reward applied during guest QR checkout.
+   * Atomically validates points, calculates exact discount, deducts points, updates order totals & snapshots.
+   */
+  static async redeemRewardForOrder(
+    userId: string,
+    orderId: string,
+    rewardId: string
+  ): Promise<{ success: boolean; discountCents?: number; newTotalCents?: number; message?: string }> {
+    const admin = createAdminClient();
+
+    // 1. Fetch order details
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, subtotal_cents, tax_cents, service_charge_cents, total_cents, customer_user_id')
+      .eq('id', orderId)
+      .single();
+
+    if (!order) {
+      return { success: false, message: 'Order not found.' };
+    }
+
+    // Link customer_user_id to order if not already set
+    if (!order.customer_user_id) {
+      await admin.from('orders').update({ customer_user_id: userId }).eq('id', orderId);
+    }
+
+    // 2. Fetch reward details (strictly for this business)
+    const { data: reward } = await admin
+      .from('loyalty_rewards')
+      .select('*')
+      .eq('id', rewardId)
+      .eq('business_id', order.business_id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!reward) {
+      return { success: false, message: 'Reward not found or inactive for this venue.' };
+    }
+
+    // Check validity dates if configured
+    const now = new Date();
+    if (reward.valid_from && new Date(reward.valid_from) > now) {
+      return { success: false, message: 'Reward is not active yet.' };
+    }
+    if (reward.valid_until && new Date(reward.valid_until) < now) {
+      return { success: false, message: 'Reward has expired.' };
+    }
+
+    // 3. Verify minimum order spend requirement
+    const subtotalCents = order.subtotal_cents || 0;
+    if (reward.min_order_value_cents && subtotalCents < reward.min_order_value_cents) {
+      return { success: false, message: `Minimum order spend of LKR ${reward.min_order_value_cents / 100} required.` };
+    }
+
+    // 4. Fetch customer loyalty account for this business
+    const { data: account } = await admin
+      .from('customer_loyalty_accounts')
+      .select('id, points_balance, lifetime_points_redeemed')
+      .eq('customer_user_id', userId)
+      .eq('business_id', order.business_id)
+      .maybeSingle();
+
+    if (!account || account.points_balance < reward.points_required) {
+      return {
+        success: false,
+        message: `Insufficient points balance. Required: ${reward.points_required}, Available: ${account?.points_balance || 0}.`,
+      };
+    }
+
+    // 5. Server-side calculation of discount amount
+    let discountCents = 0;
+    if (reward.reward_type === 'fixed_discount') {
+      discountCents = Math.min(subtotalCents, reward.discount_amount_cents || 0);
+    } else if (reward.reward_type === 'percentage_discount') {
+      const pct = Number(reward.discount_percentage) || 0;
+      discountCents = Math.min(subtotalCents, Math.round(subtotalCents * (pct / 100)));
+    } else if (reward.reward_type === 'free_item' && reward.free_menu_item_id) {
+      const { data: orderItem } = await admin
+        .from('order_items')
+        .select('unit_price_cents_snapshot')
+        .eq('order_id', orderId)
+        .eq('menu_item_id', reward.free_menu_item_id)
+        .limit(1)
+        .maybeSingle();
+      if (orderItem) {
+        discountCents = Math.min(subtotalCents, orderItem.unit_price_cents_snapshot);
+      } else {
+        discountCents = Math.min(subtotalCents, reward.discount_amount_cents || 0);
+      }
+    } else {
+      discountCents = Math.min(subtotalCents, reward.discount_amount_cents || 0);
+    }
+
+    const taxCents = order.tax_cents || 0;
+    const serviceChargeCents = order.service_charge_cents || 0;
+    const newTotalCents = Math.max(0, subtotalCents + taxCents + serviceChargeCents - discountCents);
+
+    // 6. Atomically update customer loyalty account points balance
+    const newBalance = account.points_balance - reward.points_required;
+    const newRedeemed = account.lifetime_points_redeemed + reward.points_required;
+
+    const { error: updateErr } = await admin
+      .from('customer_loyalty_accounts')
+      .update({
+        points_balance: newBalance,
+        lifetime_points_redeemed: newRedeemed,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', account.id)
+      .gte('points_balance', reward.points_required); // Guard against concurrent double spend!
+
+    if (updateErr) {
+      return { success: false, message: 'Failed to update points balance.' };
+    }
+
+    // 7. Update master order row with discount & immutable snapshots
+    await admin
+      .from('orders')
+      .update({
+        discount_cents: discountCents,
+        total_cents: newTotalCents,
+        reward_id: rewardId,
+        reward_title_snapshot: reward.title,
+        reward_points_redeemed_snapshot: reward.points_required,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+
+    // 8. Insert immutable points ledger entry
+    await admin.from('loyalty_points_ledger').insert({
+      customer_user_id: userId,
+      business_id: order.business_id,
+      order_id: orderId,
+      reward_id: rewardId,
+      transaction_type: 'redeem',
+      points: -reward.points_required,
+      reason: `Redeemed reward: ${reward.title} (-${reward.points_required} pts)`,
+    });
+
+    // 9. Insert redemption record
+    await admin.from('loyalty_reward_redemptions').insert({
+      business_id: order.business_id,
+      customer_user_id: userId,
+      reward_id: rewardId,
+      order_id: orderId,
+      points_spent: reward.points_required,
+      status: 'applied',
+    });
+
+    return { success: true, discountCents, newTotalCents };
   }
 
   /**

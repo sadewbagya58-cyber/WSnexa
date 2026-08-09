@@ -1,3 +1,5 @@
+import { LoyaltyRewardRecord } from '@/lib/validation/loyalty';
+
 export interface SelectedModifierSnapshot {
   groupId: string;
   groupName: string;
@@ -43,6 +45,7 @@ export interface CartState {
   branchId: string;
   currency: string;
   confirmedTable: ConfirmedTableContext | null;
+  selectedReward?: LoyaltyRewardRecord | null;
   lines: CartLine[];
   subtotalCents: number;
   totalQuantity: number;

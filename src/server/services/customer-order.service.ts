@@ -15,6 +15,10 @@ interface DbOrderRow {
   service_charge_cents: number;
   total_cents: number;
   currency: string;
+  discount_cents?: number;
+  reward_id?: string | null;
+  reward_title_snapshot?: string | null;
+  reward_points_redeemed_snapshot?: number;
   created_at: string;
   completed_at: string | null;
   cancelled_at: string | null;
@@ -70,6 +74,9 @@ export interface FormattedCustomerOrder {
   subtotalCents: number;
   taxCents: number;
   serviceChargeCents: number;
+  discountCents?: number;
+  rewardTitleSnapshot?: string | null;
+  rewardPointsRedeemedSnapshot?: number;
   totalCents: number;
   currency: string;
   createdAt: string;
@@ -331,6 +338,10 @@ export class CustomerOrderService {
         tax_cents,
         service_charge_cents,
         total_cents,
+        discount_cents,
+        reward_id,
+        reward_title_snapshot,
+        reward_points_redeemed_snapshot,
         currency,
         created_at,
         completed_at,
@@ -419,6 +430,9 @@ export class CustomerOrderService {
       subtotalCents: rawMaster.subtotal_cents,
       taxCents: rawMaster.tax_cents,
       serviceChargeCents: rawMaster.service_charge_cents,
+      discountCents: rawMaster.discount_cents || 0,
+      rewardTitleSnapshot: rawMaster.reward_title_snapshot || null,
+      rewardPointsRedeemedSnapshot: rawMaster.reward_points_redeemed_snapshot || 0,
       totalCents: rawMaster.total_cents,
       currency: rawMaster.currency || 'USD',
       createdAt: rawMaster.created_at,

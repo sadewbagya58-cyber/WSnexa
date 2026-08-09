@@ -8,8 +8,10 @@ import { useCart } from '@/features/cart/cart-context';
 import { ItemDetailSheet } from '../guest/item-detail-sheet';
 import { FloatingCartBar } from '../guest/floating-cart-bar';
 import { CartDrawer } from '../guest/cart-drawer';
+import { RewardsDrawer } from '../loyalty/rewards-drawer';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
+import { CustomerLoyaltyAccountRecord, LoyaltyRewardRecord } from '@/lib/validation/loyalty';
 
 interface PublicGuestMenuProps {
   token: string;
@@ -82,6 +84,9 @@ interface PublicGuestMenuProps {
       }>;
     }>;
   }>;
+  isAuthenticated?: boolean;
+  loyaltyAccount?: CustomerLoyaltyAccountRecord | null;
+  availableRewards?: LoyaltyRewardRecord[];
 }
 
 export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
@@ -92,11 +97,15 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   dining_tables,
   categories,
   items,
+  isAuthenticated = false,
+  loyaltyAccount = null,
+  availableRewards = [],
 }) => {
   const { state, addLine, editLine, setConfirmedTable } = useCart();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedItem, setSelectedItem] = useState<(typeof items)[0] | null>(null);
+  const [rewardsDrawerOpen, setRewardsDrawerOpen] = useState<boolean>(false);
   const [editingCartLine, setEditingCartLine] = useState<{
     lineId: string;
     quantity: number;
@@ -233,6 +242,20 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Loyalty Rewards Pill Button */}
+            <button
+              type="button"
+              onClick={() => setRewardsDrawerOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 hover:bg-amber-100 transition-all shadow-2xs"
+            >
+              <span>🎁</span>
+              {isAuthenticated ? (
+                <span className="font-extrabold text-amber-900">{loyaltyAccount?.pointsBalance || 0} pts</span>
+              ) : (
+                <span>Rewards</span>
+              )}
+            </button>
+
             {/* Table Selection Status Pill */}
             {branch.require_table_selection && (
               <button
@@ -486,6 +509,16 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           </form>
         </div>
       )}
+
+      {/* Rewards Drawer Modal */}
+      <RewardsDrawer
+        isOpen={rewardsDrawerOpen}
+        onClose={() => setRewardsDrawerOpen(false)}
+        isAuthenticated={isAuthenticated}
+        loyaltyAccount={loyaltyAccount}
+        availableRewards={availableRewards}
+        subtotalCents={state.subtotalCents}
+      />
     </div>
   );
 };

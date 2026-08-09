@@ -26,7 +26,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onSelectTable,
   onEditLine,
 }) => {
-  const { state, updateQuantity, removeLine, clearCart } = useCart();
+  const { state, updateQuantity, removeLine, clearCart, setSelectedReward } = useCart();
 
   // Body scroll lock
   useEffect(() => {
@@ -197,6 +197,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Footer */}
         {state.lines.length > 0 && (
           <div className="p-5 border-t border-zinc-200 bg-zinc-50 space-y-4">
+            {state.selectedReward && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                    <span>🎁 Applied Reward:</span>
+                    <span>{state.selectedReward.title}</span>
+                  </div>
+                  <p className="text-[10px] text-amber-800 font-medium mt-0.5">
+                    Redeems {state.selectedReward.pointsRequired} points on checkout
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReward(null)}
+                  className="text-xs text-rose-700 font-bold hover:underline px-2 py-1"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-600">
                 <span>Items Subtotal ({state.totalQuantity} items)</span>

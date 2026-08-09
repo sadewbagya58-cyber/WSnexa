@@ -99,6 +99,13 @@ export default function CustomerLoyaltyPage() {
                     </strong>
                   </div>
                 </div>
+                <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                  <Link href="/explore">
+                    <Button size="sm" variant="outline" className="text-xs font-bold text-amber-600 border-amber-500/30 hover:bg-amber-50">
+                      Order & Use Rewards →
+                    </Button>
+                  </Link>
+                </div>
               </Card>
             ))}
           </div>

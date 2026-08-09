@@ -30,9 +30,13 @@ export default async function CustomerPage() {
   const hasBusinessAccess = !!(memberships && memberships.length > 0);
 
   const { CustomerOrderService } = await import('@/server/services/customer-order.service');
-  const [analytics, recentOrders] = await Promise.all([
+  const { VenueRankingService } = await import('@/server/services/venue-ranking.service');
+
+  const [analytics, recentOrders, recommendations, retentionInsights] = await Promise.all([
     CustomerOrderService.getCustomerAnalytics(user.id),
     CustomerOrderService.getCustomerOrders(user.id, 'all'),
+    VenueRankingService.getPersonalizedRecommendations(user.id, 6),
+    VenueRankingService.getCustomerRetentionInsights(user.id),
   ]);
 
   return (
@@ -46,6 +50,8 @@ export default async function CustomerPage() {
         email={customerData.email}
         analytics={analytics}
         recentOrders={recentOrders}
+        recommendations={recommendations}
+        retentionInsights={retentionInsights}
       />
     </CustomerShell>
   );

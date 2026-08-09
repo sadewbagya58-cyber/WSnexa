@@ -1,0 +1,71 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { VenueRankingService } from '@/server/services/venue-ranking.service';
+import { RankingMode, VenueRankingMetrics } from '@/lib/validation/ranking';
+import { PermissionService } from '@/server/services/permission.service';
+
+/**
+ * Public action: Fetch ranked venues by mode.
+ */
+export async function getRankedVenuesAction(mode: RankingMode, limit = 12): Promise<VenueRankingMetrics[]> {
+  return VenueRankingService.getRankedVenues(mode, limit);
+}
+
+/**
+ * Customer action: Fetch personalized recommendations for authenticated user.
+ */
+export async function getPersonalizedRecommendationsAction(limit = 10): Promise<VenueRankingMetrics[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return VenueRankingService.getPersonalizedRecommendations(user?.id || null, limit);
+}
+
+/**
+ * Customer action: Fetch personal retention insights.
+ */
+export async function getCustomerRetentionInsightsAction() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+  return VenueRankingService.getCustomerRetentionInsights(user.id);
+}
+
+/**
+ * B2B action: Fetch business reputation metrics (`/dashboard/reputation`).
+ */
+export async function getBusinessReputationAction() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, message: 'Unauthorized.' };
+
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const context = await resolveActiveBusinessContext();
+
+  if (!context) {
+    return { success: false, message: 'Active business context required.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    user.id,
+    context.business.id,
+    context.activeBranch?.id || null,
+    'reputation.view'
+  );
+
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden: You do not have permission to view business reputation.' };
+  }
+
+  const metrics = await VenueRankingService.getBusinessReputationMetrics(context.business.id);
+  return { success: true, metrics };
+}

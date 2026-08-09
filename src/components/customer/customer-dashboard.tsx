@@ -5,14 +5,26 @@ import Link from 'next/link';
 import { CustomerAnalyticsSummary, FormattedCustomerOrder } from '@/server/services/customer-order.service';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 
+import { VenueRankingMetrics, CustomerPersonalizedInsight } from '@/lib/validation/ranking';
+import { VenueCarousel } from '@/components/discovery/venue-carousel';
+
 interface CustomerDashboardProps {
   displayName: string;
   email: string;
   analytics: CustomerAnalyticsSummary;
   recentOrders: FormattedCustomerOrder[];
+  recommendations?: VenueRankingMetrics[];
+  retentionInsights?: CustomerPersonalizedInsight | null;
 }
 
-export function CustomerDashboard({ displayName, email, analytics, recentOrders }: CustomerDashboardProps) {
+export function CustomerDashboard({
+  displayName,
+  email,
+  analytics,
+  recentOrders,
+  recommendations = [],
+  retentionInsights,
+}: CustomerDashboardProps) {
   const activeOrders = recentOrders.filter((o) =>
     ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
   );
@@ -69,13 +81,26 @@ export function CustomerDashboard({ displayName, email, analytics, recentOrders 
               {analytics.venuesVisitedCount}
             </div>
             <div className="text-[10px] text-zinc-500">
-              {analytics.mostVisitedVenueName
+              {retentionInsights?.favoriteVenueName
+                ? `Favorite: ${retentionInsights.favoriteVenueName}`
+                : analytics.mostVisitedVenueName
                 ? `Top: ${analytics.mostVisitedVenueName}`
                 : 'Restaurants & hotels'}
             </div>
           </div>
         </Link>
       </div>
+
+      {/* Personalized Recommendations Section */}
+      {recommendations.length > 0 && (
+        <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
+          <VenueCarousel
+            title="✨ Recommended For You"
+            subtitle="Handpicked venues based on your visits and preferences"
+            venues={recommendations}
+          />
+        </div>
+      )}
 
       {/* Live Active Orders Banner */}
       {activeOrders.length > 0 && (

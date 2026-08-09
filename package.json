@@ -26,7 +26,8 @@
     "verify:permissions": "tsx scripts/verify-permissions.ts",
     "verify:customer-orders": "tsx scripts/verify-customer-orders.ts",
     "verify:venue-discovery": "tsx scripts/verify-venue-discovery.ts",
-    "verify:venue-media-slug": "tsx scripts/verify-venue-media-and-slug.ts"
+    "verify:venue-media-slug": "tsx scripts/verify-venue-media-and-slug.ts",
+    "verify:ranking": "tsx scripts/verify-ranking.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

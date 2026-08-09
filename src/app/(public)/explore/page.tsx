@@ -2,8 +2,10 @@ import React from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { VenueDiscoveryService } from '@/server/services/venue-discovery.service';
+import { VenueRankingService } from '@/server/services/venue-ranking.service';
 import { VenueSearchBar } from '@/components/discovery/venue-search-bar';
 import { VenueCard } from '@/components/discovery/venue-card';
+import { VenueCarousel } from '@/components/discovery/venue-carousel';
 
 export const metadata: Metadata = {
   title: 'Explore Venues | WSNexa Discovery',
@@ -26,6 +28,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
   const page = parseInt(params.page || '1', 10);
   const priceLevel = params.priceLevel ? parseInt(params.priceLevel, 10) : undefined;
+  const isDefaultBrowse = !params.q && (!params.category || params.category === 'all') && !params.city;
 
   const searchResult = await VenueDiscoveryService.searchVenues({
     query: params.q,
@@ -38,6 +41,11 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   });
 
   const { venues, total, totalPages } = searchResult;
+
+  // Fetch ranking sections for default browsing view
+  const trendingVenues = isDefaultBrowse ? await VenueRankingService.getRankedVenues('trending', 6) : [];
+  const topRatedVenues = isDefaultBrowse ? await VenueRankingService.getRankedVenues('top_rated', 6) : [];
+  const hiddenGemsVenues = isDefaultBrowse ? await VenueRankingService.getRankedVenues('hidden_gems', 6) : [];
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between">
@@ -78,6 +86,31 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
         {/* Search & Filter Component */}
         <VenueSearchBar />
+
+        {/* Trending & Ranking Sections (when browsing defaults) */}
+        {isDefaultBrowse && (
+          <div className="space-y-6 pt-2 border-t border-zinc-200">
+            <VenueCarousel
+              title="🔥 Trending Now"
+              subtitle="Popular venues with fast-growing recent orders & customer engagement"
+              venues={trendingVenues}
+            />
+
+            <VenueCarousel
+              title="⭐ Top Rated Venues"
+              subtitle="Highest rating confidence calculated from verified customer visits"
+              venues={topRatedVenues}
+            />
+
+            {hiddenGemsVenues.length > 0 && (
+              <VenueCarousel
+                title="💎 Hidden Gems"
+                subtitle="Exceptional verified ratings in undiscovered spots"
+                venues={hiddenGemsVenues}
+              />
+            )}
+          </div>
+        )}
 
         {/* Results Grid */}
         {venues.length > 0 ? (

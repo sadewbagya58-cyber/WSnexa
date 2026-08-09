@@ -185,6 +185,15 @@ export class PaymentService {
       };
     }
 
+    if (payload.payment_status === 'paid') {
+      try {
+        const { LoyaltyService } = await import('@/server/services/loyalty.service');
+        await LoyaltyService.processOrderPointsEarning(orderId);
+      } catch (err) {
+        console.error('[PaymentService.recordPayment] Loyalty earning error:', err);
+      }
+    }
+
     return {
       success: true,
       message: payload.is_duplicate ? 'Duplicate payment entry detected.' : 'Payment recorded successfully.',

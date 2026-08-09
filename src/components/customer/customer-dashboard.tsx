@@ -7,6 +7,7 @@ import { formatCurrency } from '@/features/cart/cart-calculations';
 
 import { VenueRankingMetrics, CustomerPersonalizedInsight } from '@/lib/validation/ranking';
 import { VenueCarousel } from '@/components/discovery/venue-carousel';
+import { CustomerLoyaltyAccountRecord } from '@/lib/validation/loyalty';
 
 interface CustomerDashboardProps {
   displayName: string;
@@ -15,6 +16,7 @@ interface CustomerDashboardProps {
   recentOrders: FormattedCustomerOrder[];
   recommendations?: VenueRankingMetrics[];
   retentionInsights?: CustomerPersonalizedInsight | null;
+  loyaltyAccounts?: CustomerLoyaltyAccountRecord[];
 }
 
 export function CustomerDashboard({
@@ -23,11 +25,12 @@ export function CustomerDashboard({
   analytics,
   recentOrders,
   recommendations = [],
-  retentionInsights,
+  loyaltyAccounts,
 }: CustomerDashboardProps) {
   const activeOrders = recentOrders.filter((o) =>
     ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
   );
+  const totalLoyaltyPoints = (loyaltyAccounts || []).reduce((sum, a) => sum + a.pointsBalance, 0);
 
   return (
     <div className="space-y-6">
@@ -46,6 +49,23 @@ export function CustomerDashboard({
 
       {/* Analytics KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link href="/customer/loyalty" className="block">
+          <div className="bg-gradient-to-br from-amber-500/10 to-zinc-900 border border-amber-500/30 hover:border-amber-400 transition-all rounded-2xl p-5 space-y-2">
+            <div className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Loyalty Points</span>
+              <span>🎁</span>
+            </div>
+            <div className="text-2xl font-black font-mono text-amber-400">
+              {totalLoyaltyPoints} pts
+            </div>
+            <div className="text-[10px] text-zinc-400">
+              {loyaltyAccounts && loyaltyAccounts.length > 0
+                ? `${loyaltyAccounts.length} active venue program${loyaltyAccounts.length > 1 ? 's' : ''}`
+                : 'Across participating venues'}
+            </div>
+          </div>
+        </Link>
+
         <Link href="/customer/orders?filter=active" className="block">
           <div className="bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/50 transition-all rounded-2xl p-5 space-y-2">
             <div className="text-xs font-bold text-zinc-400 uppercase">Active Orders</div>
@@ -73,22 +93,6 @@ export function CustomerDashboard({
           </div>
           <div className="text-[10px] text-zinc-500">Settled order total</div>
         </div>
-
-        <Link href="/customer/venues" className="block">
-          <div className="bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition-all rounded-2xl p-5 space-y-2">
-            <div className="text-xs font-bold text-zinc-400 uppercase">Venues Visited</div>
-            <div className="text-2xl font-black font-mono text-amber-400">
-              {analytics.venuesVisitedCount}
-            </div>
-            <div className="text-[10px] text-zinc-500">
-              {retentionInsights?.favoriteVenueName
-                ? `Favorite: ${retentionInsights.favoriteVenueName}`
-                : analytics.mostVisitedVenueName
-                ? `Top: ${analytics.mostVisitedVenueName}`
-                : 'Restaurants & hotels'}
-            </div>
-          </div>
-        </Link>
       </div>
 
       {/* Personalized Recommendations Section */}
@@ -195,6 +199,15 @@ export function CustomerDashboard({
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/customer/loyalty"
+              className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors space-y-1 block"
+            >
+              <div className="text-lg">🎁</div>
+              <div className="text-xs font-bold text-amber-400">Loyalty & Rewards</div>
+              <div className="text-[11px] text-zinc-400">View points balances & redeem rewards</div>
+            </Link>
+
             <Link
               href="/customer/orders"
               className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/60 hover:bg-zinc-800/60 transition-colors space-y-1 block"

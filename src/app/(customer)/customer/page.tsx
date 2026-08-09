@@ -31,12 +31,14 @@ export default async function CustomerPage() {
 
   const { CustomerOrderService } = await import('@/server/services/customer-order.service');
   const { VenueRankingService } = await import('@/server/services/venue-ranking.service');
+  const { LoyaltyService } = await import('@/server/services/loyalty.service');
 
-  const [analytics, recentOrders, recommendations, retentionInsights] = await Promise.all([
+  const [analytics, recentOrders, recommendations, retentionInsights, loyaltyAccounts] = await Promise.all([
     CustomerOrderService.getCustomerAnalytics(user.id),
     CustomerOrderService.getCustomerOrders(user.id, 'all'),
     VenueRankingService.getPersonalizedRecommendations(user.id, 6),
     VenueRankingService.getCustomerRetentionInsights(user.id),
+    LoyaltyService.getCustomerLoyaltyAccounts(user.id),
   ]);
 
   return (
@@ -52,6 +54,7 @@ export default async function CustomerPage() {
         recentOrders={recentOrders}
         recommendations={recommendations}
         retentionInsights={retentionInsights}
+        loyaltyAccounts={loyaltyAccounts}
       />
     </CustomerShell>
   );

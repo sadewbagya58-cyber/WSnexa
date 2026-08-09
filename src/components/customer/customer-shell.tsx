@@ -21,6 +21,7 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
     { label: 'My Orders', href: '/customer/orders' },
     { label: 'Venues', href: '/customer/venues' },
     { label: 'Favorites', href: '/customer/favorites' },
+    { label: 'Loyalty', href: '/customer/loyalty' },
     { label: 'Reviews', href: '/customer/reviews' },
     { label: 'Profile', href: '/customer/profile' },
   ];
@@ -117,7 +118,17 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
                 isActive ? 'text-amber-400' : 'text-zinc-500'
               }`}
             >
-              <span>{item.label === 'Home' ? '🏠' : item.label === 'My Orders' ? '🧾' : item.label === 'Favorites' ? '⭐' : '👤'}</span>
+              <span>
+                {item.label === 'Home'
+                  ? '🏠'
+                  : item.label === 'My Orders'
+                  ? '🧾'
+                  : item.label === 'Favorites'
+                  ? '⭐'
+                  : item.label === 'Loyalty'
+                  ? '🎁'
+                  : '👤'}
+              </span>
               <span>{item.label}</span>
             </Link>
           );

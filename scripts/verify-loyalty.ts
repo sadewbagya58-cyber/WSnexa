@@ -177,7 +177,7 @@ async function runLoyaltyVerification() {
     const emptyAccs = await LoyaltyService.getCustomerLoyaltyAccounts(cust2Id!);
     assert(emptyAccs.length === 0, 'Test 18, 19, 20: Empty system returns zero/empty arrays without fake data');
 
-    // TEST 21-28: System Regressions
+    // TEST 21-28: System Regressions & Retroactive Claim Earning
     const accessTok = `tok_loy_reg_${Date.now()}`;
     const { data: anonOrd } = await admin.from('orders').insert({
       business_id: bizAId!,
@@ -197,6 +197,31 @@ async function runLoyaltyVerification() {
     const cust2Acc = await LoyaltyService.getCustomerAccount(cust2Id!, bizAId!);
     assert(claimRes.success && cust2Acc.pointsBalance === 2, 'Test 21-28: Anonymous QR ordering, claiming, and regression suites remain 100% intact');
 
+    // TEST 29: Order completed while unpaid, then payment recorded -> points awarded!
+    const { data: unpaidCompOrd } = await admin.from('orders').insert({
+      business_id: bizAId!,
+      branch_id: brA!.id,
+      order_number: 99998,
+      order_number_formatted: '#BRA-99998',
+      idempotency_key: `idemp_loy_unpaid_${Date.now()}`,
+      access_token: `tok_loy_unpaid_${Date.now()}`,
+      status: 'completed',
+      payment_status: 'unpaid',
+      subtotal_cents: 30000, // 300 LKR = 3 points
+      total_cents: 30000,
+      currency: 'USD',
+      customer_user_id: cust2Id!,
+    }).select().single();
+
+    const beforePaymentEarn = await LoyaltyService.processOrderPointsEarning(unpaidCompOrd.id);
+    assert(!beforePaymentEarn.success, 'Test 29a: Unpaid completed order earns zero points before payment');
+
+    // Simulate payment settlement RPC
+    await admin.from('orders').update({ payment_status: 'paid' }).eq('id', unpaidCompOrd.id);
+    const afterPaymentEarn = await LoyaltyService.processOrderPointsEarning(unpaidCompOrd.id);
+    const cust2AccAfter = await LoyaltyService.getCustomerAccount(cust2Id!, bizAId!);
+    assert(afterPaymentEarn.success && afterPaymentEarn.pointsEarned === 3 && cust2AccAfter.pointsBalance === 5, 'Test 29b: Payment settlement triggers points earning on completed order');
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('❌ Verification Error:', msg);
@@ -213,7 +238,7 @@ async function runLoyaltyVerification() {
   }
 
   console.log('\n================================================================');
-  console.log('  Phase 19 Loyalty & Rewards: ALL 28 TESTS PASSED             ');
+  console.log('  Phase 19 Loyalty & Rewards: ALL 29 TESTS PASSED             ');
   console.log('================================================================\n');
 }
 

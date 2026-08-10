@@ -66,7 +66,7 @@ export default async function AccountTypePage() {
 
   // 3. User is authenticated, has no business membership, and onboarding_intent is NULL -> Render Selector UI
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
       <AccountTypeSelector />
     </div>
   );

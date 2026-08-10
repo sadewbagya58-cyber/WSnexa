@@ -95,36 +95,56 @@ export function TeamManagement({
     setErrorMsg(null);
   };
 
-  const handleToggleOverride = async (updatedPermissions: PermissionKey[]) => {
+  const handleToggleOverride = (updatedPermissions: PermissionKey[]) => {
     if (!overridesMember) return;
 
-    // Find added or removed key
-    const prevKeys = overridesMember.effectivePermissions;
-    const addedKey = updatedPermissions.find((k) => !prevKeys.includes(k));
-    const removedKey = prevKeys.find((k) => !updatedPermissions.includes(k));
-
-    if (addedKey) {
-      await setMemberOverrideAction({
-        membershipId: overridesMember.id,
-        permissionKey: addedKey,
-        effect: 'allow',
-      });
-    } else if (removedKey) {
-      await setMemberOverrideAction({
-        membershipId: overridesMember.id,
-        permissionKey: removedKey,
-        effect: 'deny',
-      });
-    }
-
+    // 1. Instant local UI update (<10ms visual response)
+    const targetMemberId = overridesMember.id;
+    const prevMemberPermissions = [...memberPermissions];
     setMemberPermissions(updatedPermissions);
+
     setMembers((prev) =>
       prev.map((m) =>
-        m.id === overridesMember.id
+        m.id === targetMemberId
           ? { ...m, effectivePermissions: updatedPermissions }
           : m
       )
     );
+
+    // 2. Identify diffs against pre-toggle active state
+    const addedKey = updatedPermissions.find((k) => !prevMemberPermissions.includes(k));
+    const removedKey = prevMemberPermissions.find((k) => !updatedPermissions.includes(k));
+
+    // 3. Dispatch server action asynchronously
+    (async () => {
+      let res;
+      if (addedKey) {
+        res = await setMemberOverrideAction({
+          membershipId: targetMemberId,
+          permissionKey: addedKey,
+          effect: 'allow',
+        });
+      } else if (removedKey) {
+        res = await setMemberOverrideAction({
+          membershipId: targetMemberId,
+          permissionKey: removedKey,
+          effect: 'deny',
+        });
+      }
+
+      if (res && !res.success) {
+        // Rollback state if server request failed
+        setErrorMsg(res.message || 'Failed to set permission override');
+        setMemberPermissions(prevMemberPermissions);
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === targetMemberId
+              ? { ...m, effectivePermissions: prevMemberPermissions }
+              : m
+          )
+        );
+      }
+    })();
   };
 
   // Toggle Suspend / Reactivate Status
@@ -368,43 +388,60 @@ export function TeamManagement({
 
       {/* MEMBER PERMISSION OVERRIDES MODAL */}
       {overridesMember && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-zinc-200 rounded-t-3xl sm:rounded-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shrink-0">
               <div>
-                <h3 className="text-lg font-bold text-zinc-950">
+                <h3 className="text-base sm:text-lg font-extrabold text-zinc-950">
                   Permission Overrides: {overridesMember.userName}
                 </h3>
-                <p className="text-xs text-zinc-500">
-                  Base Role: <strong className="text-zinc-800">{formatRoleLabel(overridesMember.role)}</strong>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Base Role: <strong className="text-zinc-800 font-bold">{formatRoleLabel(overridesMember.role)}</strong>
                   {overridesMember.customRoleName && (
-                    <span> ({overridesMember.customRoleName})</span>
+                    <span className="text-zinc-600 font-medium"> ({overridesMember.customRoleName})</span>
                   )}
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setOverridesMember(null)}
-                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold"
+                className="h-9 w-9 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center font-bold text-sm transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-              💡 Checking a permission grants an explicit <strong>allow</strong> override. Unchecking a permission applies an explicit <strong>deny</strong> override, revoking that specific capability regardless of role defaults.
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+              {errorMsg && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
+
+              <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs leading-relaxed">
+                💡 Toggling a capability ON applies an explicit <strong>allow</strong> override. Toggling OFF applies an explicit <strong>deny</strong> override, overriding role defaults for this member.
+              </div>
+
+              <SimplePermissionEditor
+                catalog={catalog}
+                selectedPermissions={memberPermissions}
+                onChange={handleToggleOverride}
+              />
             </div>
 
-            <SimplePermissionEditor
-              catalog={catalog}
-              selectedPermissions={memberPermissions}
-              onChange={handleToggleOverride}
-            />
-
-            <div className="pt-2 flex justify-end">
+            {/* Sticky Footer */}
+            <div className="p-4 border-t border-zinc-100 bg-white flex items-center justify-between shrink-0">
+              <span className="text-xs font-semibold text-zinc-500">
+                {memberPermissions.length} Active Capabilities
+              </span>
               <Button
+                type="button"
                 variant="primary"
-                size="sm"
+                size="md"
                 onClick={() => setOverridesMember(null)}
+                className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-6"
               >
                 Done
               </Button>

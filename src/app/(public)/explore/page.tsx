@@ -50,21 +50,21 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between">
       {/* Public Header Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 text-white">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200 text-zinc-950 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/explore" className="flex items-center gap-2 font-black text-lg uppercase tracking-wider">
-            <span className="text-amber-500 text-2xl">🍽️</span> WSNexa Explore
+          <Link href="/explore" className="flex items-center gap-2 font-black text-lg uppercase tracking-wider text-zinc-950">
+            <span className="text-2xl">🍽️</span> WSNexa Explore
           </Link>
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="px-4 py-2 rounded-xl text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-extrabold bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-900 shadow-xs transition-colors"
             >
               Sign In
             </Link>
             <Link
               href="/register"
-              className="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-black transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-black bg-zinc-950 hover:bg-zinc-800 text-white transition-colors shadow-xs"
             >
               Join Customer Account
             </Link>
@@ -169,9 +169,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       </main>
 
       {/* Public Footer */}
-      <footer className="bg-zinc-950 border-t border-zinc-800 text-zinc-400 text-xs py-8 mt-12">
+      <footer className="bg-white border-t border-zinc-200 text-zinc-600 text-xs py-8 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-white font-black uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-zinc-950 font-black uppercase tracking-wider">
             <span>🍽️</span> WSNexa Venue Discovery
           </div>
           <div>© {new Date().getFullYear()} WSNexa. All rights reserved.</div>

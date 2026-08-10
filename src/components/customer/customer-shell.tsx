@@ -27,13 +27,13 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 flex flex-col font-sans">
       {/* Customer Header Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/customer" className="flex items-center gap-2 text-white font-black text-lg uppercase tracking-wider">
-              <span className="text-amber-500 text-2xl">🍽️</span> WSNexa Customer
+            <Link href="/customer" className="flex items-center gap-2 text-zinc-950 font-black text-lg uppercase tracking-wider">
+              <span className="text-2xl">🍽️</span> WSNexa Customer
             </Link>
 
             <nav className="hidden md:flex items-center gap-1">

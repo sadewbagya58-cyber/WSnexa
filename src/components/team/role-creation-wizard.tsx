@@ -67,36 +67,36 @@ export function RoleCreationWizard({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full p-6 space-y-6 max-h-[90vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-white border border-zinc-200 rounded-t-3xl sm:rounded-2xl max-w-2xl w-full p-5 sm:p-6 space-y-5 max-h-[92vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Wizard Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+        <div className="flex items-center justify-between border-b border-zinc-100 pb-3 shrink-0">
           <div>
-            <h2 className="text-lg font-black text-white tracking-wide">
+            <h2 className="text-lg font-black text-zinc-950 tracking-wide">
               {isEditing ? 'Edit Custom Role' : 'Create Custom Role'}
             </h2>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-500">
               Step {step} of 3 — {step === 1 ? 'Role Details' : step === 2 ? 'Starting Template' : 'Fine-Tune Permissions'}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-zinc-400 hover:text-white text-lg p-1"
+            className="h-8 w-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center font-bold text-sm"
           >
             ✕
           </button>
         </div>
 
         {/* Step Indicator */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className={`h-1.5 rounded-full transition-all ${step >= 1 ? 'bg-amber-500' : 'bg-zinc-800'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${step >= 2 ? 'bg-amber-500' : 'bg-zinc-800'}`} />
-          <div className={`h-1.5 rounded-full transition-all ${step >= 3 ? 'bg-amber-500' : 'bg-zinc-800'}`} />
+        <div className="grid grid-cols-3 gap-2 shrink-0">
+          <div className={`h-1.5 rounded-full transition-all ${step >= 1 ? 'bg-zinc-950' : 'bg-zinc-100'}`} />
+          <div className={`h-1.5 rounded-full transition-all ${step >= 2 ? 'bg-zinc-950' : 'bg-zinc-100'}`} />
+          <div className={`h-1.5 rounded-full transition-all ${step >= 3 ? 'bg-zinc-950' : 'bg-zinc-100'}`} />
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-semibold text-center">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold text-center shrink-0">
             ⚠️ {errorMsg}
           </div>
         )}
@@ -106,7 +106,7 @@ export function RoleCreationWizard({
           {step === 1 && (
             <div className="space-y-4 py-2">
               <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-1">
                   Role Name *
                 </label>
                 <input
@@ -114,13 +114,13 @@ export function RoleCreationWizard({
                   placeholder="e.g. Senior Shift Supervisor"
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value)}
-                  className="w-full bg-zinc-950 text-white text-sm border border-zinc-800 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-white text-zinc-950 text-sm border border-zinc-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-zinc-950 shadow-xs"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-1">
                   Role Description (Optional)
                 </label>
                 <textarea
@@ -128,7 +128,7 @@ export function RoleCreationWizard({
                   placeholder="Briefly describe what staff assigned to this role can do..."
                   value={roleDescription}
                   onChange={(e) => setRoleDescription(e.target.value)}
-                  className="w-full bg-zinc-950 text-white text-xs border border-zinc-800 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-white text-zinc-950 text-xs border border-zinc-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-zinc-950 shadow-xs"
                 />
               </div>
             </div>
@@ -136,7 +136,7 @@ export function RoleCreationWizard({
 
           {step === 2 && (
             <div className="space-y-3 py-2">
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600">
                 Choose a starting template to pre-fill permission toggles:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -156,15 +156,15 @@ export function RoleCreationWizard({
                       onClick={() => handleTemplateSelect(tpl.key)}
                       className={`cursor-pointer p-4 rounded-xl border transition-all space-y-1.5 ${
                         isSel
-                          ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20'
-                          : 'bg-zinc-950 border-zinc-800 hover:border-zinc-700'
+                          ? 'bg-zinc-900 border-zinc-950 text-white shadow-md ring-2 ring-zinc-950'
+                          : 'bg-zinc-50/80 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100 text-zinc-900 shadow-xs'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-white">{tpl.name}</span>
-                        {isSel && <span className="text-amber-400 text-xs">✓</span>}
+                        <span className={`font-bold text-xs ${isSel ? 'text-white' : 'text-zinc-950'}`}>{tpl.name}</span>
+                        {isSel && <span className="text-white text-xs font-bold">✓</span>}
                       </div>
-                      <p className="text-[11px] text-zinc-400 leading-relaxed">{tpl.description}</p>
+                      <p className={`text-[11px] leading-relaxed ${isSel ? 'text-zinc-300' : 'text-zinc-500'}`}>{tpl.description}</p>
                     </div>
                   );
                 })}
@@ -175,10 +175,10 @@ export function RoleCreationWizard({
           {step === 3 && (
             <div className="space-y-4 py-1">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-zinc-400">
-                  Toggle capability permissions ON or OFF for <strong className="text-white">{roleName || 'Custom Role'}</strong>:
+                <p className="text-xs text-zinc-600">
+                  Toggle capability permissions ON or OFF for <strong className="text-zinc-950">{roleName || 'Custom Role'}</strong>:
                 </p>
-                <span className="text-xs font-mono text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                <span className="text-xs font-mono text-zinc-900 font-bold bg-zinc-100 px-2.5 py-0.5 rounded-full border border-zinc-200">
                   {permissions.length} Enabled
                 </span>
               </div>
@@ -192,14 +192,14 @@ export function RoleCreationWizard({
         </div>
 
         {/* Footer Navigation */}
-        <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
+        <div className="flex items-center justify-between border-t border-zinc-100 pt-4 shrink-0">
           {step > 1 ? (
             <Button
               type="button"
               variant="outline"
               onClick={() => setStep((s) => (s > 1 ? (s - 1) as 1 | 2 | 3 : 1))}
               disabled={isSubmitting}
-              className="border-zinc-800 text-zinc-300 hover:bg-zinc-800"
+              className="border-zinc-200 text-zinc-700 hover:bg-zinc-100"
             >
               ← Back
             </Button>
@@ -208,7 +208,7 @@ export function RoleCreationWizard({
               type="button"
               variant="outline"
               onClick={onClose}
-              className="text-zinc-400 hover:text-zinc-200 border-zinc-800"
+              className="text-zinc-600 hover:text-zinc-900 border-zinc-200"
             >
               Cancel
             </Button>
@@ -225,7 +225,7 @@ export function RoleCreationWizard({
                 setErrorMsg(null);
                 setStep((s) => (s < 3 ? (s + 1) as 1 | 2 | 3 : 3));
               }}
-              className="bg-amber-500 hover:bg-amber-400 text-black font-bold"
+              className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-5"
             >
               Next Step →
             </Button>
@@ -234,7 +234,7 @@ export function RoleCreationWizard({
               type="button"
               onClick={handleFinalSave}
               disabled={isSubmitting}
-              className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold"
+              className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-5"
             >
               {isSubmitting ? 'Saving Role...' : isEditing ? 'Update Role ✓' : 'Create Role ✓'}
             </Button>

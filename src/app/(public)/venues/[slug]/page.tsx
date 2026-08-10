@@ -53,9 +53,9 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 text-white">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200 text-zinc-950 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/explore" className="flex items-center gap-2 font-black text-sm text-zinc-300 hover:text-white">
+          <Link href="/explore" className="flex items-center gap-2 font-black text-sm text-zinc-700 hover:text-zinc-950">
             ← Back to Explore
           </Link>
           <div className="flex items-center gap-3">
@@ -283,10 +283,10 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
       </main>
 
       {/* Footer */}
-      <footer className="bg-zinc-950 border-t border-zinc-800 text-zinc-400 text-xs py-8">
+      <footer className="bg-white border-t border-zinc-200 text-zinc-600 text-xs py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
           <span>© {new Date().getFullYear()} WSNexa Venue Discovery</span>
-          <Link href="/explore" className="text-amber-500 hover:underline font-bold">
+          <Link href="/explore" className="text-zinc-950 hover:underline font-extrabold">
             Explore All Venues →
           </Link>
         </div>

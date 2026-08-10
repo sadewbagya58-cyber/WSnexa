@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { getPermissionsForPreset } from '@/lib/validation/permission-presets';
 import {
   PermissionKey,
   ownerOnlyPermissions,
@@ -603,37 +604,51 @@ export class PermissionService {
 
   /**
    * Fetches team directory with full permission details for UI management.
+   * Optimized with parallel queries and in-memory effective permission evaluation.
    */
   static async listTeamMembers(businessId: string): Promise<FormattedMemberDetail[]> {
+    const t0 = performance.now();
     const admin = createAdminClient();
 
-    const { data: members } = await admin
-      .from('business_memberships')
-      .select(`
-        id,
-        user_id,
-        role,
-        custom_role_id,
-        membership_status,
-        joined_at,
-        custom_roles(name),
-        branch_assignments(branch_id, branches(name)),
-        member_permission_overrides(permission_key, effect)
-      `)
-      .eq('business_id', businessId)
-      .order('joined_at', { ascending: true });
+    const [membersRes, customRolesRes, catalog] = await Promise.all([
+      admin
+        .from('business_memberships')
+        .select(`
+          id,
+          user_id,
+          role,
+          custom_role_id,
+          membership_status,
+          joined_at,
+          custom_roles(name),
+          branch_assignments(branch_id, branches(name)),
+          member_permission_overrides(permission_key, effect)
+        `)
+        .eq('business_id', businessId)
+        .order('joined_at', { ascending: true }),
+      admin
+        .from('custom_roles')
+        .select('id, role_permissions(permission_key)')
+        .eq('business_id', businessId),
+      this.listPermissionCatalog(),
+    ]);
 
-    if (!members) return [];
+    const members = membersRes.data || [];
+    if (members.length === 0) return [];
+
+    const customRolesPermMap = new Map<string, PermissionKey[]>();
+    (customRolesRes.data || []).forEach((cr) => {
+      const perms = (cr.role_permissions || []).map((rp: { permission_key: string }) => rp.permission_key as PermissionKey);
+      customRolesPermMap.set(cr.id, perms);
+    });
 
     const userIds = members.map((m) => m.user_id);
     const { data: profiles } = await admin
       .from('user_profiles')
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, email')
       .in('id', userIds);
 
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
-
-    const catalog = await this.listPermissionCatalog();
     const allKeys = catalog.map((c) => c.key);
 
     const result: FormattedMemberDetail[] = [];
@@ -650,12 +665,10 @@ export class PermissionService {
       member_permission_overrides?: Array<{ permission_key: string; effect: string }>;
     }
 
-    for (const m of (members || []) as unknown as MemberRow[]) {
+    for (const m of (members as unknown as MemberRow[])) {
       const p = profileMap.get(m.user_id);
-      const userName = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Staff User';
-
-      const { data: authUser } = await admin.auth.admin.getUserById(m.user_id);
-      const userEmail = authUser?.user?.email || 'N/A';
+      const userName = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Staff Member';
+      const userEmail = p?.email || 'staff@wsnexa.internal';
 
       const branchAssign = m.branch_assignments?.[0];
       const branchId = branchAssign?.branch_id || null;
@@ -666,16 +679,26 @@ export class PermissionService {
         effect: o.effect as 'allow' | 'deny',
       }));
 
-      // Calculate effective permissions
-      const effective: PermissionKey[] = [];
+      // In-memory effective permission calculation
+      const effectiveSet = new Set<PermissionKey>();
       if (m.membership_status === 'active') {
         if (m.role === 'business_owner') {
-          effective.push(...allKeys);
+          allKeys.forEach((k) => effectiveSet.add(k));
         } else {
-          for (const key of allKeys) {
-            const has = await this.hasPermission(m.user_id, businessId, branchId, key);
-            if (has) effective.push(key);
+          let basePerms: PermissionKey[] = [];
+          if (m.custom_role_id && customRolesPermMap.has(m.custom_role_id)) {
+            basePerms = customRolesPermMap.get(m.custom_role_id) || [];
+          } else {
+            basePerms = getPermissionsForPreset(m.role);
           }
+
+          const denySet = new Set(overrides.filter((o) => o.effect === 'deny').map((o) => o.permissionKey));
+          const allowSet = new Set(overrides.filter((o) => o.effect === 'allow').map((o) => o.permissionKey));
+
+          basePerms.forEach((k) => {
+            if (!denySet.has(k)) effectiveSet.add(k);
+          });
+          allowSet.forEach((k) => effectiveSet.add(k));
         }
       }
 
@@ -692,8 +715,12 @@ export class PermissionService {
         branchName,
         joinedAt: m.joined_at,
         overrides,
-        effectivePermissions: effective,
+        effectivePermissions: Array.from(effectiveSet),
       });
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`⚡ [PermissionService.listTeamMembers] Resolved ${result.length} members in ${(performance.now() - t0).toFixed(1)}ms`);
     }
 
     return result;

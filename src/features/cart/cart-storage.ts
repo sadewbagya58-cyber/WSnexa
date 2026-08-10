@@ -1,5 +1,6 @@
 import { CartState, CartLine, ConfirmedTableContext } from './cart-types';
 import { calculateCartTotals } from './cart-calculations';
+import { LoyaltyRewardRecord } from '@/lib/validation/loyalty';
 
 const CART_SCHEMA_VERSION = 1;
 const CART_TTL_MS = 4 * 60 * 60 * 1000; // 4 Hours Activity TTL
@@ -10,6 +11,7 @@ interface StoredCartPayload {
   branchId: string;
   currency: string;
   confirmedTable: ConfirmedTableContext | null;
+  selectedReward: LoyaltyRewardRecord | null;
   lines: CartLine[];
   updatedAt: string;
   expiresAt: number;
@@ -47,6 +49,7 @@ export function saveCartToStorage(branchId: string, state: CartState): void {
       branchId: state.branchId,
       currency: state.currency.toUpperCase(),
       confirmedTable: safeTable,
+      selectedReward: state.selectedReward || null,
       lines: state.lines,
       updatedAt: new Date().toISOString(),
       expiresAt,
@@ -146,6 +149,7 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
       branchId,
       currency: payload.currency.toUpperCase(),
       confirmedTable: validTable,
+      selectedReward: payload.selectedReward || null,
       lines: validLines,
       subtotalCents,
       totalQuantity,

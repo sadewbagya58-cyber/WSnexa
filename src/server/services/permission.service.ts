@@ -42,6 +42,8 @@ export interface FormattedMemberDetail {
   branchId: string | null;
   branchName: string | null;
   joinedAt: string;
+  assignedAreaIds?: string[];
+  assignedAreaNames?: string[];
   overrides: Array<{ permissionKey: PermissionKey; effect: 'allow' | 'deny' }>;
   effectivePermissions: PermissionKey[];
 }
@@ -643,14 +645,36 @@ export class PermissionService {
     });
 
     const userIds = members.map((m) => m.user_id);
-    const { data: profiles } = await admin
-      .from('user_profiles')
-      .select('id, first_name, last_name, email')
-      .in('id', userIds);
+    const membershipIds = members.map((m) => m.id);
 
-    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+    const [profilesRes, areaAssignsRes] = await Promise.all([
+      admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, email')
+        .in('id', userIds),
+      admin
+        .from('staff_area_assignments')
+        .select('business_membership_id, service_area_id, service_areas(id, name)')
+        .in('business_membership_id', membershipIds),
+    ]);
+
+    const profileMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
+    const memberAreaMap = new Map<string, { ids: string[]; names: string[] }>();
+
+    for (const a of areaAssignsRes.data || []) {
+      const memId = a.business_membership_id;
+      if (!memberAreaMap.has(memId)) {
+        memberAreaMap.set(memId, { ids: [], names: [] });
+      }
+      const entry = memberAreaMap.get(memId)!;
+      entry.ids.push(a.service_area_id);
+      const areaObj = Array.isArray(a.service_areas) ? a.service_areas[0] : a.service_areas;
+      if (areaObj?.name) {
+        entry.names.push(areaObj.name);
+      }
+    }
+
     const allKeys = catalog.map((c) => c.key);
-
     const result: FormattedMemberDetail[] = [];
 
     interface MemberRow {
@@ -710,6 +734,8 @@ export class PermissionService {
         }
       }
 
+      const areaInfo = memberAreaMap.get(m.id) || { ids: [], names: [] };
+
       result.push({
         id: m.id,
         userId: m.user_id,
@@ -722,6 +748,8 @@ export class PermissionService {
         branchId: memberBranchId,
         branchName,
         joinedAt: m.joined_at,
+        assignedAreaIds: areaInfo.ids,
+        assignedAreaNames: areaInfo.names,
         overrides,
         effectivePermissions: Array.from(effectiveSet),
       });

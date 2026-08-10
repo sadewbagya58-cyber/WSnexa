@@ -82,7 +82,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       sectionTitle: 'Dining & Tables',
       items: [
         { label: 'Tables Overview', href: '/dashboard/tables' },
-        { label: 'Service Areas', href: '/dashboard/tables/areas' },
+        { label: 'Service Areas', href: '/dashboard/areas' },
         { label: 'Add Table', href: '/dashboard/tables/new' },
         { label: 'Bulk Generator', href: '/dashboard/tables/bulk' },
         { label: 'QR Codes & Cards', href: '/dashboard/tables/qr' },

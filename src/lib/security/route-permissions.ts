@@ -16,6 +16,7 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/menu/new', permission: 'menu.manage' },
   { prefix: '/dashboard/menu', permission: 'menu.view' },
   { prefix: '/dashboard/reports', permission: 'reports.view' },
+  { prefix: '/dashboard/areas', permission: 'tables.manage' },
   { prefix: '/dashboard/tables/areas', permission: 'tables.manage' },
   { prefix: '/dashboard/tables/bulk', permission: 'tables.manage' },
   { prefix: '/dashboard/tables/new', permission: 'tables.manage' },

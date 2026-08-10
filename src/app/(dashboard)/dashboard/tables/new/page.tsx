@@ -44,7 +44,7 @@ export default async function NewTablePage() {
           <p className="text-xs text-zinc-500">
             You must create at least one Service Area (e.g. Main Hall, Outdoor) before adding dining tables.
           </p>
-          <Link href="/dashboard/tables/areas">
+          <Link href="/dashboard/areas">
             <Button size="sm">+ Create Service Area First</Button>
           </Link>
         </Card>

@@ -30,7 +30,8 @@
     "verify:ranking": "tsx scripts/verify-ranking.ts",
     "verify:loyalty": "tsx scripts/verify-loyalty.ts",
     "verify:ux": "tsx scripts/verify-ux.ts",
-    "verify:branch-isolation": "tsx scripts/verify-branch-isolation.ts"
+    "verify:branch-isolation": "tsx scripts/verify-branch-isolation.ts",
+    "verify:areas": "tsx scripts/verify-areas.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

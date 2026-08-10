@@ -22,6 +22,7 @@ interface TeamManagementProps {
   customRoles: FormattedCustomRole[];
   userRole: string;
   activeBranchName?: string;
+  branchAreas?: Array<{ id: string; name: string }>;
 }
 
 export function TeamManagement({
@@ -30,6 +31,7 @@ export function TeamManagement({
   customRoles,
   userRole,
   activeBranchName = 'Main Branch',
+  branchAreas = [],
 }: TeamManagementProps) {
   const [members, setMembers] = useState<FormattedMemberDetail[]>(initialMembers);
 
@@ -42,10 +44,55 @@ export function TeamManagement({
   const [overridesMember, setOverridesMember] = useState<FormattedMemberDetail | null>(null);
   const [memberPermissions, setMemberPermissions] = useState<PermissionKey[]>([]);
 
+  // Manage Service Areas Modal State
+  const [managingAreaMember, setManagingAreaMember] = useState<FormattedMemberDetail | null>(null);
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isOwner = userRole === 'business_owner';
+
+  const handleOpenManageAreas = (member: FormattedMemberDetail) => {
+    setManagingAreaMember(member);
+    setSelectedAreaIds(member.assignedAreaIds || []);
+    setErrorMsg(null);
+  };
+
+  const handleToggleArea = (areaId: string) => {
+    setSelectedAreaIds((prev) =>
+      prev.includes(areaId) ? prev.filter((id) => id !== areaId) : [...prev, areaId]
+    );
+  };
+
+  const handleSaveStaffAreas = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!managingAreaMember) return;
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+
+    const { assignStaffToAreasAction } = await import('@/server/actions/service-area');
+    const res = await assignStaffToAreasAction(managingAreaMember.id, selectedAreaIds);
+
+    if (res.success) {
+      const assignedNames = branchAreas
+        .filter((a) => selectedAreaIds.includes(a.id))
+        .map((a) => a.name);
+
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === managingAreaMember.id
+            ? { ...m, assignedAreaIds: selectedAreaIds, assignedAreaNames: assignedNames }
+            : m
+        )
+      );
+      setManagingAreaMember(null);
+    } else {
+      setErrorMsg(res.message || 'Failed to update staff area assignments.');
+    }
+    setIsSubmitting(false);
+  };
 
   // Open Edit Role Modal
   const handleOpenEditRole = (member: FormattedMemberDetail) => {
@@ -234,7 +281,7 @@ export function TeamManagement({
                   <th className="py-3 px-4">Member Name</th>
                   <th className="py-3 px-4">Branch</th>
                   <th className="py-3 px-4">Built-in Role</th>
-                  <th className="py-3 px-4">Custom Role</th>
+                  <th className="py-3 px-4">Service Areas</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Effective Permissions</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -244,6 +291,7 @@ export function TeamManagement({
                 {members.map((m) => {
                   const isOwnerMember = m.role === 'business_owner';
                   const isSuspended = m.membershipStatus === 'suspended';
+                  const assignedAreas = m.assignedAreaNames || [];
 
                   return (
                     <tr key={m.id} className="hover:bg-zinc-50/50 transition-colors">
@@ -256,13 +304,28 @@ export function TeamManagement({
                         {formatRoleLabel(m.role)}
                       </td>
                       <td className="py-3 px-4">
-                        {m.customRoleName ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-700 border border-amber-500/20">
-                            {m.customRoleName}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-400 italic">None</span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {assignedAreas.length > 0 ? (
+                            assignedAreas.map((areaName, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-zinc-100 text-zinc-800 border border-zinc-200"
+                              >
+                                {areaName}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-zinc-400 italic">All Areas</span>
+                          )}
+                          {isOwner && !isOwnerMember && branchAreas && branchAreas.length > 0 && (
+                            <button
+                              onClick={() => handleOpenManageAreas(m)}
+                              className="ml-1 text-[10px] font-bold text-zinc-900 underline hover:text-zinc-600"
+                            >
+                              Manage
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <span
@@ -453,6 +516,104 @@ export function TeamManagement({
                 Done
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE SERVICE AREAS MODAL */}
+      {managingAreaMember && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-zinc-200 rounded-t-3xl sm:rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+              <div>
+                <h3 className="text-base font-extrabold text-zinc-950">
+                  Assign Service Areas: {managingAreaMember.userName}
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Select which operational sections this staff member operates in.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManagingAreaMember(null)}
+                className="h-8 w-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 flex items-center justify-center font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStaffAreas} className="p-4 sm:p-6 space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
+
+              {branchAreas.length === 0 ? (
+                <div className="text-center py-6 text-xs text-zinc-500">
+                  No active service areas found for this branch. Create service areas first under <strong className="text-zinc-900">Dining & Tables → Service Areas</strong>.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {branchAreas.map((area) => {
+                    const isChecked = selectedAreaIds.includes(area.id);
+                    return (
+                      <label
+                        key={area.id}
+                        onClick={() => handleToggleArea(area.id)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
+                            : 'bg-white text-zinc-900 border-zinc-200 hover:bg-zinc-50'
+                        }`}
+                      >
+                        <div className="font-bold text-sm">{area.name}</div>
+                        <div
+                          className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
+                            isChecked ? 'bg-emerald-500' : 'bg-zinc-300'
+                          }`}
+                        >
+                          <div
+                            className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                              isChecked ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAreaIds([])}
+                  className="text-xs font-bold text-zinc-500 hover:text-zinc-900"
+                >
+                  Clear All (All Areas Access)
+                </button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setManagingAreaMember(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    disabled={isSubmitting}
+                    className="bg-zinc-950 text-white font-extrabold"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Save Assignments'}
+                  </Button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

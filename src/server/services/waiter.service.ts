@@ -94,11 +94,24 @@ export class WaiterService {
 
     const supabase = await createClient();
 
+    // Check if user is waiter role and has explicit area assignments
+    let allowedAreaIds: string[] | null = null;
+    if (tenantContext.membership.role === 'waiter') {
+      const { data: areaAssigns } = await supabase
+        .from('staff_area_assignments')
+        .select('service_area_id')
+        .eq('business_membership_id', tenantContext.membership.id);
+
+      if (areaAssigns && areaAssigns.length > 0) {
+        allowedAreaIds = areaAssigns.map((a) => a.service_area_id);
+      }
+    }
+
     const { data, error } = await supabase
       .from('waiter_requests')
       .select(`
         *,
-        table:dining_tables(id, name, code, table_number)
+        table:dining_tables(id, name, code, table_number, service_area_id)
       `)
       .eq('business_id', tenantContext.business.id)
       .eq('branch_id', tenantContext.activeBranch.id)
@@ -106,7 +119,18 @@ export class WaiterService {
       .order('created_at', { ascending: false });
 
     if (error || !data) return [];
-    return data as unknown as WaiterRequestRecord[];
+
+    const records = data as unknown as Array<
+      WaiterRequestRecord & { table?: { service_area_id?: string } | null }
+    >;
+
+    if (allowedAreaIds !== null) {
+      return records.filter(
+        (r) => r.table?.service_area_id && allowedAreaIds!.includes(r.table.service_area_id)
+      );
+    }
+
+    return records;
   }
 
   /**

@@ -163,7 +163,6 @@ export class OrderService {
       }
     }
 
-    // Resolve active authenticated customer user ID if not explicitly passed
     let activeUserId = userIdInput || null;
     if (!activeUserId) {
       try {
@@ -178,7 +177,23 @@ export class OrderService {
       }
     }
 
-    // 2. Execute atomic private service-role create_guest_order RPC
+    // 2. Check branch ordering_mode (WAITER_ONLY mode blocks customer QR ordering)
+    const { data: tableData } = await admin
+      .from('table_qr_codes')
+      .select('branch_id, branches(ordering_mode)')
+      .eq('token_hash', tokenHash)
+      .single();
+
+    const branchObj = Array.isArray(tableData?.branches) ? tableData?.branches[0] : tableData?.branches;
+    if (branchObj?.ordering_mode === 'waiter_only') {
+      return {
+        success: false,
+        message: 'Please ask a staff member to place your order.',
+        errorType: 'WAITER_ONLY_MODE',
+      };
+    }
+
+    // 3. Execute atomic private service-role create_guest_order RPC
     const { data, error } = await admin.rpc('create_guest_order', {
       p_token_hash: tokenHash,
       p_table_id: tableId || null,

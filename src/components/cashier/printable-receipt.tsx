@@ -95,6 +95,18 @@ export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ data }) => {
           <span>Subtotal:</span>
           <span>{formatCurrency(order.subtotal_cents, order.currency)}</span>
         </div>
+        {(order.discount_cents ?? 0) > 0 && (
+          <div className="flex justify-between text-zinc-900 font-bold">
+            <span>🎁 Reward ({order.reward_title_snapshot || 'Discount'}):</span>
+            <span className="text-emerald-700">-{formatCurrency(order.discount_cents || 0, order.currency)}</span>
+          </div>
+        )}
+        {(order.reward_points_redeemed_snapshot ?? 0) > 0 && (
+          <div className="flex justify-between text-zinc-600 text-[10px]">
+            <span>Points Redeemed:</span>
+            <span>{order.reward_points_redeemed_snapshot} pts</span>
+          </div>
+        )}
         {order.tax_cents > 0 && (
           <div className="flex justify-between text-zinc-700">
             <span>Tax:</span>

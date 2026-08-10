@@ -163,7 +163,22 @@ export class OrderService {
       }
     }
 
-    // 2. Execute private service-role create_guest_order RPC with p_table_access_verified
+    // Resolve active authenticated customer user ID if not explicitly passed
+    let activeUserId = userIdInput || null;
+    if (!activeUserId) {
+      try {
+        const { createClient } = await import('@/lib/supabase/server');
+        const supabase = await createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        activeUserId = user?.id || null;
+      } catch {
+        // Called outside Next.js request context (e.g. CLI test script)
+      }
+    }
+
+    // 2. Execute atomic private service-role create_guest_order RPC
     const { data, error } = await admin.rpc('create_guest_order', {
       p_token_hash: tokenHash,
       p_table_id: tableId || null,
@@ -174,6 +189,8 @@ export class OrderService {
       p_idempotency_key: idempotencyKey,
       p_cart_items: cartItems,
       p_payment_method: paymentMethod || 'pay_at_counter',
+      p_customer_user_id: activeUserId || null,
+      p_selected_reward_id: parsed.data.selectedRewardId || null,
     });
 
     const rpcPayload = data as { success?: boolean; error?: string } | null;
@@ -194,6 +211,8 @@ export class OrderService {
       isTableAccessVerified,
       tableIdPrefix: tableId ? tableId.substring(0, 8) : 'none',
       branchIdPrefix,
+      selectedRewardReceivedByOrderService: Boolean(parsed.data.selectedRewardId),
+      customerUserIdProvided: Boolean(activeUserId),
       rpcError: rpcErrorStr,
     };
 
@@ -213,6 +232,9 @@ export class OrderService {
       access_token?: string;
       order_number_formatted?: string;
       status?: OrderStatus;
+      discount_cents?: number;
+      reward_title_snapshot?: string | null;
+      reward_points_redeemed_snapshot?: number;
     };
 
     if (!payload.success) {
@@ -227,47 +249,6 @@ export class OrderService {
         success: false,
         message: payload.error || 'Failed to place order.',
       };
-    }
-
-    // Optional Loyalty Reward Redemption for authenticated customers
-    if (parsed.data.selectedRewardId && payload.order_id) {
-      let activeUserId = userIdInput || null;
-      if (!activeUserId) {
-        try {
-          const { createClient } = await import('@/lib/supabase/server');
-          const supabase = await createClient().catch(() => null);
-          if (supabase) {
-            const {
-              data: { user },
-            } = await supabase.auth.getUser();
-            activeUserId = user?.id || null;
-          }
-        } catch {
-          // Called outside Next.js request context (e.g. CLI test script)
-        }
-      }
-
-      if (activeUserId) {
-        const { LoyaltyService } = await import('@/server/services/loyalty.service');
-        const redeemRes = await LoyaltyService.redeemRewardForOrder(
-          activeUserId,
-          payload.order_id,
-          parsed.data.selectedRewardId
-        );
-
-        if (!redeemRes.success) {
-          // Cancel order if reward redemption failed security/points check
-          await admin
-            .from('orders')
-            .update({ status: 'cancelled', guest_notes: `Reward redemption failed: ${redeemRes.message}` })
-            .eq('id', payload.order_id);
-
-          return {
-            success: false,
-            message: redeemRes.message || 'Failed to apply selected reward.',
-          };
-        }
-      }
     }
 
     return {

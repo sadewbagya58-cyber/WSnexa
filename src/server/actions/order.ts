@@ -11,16 +11,26 @@ import { ActionResponse } from './auth';
 export async function submitGuestOrderAction(
   input: CreateGuestOrderInput
 ): Promise<ActionResponse<{ orderId: string; accessToken: string; orderNumberFormatted: string; status: OrderStatus }>> {
-  console.log('[submitGuestOrderAction] Received order submission request:', {
-    rawQrTokenPrefix: input.rawQrToken ? input.rawQrToken.substring(0, 10) : null,
-    tableId: input.tableId,
-    signedTableAccessProofExists: Boolean(input.signedTableAccessProof),
-    inputPinExists: Boolean(input.inputPin && input.inputPin.trim().length > 0),
+  let activeUserId: string | null = null;
+  try {
+    const { createClient } = await import('@/lib/supabase/server');
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    activeUserId = user?.id || null;
+  } catch (err) {
+    console.warn('[submitGuestOrderAction] User resolution skipped:', err);
+  }
+
+  console.log('[submitGuestOrderAction Safe Trace]:', {
+    selectedRewardInCart: Boolean(input.selectedRewardId),
+    selectedRewardSubmitted: Boolean(input.selectedRewardId),
+    selectedRewardReceivedByAction: Boolean(input.selectedRewardId),
+    authenticatedUserPresent: Boolean(activeUserId),
     cartItemsCount: input.cartItems?.length || 0,
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKeyPrefix: input.idempotencyKey ? input.idempotencyKey.substring(0, 10) : null,
   });
 
-  const result = await OrderService.createGuestOrder(input);
+  const result = await OrderService.createGuestOrder(input, activeUserId);
 
   console.log('[submitGuestOrderAction] Outcome:', {
     success: result.success,
@@ -36,16 +46,13 @@ export async function submitGuestOrderAction(
   }
 
   // Server-side optional auto-link for authenticated customers placing guest orders
-  try {
-    const { createClient } = await import('@/lib/supabase/server');
-    const { CustomerOrderService } = await import('@/server/services/customer-order.service');
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && result.data.orderId && result.data.accessToken) {
-      await CustomerOrderService.claimOrder(user.id, result.data.orderId, result.data.accessToken);
+  if (activeUserId && result.data.orderId && result.data.accessToken) {
+    try {
+      const { CustomerOrderService } = await import('@/server/services/customer-order.service');
+      await CustomerOrderService.claimOrder(activeUserId, result.data.orderId, result.data.accessToken);
+    } catch (err) {
+      console.warn('[submitGuestOrderAction] Optional auto-link skipped:', err);
     }
-  } catch (err) {
-    console.warn('[submitGuestOrderAction] Optional auto-link skipped:', err);
   }
 
   revalidatePath(`/m/${input.rawQrToken}/checkout`);
@@ -102,10 +109,13 @@ export async function getPublicOrderTrackingStateAction(
     payment_method: string;
     total_cents: number;
     subtotal_cents: number;
+    discount_cents: number;
     tax_cents: number;
     service_charge_cents: number;
     amount_paid_cents: number;
     balance_due_cents: number;
+    reward_title_snapshot: string | null;
+    reward_points_redeemed_snapshot: number;
     currency: string;
     updated_at: string;
     customer_user_id: string | null;
@@ -151,10 +161,13 @@ export async function getPublicOrderTrackingStateAction(
       payment_method: order.payment_method,
       total_cents: order.total_cents,
       subtotal_cents: order.subtotal_cents,
+      discount_cents: order.discount_cents || 0,
       tax_cents: order.tax_cents,
       service_charge_cents: order.service_charge_cents,
       amount_paid_cents: amountPaidCents,
       balance_due_cents: balanceDueCents,
+      reward_title_snapshot: order.reward_title_snapshot || null,
+      reward_points_redeemed_snapshot: order.reward_points_redeemed_snapshot || 0,
       currency: order.currency,
       updated_at: order.updated_at,
       customer_user_id: (order as { customer_user_id?: string | null }).customer_user_id || null,

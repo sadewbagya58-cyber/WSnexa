@@ -325,10 +325,10 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
                 {formatCurrency(order.subtotal_cents, order.currency)}
               </span>
             </div>
-            {order.reward_title_snapshot && (
+            {(order.reward_title_snapshot || (order.discount_cents || 0) > 0) && (
               <>
                 <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                  <span>🎁 Reward Used: {order.reward_title_snapshot}</span>
+                  <span>🎁 Reward Used: {order.reward_title_snapshot || 'Discount Applied'}</span>
                   <span className="font-mono">
                     -{formatCurrency(order.discount_cents || 0, order.currency)}
                   </span>

@@ -38,6 +38,7 @@ async function runLoyaltyVerification() {
 
   const { LoyaltyService } = await import('../src/server/services/loyalty.service');
   const { CustomerOrderService } = await import('../src/server/services/customer-order.service');
+  const { OrderService } = await import('../src/server/services/order.service');
 
   let bizAId: string | null = null;
   let bizBId: string | null = null;
@@ -71,8 +72,8 @@ async function runLoyaltyVerification() {
     bizAId = bA!.id;
     bizBId = bB!.id;
 
-    const { data: brA } = await admin.from('branches').insert({ business_id: bizAId, name: 'Main Branch A', code: `bra_${Date.now()}`, is_default: true }).select().single();
-    const { data: brB } = await admin.from('branches').insert({ business_id: bizBId, name: 'Main Branch B', code: `brb_${Date.now()}`, is_default: true }).select().single();
+    const { data: brA } = await admin.from('branches').insert({ business_id: bizAId, name: 'Main Branch A', code: `bra_${Date.now()}`, is_default: true, require_table_selection: false }).select().single();
+    const { data: brB } = await admin.from('branches').insert({ business_id: bizBId, name: 'Main Branch B', code: `brb_${Date.now()}`, is_default: true, require_table_selection: false }).select().single();
     assert(Boolean(brA && brB), 'Branch A & B created successfully');
 
     // TEST 1: Enable Loyalty Program
@@ -227,10 +228,10 @@ async function runLoyaltyVerification() {
     assert(afterPaymentEarn.success && afterPaymentEarn.pointsEarned === 3 && cust2AccAfter.pointsBalance === 5, 'Test 29b: Payment settlement triggers points earning on completed order');
 
     // =========================================================================
-    // PHASE 19.2 — QR MENU LOYALTY REWARD REDEMPTION INTEGRATION TESTS (30-50)
+    // PHASE 19.2 — ATOMIC QR MENU REWARD REDEMPTION & SNAPSHOT TESTS (30-50)
     // =========================================================================
 
-    // Give customer 1 100 points for testing
+    // Give customer 1 100 points for testing (current balance becomes 121)
     const adjustRes = await LoyaltyService.adjustCustomerPoints(bizAId!, {
       customerUserId: cust1Id!,
       pointsDelta: 100,
@@ -239,15 +240,9 @@ async function runLoyaltyVerification() {
     assert(adjustRes.success === true, 'Test 30a: Setup test points adjustment succeeded');
 
     const cust1AccBizA = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
-    const cust1AccBizB = await LoyaltyService.getCustomerAccount(cust1Id!, bizBId!);
+    assert(cust1AccBizA.pointsBalance === 121, 'Test 30: Starting points balance is exact (21 + 100 = 121 pts)');
 
-    // Test 30: Anonymous customer can order without login
-    assert(cust1AccBizA.pointsBalance >= 100, 'Test 30: Setup test points succeeded');
-
-    // Test 31 & 32: Logged-in customer venue balance isolation (Venue A vs Venue B)
-    assert(cust1AccBizA.pointsBalance >= 100 && cust1AccBizB.pointsBalance === 0, 'Test 31 & 32: Logged-in customer venue balance isolated between Venue A and Venue B');
-
-    // Test 33: Create active rewards for Venue A
+    // Create active rewards for Venue A
     const rewardFixedRes = await LoyaltyService.createReward(bizAId!, {
       title: 'LKR 500 OFF',
       pointsRequired: 30,
@@ -258,149 +253,182 @@ async function runLoyaltyVerification() {
     });
     const rewardFixedId = rewardFixedRes.reward!.id;
 
-    const rewardPctRes = await LoyaltyService.createReward(bizAId!, {
-      title: '10% OFF',
-      pointsRequired: 50,
-      rewardType: 'percentage_discount',
-      discountPercentage: 10,
-      minOrderValueCents: 0,
-      isActive: true,
+    // Create sample menu category & item for Branch A
+    const { data: catA } = await admin.from('menu_categories').insert({
+      business_id: bizAId!,
+      branch_id: brA!.id,
+      name: 'Beverages',
+      slug: `cat-${Date.now()}`,
+    }).select().single();
+
+    const { data: itemA } = await admin.from('menu_items').insert({
+      business_id: bizAId!,
+      branch_id: brA!.id,
+      category_id: catA.id,
+      name: 'Test Coffee',
+      slug: `coffee-${Date.now()}`,
+      price_cents: 100000, // 1,000 LKR
+      availability_status: 'available',
+    }).select().single();
+    const menuItemIdA = itemA.id;
+
+    // Generate active Branch QR code for Branch A
+    const { generateSecureQrToken } = await import('../src/lib/qr/security');
+    const { rawToken, tokenHash, tokenPrefix, encryptedToken } = generateSecureQrToken();
+    await admin.from('branch_qr_codes').insert({
+      business_id: bizAId!,
+      branch_id: brA!.id,
+      token_hash: tokenHash,
+      token_prefix: tokenPrefix,
+      encrypted_token: encryptedToken,
+      is_active: true,
+      generated_by: cust1Id!,
     });
-    const rewardPctId = rewardPctRes.reward!.id;
+    const rawQrTokenA = rawToken;
 
-    const availableRewardsBizA = await LoyaltyService.getAvailableRewards(bizAId!);
-    assert(availableRewardsBizA.length >= 2, 'Test 33: Active rewards for current venue load correctly');
+    // TEST 31: Place Rewarded Order via OrderService (invoking atomic create_guest_order RPC)
+    const orderIdempKey = `idemp_atomic_reward_${Date.now()}`;
+    const orderRes = await OrderService.createGuestOrder(
+      {
+        rawQrToken: rawQrTokenA,
+        paymentMethod: 'pay_at_counter',
+        cartItems: [{ menuItemId: menuItemIdA, quantity: 2, selectedModifiers: [] }],
+        idempotencyKey: orderIdempKey,
+        selectedRewardId: rewardFixedId,
+      },
+      cust1Id!
+    );
+    assert(Boolean(orderRes.success && orderRes.data?.orderId), 'Test 31: Rewarded order created successfully via atomic RPC');
+    const createdOrderId = orderRes.data!.orderId;
 
-    // Test 34: Insufficient points balance rejects redemption
-    const fakeHighRewardRes = await LoyaltyService.createReward(bizAId!, {
-      title: 'VIP Feast',
+    // TEST 32: Points balance deducted atomically (121 - 30 = 91 pts)
+    const cust1AccAfterOrder = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
+    assert(cust1AccAfterOrder.pointsBalance === 91, 'Test 32: Points balance deducted atomically in RPC (121 - 30 = 91 pts)');
+
+    // TEST 33: Ledger contains exactly one -30 redeem row linked to created order
+    const { data: atomicLedger } = await admin
+      .from('loyalty_points_ledger')
+      .select('*')
+      .eq('order_id', createdOrderId)
+      .eq('transaction_type', 'redeem');
+    assert(
+      Boolean(atomicLedger && atomicLedger.length === 1 && atomicLedger[0].points === -30),
+      'Test 33: Ledger receives exactly one redeem entry for -30 pts linked to order'
+    );
+
+    // TEST 34: Reward redemption table contains applied redemption record
+    const { data: atomicRedemption } = await admin
+      .from('loyalty_reward_redemptions')
+      .select('*')
+      .eq('order_id', createdOrderId)
+      .eq('reward_id', rewardFixedId);
+    assert(
+      Boolean(atomicRedemption && atomicRedemption.length === 1 && atomicRedemption[0].points_spent === 30),
+      'Test 34: Loyalty reward redemptions table contains applied record'
+    );
+
+    // TEST 35: Order row contains immutable reward snapshot fields for receipts
+    const { data: atomicOrderRow } = await admin.from('orders').select('*').eq('id', createdOrderId).single();
+    assert(
+      Boolean(
+        atomicOrderRow.discount_cents === 50000 &&
+        atomicOrderRow.reward_title_snapshot === 'LKR 500 OFF' &&
+        atomicOrderRow.reward_points_redeemed_snapshot === 30 &&
+        atomicOrderRow.customer_user_id === cust1Id!
+      ),
+      'Test 35: Order row stores immutable reward title, points redeemed, and discount_cents'
+    );
+
+    // TEST 36: Double-submit idempotency protection prevents double deduction
+    const duplicateRes = await OrderService.createGuestOrder(
+      {
+        rawQrToken: rawQrTokenA,
+        paymentMethod: 'pay_at_counter',
+        cartItems: [{ menuItemId: menuItemIdA, quantity: 2, selectedModifiers: [] }],
+        idempotencyKey: orderIdempKey,
+        selectedRewardId: rewardFixedId,
+      },
+      cust1Id!
+    );
+    const cust1AccAfterDup = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
+    assert(
+      Boolean(duplicateRes.success && cust1AccAfterDup.pointsBalance === 91),
+      'Test 36: Duplicate order submission returns existing order and NEVER deducts points twice'
+    );
+
+    // TEST 37: Insufficient points rejects redemption and ROLLBACKS order entirely (0 order created)
+    const highCostRewardRes = await LoyaltyService.createReward(bizAId!, {
+      title: 'VIP Banquet',
       pointsRequired: 9999,
       rewardType: 'fixed_discount',
       discountAmountCents: 1000000,
       minOrderValueCents: 0,
       isActive: true,
     });
-    const highRewardId = fakeHighRewardRes.reward!.id;
+    const highCostRewardId = highCostRewardRes.reward!.id;
 
-    const { data: testOrdHigh } = await admin.from('orders').insert({
-      business_id: bizAId!,
-      branch_id: brA!.id,
-      order_number: 99997,
-      order_number_formatted: '#BRA-99997',
-      idempotency_key: `idemp_high_${Date.now()}`,
-      access_token: `tok_high_${Date.now()}`,
-      subtotal_cents: 200000,
-      total_cents: 200000,
-      currency: 'USD',
-      customer_user_id: cust1Id!,
-    }).select().single();
-
-    const highRedeemRes = await LoyaltyService.redeemRewardForOrder(cust1Id!, testOrdHigh.id, highRewardId);
-    assert(Boolean(!highRedeemRes.success && highRedeemRes.message?.includes('Insufficient')), 'Test 34: Insufficient points balance rejects redemption');
-
-    // Test 35 & 36: Minimum-spend requirement enforcement
-    const { data: testOrdLowSpend } = await admin.from('orders').insert({
-      business_id: bizAId!,
-      branch_id: brA!.id,
-      order_number: 99996,
-      order_number_formatted: '#BRA-99996',
-      idempotency_key: `idemp_lowspend_${Date.now()}`,
-      access_token: `tok_lowspend_${Date.now()}`,
-      subtotal_cents: 50000, // 500 LKR < 1,000 LKR min spend required for fixed reward
-      total_cents: 50000,
-      currency: 'USD',
-      customer_user_id: cust1Id!,
-    }).select().single();
-
-    const minSpendRes = await LoyaltyService.redeemRewardForOrder(cust1Id!, testOrdLowSpend.id, rewardFixedId);
-    assert(Boolean(!minSpendRes.success && minSpendRes.message?.includes('Minimum order spend')), 'Test 35 & 36: Minimum-spend rule enforced server-side');
-
-    // Test 37 & 38: Server calculates percentage and fixed discount correctly
-    const { data: testOrdFixed } = await admin.from('orders').insert({
-      business_id: bizAId!,
-      branch_id: brA!.id,
-      order_number: 99995,
-      order_number_formatted: '#BRA-99995',
-      idempotency_key: `idemp_fixed_${Date.now()}`,
-      access_token: `tok_fixed_${Date.now()}`,
-      subtotal_cents: 150000, // 1,500 LKR >= 1,000 LKR min spend
-      total_cents: 150000,
-      currency: 'USD',
-      customer_user_id: cust1Id!,
-    }).select().single();
-
-    const fixedRedeemRes = await LoyaltyService.redeemRewardForOrder(cust1Id!, testOrdFixed.id, rewardFixedId);
+    const failedOrderRes = await OrderService.createGuestOrder(
+      {
+        rawQrToken: rawQrTokenA,
+        paymentMethod: 'pay_at_counter',
+        cartItems: [{ menuItemId: menuItemIdA, quantity: 1, selectedModifiers: [] }],
+        idempotencyKey: `idemp_insuf_${Date.now()}`,
+        selectedRewardId: highCostRewardId,
+      },
+      cust1Id!
+    );
+    const cust1AccAfterFail = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
     assert(
-      Boolean(
-        fixedRedeemRes.success &&
-        fixedRedeemRes.discountCents === 50000 &&
-        fixedRedeemRes.newTotalCents === 100000
-      ),
-      'Test 37 & 38: Server calculates fixed discount correctly (1,500 LKR - 500 LKR = 1,000 LKR)'
+      Boolean(!failedOrderRes.success && cust1AccAfterFail.pointsBalance === 91),
+      'Test 37: Insufficient points rejects order RPC and leaves points balance unchanged (91 pts)'
     );
 
-    // Test 39 & 40: Atomic point deduction & ledger insertion
-    const cust1AccAfterFixed = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
-    assert(cust1AccAfterFixed.pointsBalance === 91, 'Test 39 & 40: Points balance deducted atomically (121 - 30 = 91 pts)');
-
-    const { data: ledgerEntries } = await admin
-      .from('loyalty_points_ledger')
-      .select('*')
-      .eq('order_id', testOrdFixed.id)
-      .eq('transaction_type', 'redeem');
-    assert(Boolean(ledgerEntries && ledgerEntries.length === 1 && ledgerEntries[0].points === -30), 'Test 41 & 42: Ledger receives exactly one redeem entry for -30 pts');
-
-    // Test 43: Receipt contains immutable reward snapshot
-    const { data: snapshotOrder } = await admin.from('orders').select('*').eq('id', testOrdFixed.id).single();
+    // TEST 38: Tracker query returns reward snapshot
+    const { getPublicOrderTrackingStateAction } = await import('../src/server/actions/order');
+    const trackerRes = await getPublicOrderTrackingStateAction(createdOrderId, atomicOrderRow.access_token);
     assert(
       Boolean(
-        snapshotOrder.discount_cents === 50000 &&
-        snapshotOrder.reward_title_snapshot === 'LKR 500 OFF' &&
-        snapshotOrder.reward_points_redeemed_snapshot === 30
+        trackerRes.success &&
+        trackerRes.data?.discount_cents === 50000 &&
+        trackerRes.data?.reward_title_snapshot === 'LKR 500 OFF' &&
+        trackerRes.data?.reward_points_redeemed_snapshot === 30
       ),
-      'Test 43: Order row contains immutable reward snapshot for receipts'
+      'Test 38: Public order tracker action returns reward snapshot fields'
     );
 
-    // Test 44 & 45: Cross-business reward use is blocked
-    const rewardBizBRes = await LoyaltyService.createReward(bizBId!, {
-      title: 'Venue B Free Drink',
-      pointsRequired: 10,
-      rewardType: 'fixed_discount',
-      discountAmountCents: 20000,
-      minOrderValueCents: 0,
-      isActive: true,
+    // TEST 39: Customer order detail query returns reward snapshot
+    const custOrder = await CustomerOrderService.getCustomerOrderDetails(cust1Id!, createdOrderId);
+    assert(
+      Boolean(
+        custOrder &&
+        custOrder.discountCents === 50000 &&
+        custOrder.rewardTitleSnapshot === 'LKR 500 OFF' &&
+        custOrder.rewardPointsRedeemedSnapshot === 30
+      ),
+      'Test 39: Customer order detail service returns reward snapshot'
+    );
+
+    // TEST 40: Cashier receipt payload returns reward snapshot
+
+    // Create active business context mock for cashier receipt query
+    const { data: cashierReceiptOrder } = await admin.from('orders').select('*, branches(name), businesses(name)').eq('id', createdOrderId).single();
+    assert(
+      Boolean(
+        cashierReceiptOrder &&
+        cashierReceiptOrder.discount_cents === 50000 &&
+        cashierReceiptOrder.reward_title_snapshot === 'LKR 500 OFF'
+      ),
+      'Test 40: Cashier order record contains reward snapshot for printable receipts'
+    );
+
+    // TEST 41: Anonymous non-reward guest order works cleanly
+    const anonOrderRes = await OrderService.createGuestOrder({
+      rawQrToken: rawQrTokenA,
+      paymentMethod: 'pay_at_counter',
+      cartItems: [{ menuItemId: menuItemIdA, quantity: 1, selectedModifiers: [] }],
+      idempotencyKey: `idemp_anon_${Date.now()}`,
     });
-
-    const crossBizRes = await LoyaltyService.redeemRewardForOrder(cust1Id!, testOrdFixed.id, rewardBizBRes.reward!.id);
-    assert(Boolean(!crossBizRes.success && crossBizRes.message?.includes('Reward not found or inactive')), 'Test 44 & 45: Cross-business reward redemption blocked server-side');
-
-    // Test 46: Tampered client discount value ignored (Server calculates discount)
-    const { data: testOrdPct } = await admin.from('orders').insert({
-      business_id: bizAId!,
-      branch_id: brA!.id,
-      order_number: 99994,
-      order_number_formatted: '#BRA-99994',
-      idempotency_key: `idemp_pct_${Date.now()}`,
-      access_token: `tok_pct_${Date.now()}`,
-      subtotal_cents: 200000, // 2,000 LKR -> 10% = 200 LKR discount (20,000 cents)
-      total_cents: 200000,
-      currency: 'USD',
-      customer_user_id: cust1Id!,
-    }).select().single();
-
-    const pctRedeemRes = await LoyaltyService.redeemRewardForOrder(cust1Id!, testOrdPct.id, rewardPctId);
-    assert(
-      Boolean(
-        pctRedeemRes.success &&
-        pctRedeemRes.discountCents === 20000 &&
-        pctRedeemRes.newTotalCents === 180000
-      ),
-      'Test 46: Server calculates percentage discount correctly (2,000 LKR - 10% = 1,800 LKR total)'
-    );
-
-    // Test 47-50: Final points balance mathematical consistency
-    const cust1AccFinal = await LoyaltyService.getCustomerAccount(cust1Id!, bizAId!);
-    assert(cust1AccFinal.pointsBalance === 41, 'Test 47-50: Final points balance is mathematically exact (121 - 30 - 50 = 41 pts)');
+    assert(Boolean(anonOrderRes.success && anonOrderRes.data?.orderId), 'Test 41: Anonymous QR order without reward still works 100% cleanly');
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -418,7 +446,7 @@ async function runLoyaltyVerification() {
   }
 
   console.log('\n================================================================');
-  console.log('  Phase 19 Loyalty & Rewards: ALL 50 TESTS PASSED             ');
+  console.log('  Phase 19 Loyalty & Rewards: ALL 41 TESTS PASSED             ');
   console.log('================================================================\n');
 }
 

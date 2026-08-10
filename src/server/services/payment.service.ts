@@ -75,6 +75,9 @@ export interface ReceiptData {
     payment_method: string;
     created_at: string;
     subtotal_cents: number;
+    discount_cents?: number;
+    reward_title_snapshot?: string | null;
+    reward_points_redeemed_snapshot?: number;
     tax_cents: number;
     service_charge_cents: number;
     total_cents: number;
@@ -373,6 +376,9 @@ export class PaymentService {
         payment_method: order.payment_method,
         created_at: order.created_at,
         subtotal_cents: order.subtotal_cents,
+        discount_cents: (order as { discount_cents?: number }).discount_cents || 0,
+        reward_title_snapshot: (order as { reward_title_snapshot?: string | null }).reward_title_snapshot || null,
+        reward_points_redeemed_snapshot: (order as { reward_points_redeemed_snapshot?: number }).reward_points_redeemed_snapshot || 0,
         tax_cents: order.tax_cents,
         service_charge_cents: order.service_charge_cents,
         total_cents: order.total_cents,

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { claimInvitationAction } from '@/server/actions/staff-invitation';
+import { reconcileAccountTypeIntentAction } from '@/server/actions/account';
 
 interface PendingAccessScreenProps {
   intent: string;
@@ -14,6 +15,7 @@ export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenPr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [mismatchTarget, setMismatchTarget] = useState<'branch_manager' | 'staff' | null>(null);
 
   const formattedIntent = intent === 'branch_manager' ? 'Branch Manager' : 'Staff Member';
 
@@ -24,6 +26,7 @@ export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenPr
     setIsSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
+    setMismatchTarget(null);
 
     const res = await claimInvitationAction({ code: inviteCode.trim() });
 
@@ -36,6 +39,21 @@ export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenPr
       }, 1000);
     } else {
       setErrorMsg(res.message || 'Unable to claim invitation code. Please verify and retry.');
+      if (res.mismatchIntent && res.targetIntentNeeded) {
+        setMismatchTarget(res.targetIntentNeeded);
+      }
+    }
+  };
+
+  const handleChangeAccountType = async () => {
+    if (!mismatchTarget) return;
+    setIsSubmitting(true);
+    const recRes = await reconcileAccountTypeIntentAction(mismatchTarget);
+    setIsSubmitting(false);
+    if (recRes.success) {
+      window.location.reload();
+    } else {
+      setErrorMsg(recRes.message || 'Failed to change account type intent.');
     }
   };
 
@@ -77,8 +95,18 @@ export function PendingAccessScreen({ intent, userEmail }: PendingAccessScreenPr
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium text-left">
-            ⚠️ {errorMsg}
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium text-left space-y-2">
+            <div>⚠️ {errorMsg}</div>
+            {mismatchTarget && (
+              <button
+                type="button"
+                onClick={handleChangeAccountType}
+                disabled={isSubmitting}
+                className="w-full py-1.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-[11px] rounded-lg transition-all border border-zinc-700"
+              >
+                Change Account Type to {mismatchTarget === 'branch_manager' ? 'Branch Manager' : 'Staff Member'}
+              </button>
+            )}
           </div>
         )}
 

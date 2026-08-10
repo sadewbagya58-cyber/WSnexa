@@ -53,3 +53,19 @@ export async function updateCustomerProfileAction(rawInput: UpdateCustomerProfil
     return { success: false, message: msg };
   }
 }
+
+export async function reconcileAccountTypeIntentAction(targetIntent: 'branch_manager' | 'staff') {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, message: 'Unauthorized. Session expired.' };
+    }
+
+    return await AccountService.saveOnboardingIntent(user.id, targetIntent);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to update account intent';
+    return { success: false, message: msg };
+  }
+}

@@ -162,6 +162,8 @@ export class StaffInvitationService {
     message?: string;
     targetRoute?: string;
     role?: StaffRole;
+    mismatchIntent?: boolean;
+    targetIntentNeeded?: 'branch_manager' | 'staff';
   }> {
     const admin = createAdminClient();
     const normalized = normalizeInvitationCode(rawCode);
@@ -226,6 +228,42 @@ export class StaffInvitationService {
 
     if (existingOwnerMem && existingOwnerMem.length > 0) {
       return { success: false, message: 'Business Owners cannot claim staff or manager roles.' };
+    }
+
+    // 5b. Check user onboarding intent against invitation role (CRITICAL SECURITY RULE)
+    const { data: userProfile } = await admin
+      .from('user_profiles')
+      .select('onboarding_intent')
+      .eq('id', userId)
+      .single();
+
+    const userIntent = userProfile?.onboarding_intent;
+    const inviteRole = (invite.assigned_role || invite.role) as string;
+
+    if (userIntent) {
+      // Rule A: Branch Manager intent MUST ONLY claim Branch Manager invitations
+      if (userIntent === 'branch_manager') {
+        if (inviteRole !== 'branch_manager') {
+          return {
+            success: false,
+            message: 'This invitation is for a different account type.',
+            mismatchIntent: true,
+            targetIntentNeeded: 'staff',
+          };
+        }
+      }
+
+      // Rule B: Staff intent MUST NOT claim Branch Manager or Business Owner invitations
+      if (userIntent === 'staff') {
+        if (inviteRole === 'branch_manager' || inviteRole === 'business_owner') {
+          return {
+            success: false,
+            message: 'This invitation is for a different account type.',
+            mismatchIntent: true,
+            targetIntentNeeded: 'branch_manager',
+          };
+        }
+      }
     }
 
     // 6. ATOMIC CLAIM LOCK: Mark invitation as claimed FIRST to prevent race conditions

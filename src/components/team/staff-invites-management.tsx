@@ -220,67 +220,114 @@ Instructions:
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Branch</th>
-                  <th className="py-3 px-4">Code Prefix</th>
-                  <th className="py-3 px-4">Bound Email</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Expires</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 text-xs">
-                {invitations.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-zinc-900">
-                      {formatRoleLabel(inv.assignedRole)}
-                    </td>
-                    <td className="py-3 px-4 text-zinc-600 font-medium">{inv.branchName}</td>
-                    <td className="py-3 px-4 font-mono text-zinc-500 font-semibold">{inv.tokenPrefix}</td>
-                    <td className="py-3 px-4 text-zinc-500 font-mono">
-                      {inv.invitedEmail || <span className="text-zinc-400 italic">Any email</span>}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusBadge(
-                          inv.status
-                        )}`}
-                      >
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-zinc-500">
-                      {new Date(inv.expiresAt).toLocaleDateString()} {new Date(inv.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-3 px-4 text-right space-x-2">
+          <div>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Branch</th>
+                    <th className="py-3 px-4">Code Prefix</th>
+                    <th className="py-3 px-4">Bound Email</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Expires</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-xs">
+                  {invitations.map((inv) => (
+                    <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3 px-4 font-bold text-zinc-900">
+                        {formatRoleLabel(inv.assignedRole)}
+                      </td>
+                      <td className="py-3 px-4 text-zinc-600 font-medium">{inv.branchName}</td>
+                      <td className="py-3 px-4 font-mono text-zinc-500 font-semibold">{inv.tokenPrefix}</td>
+                      <td className="py-3 px-4 text-zinc-500 font-mono">
+                        {inv.invitedEmail || <span className="text-zinc-400 italic">Any email</span>}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusBadge(
+                            inv.status
+                          )}`}
+                        >
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-zinc-500">
+                        {new Date(inv.expiresAt).toLocaleDateString()} {new Date(inv.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-2">
+                        {isOwner && inv.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleRegenerate(inv)}
+                              className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+                            >
+                              Regenerate
+                            </button>
+                            <button
+                              onClick={() => handleRevoke(inv.id)}
+                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors"
+                            >
+                              Revoke
+                            </button>
+                          </>
+                        )}
+                        {inv.status === 'claimed' && (
+                          <span className="text-[11px] text-zinc-400 font-medium">Claimed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Card View */}
+            <div className="block md:hidden divide-y divide-zinc-200">
+              {invitations.map((inv) => (
+                <div key={inv.id} className="p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-900 text-sm">{formatRoleLabel(inv.assignedRole)}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusBadge(inv.status)}`}>
+                      {inv.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-zinc-600">
+                    <span>Branch: <strong>{inv.branchName}</strong></span>
+                    <span className="font-mono text-zinc-500">{inv.tokenPrefix}</span>
+                  </div>
+                  {inv.invitedEmail && (
+                    <div className="text-zinc-500 font-mono text-[11px]">
+                      Email: {inv.invitedEmail}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1 border-t border-zinc-100 text-[11px] text-zinc-400">
+                    <span>Expires {new Date(inv.expiresAt).toLocaleDateString()}</span>
+                    <div className="space-x-2">
                       {isOwner && inv.status === 'pending' && (
                         <>
                           <button
                             onClick={() => handleRegenerate(inv)}
-                            className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+                            className="font-bold text-amber-600 hover:underline"
                           >
                             Regenerate
                           </button>
                           <button
                             onClick={() => handleRevoke(inv.id)}
-                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors"
+                            className="font-bold text-rose-600 hover:underline"
                           >
                             Revoke
                           </button>
                         </>
                       )}
-                      {inv.status === 'claimed' && (
-                        <span className="text-[11px] text-zinc-400 font-medium">Claimed</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

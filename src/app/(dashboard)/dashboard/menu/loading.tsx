@@ -1,28 +1,35 @@
-import React from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { StatsSkeleton } from '@/components/ui/skeletons';
-
 export default function MenuLoading() {
   return (
-    <div className="space-y-6">
-      {/* Real Page Header & Navigation Tabs */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Menu Management</h1>
-          <p className="text-xs text-zinc-500">Configure menu categories, items, and modifiers</p>
+    <div className="p-6 space-y-6 animate-pulse max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <div className="h-7 w-40 bg-zinc-800 rounded-lg" />
+          <div className="h-4 w-64 bg-zinc-800/60 rounded-md" />
         </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/menu/categories">
-            <Button variant="outline" size="sm">Categories</Button>
-          </Link>
-          <Link href="/dashboard/menu/items">
-            <Button size="sm">Menu Items</Button>
-          </Link>
-        </div>
+        <div className="h-10 w-36 bg-zinc-800 rounded-xl" />
       </div>
 
-      <StatsSkeleton count={3} />
+      {/* Category Pills Skeleton */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-9 w-28 bg-zinc-800 rounded-xl shrink-0" />
+        ))}
+      </div>
+
+      {/* Menu Item Cards Grid Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="p-4 bg-zinc-900 border border-zinc-800 rounded-2xl space-y-3">
+            <div className="h-40 bg-zinc-950 rounded-xl border border-zinc-800/50" />
+            <div className="flex justify-between items-center">
+              <div className="h-5 w-32 bg-zinc-800 rounded" />
+              <div className="h-5 w-16 bg-zinc-800 rounded" />
+            </div>
+            <div className="h-3 w-48 bg-zinc-800/60 rounded" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

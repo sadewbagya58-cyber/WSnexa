@@ -61,7 +61,7 @@ export async function createInvitationAction(
 
 export async function claimInvitationAction(
   formData: ClaimInvitationInput
-): Promise<ActionResponse<{ targetRoute: string; role: string }>> {
+): Promise<ActionResponse<{ targetRoute: string; role: string }> & { mismatchIntent?: boolean; targetIntentNeeded?: 'branch_manager' | 'staff' }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -87,7 +87,12 @@ export async function claimInvitationAction(
   );
 
   if (!res.success) {
-    return { success: false, message: res.message || 'Failed to claim invitation.' };
+    return {
+      success: false,
+      message: res.message || 'Failed to claim invitation.',
+      mismatchIntent: res.mismatchIntent,
+      targetIntentNeeded: res.targetIntentNeeded,
+    };
   }
 
   return {

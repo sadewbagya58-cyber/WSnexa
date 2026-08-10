@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { SimplePermissionEditor } from '@/components/team/simple-permission-editor';
+import { RoleCreationWizard } from '@/components/team/role-creation-wizard';
 import { FormattedCustomRole, FormattedPermission } from '@/server/services/permission.service';
 import { createCustomRoleAction, updateCustomRoleAction } from '@/server/actions/permission';
 import { PermissionKey } from '@/lib/validation/permission';
@@ -29,8 +29,6 @@ export function RolesManagement({
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<PermissionKey[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const isOwner = userRole === 'business_owner';
 
@@ -39,7 +37,6 @@ export function RolesManagement({
     setRoleName('');
     setRoleDescription('');
     setSelectedPermissions([]);
-    setErrorMsg(null);
     setIsModalOpen(true);
   };
 
@@ -48,7 +45,6 @@ export function RolesManagement({
     setRoleName(role.name);
     setRoleDescription(role.description || '');
     setSelectedPermissions(role.permissions);
-    setErrorMsg(null);
     setIsModalOpen(true);
   };
 
@@ -57,65 +53,6 @@ export function RolesManagement({
     setRoleName(`${role.name} (Copy)`);
     setRoleDescription(role.description || '');
     setSelectedPermissions([...role.permissions]);
-    setErrorMsg(null);
-    setIsModalOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!roleName.trim()) {
-      setErrorMsg('Role name is required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMsg(null);
-
-    if (editingRole) {
-      // Update
-      const res = await updateCustomRoleAction({
-        roleId: editingRole.id,
-        name: roleName,
-        description: roleDescription,
-        permissions: selectedPermissions,
-      });
-
-      setIsSubmitting(false);
-
-      if (res.success) {
-        setRoles((prev) =>
-          prev.map((r) =>
-            r.id === editingRole.id
-              ? {
-                  ...r,
-                  name: roleName,
-                  description: roleDescription,
-                  permissions: selectedPermissions,
-                }
-              : r
-          )
-        );
-        setIsModalOpen(false);
-      } else {
-        setErrorMsg(res.message || 'Failed to update custom role.');
-      }
-    } else {
-      // Create
-      const res = await createCustomRoleAction({
-        name: roleName,
-        description: roleDescription,
-        permissions: selectedPermissions,
-      });
-
-      setIsSubmitting(false);
-
-      if (res.success && res.data) {
-        setRoles([...roles, res.data]);
-        setIsModalOpen(false);
-      } else {
-        setErrorMsg(res.message || 'Failed to create custom role.');
-      }
-    }
   };
 
   // Built-in Role Definitions for Display
@@ -298,76 +235,64 @@ export function RolesManagement({
         </div>
       )}
 
-      {/* CREATE / EDIT CUSTOM ROLE MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-              <h3 className="text-lg font-bold text-zinc-950">
-                {editingRole ? `Edit Role: ${editingRole.name}` : 'Create Custom Role'}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {errorMsg && (
-              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
-                ⚠️ {errorMsg}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-zinc-700 font-bold text-xs mb-1">Role Name *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Supervisor, Bar Staff"
-                    value={roleName}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRoleName(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-zinc-700 font-bold text-xs mb-1">Description</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Floor supervisor for dining area"
-                    value={roleDescription}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRoleDescription(e.target.value)}
-                    className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-zinc-700 font-bold text-xs mb-2">
-                  Configure Granted Permissions *
-                </label>
-                <SimplePermissionEditor
-                  catalog={catalog}
-                  selectedPermissions={selectedPermissions}
-                  onChange={setSelectedPermissions}
-                />
-              </div>
-
-              <div className="pt-3 border-t border-zinc-100 flex justify-end gap-2 sticky bottom-0 bg-white py-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" size="sm" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving Role...' : editingRole ? 'Update Role' : 'Create Role'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* CREATE / EDIT CUSTOM ROLE WIZARD */}
+      <RoleCreationWizard
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        catalog={catalog}
+        editingRoleName={roleName}
+        editingRoleDescription={roleDescription}
+        initialPermissions={selectedPermissions}
+        isEditing={!!editingRole}
+        onSave={async (name, description, perms) => {
+          if (editingRole) {
+            const res = await updateCustomRoleAction({
+              roleId: editingRole.id,
+              name,
+              description,
+              permissions: perms,
+            });
+            if (res.success) {
+              setRoles((prev) =>
+                prev.map((r) =>
+                  r.id === editingRole.id
+                    ? { ...r, name, description, permissions: perms }
+                    : r
+                )
+              );
+            } else {
+              throw new Error(res.message || 'Failed to update custom role');
+            }
+          } else {
+            const res = await createCustomRoleAction({
+              name,
+              description,
+              permissions: perms,
+            });
+            const newRoleData = res.data;
+            if (res.success && newRoleData) {
+              setRoles((prev) => [
+                ...prev,
+                {
+                  id: newRoleData.id,
+                  businessId: newRoleData.businessId,
+                  name,
+                  roleKey: newRoleData.roleKey || name.toLowerCase().replace(/\s+/g, '_'),
+                  description,
+                  is_custom: true,
+                  isActive: true,
+                  permissions: perms,
+                  user_count: 0,
+                  createdBy: newRoleData.createdBy || '',
+                  createdAt: new Date().toISOString(),
+                },
+              ]);
+            } else {
+              throw new Error(res.message || 'Failed to create custom role');
+            }
+          }
+        }}
+      />
     </div>
   );
 }

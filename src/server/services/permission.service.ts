@@ -604,9 +604,9 @@ export class PermissionService {
 
   /**
    * Fetches team directory with full permission details for UI management.
-   * Optimized with parallel queries and in-memory effective permission evaluation.
+   * Optimized with parallel queries, branch isolation, and in-memory effective permission evaluation.
    */
-  static async listTeamMembers(businessId: string): Promise<FormattedMemberDetail[]> {
+  static async listTeamMembers(businessId: string, branchId?: string | null): Promise<FormattedMemberDetail[]> {
     const t0 = performance.now();
     const admin = createAdminClient();
 
@@ -666,12 +666,20 @@ export class PermissionService {
     }
 
     for (const m of (members as unknown as MemberRow[])) {
+      // Branch Isolation Rule: If branchId is specified and member is NOT a Business Owner,
+      // verify member possesses an explicit branch assignment for target branchId.
+      if (branchId && m.role !== 'business_owner') {
+        const assignedBranchIds = (m.branch_assignments || []).map((ba) => ba.branch_id);
+        if (!assignedBranchIds.includes(branchId)) {
+          continue;
+        }
+      }
       const p = profileMap.get(m.user_id);
       const userName = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Staff Member';
       const userEmail = p?.email || 'staff@wsnexa.internal';
 
       const branchAssign = m.branch_assignments?.[0];
-      const branchId = branchAssign?.branch_id || null;
+      const memberBranchId = branchAssign?.branch_id || null;
       const branchName = branchAssign?.branches?.name || 'All Branches';
 
       const overrides = (m.member_permission_overrides || []).map((o) => ({
@@ -711,7 +719,7 @@ export class PermissionService {
         customRoleId: m.custom_role_id,
         customRoleName: Array.isArray(m.custom_roles) ? m.custom_roles[0]?.name || null : m.custom_roles?.name || null,
         membershipStatus: m.membership_status,
-        branchId,
+        branchId: memberBranchId,
         branchName,
         joinedAt: m.joined_at,
         overrides,

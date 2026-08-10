@@ -21,9 +21,9 @@ export default async function StaffInvitesPage() {
     redirect('/login');
   }
 
-  const { business, membership, branches } = context;
+  const { business, membership, branches, activeBranch } = context;
 
-  const invitations = await StaffInvitationService.listInvitations(business.id);
+  const invitations = await StaffInvitationService.listInvitations(business.id, activeBranch?.id);
 
   const formattedBranches = branches.map((b: { id: string; name: string; isDefault: boolean }) => ({
     id: b.id,
@@ -36,6 +36,7 @@ export default async function StaffInvitesPage() {
       branches={formattedBranches}
       initialInvitations={invitations}
       userRole={membership.role}
+      activeBranchId={activeBranch?.id}
     />
   );
 }

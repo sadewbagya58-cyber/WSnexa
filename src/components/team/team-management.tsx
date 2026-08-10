@@ -21,6 +21,7 @@ interface TeamManagementProps {
   initialMembers: FormattedMemberDetail[];
   customRoles: FormattedCustomRole[];
   userRole: string;
+  activeBranchName?: string;
 }
 
 export function TeamManagement({
@@ -28,6 +29,7 @@ export function TeamManagement({
   initialMembers,
   customRoles,
   userRole,
+  activeBranchName = 'Main Branch',
 }: TeamManagementProps) {
   const [members, setMembers] = useState<FormattedMemberDetail[]>(initialMembers);
 
@@ -192,9 +194,14 @@ export function TeamManagement({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Team & Staff Directory</h1>
-          <p className="text-xs text-zinc-500">
-            View staff directory, assign built-in & custom roles, configure permission overrides, and manage account statuses.
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Team & Staff Directory</h1>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-zinc-100 text-zinc-900 border border-zinc-200">
+              📍 {activeBranchName}
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500 mt-1">
+            Showing staff assigned to <strong className="text-zinc-800">{activeBranchName}</strong>. View directory, assign roles, configure permission overrides, and manage account statuses.
           </p>
         </div>
 

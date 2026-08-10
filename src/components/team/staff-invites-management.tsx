@@ -20,12 +20,14 @@ interface StaffInvitesManagementProps {
   branches: BranchOption[];
   initialInvitations: FormattedInvitation[];
   userRole: string;
+  activeBranchId?: string;
 }
 
 export function StaffInvitesManagement({
   branches,
   initialInvitations,
   userRole,
+  activeBranchId,
 }: StaffInvitesManagementProps) {
   const [invitations, setInvitations] = useState<FormattedInvitation[]>(initialInvitations);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,7 +39,7 @@ export function StaffInvitesManagement({
   } | null>(null);
 
   // Form states
-  const [branchId, setBranchId] = useState<string>(branches[0]?.id || '');
+  const [branchId, setBranchId] = useState<string>(activeBranchId || branches[0]?.id || '');
   const [assignedRole, setAssignedRole] = useState<StaffRole>('cashier');
   const [invitedEmail, setInvitedEmail] = useState<string>('');
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>('48h');

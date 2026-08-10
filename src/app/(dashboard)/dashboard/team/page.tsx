@@ -21,11 +21,11 @@ export default async function TeamDirectoryPage() {
     redirect('/login');
   }
 
-  const { business, membership } = context;
+  const { business, membership, activeBranch } = context;
 
   const [catalog, members, customRoles] = await Promise.all([
     PermissionService.listPermissionCatalog(),
-    PermissionService.listTeamMembers(business.id),
+    PermissionService.listTeamMembers(business.id, activeBranch?.id),
     PermissionService.listCustomRoles(business.id),
   ]);
 
@@ -35,6 +35,7 @@ export default async function TeamDirectoryPage() {
       initialMembers={members}
       customRoles={customRoles}
       userRole={membership.role}
+      activeBranchName={activeBranch?.name || 'Main Branch'}
     />
   );
 }

@@ -527,16 +527,21 @@ export class StaffInvitationService {
   }
 
   /**
-   * Fetches formatted list of invitations for business dashboard.
+   * Fetches formatted list of invitations for business dashboard with branch isolation.
    */
-  static async listInvitations(businessId: string): Promise<FormattedInvitation[]> {
+  static async listInvitations(businessId: string, branchId?: string | null): Promise<FormattedInvitation[]> {
     const admin = createAdminClient();
 
-    const { data: rows } = await admin
+    let query = admin
       .from('staff_invitations')
       .select('*, branches(name)')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+      .eq('business_id', businessId);
+
+    if (branchId) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    const { data: rows } = await query.order('created_at', { ascending: false });
 
     if (!rows) return [];
 

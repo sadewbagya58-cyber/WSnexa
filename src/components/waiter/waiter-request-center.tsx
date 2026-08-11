@@ -13,15 +13,17 @@ interface WaiterRequestCenterProps {
   initialRequests: WaiterRequestRecord[];
   branchName: string;
   branchId: string;
+  assignedAreaIds?: string[] | null;
 }
 
 export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   initialRequests,
   branchName,
   branchId,
+  assignedAreaIds,
 }) => {
   const router = useRouter();
-  const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId);
+  const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
 

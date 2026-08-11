@@ -132,7 +132,7 @@ export class WaiterService {
       memberRole = tenantContext.membership.role;
     }
 
-    // Check if user is waiter role and has explicit area assignments
+    // Check if user is waiter role and set explicit area boundaries
     let allowedAreaIds: string[] | null = null;
     if (memberRole === 'waiter' && membershipId) {
       const { data: areaAssigns } = await supabase
@@ -140,8 +140,11 @@ export class WaiterService {
         .select('service_area_id')
         .eq('business_membership_id', membershipId);
 
-      if (areaAssigns && areaAssigns.length > 0) {
-        allowedAreaIds = areaAssigns.map((a: { service_area_id: string }) => a.service_area_id);
+      allowedAreaIds = (areaAssigns || []).map((a: { service_area_id: string }) => a.service_area_id);
+
+      // If Waiter is assigned zero service areas, return empty request queue immediately
+      if (allowedAreaIds.length === 0) {
+        return [];
       }
     }
 

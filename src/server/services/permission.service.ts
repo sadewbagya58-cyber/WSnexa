@@ -699,8 +699,20 @@ export class PermissionService {
         }
       }
       const p = profileMap.get(m.user_id);
-      const userName = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Staff Member';
-      const userEmail = p?.email || 'staff@wsnexa.internal';
+      let rawName = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim();
+      let userEmail = p?.email || '';
+
+      if (!rawName && userEmail) {
+        // Derive clean name from email if first_name/last_name not set (e.g. kasun.perera@gmail.com -> Kasun Perera)
+        const emailPrefix = userEmail.split('@')[0];
+        rawName = emailPrefix
+          .split(/[\._\-]/)
+          .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+      }
+
+      const userName = rawName || 'Staff Member';
+      if (!userEmail) userEmail = 'staff@wsnexa.internal';
 
       const branchAssign = m.branch_assignments?.[0];
       const memberBranchId = branchAssign?.branch_id || null;

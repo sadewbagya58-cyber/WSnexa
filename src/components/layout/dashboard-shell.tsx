@@ -214,8 +214,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <span className="hidden text-zinc-300 sm:inline">|</span>
 
           {/* Active Business & Branch Switcher */}
-          <div className="hidden items-center gap-2 sm:flex">
-            <Badge variant="neutral" className="font-semibold text-zinc-900">
+          <div className="flex items-center gap-2">
+            <Badge variant="neutral" className="hidden font-semibold text-zinc-900 md:inline-flex">
               🏢 {businessName}
             </Badge>
 

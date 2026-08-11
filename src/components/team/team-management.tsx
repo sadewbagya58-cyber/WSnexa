@@ -264,135 +264,162 @@ export function TeamManagement({
             </Button>
           </Link>
         </div>
-      </div>
-
-      {/* Staff Table */}
-      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+        {/* Staff Directory Cards (Responsive Mobile & Desktop) */}
+      <div className="space-y-4">
         {members.length === 0 ? (
-          <div className="p-12 text-center text-zinc-500 text-xs space-y-2">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center text-zinc-500 text-xs space-y-2 shadow-2xs">
             <div className="text-3xl mb-2">👥</div>
-            <div>No staff members registered for this business yet.</div>
+            <div>No staff members registered for this branch yet.</div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Member Name</th>
-                  <th className="py-3 px-4">Branch</th>
-                  <th className="py-3 px-4">Built-in Role</th>
-                  <th className="py-3 px-4">Service Areas</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Effective Permissions</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 text-xs">
-                {members.map((m) => {
-                  const isOwnerMember = m.role === 'business_owner';
-                  const isSuspended = m.membershipStatus === 'suspended';
-                  const assignedAreas = m.assignedAreaNames || [];
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {members.map((m) => {
+              const isOwnerMember = m.role === 'business_owner';
+              const isSuspended = m.membershipStatus === 'suspended';
+              const assignedAreas = m.assignedAreaNames || [];
 
-                  return (
-                    <tr key={m.id} className="hover:bg-zinc-50/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-zinc-900">{m.userName}</div>
-                        <div className="text-[11px] font-mono text-zinc-400">{m.userEmail}</div>
-                      </td>
-                      <td className="py-3 px-4 text-zinc-600 font-medium">{m.branchName}</td>
-                      <td className="py-3 px-4 font-bold text-zinc-800">
-                        {formatRoleLabel(m.role)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex flex-wrap items-center gap-1">
-                          {assignedAreas.length > 0 ? (
-                            assignedAreas.map((areaName, idx) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-zinc-100 text-zinc-800 border border-zinc-200"
-                              >
-                                {areaName}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-zinc-400 italic">All Areas</span>
-                          )}
-                          {isOwner && !isOwnerMember && branchAreas && branchAreas.length > 0 && (
-                            <button
-                              onClick={() => handleOpenManageAreas(m)}
-                              className="ml-1 text-[10px] font-bold text-zinc-900 underline hover:text-zinc-600"
-                            >
-                              Manage
-                            </button>
-                          )}
+              const initial = (m.userName || 'S').trim().charAt(0).toUpperCase();
+
+              return (
+                <div
+                  key={m.id}
+                  className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-4 flex flex-col justify-between hover:border-zinc-300 transition-all"
+                >
+                  {/* Card Header: Avatar, Name, Email, Status */}
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-700 text-white font-black text-lg flex items-center justify-center shadow-xs">
+                          {initial}
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                        <div>
+                          <h3 className="font-extrabold text-sm text-zinc-950 leading-snug truncate max-w-[170px] sm:max-w-[200px]">
+                            {m.userName}
+                          </h3>
+                          <p className="text-[11px] font-mono text-zinc-400 truncate max-w-[170px] sm:max-w-[200px]">
+                            {m.userEmail}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0 ${
+                          isSuspended
+                            ? 'bg-rose-500/10 text-rose-600 border-rose-500/30'
+                            : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                        }`}
+                      >
+                        {m.membershipStatus}
+                      </span>
+                    </div>
+
+                    {/* Meta Details: Role & Branch */}
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-zinc-100">
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Role</span>
+                        <span className="font-extrabold text-zinc-900">{formatRoleLabel(m.role)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Branch</span>
+                        <span className="font-bold text-zinc-700 truncate block">📍 {m.branchName}</span>
+                      </div>
+                    </div>
+
+                    {/* Service Areas Section */}
+                    <div className="space-y-1 pt-1">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Service Areas</span>
+                      <div className="flex flex-wrap items-center gap-1.5 min-h-[28px]">
+                        {assignedAreas.length > 0 ? (
+                          assignedAreas.map((areaName, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-zinc-100 text-zinc-900 border border-zinc-200"
+                            >
+                              📍 {areaName}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-zinc-400 italic">All Areas (Branch-wide)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Actions */}
+                  <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 gap-2">
+                    {isOwner && !isOwnerMember ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditRole(m)}
+                          className="min-h-[44px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-900 hover:bg-zinc-100 active:scale-98 transition-all touch-manipulation flex items-center justify-center gap-1"
+                        >
+                          ✏️ Edit Staff
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenManageAreas(m)}
+                          className="min-h-[44px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-900 hover:bg-zinc-100 active:scale-98 transition-all touch-manipulation flex items-center justify-center gap-1"
+                        >
+                          📍 Areas
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOverrides(m)}
+                          className="min-h-[44px] rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 hover:bg-blue-100 active:scale-98 transition-all touch-manipulation flex items-center justify-center gap-1"
+                        >
+                          🛡️ Access
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(m)}
+                          className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-bold active:scale-98 transition-all touch-manipulation flex items-center justify-center gap-1 ${
                             isSuspended
-                              ? 'bg-rose-500/10 text-rose-600 border-rose-500/30'
-                              : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
+                              : 'border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100'
                           }`}
                         >
-                          {m.membershipStatus}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-zinc-500 font-medium">
-                        {isOwnerMember ? (
-                          <span className="text-purple-600 font-bold">All Permissions (Owner)</span>
-                        ) : (
-                          `${m.effectivePermissions.length} Active`
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        {isOwner && !isOwnerMember && (
-                          <>
-                            <button
-                              onClick={() => handleOpenEditRole(m)}
-                              className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
-                            >
-                              Edit Role
-                            </button>
-                            <button
-                              onClick={() => handleOpenOverrides(m)}
-                              className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                            >
-                              Overrides
-                            </button>
-                            <button
-                              onClick={() => handleToggleStatus(m)}
-                              className={`text-xs font-semibold transition-colors ${
-                                isSuspended
-                                  ? 'text-emerald-600 hover:text-emerald-700'
-                                  : 'text-rose-600 hover:text-rose-700'
-                              }`}
-                            >
-                              {isSuspended ? 'Reactivate' : 'Suspend'}
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {isSuspended ? '⚡ Reactivate' : '🚫 Suspend'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="col-span-2 text-center py-2 text-xs text-zinc-400 font-bold bg-zinc-50 rounded-xl">
+                        👑 Business Owner (Primary)
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+      </div>
 
-      {/* EDIT MEMBER ROLE MODAL */}
+      {/* EDIT MEMBER ROLE MODAL (Responsive Bottom-Sheet on Mobile / Dialog on Desktop) */}
       {editingRoleMember && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setEditingRoleMember(null)}
+        >
+          <div
+            className="bg-white border border-zinc-200 rounded-t-3xl sm:rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom-5 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-              <h3 className="text-lg font-bold text-zinc-950">
-                Edit Role: {editingRoleMember.userName}
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold text-zinc-950">
+                  Edit Staff: {editingRoleMember.userName}
+                </h3>
+                <p className="text-[11px] text-zinc-500">{editingRoleMember.userEmail}</p>
+              </div>
               <button
+                type="button"
                 onClick={() => setEditingRoleMember(null)}
-                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold"
+                className="h-8 w-8 rounded-full bg-zinc-100 text-zinc-500 font-bold text-xs flex items-center justify-center"
               >
                 ✕
               </button>
@@ -406,11 +433,11 @@ export function TeamManagement({
 
             <form onSubmit={handleSaveRole} className="space-y-4 text-xs">
               <div>
-                <label className="block text-zinc-700 font-bold mb-1">Built-in Base Role *</label>
+                <label className="block text-zinc-700 font-bold mb-1">Built-in Role *</label>
                 <select
                   value={selectedBuiltInRole}
                   onChange={(e) => setSelectedBuiltInRole(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                  className="w-full h-11 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none touch-manipulation"
                   required
                 >
                   <option value="branch_manager">Branch Manager</option>
@@ -422,12 +449,12 @@ export function TeamManagement({
 
               <div>
                 <label className="block text-zinc-700 font-bold mb-1">
-                  Assign Custom Role <span className="text-zinc-400 font-normal">(Optional Override)</span>
+                  Custom Role <span className="text-zinc-400 font-normal">(Optional Override)</span>
                 </label>
                 <select
                   value={selectedCustomRoleId}
                   onChange={(e) => setSelectedCustomRoleId(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                  className="w-full h-11 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none touch-manipulation"
                 >
                   <option value="">-- No Custom Role (Use Built-in Template) --</option>
                   {customRoles.map((cr) => (
@@ -438,17 +465,22 @@ export function TeamManagement({
                 </select>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-2 sticky bottom-0 bg-white py-2">
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
+                  className="text-xs font-bold min-h-[44px]"
                   onClick={() => setEditingRoleMember(null)}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" size="sm" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Update Member Role'}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="text-xs font-bold min-h-[44px]"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : '💾 Save Changes'}
                 </Button>
               </div>
             </form>

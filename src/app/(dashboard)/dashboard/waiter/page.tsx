@@ -23,6 +23,12 @@ export default async function WaiterPage() {
 
   const initialRequests = await WaiterService.getBranchWaiterRequests();
 
+  let assignedAreaIds: string[] | null = null;
+  if (role === 'waiter') {
+    const { ServiceAreaService } = await import('@/server/services/service-area.service');
+    assignedAreaIds = await ServiceAreaService.getStaffAssignedAreaIds(context.membership.id);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -38,6 +44,7 @@ export default async function WaiterPage() {
         initialRequests={initialRequests}
         branchName={context.activeBranch.name}
         branchId={context.activeBranch.id}
+        assignedAreaIds={assignedAreaIds}
       />
     </div>
   );

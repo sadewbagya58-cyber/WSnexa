@@ -384,6 +384,65 @@ export async function bulkCreateDiningTablesAction(
   const { serviceAreaId, prefix, startNumber, count, capacity, shape } = parsed.data;
   const supabase = await createClient();
 
+  // 1. Resolve target Service Area name
+  let areaName = 'selected Service Area';
+  if (serviceAreaId) {
+    const { data: areaRow } = await supabase
+      .from('service_areas')
+      .select('name')
+      .eq('id', serviceAreaId)
+      .single();
+    if (areaRow?.name) {
+      areaName = areaRow.name;
+    }
+  }
+
+  // 2. Pre-check for overlapping table numbers/codes in the target service area
+  const requestedNumbers = Array.from({ length: count }, (_, i) => startNumber + i);
+  const requestedCodes = requestedNumbers.map((n) => `${prefix || 'T'}${n}`);
+
+  let query = supabase
+    .from('dining_tables')
+    .select('table_number, code')
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
+    .is('deleted_at', null);
+
+  if (serviceAreaId) {
+    query = query.eq('service_area_id', serviceAreaId);
+  } else {
+    query = query.is('service_area_id', null);
+  }
+
+  const { data: existingTables } = await query;
+
+  if (existingTables && existingTables.length > 0) {
+    const existingNumSet = new Set(existingTables.map((t) => t.table_number).filter((n): n is number => n !== null));
+    const existingCodeSet = new Set(existingTables.map((t) => t.code));
+
+    const duplicateNumbers = requestedNumbers.filter((n) => existingNumSet.has(n));
+    const duplicateCodes = requestedCodes.filter((c) => existingCodeSet.has(c));
+
+    if (duplicateNumbers.length > 0) {
+      const rangeText =
+        duplicateNumbers.length === 1
+          ? `Table ${duplicateNumbers[0]}`
+          : `Tables ${duplicateNumbers[0]}–${duplicateNumbers[duplicateNumbers.length - 1]}`;
+      return {
+        success: false,
+        message: `${rangeText} already exist${duplicateNumbers.length === 1 ? 's' : ''} in ${areaName}.`,
+      };
+    }
+
+    if (duplicateCodes.length > 0) {
+      return {
+        success: false,
+        message: `Table code "${duplicateCodes[0]}" already exists in ${areaName}.`,
+      };
+    }
+  }
+
+  // 3. Execute atomic bulk table creation via RPC
   const { data: rpcRes, error } = await supabase.rpc('bulk_create_dining_tables', {
     p_business_id: context.business.id,
     p_branch_id: context.activeBranch.id,
@@ -396,6 +455,13 @@ export async function bulkCreateDiningTablesAction(
   });
 
   if (error) {
+    const errMsg = error.message.toLowerCase();
+    if (errMsg.includes('unique') || errMsg.includes('constraint') || errMsg.includes('duplicate')) {
+      return {
+        success: false,
+        message: `One or more requested tables already exist in ${areaName}. Please choose a different starting number or prefix.`,
+      };
+    }
     return { success: false, message: error.message };
   }
 

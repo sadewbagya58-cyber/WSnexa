@@ -5,11 +5,20 @@ import { createClient } from '@/lib/supabase/client';
 import { WaiterRequestRecord } from '@/server/services/waiter.service';
 import { RealtimeConnectionStatus } from './use-realtime-order';
 
-export function useRealtimeWaiterRequests(initialRequests: WaiterRequestRecord[], branchId: string) {
+export function useRealtimeWaiterRequests(
+  initialRequests: WaiterRequestRecord[],
+  branchId: string,
+  assignedAreaIds?: string[] | null
+) {
   const [requests, setRequests] = useState<WaiterRequestRecord[]>(initialRequests);
   const [connectionStatus, setConnectionStatus] = useState<RealtimeConnectionStatus>('connecting');
   const supabase = createClient();
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRequests(initialRequests);
+  }, [initialRequests]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -35,17 +44,25 @@ export function useRealtimeWaiterRequests(initialRequests: WaiterRequestRecord[]
               .from('waiter_requests')
               .select(`
                 *,
-                table:dining_tables(id, name, code, table_number)
+                table:dining_tables(id, name, code, table_number, service_area_id)
               `)
               .eq('id', newReq.id)
               .maybeSingle();
 
-            const fullReq = (data as unknown as WaiterRequestRecord) || newReq;
+            const fullReq = (data as unknown as WaiterRequestRecord & { table?: { service_area_id?: string } }) || newReq;
+            const reqAreaId = fullReq?.table?.service_area_id;
+
+            // Server-scoped check: Reject cross-area requests for area-bounded waiters
+            if (assignedAreaIds !== undefined && assignedAreaIds !== null) {
+              if (!reqAreaId || !assignedAreaIds.includes(reqAreaId)) {
+                return;
+              }
+            }
 
             setRequests((prev) => {
               const exists = prev.some((r) => r.id === fullReq.id);
               if (exists) return prev;
-              return [fullReq, ...prev];
+              return [fullReq as WaiterRequestRecord, ...prev];
             });
           }
         )
@@ -95,14 +112,20 @@ export function useRealtimeWaiterRequests(initialRequests: WaiterRequestRecord[]
           .from('waiter_requests')
           .select(`
             *,
-            table:dining_tables(id, name, code, table_number)
+            table:dining_tables(id, name, code, table_number, service_area_id)
           `)
           .eq('branch_id', branchId)
           .in('status', ['pending', 'accepted'])
           .order('created_at', { ascending: false });
 
         if (data) {
-          setRequests(data as unknown as WaiterRequestRecord[]);
+          let fetched = data as unknown as Array<WaiterRequestRecord & { table?: { service_area_id?: string } }>;
+          if (assignedAreaIds !== undefined && assignedAreaIds !== null) {
+            fetched = fetched.filter(
+              (r) => r.table?.service_area_id && assignedAreaIds.includes(r.table.service_area_id)
+            );
+          }
+          setRequests(fetched as unknown as WaiterRequestRecord[]);
         }
       } catch (err: unknown) {
         console.warn('Waiter polling fallback encountered error:', err);
@@ -117,7 +140,7 @@ export function useRealtimeWaiterRequests(initialRequests: WaiterRequestRecord[]
         clearInterval(pollTimerRef.current);
       }
     };
-  }, [branchId, supabase]);
+  }, [branchId, assignedAreaIds, supabase]);
 
   return { requests, setRequests, connectionStatus };
 }

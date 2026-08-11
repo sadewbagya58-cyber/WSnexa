@@ -71,46 +71,53 @@ export class StaffInvitationService {
     }
 
     // 3. Service Area Validation
-    let reqAreas = input.serviceAreaIds || [];
-    if (input.assignedRole === 'waiter' && reqAreas.length === 0) {
-      const { data: existingAreas } = await admin
-        .from('service_areas')
-        .select('id')
-        .eq('business_id', businessId)
-        .eq('branch_id', input.branchId)
-        .eq('is_active', true)
-        .is('deleted_at', null);
-
-      if (existingAreas && existingAreas.length > 0) {
-        reqAreas = existingAreas.map((a) => a.id);
-      } else {
-        const { data: defaultArea } = await admin
+    let reqAreas = input.serviceAreaIds;
+    if (input.assignedRole === 'waiter') {
+      if (reqAreas && reqAreas.length === 0) {
+        return { success: false, message: 'At least one Service Area is required when inviting a Waiter.' };
+      }
+      if (!reqAreas) {
+        // Fallback for legacy Phase 14 invites without serviceAreaIds property
+        const { data: existingAreas } = await admin
           .from('service_areas')
-          .insert({
-            business_id: businessId,
-            branch_id: input.branchId,
-            name: 'Main Area',
-            code: `MAIN_${Date.now().toString(36).slice(-4)}`,
-            is_active: true,
-          })
           .select('id')
-          .single();
-        if (defaultArea) {
-          reqAreas = [defaultArea.id];
+          .eq('business_id', businessId)
+          .eq('branch_id', input.branchId)
+          .eq('is_active', true)
+          .is('deleted_at', null);
+
+        if (existingAreas && existingAreas.length > 0) {
+          reqAreas = existingAreas.map((a) => a.id);
+        } else {
+          const { data: defaultArea } = await admin
+            .from('service_areas')
+            .insert({
+              business_id: businessId,
+              branch_id: input.branchId,
+              name: 'Main Area',
+              code: `MAIN_${Date.now().toString(36).slice(-4)}`,
+              is_active: true,
+            })
+            .select('id')
+            .single();
+          if (defaultArea) {
+            reqAreas = [defaultArea.id];
+          }
         }
       }
     }
+    const finalAreas = reqAreas || [];
 
-    if (reqAreas.length > 0) {
+    if (finalAreas.length > 0) {
       const { data: validAreas } = await admin
         .from('service_areas')
         .select('id, name')
-        .in('id', reqAreas)
+        .in('id', finalAreas)
         .eq('business_id', businessId)
         .eq('branch_id', input.branchId)
         .is('deleted_at', null);
 
-      if (!validAreas || validAreas.length !== reqAreas.length) {
+      if (!validAreas || validAreas.length !== finalAreas.length) {
         return {
           success: false,
           message: 'One or more invalid or cross-branch Service Areas selected.',
@@ -160,8 +167,8 @@ export class StaffInvitationService {
 
     // 6. Insert service area mappings if any
     let assignedAreaNames: string[] = [];
-    if (reqAreas.length > 0) {
-      const inviteAreaRows = reqAreas.map((areaId) => ({
+    if (finalAreas.length > 0) {
+      const inviteAreaRows = finalAreas.map((areaId) => ({
         invitation_id: inviteRow.id,
         service_area_id: areaId,
         business_id: businessId,
@@ -175,7 +182,7 @@ export class StaffInvitationService {
       const { data: areaRows } = await admin
         .from('service_areas')
         .select('name')
-        .in('id', reqAreas);
+        .in('id', finalAreas);
       assignedAreaNames = areaRows?.map((a) => a.name) || [];
     }
 
@@ -192,7 +199,7 @@ export class StaffInvitationService {
         invited_email: invitedEmail,
         token_prefix: tokenPrefix,
         expires_at: expiresAt,
-        service_area_ids: reqAreas,
+        service_area_ids: finalAreas,
       },
     });
 

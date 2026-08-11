@@ -237,12 +237,12 @@ export function TeamManagement({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 min-w-0">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-200 pb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Team & Staff Directory</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-950">Team & Staff Directory</h1>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-zinc-100 text-zinc-900 border border-zinc-200">
               📍 {activeBranchName}
             </span>
@@ -252,27 +252,29 @@ export function TeamManagement({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <Link href="/dashboard/team/roles">
-            <Button variant="outline" className="flex items-center gap-2 text-xs">
+            <Button variant="outline" className="flex items-center gap-2 text-xs min-h-[44px]">
               🛡️ Roles & Permissions Matrix
             </Button>
           </Link>
           <Link href="/dashboard/team/invites">
-            <Button variant="primary" className="flex items-center gap-2 text-xs">
+            <Button variant="primary" className="flex items-center gap-2 text-xs min-h-[44px]">
               🔑 Staff Invitations
             </Button>
           </Link>
         </div>
-        {/* Staff Directory Cards (Responsive Mobile & Desktop) */}
-      <div className="space-y-4">
+      </div>
+
+      {/* Staff Directory Cards (Responsive Mobile & Desktop Grid) */}
+      <div className="space-y-4 min-w-0">
         {members.length === 0 ? (
           <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center text-zinc-500 text-xs space-y-2 shadow-2xs">
             <div className="text-3xl mb-2">👥</div>
             <div>No staff members registered for this branch yet.</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0">
             {members.map((m) => {
               const isOwnerMember = m.role === 'business_owner';
               const isSuspended = m.membershipStatus === 'suspended';
@@ -396,7 +398,6 @@ export function TeamManagement({
             })}
           </div>
         )}
-      </div>
       </div>
 
       {/* EDIT MEMBER ROLE MODAL (Responsive Bottom-Sheet on Mobile / Dialog on Desktop) */}

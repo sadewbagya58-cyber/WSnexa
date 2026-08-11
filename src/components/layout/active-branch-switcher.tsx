@@ -40,23 +40,24 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <button
         type="button"
         disabled={switching}
         onClick={() => setDropdownOpen((prev) => !prev)}
-        className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 py-2 sm:py-1.5 text-xs font-bold text-zinc-950 shadow-2xs hover:bg-zinc-50 active:scale-95 transition-all touch-manipulation min-h-[44px] sm:min-h-[36px]"
+        className="flex items-center gap-1.5 xs:gap-2 rounded-xl border border-zinc-300 bg-white px-2.5 sm:px-3 py-1.5 text-xs font-bold text-zinc-950 shadow-2xs hover:bg-zinc-50 active:scale-95 transition-all touch-manipulation min-h-[44px] sm:min-h-[38px] min-w-0"
+        aria-label={`Current Branch: ${activeBranch.name}. Tap to switch branch.`}
       >
-        <span className="text-zinc-500 font-medium hidden sm:inline">Branch:</span>
-        <span className="font-extrabold text-zinc-950 truncate max-w-[140px] sm:max-w-none">
+        <span className="text-zinc-500 font-medium hidden sm:inline shrink-0">Branch:</span>
+        <span className="font-extrabold text-zinc-950 truncate max-w-[105px] xs:max-w-[155px] sm:max-w-none">
           📍 {activeBranch.name}
         </span>
         {activeBranch.isDefault && (
-          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-zinc-600 hidden xs:inline">
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-zinc-600 hidden md:inline shrink-0">
             Primary
           </span>
         )}
-        <span className="text-[10px] text-zinc-400">▼</span>
+        <span className="text-[10px] text-zinc-400 shrink-0 ml-0.5">▼</span>
       </button>
 
       {dropdownOpen && (

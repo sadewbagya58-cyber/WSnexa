@@ -186,35 +186,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       <RoutePrefetcher />
 
       {/* Top Bar Header */}
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-3 sm:px-6 backdrop-blur">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          {/* Mobile Drawer Hamburger */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md p-2 text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus:outline-none"
-            aria-label="Toggle Navigation Drawer"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {mobileOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
-
-          {/* Logo & Context Badges */}
+      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-3 sm:px-6 backdrop-blur min-w-0">
+        {/* Left Side: Logo & Active Branch Switcher */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98]">
             <span className="rounded bg-zinc-950 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-extrabold text-white tracking-widest">
               WSNEXA
             </span>
           </Link>
 
-          <span className="hidden text-zinc-300 sm:inline shrink-0">|</span>
+          <span className="text-zinc-300 shrink-0">|</span>
 
           {/* Active Business & Branch Switcher */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1 max-w-[210px] xs:max-w-[280px] sm:max-w-none">
             <Badge variant="neutral" className="hidden font-semibold text-zinc-900 md:inline-flex shrink-0">
               🏢 {businessName}
             </Badge>
@@ -227,21 +212,23 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
 
-        {/* User Profile Dropdown Trigger */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex min-h-[44px] items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-2.5 sm:px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus:outline-none"
-          >
-            <span className="font-bold text-zinc-950 max-w-[80px] xs:max-w-[120px] sm:max-w-none truncate">{userName || userEmail}</span>
-            <Badge variant="neutral" className="hidden sm:inline-block text-[10px] uppercase">
-              {formatRoleLabel(userRole)}
-            </Badge>
-            <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+        {/* Right Side: Desktop Profile Trigger & Mobile Navigation Hamburger */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* User Profile Dropdown Trigger (Desktop >= 1024px) */}
+          <div className="relative hidden lg:block">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex min-h-[44px] items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-2.5 sm:px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus:outline-none"
+            >
+              <span className="font-bold text-zinc-950 max-w-[140px] truncate">{userName || userEmail}</span>
+              <Badge variant="neutral" className="text-[10px] uppercase">
+                {formatRoleLabel(userRole)}
+              </Badge>
+              <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
 
           {userMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 rounded-md border border-zinc-200 bg-white p-2 shadow-lg z-50">
@@ -264,7 +251,24 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             </div>
           )}
         </div>
-      </header>
+
+        {/* Mobile Drawer Hamburger (< 1024px) */}
+        <button
+          type="button"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md p-2 text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus:outline-none"
+          aria-label="Toggle Navigation Drawer"
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            {mobileOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
+    </header>
 
       {/* Main Body with Sidebar + Content */}
       <div className="flex flex-1 min-w-0">

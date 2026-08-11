@@ -659,6 +659,39 @@ export class PermissionService {
     ]);
 
     const profileMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
+
+    // Batch resolve auth user metadata for any members missing profile name or email
+    const missingMetadataUserIds = userIds.filter((id) => {
+      const p = profileMap.get(id);
+      return !p || (!p.first_name && !p.last_name) || !p.email;
+    });
+
+    if (missingMetadataUserIds.length > 0) {
+      try {
+        const { data: authUsersRes } = await admin.auth.admin.listUsers();
+        if (authUsersRes?.users) {
+          for (const u of authUsersRes.users) {
+            if (missingMetadataUserIds.includes(u.id)) {
+              const existingP = profileMap.get(u.id) || { id: u.id, first_name: '', last_name: '', email: u.email || '' };
+              const meta = u.user_metadata || {};
+              const metaFullName = meta.full_name || meta.name || '';
+              const metaFirstName = meta.first_name || (metaFullName ? metaFullName.split(' ')[0] : '');
+              const metaLastName = meta.last_name || (metaFullName ? metaFullName.split(' ').slice(1).join(' ') : '');
+
+              profileMap.set(u.id, {
+                id: u.id,
+                first_name: existingP.first_name || metaFirstName || '',
+                last_name: existingP.last_name || metaLastName || '',
+                email: existingP.email || u.email || '',
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch auth metadata fallback for team members:', err);
+      }
+    }
+
     const memberAreaMap = new Map<string, { ids: string[]; names: string[] }>();
 
     for (const a of areaAssignsRes.data || []) {

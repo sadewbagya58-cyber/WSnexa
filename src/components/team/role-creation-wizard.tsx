@@ -139,7 +139,7 @@ export function RoleCreationWizard({
               <p className="text-xs text-zinc-600">
                 Choose a starting template to pre-fill permission toggles:
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {[
                   ...ROLE_PRESETS,
                   {
@@ -149,23 +149,28 @@ export function RoleCreationWizard({
                     permissions: [],
                   },
                 ].map((tpl) => {
-                  const isSel = selectedTemplate === tpl.key;
+                  const isSelected = selectedTemplate === tpl.key;
                   return (
-                    <div
+                    <button
                       key={tpl.key}
+                      type="button"
                       onClick={() => handleTemplateSelect(tpl.key)}
-                      className={`cursor-pointer p-4 rounded-xl border transition-all space-y-1.5 ${
-                        isSel
-                          ? 'bg-zinc-900 border-zinc-950 text-white shadow-md ring-2 ring-zinc-950'
-                          : 'bg-zinc-50/80 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100 text-zinc-900 shadow-xs'
+                      className={`p-3 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className={`font-bold text-xs ${isSel ? 'text-white' : 'text-zinc-950'}`}>{tpl.name}</span>
-                        {isSel && <span className="text-white text-xs font-bold">✓</span>}
+                      <div>
+                        <div className="font-extrabold text-xs flex items-center justify-between">
+                          <span className="truncate">{tpl.name}</span>
+                          {isSelected && <span className="text-[10px] shrink-0">✓</span>}
+                        </div>
+                        <p className={`text-[10px] mt-1 line-clamp-2 ${isSelected ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                          {tpl.description}
+                        </p>
                       </div>
-                      <p className={`text-[11px] leading-relaxed ${isSel ? 'text-zinc-300' : 'text-zinc-500'}`}>{tpl.description}</p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

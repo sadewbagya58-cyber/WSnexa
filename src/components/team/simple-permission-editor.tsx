@@ -208,24 +208,24 @@ export function SimplePermissionEditor({
       {/* Preset Buttons */}
       <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="font-bold text-zinc-900 text-xs">Quick Role Presets</h4>
+          <h4 className="font-extrabold text-zinc-950 text-xs">Quick Role Presets</h4>
           <button
             type="button"
             onClick={() => setIsAdvancedMode(!isAdvancedMode)}
-            className="text-xs font-semibold text-amber-600 hover:text-amber-700 underline"
+            className="text-xs font-bold text-amber-600 hover:text-amber-700 underline"
           >
             {isAdvancedMode ? '← Back to Simple Mode' : '⚙️ Advanced Technical Matrix'}
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {ROLE_PRESETS.map((preset) => (
             <button
               key={preset.key}
               type="button"
               onClick={() => handleApplyPreset(preset.key)}
               disabled={disabled}
-              className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-100 hover:border-zinc-300 font-bold text-zinc-800 text-xs shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3 py-2 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-100 hover:border-zinc-300 font-bold text-zinc-900 text-xs shadow-2xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 min-h-[44px] touch-manipulation"
             >
               <span>✨</span> {preset.name}
             </button>
@@ -246,7 +246,7 @@ export function SimplePermissionEditor({
           {capabilityGroups.map((group) => (
             <div
               key={group.category}
-              className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+              className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs space-y-3"
             >
               <h4 className="font-extrabold text-zinc-950 text-xs uppercase tracking-wider border-b border-zinc-100 pb-2">
                 {group.category}
@@ -273,33 +273,31 @@ export function SimplePermissionEditor({
                       }}
                       className={`flex items-center justify-between min-h-[48px] p-3 rounded-xl border transition-all cursor-pointer select-none active:scale-[0.99] touch-manipulation ${
                         active
-                          ? 'bg-zinc-900 border-zinc-950 text-white shadow-xs'
-                          : 'bg-zinc-50/80 border-zinc-200 hover:bg-zinc-100 text-zinc-900'
+                          ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10 shadow-2xs'
+                          : 'bg-white border-zinc-200 hover:bg-zinc-50/60'
                       }`}
                     >
-                      <div className="flex-1 pr-3 pointer-events-none">
-                        <div className={`font-extrabold text-xs flex items-center gap-1.5 ${active ? 'text-white' : 'text-zinc-950'}`}>
+                      <div className="flex-1 pr-3 pointer-events-none min-w-0">
+                        <div className="font-extrabold text-xs text-zinc-950 flex items-center gap-1.5 flex-wrap">
                           <span>{item.label}</span>
                           {item.warning && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
-                              active ? 'bg-amber-400 text-black border-amber-500' : 'bg-amber-100 text-amber-900 border-amber-300'
-                            }`}>
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded border bg-amber-50 text-amber-900 border-amber-300">
                               ⚠️ {item.warning}
                             </span>
                           )}
                         </div>
-                        <p className={`text-[11px] mt-0.5 ${active ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        <p className="text-[11px] mt-0.5 text-zinc-500 font-medium leading-normal">
                           {item.description}
                         </p>
                       </div>
 
                       <div className="pointer-events-none shrink-0">
                         {active ? (
-                          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-white text-zinc-950 text-[11px] font-black tracking-wide shadow-xs border border-white">
+                          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-zinc-950 text-white text-[11px] font-extrabold tracking-wide shadow-xs border border-zinc-950">
                             ON
                           </span>
                         ) : (
-                          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-zinc-200/80 text-zinc-600 text-[11px] font-extrabold tracking-wide border border-zinc-300/60">
+                          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-zinc-100 text-zinc-500 text-[11px] font-bold tracking-wide border border-zinc-200">
                             OFF
                           </span>
                         )}

@@ -186,13 +186,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       <RoutePrefetcher />
 
       {/* Top Bar Header */}
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-4 backdrop-blur sm:px-6">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-3 sm:px-6 backdrop-blur">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Mobile Drawer Hamburger */}
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus:outline-none"
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md p-2 text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus:outline-none"
             aria-label="Toggle Navigation Drawer"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -205,17 +205,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </button>
 
           {/* Logo & Context Badges */}
-          <Link href="/dashboard" className="flex items-center gap-2 touch-manipulation active:scale-[0.98]">
-            <span className="rounded bg-zinc-950 px-2.5 py-1.5 text-xs font-extrabold text-white tracking-widest">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98]">
+            <span className="rounded bg-zinc-950 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-extrabold text-white tracking-widest">
               WSNEXA
             </span>
           </Link>
 
-          <span className="hidden text-zinc-300 sm:inline">|</span>
+          <span className="hidden text-zinc-300 sm:inline shrink-0">|</span>
 
           {/* Active Business & Branch Switcher */}
-          <div className="flex items-center gap-2">
-            <Badge variant="neutral" className="hidden font-semibold text-zinc-900 md:inline-flex">
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge variant="neutral" className="hidden font-semibold text-zinc-900 md:inline-flex shrink-0">
               🏢 {businessName}
             </Badge>
 
@@ -228,17 +228,17 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         </div>
 
         {/* User Profile Dropdown Trigger */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="flex min-h-[44px] items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus:outline-none"
+            className="flex min-h-[44px] items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-2.5 sm:px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus:outline-none"
           >
-            <span className="font-bold text-zinc-950 max-w-[120px] sm:max-w-none truncate">{userName || userEmail}</span>
+            <span className="font-bold text-zinc-950 max-w-[80px] xs:max-w-[120px] sm:max-w-none truncate">{userName || userEmail}</span>
             <Badge variant="neutral" className="hidden sm:inline-block text-[10px] uppercase">
               {formatRoleLabel(userRole)}
             </Badge>
-            <svg className="h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
@@ -267,9 +267,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       </header>
 
       {/* Main Body with Sidebar + Content */}
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-w-0">
         {/* Desktop Sidebar */}
-        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block">
+        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0">
           {renderNavLinks()}
         </aside>
 
@@ -277,12 +277,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         {mobileOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
             <div
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
               onClick={() => setMobileOpen(false)}
             />
-            <aside className="relative z-50 w-72 max-w-[80vw] bg-white p-6 shadow-xl space-y-6 overflow-y-auto max-h-screen">
+            <aside className="relative z-50 w-72 max-w-[85vw] bg-white p-5 sm:p-6 shadow-xl space-y-6 overflow-y-auto max-h-screen">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                <span className="font-bold text-zinc-950">Navigation Menu</span>
+                <span className="font-extrabold text-sm text-zinc-950">Navigation Menu</span>
                 <button
                   type="button"
                   onClick={() => setMobileOpen(false)}
@@ -293,9 +293,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               </div>
 
               {/* Mobile Business & Branch Header */}
-              <div className="rounded-md bg-zinc-50 p-3 space-y-1">
-                <p className="text-xs font-bold text-zinc-950">🏢 {businessName}</p>
-                <p className="text-xs text-zinc-500">📍 {activeBranch?.name || 'Primary Branch'}</p>
+              <div className="rounded-xl bg-zinc-50 p-3 space-y-1 border border-zinc-200/60">
+                <p className="text-xs font-extrabold text-zinc-950">🏢 {businessName}</p>
+                <p className="text-xs text-zinc-600">📍 {activeBranch?.name || 'Primary Branch'}</p>
+                <p className="text-[11px] text-zinc-400 font-medium">👤 {userName || userEmail}</p>
               </div>
 
               {renderNavLinks()}
@@ -304,7 +305,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           {children}
         </main>
       </div>

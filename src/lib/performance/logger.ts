@@ -1,4 +1,4 @@
-import { performance } from 'perf_hooks';
+const perf = typeof globalThis !== 'undefined' && globalThis.performance ? globalThis.performance : Date;
 
 export interface PerformanceTimingLog {
   requestId: string;
@@ -11,11 +11,11 @@ export interface PerformanceTimingLog {
 }
 
 export function startTimer() {
-  return performance.now();
+  return perf.now();
 }
 
 export function stopTimer(startTime: number): number {
-  return Math.round(performance.now() - startTime);
+  return Math.round(perf.now() - startTime);
 }
 
 export function logPerformanceMetric(

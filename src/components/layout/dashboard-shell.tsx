@@ -96,6 +96,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         { label: 'Waiter Assistance', href: '/dashboard/waiter' },
       ],
     },
+    {
+      sectionTitle: 'Settings',
+      items: [
+        { label: 'Order Security Engine', href: '/dashboard/settings/order-security' },
+        { label: 'Branch Payment Methods', href: '/dashboard/settings/payments' },
+      ],
+    },
   ];
 
   // Filter sections by granted user permissions

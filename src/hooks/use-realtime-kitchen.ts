@@ -57,7 +57,10 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
               .eq('id', newOrder.id)
               .maybeSingle();
 
-            const fullOrder = (data as unknown as OrderRecord) || newOrder;
+            const fullOrder = (data as unknown as OrderRecord & { approval_status?: string }) || newOrder;
+            if (fullOrder.approval_status === 'pending_waiter_approval' || fullOrder.approval_status === 'rejected') {
+              return;
+            }
 
             setOrders((prev) => {
               const exists = prev.some((o) => o.id === fullOrder.id);
@@ -77,11 +80,51 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
             table: 'orders',
             filter: `branch_id=eq.${branchId}`,
           },
-          (payload) => {
-            const updatedRow = payload.new as Partial<OrderRecord>;
-            if (!updatedRow.id || !updatedRow.status) return;
+          async (payload) => {
+            const updatedRow = payload.new as Partial<OrderRecord & { approval_status?: string }>;
+            if (!updatedRow.id) return;
+
+            if (updatedRow.approval_status === 'pending_waiter_approval' || updatedRow.approval_status === 'rejected') {
+              setOrders((prev) => prev.filter((o) => o.id !== updatedRow.id));
+              return;
+            }
 
             setOrders((prev) => {
+              const existingIndex = prev.findIndex((o) => o.id === updatedRow.id);
+              if (existingIndex === -1 && updatedRow.approval_status === 'approved') {
+                // Fetch full order to add to kitchen queue
+                supabase
+                  .from('orders')
+                  .select(`
+                    *,
+                    table:dining_tables(id, name, code, table_number),
+                    items:order_items(
+                      id,
+                      menu_item_id,
+                      item_name_snapshot,
+                      unit_price_cents_snapshot,
+                      quantity,
+                      line_subtotal_cents,
+                      special_instructions,
+                      order_item_modifiers(
+                        id,
+                        group_name_snapshot,
+                        option_name_snapshot,
+                        additional_price_cents_snapshot
+                      )
+                    )
+                  `)
+                  .eq('id', updatedRow.id!)
+                  .maybeSingle()
+                  .then(({ data }) => {
+                    if (data) {
+                      setOrders((curr) => [data as unknown as OrderRecord, ...curr]);
+                      kitchenSoundEngine.playNewOrderChime(data.id);
+                    }
+                  });
+                return prev;
+              }
+
               if (updatedRow.status === 'completed' || updatedRow.status === 'cancelled') {
                 return prev.filter((o) => o.id !== updatedRow.id);
               }

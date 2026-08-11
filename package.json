@@ -33,7 +33,8 @@
     "verify:branch-isolation": "tsx scripts/verify-branch-isolation.ts",
     "verify:areas": "tsx scripts/verify-areas.ts",
     "verify:staff-areas": "tsx scripts/verify-staff-areas.ts",
-    "verify:mobile-ui": "tsx scripts/verify-mobile-ui.ts"
+    "verify:mobile-ui": "tsx scripts/verify-mobile-ui.ts",
+    "verify:order-security": "tsx scripts/verify-order-security.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

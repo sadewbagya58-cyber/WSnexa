@@ -1144,3 +1144,83 @@ export interface Database {
     };
   };
 }
+
+export type ConfiguredPaymentMethodType = 'pay_at_counter' | 'cash' | 'card' | 'qr_payment' | 'online_payment';
+export type OrderApprovalStatus = 'approved' | 'pending_waiter_approval' | 'rejected';
+export type SecurityPresetLevel = 'low' | 'balanced' | 'high' | 'custom';
+
+export interface BranchOrderSecuritySettings {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  require_customer_account: boolean;
+  require_waiter_approval: boolean;
+  require_location_verification: boolean;
+  require_active_qr_session: boolean;
+  require_table_session: boolean;
+  qr_session_duration_minutes: number;
+  location_radius_meters: number;
+  allow_verified_online_payment_bypass: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QrVisitSession {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  service_area_id: string | null;
+  table_id: string | null;
+  session_token_hash: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_activity_at: string;
+}
+
+export interface TableSession {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  service_area_id: string | null;
+  table_id: string;
+  status: 'active' | 'closed' | 'expired';
+  opened_at: string;
+  expires_at: string | null;
+  closed_at: string | null;
+  created_at: string;
+}
+
+export interface BranchPaymentMethod {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  method: ConfiguredPaymentMethodType;
+  is_enabled: boolean;
+  display_name: string | null;
+  instructions: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderSecurityAuditLog {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  order_id: string | null;
+  actor_user_id: string | null;
+  event_type:
+    | 'QR_SESSION_CREATED'
+    | 'QR_SESSION_EXPIRED'
+    | 'LOCATION_VERIFIED'
+    | 'LOCATION_REJECTED'
+    | 'ORDER_SECURITY_REJECTED'
+    | 'WAITER_APPROVED_ORDER'
+    | 'WAITER_REJECTED_ORDER'
+    | 'PAYMENT_VERIFIED'
+    | 'PAYMENT_METHOD_REJECTED';
+  safe_metadata: Record<string, unknown>;
+  created_at: string;
+}
+

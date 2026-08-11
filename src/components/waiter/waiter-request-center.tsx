@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { WaiterRequestRecord } from '@/server/services/waiter.service';
+import type { OrderRecord } from '@/server/services/order.service';
 import { updateWaiterRequestStatusAction } from '@/server/actions/waiter';
 import { WaiterRequestStatus } from '@/lib/validation/waiter';
 import { useRealtimeWaiterRequests } from '@/hooks/use-realtime-waiter-requests';
@@ -60,6 +61,9 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
           ⚠️ {actionError}
         </div>
       )}
+
+      {/* Pending Guest Order Approvals Section */}
+      <PendingOrderApprovalsSection branchId={branchId} />
 
       {/* Header controls & Realtime status */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
@@ -187,3 +191,150 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
     </div>
   );
 };
+
+function PendingOrderApprovalsSection({ branchId }: { branchId: string }) {
+  const [approvals, setApprovals] = React.useState<OrderRecord[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [processingId, setProcessingId] = React.useState<string | null>(null);
+
+  const fetchApprovals = React.useCallback(async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { getPendingApprovalsAction } = await import('@/server/actions/waiter-approval');
+      const res = await getPendingApprovalsAction(branchId, user.user.id);
+      if (res.success && res.orders) {
+        setApprovals(res.orders as unknown as OrderRecord[]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadData = async () => {
+      if (isMounted) {
+        await fetchApprovals();
+      }
+    };
+    loadData();
+    const interval = setInterval(() => {
+      if (isMounted) fetchApprovals();
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [fetchApprovals]);
+
+  const handleApprove = async (orderId: string) => {
+    setProcessingId(orderId);
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    const { data: user } = await supabase.auth.getUser();
+    if (user.user) {
+      const { approveGuestOrderAction } = await import('@/server/actions/waiter-approval');
+      await approveGuestOrderAction(orderId, user.user.id);
+      await fetchApprovals();
+    }
+    setProcessingId(null);
+  };
+
+  const handleReject = async (orderId: string) => {
+    setProcessingId(orderId);
+    const { createClient } = await import('@/lib/supabase/client');
+    const supabase = createClient();
+    const { data: user } = await supabase.auth.getUser();
+    if (user.user) {
+      const { rejectGuestOrderAction } = await import('@/server/actions/waiter-approval');
+      await rejectGuestOrderAction(orderId, user.user.id, 'Rejected by waiter');
+      await fetchApprovals();
+    }
+    setProcessingId(null);
+  };
+
+  if (loading || approvals.length === 0) return null;
+
+  return (
+    <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 space-y-4 shadow-2xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🛡️</span>
+          <h3 className="font-extrabold text-sm text-amber-950">
+            Pending QR Order Approvals ({approvals.length})
+          </h3>
+        </div>
+        <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+          Action Required
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {approvals.map((ord) => (
+          <div key={ord.id} className="bg-white border border-amber-200 rounded-xl p-4 shadow-2xs space-y-3">
+            <div className="flex items-start justify-between border-b border-zinc-100 pb-2">
+              <div>
+                <span className="font-extrabold text-xs text-zinc-950">
+                  Order #{ord.order_number_formatted || ord.order_number}
+                </span>
+                <p className="text-[11px] text-emerald-800 font-bold mt-0.5">
+                  📍 {ord.table?.name || 'Dining Table'} {ord.service_area_name_snapshot ? `(${ord.service_area_name_snapshot})` : ''}
+                </p>
+              </div>
+              <span className="text-xs font-black text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
+                {(ord.total_cents / 100).toFixed(2)} {ord.currency}
+              </span>
+            </div>
+
+            <div className="space-y-1 text-xs text-zinc-600">
+              <p>Customer: <strong className="text-zinc-900 font-bold">{ord.guest_name || 'Guest User'}</strong></p>
+              <div className="flex flex-wrap gap-1 text-[10px] pt-1">
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold rounded border border-emerald-200">
+                  ✓ QR Session
+                </span>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold rounded border border-emerald-200">
+                  ✓ Account
+                </span>
+                {ord.location_verified && (
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold rounded border border-emerald-200">
+                    ✓ Location
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleReject(ord.id)}
+                disabled={processingId === ord.id}
+                className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px]"
+              >
+                Reject
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => handleApprove(ord.id)}
+                disabled={processingId === ord.id}
+                className="w-1/2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+              >
+                {processingId === ord.id ? 'Approving...' : 'Approve Order'}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

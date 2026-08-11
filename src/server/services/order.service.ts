@@ -56,7 +56,10 @@ export interface OrderRecord {
   created_at: string;
   updated_at: string;
   cancelled_at: string | null;
-  completed_at: string | null;
+  service_area_id?: string | null;
+  service_area_name_snapshot?: string | null;
+  approval_status?: string;
+  location_verified?: boolean;
   table?: {
     id: string;
     name: string;
@@ -180,7 +183,7 @@ export class OrderService {
     // 2. Check branch ordering_mode (WAITER_ONLY mode blocks customer QR ordering)
     const { data: tableData } = await admin
       .from('table_qr_codes')
-      .select('branch_id, branches(ordering_mode)')
+      .select('branch_id, branches(business_id, ordering_mode)')
       .eq('token_hash', tokenHash)
       .single();
 
@@ -191,6 +194,67 @@ export class OrderService {
         message: 'Please ask a staff member to place your order.',
         errorType: 'WAITER_ONLY_MODE',
       };
+    }
+
+    const targetBranchId = tableData?.branch_id;
+
+    // 2b. Server-side Payment Method Validation
+    if (targetBranchId && paymentMethod) {
+      const { BranchPaymentService } = await import('./branch-payment.service');
+      const isMethodOk = await BranchPaymentService.isMethodEnabled(targetBranchId, paymentMethod);
+      if (!isMethodOk) {
+        const { OrderSecurityService } = await import('./order-security.service');
+        if (branchObj?.business_id) {
+          await OrderSecurityService.logSecurityEvent({
+            businessId: branchObj.business_id,
+            branchId: targetBranchId,
+            eventType: 'PAYMENT_METHOD_REJECTED',
+            safeMetadata: { paymentMethod },
+          });
+        }
+        return {
+          success: false,
+          message: 'The selected payment method is not available at this location.',
+          errorType: 'PAYMENT_METHOD_DISABLED',
+        };
+      }
+    }
+
+    // 2c. Authoritative Server-side Order Security Engine Evaluation
+    let secEvalResult: import('./order-security.service').SecurityEvaluationResult | null = null;
+    const extendedInput = input as CreateGuestOrderInput & {
+      qrSessionToken?: string;
+      userCoordinates?: { latitude: number; longitude: number };
+      isServerVerifiedOnlinePayment?: boolean;
+    };
+
+    if (targetBranchId) {
+      const { OrderSecurityService } = await import('./order-security.service');
+      secEvalResult = await OrderSecurityService.evaluateOrderSubmission({
+        branchId: targetBranchId,
+        tableId: tableId || null,
+        qrSessionToken: extendedInput.qrSessionToken || rawQrToken || null,
+        customerId: activeUserId || null,
+        userCoordinates: extendedInput.userCoordinates || null,
+        isServerVerifiedOnlinePayment: Boolean(extendedInput.isServerVerifiedOnlinePayment),
+        orderSource: 'qr_customer',
+      });
+
+      if (!secEvalResult.allowed) {
+        if (branchObj?.business_id) {
+          await OrderSecurityService.logSecurityEvent({
+            businessId: branchObj.business_id,
+            branchId: targetBranchId,
+            eventType: 'ORDER_SECURITY_REJECTED',
+            safeMetadata: { reason: secEvalResult.failureReason, code: secEvalResult.failureCode },
+          });
+        }
+        return {
+          success: false,
+          message: secEvalResult.failureReason || 'Order security checks failed.',
+          errorType: secEvalResult.failureCode || 'ORDER_SECURITY_REJECTED',
+        };
+      }
     }
 
     // 3. Execute atomic private service-role create_guest_order RPC
@@ -208,8 +272,34 @@ export class OrderService {
       p_selected_reward_id: parsed.data.selectedRewardId || null,
     });
 
-    const rpcPayload = data as { success?: boolean; error?: string } | null;
+    const rpcPayload = data as { success?: boolean; error?: string; order_id?: string } | null;
     const rpcErrorStr = error?.message || (rpcPayload && !rpcPayload.success ? rpcPayload.error : null) || null;
+
+    if (rpcPayload?.success && rpcPayload.order_id && secEvalResult) {
+      const updateData: Record<string, unknown> = {};
+      if (secEvalResult.requiresWaiterApproval) {
+        updateData.approval_status = 'pending_waiter_approval';
+        updateData.status = 'pending';
+      } else {
+        updateData.approval_status = 'approved';
+      }
+      if (secEvalResult.qrVisitSessionId) {
+        updateData.qr_visit_session_id = secEvalResult.qrVisitSessionId;
+      }
+      if (secEvalResult.tableSessionId) {
+        updateData.table_session_id = secEvalResult.tableSessionId;
+      }
+      if (secEvalResult.checks?.location === 'passed') {
+        updateData.location_verified = true;
+      }
+      if (secEvalResult.checks?.paymentBypass === 'applied') {
+        updateData.payment_verified_online = true;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await admin.from('orders').update(updateData).eq('id', rpcPayload.order_id);
+      }
+    }
 
     const safeLogFormat = {
       tableContextExists: Boolean(tableId),

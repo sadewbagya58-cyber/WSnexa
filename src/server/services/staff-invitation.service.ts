@@ -23,6 +23,8 @@ export interface FormattedInvitation {
   claimedAt: string | null;
   revokedAt: string | null;
   createdAt: string;
+  serviceAreaIds?: string[];
+  serviceAreaNames?: string[];
 }
 
 export class StaffInvitationService {
@@ -68,7 +70,55 @@ export class StaffInvitationService {
       return { success: false, message: 'Invalid or deleted branch selected.' };
     }
 
-    // 3. Compute expiry timestamp
+    // 3. Service Area Validation
+    let reqAreas = input.serviceAreaIds || [];
+    if (input.assignedRole === 'waiter' && reqAreas.length === 0) {
+      const { data: existingAreas } = await admin
+        .from('service_areas')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('branch_id', input.branchId)
+        .eq('is_active', true)
+        .is('deleted_at', null);
+
+      if (existingAreas && existingAreas.length > 0) {
+        reqAreas = existingAreas.map((a) => a.id);
+      } else {
+        const { data: defaultArea } = await admin
+          .from('service_areas')
+          .insert({
+            business_id: businessId,
+            branch_id: input.branchId,
+            name: 'Main Area',
+            code: `MAIN_${Date.now().toString(36).slice(-4)}`,
+            is_active: true,
+          })
+          .select('id')
+          .single();
+        if (defaultArea) {
+          reqAreas = [defaultArea.id];
+        }
+      }
+    }
+
+    if (reqAreas.length > 0) {
+      const { data: validAreas } = await admin
+        .from('service_areas')
+        .select('id, name')
+        .in('id', reqAreas)
+        .eq('business_id', businessId)
+        .eq('branch_id', input.branchId)
+        .is('deleted_at', null);
+
+      if (!validAreas || validAreas.length !== reqAreas.length) {
+        return {
+          success: false,
+          message: 'One or more invalid or cross-branch Service Areas selected.',
+        };
+      }
+    }
+
+    // 4. Compute expiry timestamp
     const now = new Date();
     let hours = 48;
     if (input.expiryOption === '24h') hours = 24;
@@ -84,7 +134,7 @@ export class StaffInvitationService {
       ? input.invitedEmail.trim().toLowerCase()
       : null;
 
-    // 4. Insert into staff_invitations
+    // 5. Insert into staff_invitations
     const { data: inviteRow, error: insertErr } = await admin
       .from('staff_invitations')
       .insert({
@@ -108,7 +158,28 @@ export class StaffInvitationService {
       return { success: false, message: `Failed to create invitation: ${insertErr?.message || 'DB error'}` };
     }
 
-    // 5. Log audit event
+    // 6. Insert service area mappings if any
+    let assignedAreaNames: string[] = [];
+    if (reqAreas.length > 0) {
+      const inviteAreaRows = reqAreas.map((areaId) => ({
+        invitation_id: inviteRow.id,
+        service_area_id: areaId,
+        business_id: businessId,
+        branch_id: input.branchId,
+      }));
+      const { error: inviteAreaErr } = await admin.from('staff_invitation_areas').insert(inviteAreaRows);
+      if (inviteAreaErr) {
+        console.error('Failed to insert staff_invitation_areas:', inviteAreaErr.message);
+      }
+
+      const { data: areaRows } = await admin
+        .from('service_areas')
+        .select('name')
+        .in('id', reqAreas);
+      assignedAreaNames = areaRows?.map((a) => a.name) || [];
+    }
+
+    // 7. Log audit event
     await admin.from('audit_logs').insert({
       business_id: businessId,
       actor_id: userId,
@@ -121,6 +192,7 @@ export class StaffInvitationService {
         invited_email: invitedEmail,
         token_prefix: tokenPrefix,
         expires_at: expiresAt,
+        service_area_ids: reqAreas,
       },
     });
 
@@ -140,6 +212,8 @@ export class StaffInvitationService {
       claimedAt: inviteRow.claimed_at,
       revokedAt: inviteRow.revoked_at,
       createdAt: inviteRow.created_at,
+      serviceAreaIds: reqAreas,
+      serviceAreaNames: assignedAreaNames,
     };
 
     return {
@@ -353,6 +427,53 @@ export class StaffInvitationService {
       });
     }
 
+    // 8. STAFF AREA ASSIGNMENTS CREATION
+    // Check if this invitation has pre-assigned service areas
+    let targetAreaIds: string[] = [];
+    const { data: inviteAreas, error: fetchAreasErr } = await admin
+      .from('staff_invitation_areas')
+      .select('service_area_id')
+      .eq('invitation_id', invite.id);
+
+    if (!fetchAreasErr && inviteAreas && inviteAreas.length > 0) {
+      targetAreaIds = inviteAreas.map((ia) => ia.service_area_id);
+    } else {
+      // Fallback: Query audit_logs for pre-assigned area IDs
+      const { data: auditLog } = await admin
+        .from('audit_logs')
+        .select('payload')
+        .eq('target_id', invite.id)
+        .eq('action', 'invitation.created')
+        .maybeSingle();
+
+      const payloadAreaIds = (auditLog?.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
+      if (Array.isArray(payloadAreaIds)) {
+        targetAreaIds = payloadAreaIds;
+      }
+    }
+
+    if (targetAreaIds.length > 0) {
+      // Clear old area assignments for membership
+      await admin
+        .from('staff_area_assignments')
+        .delete()
+        .eq('business_membership_id', membershipId);
+
+      const areaRowsToInsert = targetAreaIds.map((areaId) => ({
+        business_id: invite.business_id,
+        branch_id: invite.branch_id,
+        service_area_id: areaId,
+        business_membership_id: membershipId,
+        assigned_by: invite.created_by,
+        created_at: now.toISOString(),
+      }));
+
+      const { error: areaInsertErr } = await admin.from('staff_area_assignments').insert(areaRowsToInsert);
+      if (areaInsertErr) {
+        console.error('Failed to insert staff_area_assignments on claim:', areaInsertErr.message);
+      }
+    }
+
     // Update user_profiles workspace preference
     await admin
       .from('user_profiles')
@@ -543,10 +664,69 @@ export class StaffInvitationService {
 
     const { data: rows } = await query.order('created_at', { ascending: false });
 
-    if (!rows) return [];
+    if (!rows || rows.length === 0) return [];
+
+    const inviteIds = rows.map((r) => r.id as string);
+    const { data: areaRows, error: areaRowsErr } = await admin
+      .from('staff_invitation_areas')
+      .select('invitation_id, service_area_id, service_areas(id, name)')
+      .in('invitation_id', inviteIds);
+
+    const inviteAreaMap = new Map<string, { ids: string[]; names: string[] }>();
+    if (!areaRowsErr && areaRows && areaRows.length > 0) {
+      for (const ar of areaRows) {
+        const invId = ar.invitation_id as string;
+        const sa = (Array.isArray(ar.service_areas) ? ar.service_areas[0] : ar.service_areas) as { id?: string; name?: string } | null;
+        if (!inviteAreaMap.has(invId)) {
+          inviteAreaMap.set(invId, { ids: [], names: [] });
+        }
+        if (sa?.id && sa?.name) {
+          const entry = inviteAreaMap.get(invId)!;
+          entry.ids.push(sa.id);
+          entry.names.push(sa.name);
+        }
+      }
+    } else {
+      // Fallback to audit_logs
+      const { data: auditLogs } = await admin
+        .from('audit_logs')
+        .select('target_id, payload')
+        .in('target_id', inviteIds)
+        .eq('action', 'invitation.created');
+
+      if (auditLogs) {
+        const allAreaIdsSet = new Set<string>();
+        for (const log of auditLogs) {
+          const areaIds = (log.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
+          if (Array.isArray(areaIds)) {
+            areaIds.forEach((id) => allAreaIdsSet.add(id));
+          }
+        }
+
+        if (allAreaIdsSet.size > 0) {
+          const { data: saList } = await admin
+            .from('service_areas')
+            .select('id, name')
+            .in('id', Array.from(allAreaIdsSet));
+
+          const saNameMap = new Map<string, string>();
+          saList?.forEach((sa) => saNameMap.set(sa.id, sa.name));
+
+          for (const log of auditLogs) {
+            const invId = log.target_id;
+            const areaIds = (log.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
+            if (invId && Array.isArray(areaIds)) {
+              const names = areaIds.map((id) => saNameMap.get(id)).filter(Boolean) as string[];
+              inviteAreaMap.set(invId, { ids: areaIds, names });
+            }
+          }
+        }
+      }
+    }
 
     return rows.map((r) => {
       const b = r.branches as { name?: string } | null;
+      const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
       return {
         id: r.id as string,
         businessId: r.business_id as string,
@@ -563,6 +743,8 @@ export class StaffInvitationService {
         claimedAt: (r.claimed_at as string) || null,
         revokedAt: (r.revoked_at as string) || null,
         createdAt: r.created_at as string,
+        serviceAreaIds: areaInfo.ids,
+        serviceAreaNames: areaInfo.names,
       };
     });
   }

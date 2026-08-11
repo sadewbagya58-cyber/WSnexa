@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: 'Manage secure manager and staff invitation codes for your active business',
 };
 
+import { ServiceAreaService } from '@/server/services/service-area.service';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 
@@ -31,9 +32,22 @@ export default async function StaffInvitesPage() {
     isDefault: b.isDefault,
   }));
 
+  const targetBranchId = activeBranch?.id || branches[0]?.id;
+  const rawAreas = targetBranchId
+    ? await ServiceAreaService.listBranchAreas(business.id, targetBranchId)
+    : [];
+
+  const branchAreas = rawAreas.map((a) => ({
+    id: a.id,
+    branchId: a.branchId,
+    name: a.name,
+    code: a.code,
+  }));
+
   return (
     <StaffInvitesManagement
       branches={formattedBranches}
+      branchAreas={branchAreas}
       initialInvitations={invitations}
       userRole={membership.role}
       activeBranchId={activeBranch?.id}

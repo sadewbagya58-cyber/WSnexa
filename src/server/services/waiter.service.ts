@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { hashQrToken } from '@/lib/qr/security';
 import {
@@ -88,22 +89,59 @@ export class WaiterService {
   /**
    * Fetches active waiter requests for active branch staff.
    */
-  static async getBranchWaiterRequests(): Promise<WaiterRequestRecord[]> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) return [];
+  static async getBranchWaiterRequests(
+    branchIdInput?: string,
+    userIdInput?: string,
+    client?: SupabaseClient
+  ): Promise<WaiterRequestRecord[]> {
+    const supabase = client || (await createClient());
 
-    const supabase = await createClient();
+    let businessId: string;
+    let branchId: string;
+    let memberRole: string | null = null;
+    let membershipId: string | null = null;
+
+    if (branchIdInput && client) {
+      branchId = branchIdInput;
+      // Resolve businessId from branch
+      const { data: bRow } = await supabase
+        .from('branches')
+        .select('business_id')
+        .eq('id', branchIdInput)
+        .single();
+      businessId = bRow?.business_id;
+
+      if (userIdInput && businessId) {
+        const { data: mem } = await supabase
+          .from('business_memberships')
+          .select('id, role')
+          .eq('business_id', businessId)
+          .eq('user_id', userIdInput)
+          .single();
+        if (mem) {
+          membershipId = mem.id;
+          memberRole = mem.role;
+        }
+      }
+    } else {
+      const tenantContext = await resolveActiveBusinessContext();
+      if (!tenantContext || !tenantContext.activeBranch) return [];
+      businessId = tenantContext.business.id;
+      branchId = tenantContext.activeBranch.id;
+      membershipId = tenantContext.membership.id;
+      memberRole = tenantContext.membership.role;
+    }
 
     // Check if user is waiter role and has explicit area assignments
     let allowedAreaIds: string[] | null = null;
-    if (tenantContext.membership.role === 'waiter') {
+    if (memberRole === 'waiter' && membershipId) {
       const { data: areaAssigns } = await supabase
         .from('staff_area_assignments')
         .select('service_area_id')
-        .eq('business_membership_id', tenantContext.membership.id);
+        .eq('business_membership_id', membershipId);
 
       if (areaAssigns && areaAssigns.length > 0) {
-        allowedAreaIds = areaAssigns.map((a) => a.service_area_id);
+        allowedAreaIds = areaAssigns.map((a: { service_area_id: string }) => a.service_area_id);
       }
     }
 
@@ -113,8 +151,8 @@ export class WaiterService {
         *,
         table:dining_tables(id, name, code, table_number, service_area_id)
       `)
-      .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.activeBranch.id)
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
       .in('status', ['pending', 'accepted'])
       .order('created_at', { ascending: false });
 

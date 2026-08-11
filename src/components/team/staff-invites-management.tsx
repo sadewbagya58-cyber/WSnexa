@@ -10,14 +10,22 @@ import {
 } from '@/server/actions/staff-invitation';
 import { StaffRole, ExpiryOption } from '@/lib/validation/staff-invitation';
 
-interface BranchOption {
+export interface BranchOption {
   id: string;
   name: string;
   isDefault: boolean;
 }
 
+export interface AreaOption {
+  id: string;
+  branchId: string;
+  name: string;
+  code: string;
+}
+
 interface StaffInvitesManagementProps {
   branches: BranchOption[];
+  branchAreas?: AreaOption[];
   initialInvitations: FormattedInvitation[];
   userRole: string;
   activeBranchId?: string;
@@ -25,6 +33,7 @@ interface StaffInvitesManagementProps {
 
 export function StaffInvitesManagement({
   branches,
+  branchAreas = [],
   initialInvitations,
   userRole,
   activeBranchId,
@@ -43,6 +52,7 @@ export function StaffInvitesManagement({
   const [assignedRole, setAssignedRole] = useState<StaffRole>('cashier');
   const [invitedEmail, setInvitedEmail] = useState<string>('');
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>('48h');
+  const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -58,6 +68,11 @@ export function StaffInvitesManagement({
       return;
     }
 
+    if (assignedRole === 'waiter' && selectedAreaIds.length === 0) {
+      setErrorMsg('At least one Service Area is required when inviting a Waiter.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 
@@ -66,6 +81,7 @@ export function StaffInvitesManagement({
       assignedRole,
       invitedEmail,
       expiryOption,
+      serviceAreaIds: selectedAreaIds,
     });
 
     setIsSubmitting(false);
@@ -82,6 +98,7 @@ export function StaffInvitesManagement({
       });
       // Reset form
       setInvitedEmail('');
+      setSelectedAreaIds([]);
     } else {
       setErrorMsg(res.message || 'Failed to generate invitation.');
     }
@@ -230,6 +247,7 @@ Instructions:
                   <tr className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Branch</th>
+                    <th className="py-3 px-4">Service Areas</th>
                     <th className="py-3 px-4">Code Prefix</th>
                     <th className="py-3 px-4">Bound Email</th>
                     <th className="py-3 px-4">Status</th>
@@ -244,6 +262,22 @@ Instructions:
                         {formatRoleLabel(inv.assignedRole)}
                       </td>
                       <td className="py-3 px-4 text-zinc-600 font-medium">{inv.branchName}</td>
+                      <td className="py-3 px-4">
+                        {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {inv.serviceAreaNames.map((areaName, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                              >
+                                {areaName}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-zinc-400 italic">Branch Wide</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 font-mono text-zinc-500 font-semibold">{inv.tokenPrefix}</td>
                       <td className="py-3 px-4 text-zinc-500 font-mono">
                         {inv.invitedEmail || <span className="text-zinc-400 italic">Any email</span>}
@@ -301,6 +335,18 @@ Instructions:
                     <span>Branch: <strong>{inv.branchName}</strong></span>
                     <span className="font-mono text-zinc-500">{inv.tokenPrefix}</span>
                   </div>
+                  {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {inv.serviceAreaNames.map((areaName, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                        >
+                          {areaName}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {inv.invitedEmail && (
                     <div className="text-zinc-500 font-mono text-[11px]">
                       Email: {inv.invitedEmail}
@@ -337,7 +383,7 @@ Instructions:
       {/* CREATE INVITATION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-lg font-bold text-zinc-950">Generate Staff Invitation</h3>
               <button
@@ -359,7 +405,10 @@ Instructions:
                 <label className="block text-zinc-700 font-bold mb-1">Target Branch *</label>
                 <select
                   value={branchId}
-                  onChange={(e) => setBranchId(e.target.value)}
+                  onChange={(e) => {
+                    setBranchId(e.target.value);
+                    setSelectedAreaIds([]);
+                  }}
                   className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
                   required
                 >
@@ -375,7 +424,13 @@ Instructions:
                 <label className="block text-zinc-700 font-bold mb-1">Assigned Role *</label>
                 <select
                   value={assignedRole}
-                  onChange={(e) => setAssignedRole(e.target.value as StaffRole)}
+                  onChange={(e) => {
+                    const role = e.target.value as StaffRole;
+                    setAssignedRole(role);
+                    if (role !== 'waiter') {
+                      setErrorMsg(null);
+                    }
+                  }}
                   className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
                   required
                 >
@@ -384,6 +439,55 @@ Instructions:
                   <option value="kitchen_staff">Kitchen Staff</option>
                   <option value="waiter">Waiter</option>
                 </select>
+              </div>
+
+              {/* Service Areas Checklist */}
+              <div className="space-y-2 border-t border-b border-zinc-100 py-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-zinc-900 font-bold text-xs">
+                    Service Area Assignments {assignedRole === 'waiter' && <span className="text-rose-600">*</span>}
+                  </label>
+                  <span className="text-[10px] text-zinc-500 font-normal">
+                    {assignedRole === 'waiter' ? 'Required for Waiters' : 'Optional'}
+                  </span>
+                </div>
+
+                {branchAreas.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl leading-relaxed">
+                    ⚠️ No active service areas found for this branch. Create areas in{' '}
+                    <strong className="underline">/dashboard/areas</strong> first.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {branchAreas.map((area) => {
+                      const isChecked = selectedAreaIds.includes(area.id);
+                      return (
+                        <label
+                          key={area.id}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer min-h-[44px] ${
+                            isChecked
+                              ? 'bg-blue-50/60 border-blue-300 text-blue-900'
+                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                          }`}
+                        >
+                          <span className="font-semibold text-xs">{area.name}</span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAreaIds([...selectedAreaIds, area.id]);
+                              } else {
+                                setSelectedAreaIds(selectedAreaIds.filter((id) => id !== area.id));
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-zinc-300 text-zinc-950 focus:ring-0"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>

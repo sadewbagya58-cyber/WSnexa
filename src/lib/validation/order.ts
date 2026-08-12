@@ -48,6 +48,11 @@ export const createGuestOrderSchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   cartItems: z.array(cartItemInputSchema).min(1, 'Cart cannot be empty'),
   selectedRewardId: z.string().uuid().optional().nullable(),
+  userCoordinates: z.object({
+    latitude: z.number(),
+    longitude: z.number(),
+    accuracy: z.number().optional(),
+  }).optional().nullable(),
 });
 
 export const orderAccessSchema = z.object({

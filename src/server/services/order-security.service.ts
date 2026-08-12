@@ -53,19 +53,11 @@ export interface SecurityEvaluationResult {
   tableSessionId?: string | null;
 }
 
-const memorySecuritySettings = new Map<string, BranchOrderSecuritySettings>();
-const memoryQrSessions = new Map<string, QrVisitSession>();
-const memoryTableSessions = new Map<string, TableSession>();
-
 export class OrderSecurityService {
   /**
-   * Retrieves branch security settings, auto-seeding defaults if not yet created.
+   * Retrieves branch security settings directly from DB, auto-seeding defaults if not yet created.
    */
   static async getBranchSecuritySettings(branchId: string): Promise<BranchOrderSecuritySettings> {
-    if (memorySecuritySettings.has(branchId)) {
-      return memorySecuritySettings.get(branchId)!;
-    }
-
     const admin = createAdminClient();
 
     try {
@@ -76,11 +68,10 @@ export class OrderSecurityService {
         .maybeSingle();
 
       if (existing) {
-        memorySecuritySettings.set(branchId, existing as BranchOrderSecuritySettings);
         return existing as BranchOrderSecuritySettings;
       }
-    } catch {
-      // Table missing fallback
+    } catch (err) {
+      console.warn('[OrderSecurityService.getBranchSecuritySettings] DB fetch warning:', err);
     }
 
     let businessId = '';
@@ -89,14 +80,13 @@ export class OrderSecurityService {
         .from('branches')
         .select('business_id')
         .eq('id', branchId)
-        .single();
+        .maybeSingle();
       businessId = branchData?.business_id || '';
     } catch {
       // ignore
     }
 
-    const defaultSettings: BranchOrderSecuritySettings = {
-      id: `sec_${branchId}`,
+    const defaultPayload = {
       business_id: businessId,
       branch_id: branchId,
       require_customer_account: false,
@@ -114,46 +104,84 @@ export class OrderSecurityService {
     try {
       const { data: seeded } = await admin
         .from('branch_order_security_settings')
-        .upsert(defaultSettings, { onConflict: 'branch_id' })
+        .upsert(defaultPayload, { onConflict: 'branch_id' })
         .select('*')
         .single();
 
       if (seeded) {
-        memorySecuritySettings.set(branchId, seeded as BranchOrderSecuritySettings);
         return seeded as BranchOrderSecuritySettings;
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[OrderSecurityService.getBranchSecuritySettings] DB seed warning:', err);
     }
 
-    memorySecuritySettings.set(branchId, defaultSettings);
-    return defaultSettings;
+    return {
+      id: `sec_${branchId}`,
+      ...defaultPayload,
+    } as BranchOrderSecuritySettings;
   }
 
   /**
-   * Updates branch order security settings.
+   * Updates branch order security settings in DB.
    */
   static async updateBranchSecuritySettings(
     branchId: string,
     updates: Partial<BranchOrderSecuritySettings>
   ): Promise<{ success: boolean; message?: string }> {
+    const admin = createAdminClient();
+
     const existing = await this.getBranchSecuritySettings(branchId);
 
-    const payload: BranchOrderSecuritySettings = {
-      ...existing,
-      ...updates,
+    const payload = {
+      business_id: existing.business_id,
+      branch_id: branchId,
+      require_customer_account:
+        updates.require_customer_account !== undefined
+          ? updates.require_customer_account
+          : existing.require_customer_account,
+      require_waiter_approval:
+        updates.require_waiter_approval !== undefined
+          ? updates.require_waiter_approval
+          : existing.require_waiter_approval,
+      require_location_verification:
+        updates.require_location_verification !== undefined
+          ? updates.require_location_verification
+          : existing.require_location_verification,
+      require_active_qr_session:
+        updates.require_active_qr_session !== undefined
+          ? updates.require_active_qr_session
+          : existing.require_active_qr_session,
+      require_table_session:
+        updates.require_table_session !== undefined
+          ? updates.require_table_session
+          : existing.require_table_session,
+      qr_session_duration_minutes:
+        updates.qr_session_duration_minutes !== undefined
+          ? updates.qr_session_duration_minutes
+          : existing.qr_session_duration_minutes,
+      location_radius_meters:
+        updates.location_radius_meters !== undefined
+          ? updates.location_radius_meters
+          : existing.location_radius_meters,
+      allow_verified_online_payment_bypass:
+        updates.allow_verified_online_payment_bypass !== undefined
+          ? updates.allow_verified_online_payment_bypass
+          : existing.allow_verified_online_payment_bypass,
       updated_at: new Date().toISOString(),
     };
 
-    memorySecuritySettings.set(branchId, payload);
-
     try {
-      const admin = createAdminClient();
-      await admin
+      const { error } = await admin
         .from('branch_order_security_settings')
         .upsert(payload, { onConflict: 'branch_id' });
-    } catch {
-      // ignore
+
+      if (error) {
+        console.error('[OrderSecurityService.updateBranchSecuritySettings] Error:', error.message);
+        return { success: false, message: error.message };
+      }
+    } catch (err) {
+      console.error('[OrderSecurityService.updateBranchSecuritySettings] Exception:', err);
+      return { success: false, message: 'Failed to update security settings.' };
     }
 
     return { success: true };
@@ -206,7 +234,7 @@ export class OrderSecurityService {
   }
 
   /**
-   * Creates or refreshes a temporary opaque QR visit session.
+   * Creates or refreshes a temporary opaque QR visit session in DB.
    */
   static async createQrVisitSession(
     branchId: string,
@@ -220,14 +248,14 @@ export class OrderSecurityService {
     expiresAt?: string;
     message?: string;
   }> {
+    const admin = createAdminClient();
     let businessId = '';
     try {
-      const admin = createAdminClient();
       const { data: branchData } = await admin
         .from('branches')
         .select('business_id')
         .eq('id', branchId)
-        .single();
+        .maybeSingle();
       businessId = branchData?.business_id || '';
     } catch {
       // ignore
@@ -235,11 +263,9 @@ export class OrderSecurityService {
 
     const rawToken = 'WSN-QRS-' + crypto.randomBytes(24).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const sessionId = `qrs_${crypto.randomBytes(8).toString('hex')}`;
     const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString();
 
-    const sessionObj: QrVisitSession = {
-      id: sessionId,
+    const insertPayload = {
       business_id: businessId,
       branch_id: branchId,
       service_area_id: serviceAreaId || null,
@@ -251,13 +277,19 @@ export class OrderSecurityService {
       last_activity_at: new Date().toISOString(),
     };
 
-    memoryQrSessions.set(tokenHash, sessionObj);
-
+    let sessionId = `qrs_${Date.now()}`;
     try {
-      const admin = createAdminClient();
-      await admin.from('qr_visit_sessions').insert(sessionObj);
-    } catch {
-      // ignore table missing
+      const { data, error } = await admin
+        .from('qr_visit_sessions')
+        .insert(insertPayload)
+        .select('id')
+        .single();
+
+      if (data && !error) {
+        sessionId = data.id;
+      }
+    } catch (err) {
+      console.warn('[OrderSecurityService.createQrVisitSession] Insert warning:', err);
     }
 
     return {
@@ -269,7 +301,23 @@ export class OrderSecurityService {
   }
 
   /**
-   * Validates an opaque QR visit session token.
+   * Revokes an active QR visit session.
+   */
+  static async revokeQrVisitSession(sessionId: string): Promise<boolean> {
+    const admin = createAdminClient();
+    try {
+      await admin
+        .from('qr_visit_sessions')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('id', sessionId);
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  /**
+   * Validates an opaque QR visit session token against DB.
    */
   static async validateQrVisitSession(sessionToken: string): Promise<{
     valid: boolean;
@@ -281,135 +329,110 @@ export class OrderSecurityService {
     }
 
     const tokenHash = crypto.createHash('sha256').update(sessionToken.trim()).digest('hex');
-
-    let session: QrVisitSession | undefined = memoryQrSessions.get(tokenHash);
-
-    if (!session) {
-      try {
-        const admin = createAdminClient();
-        const { data: dbSession } = await admin
-          .from('qr_visit_sessions')
-          .select('*')
-          .eq('session_token_hash', tokenHash)
-          .maybeSingle();
-
-        if (dbSession) {
-          session = dbSession as QrVisitSession;
-          memoryQrSessions.set(tokenHash, session);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!session) {
-      return { valid: false, errorType: 'NOT_FOUND' };
-    }
-
-    if (session.revoked_at) {
-      return { valid: false, session, errorType: 'REVOKED' };
-    }
-
-    if (new Date(session.expires_at).getTime() < Date.now()) {
-      return { valid: false, session, errorType: 'EXPIRED' };
-    }
-
-    session.last_activity_at = new Date().toISOString();
-    memoryQrSessions.set(tokenHash, session);
-
-    return { valid: true, session };
-  }
-
-  /**
-   * Revokes a QR visit session.
-   */
-  static async revokeQrVisitSession(sessionId: string): Promise<boolean> {
-    for (const [hash, sess] of memoryQrSessions.entries()) {
-      if (sess.id === sessionId) {
-        sess.revoked_at = new Date().toISOString();
-        memoryQrSessions.set(hash, sess);
-      }
-    }
+    const admin = createAdminClient();
 
     try {
-      const admin = createAdminClient();
-      await admin
+      const { data: dbSession } = await admin
         .from('qr_visit_sessions')
-        .update({ revoked_at: new Date().toISOString() })
-        .eq('id', sessionId);
-    } catch {
-      // ignore
-    }
+        .select('*')
+        .eq('session_token_hash', tokenHash)
+        .maybeSingle();
 
-    return true;
+      if (!dbSession) {
+        return { valid: false, errorType: 'NOT_FOUND' };
+      }
+
+      const session = dbSession as QrVisitSession;
+      if (session.revoked_at) {
+        return { valid: false, session, errorType: 'REVOKED' };
+      }
+
+      if (new Date(session.expires_at).getTime() < Date.now()) {
+        return { valid: false, session, errorType: 'EXPIRED' };
+      }
+
+      return { valid: true, session };
+    } catch {
+      return { valid: false, errorType: 'NOT_FOUND' };
+    }
   }
 
   /**
-   * Opens or retrieves active table session.
+   * Opens or retrieves an active dining table session in DB.
    */
   static async openTableSession(
     branchId: string,
     tableId: string,
-    serviceAreaId?: string | null
-  ): Promise<TableSession | null> {
-    if (memoryTableSessions.has(tableId)) {
-      const existing = memoryTableSessions.get(tableId)!;
-      if (existing.status === 'active') {
-        return existing;
+    customServiceAreaId?: string | null
+  ): Promise<TableSession> {
+    const admin = createAdminClient();
+
+    try {
+      const { data: existing } = await admin
+        .from('table_sessions')
+        .select('*')
+        .eq('table_id', tableId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (existing) {
+        return existing as TableSession;
       }
+    } catch {
+      // ignore
     }
 
     let businessId = '';
+    let serviceAreaId: string | null = customServiceAreaId || null;
+
     try {
-      const admin = createAdminClient();
-      const { data: branchData } = await admin
-        .from('branches')
-        .select('business_id')
-        .eq('id', branchId)
+      const { data: tData } = await admin
+        .from('dining_tables')
+        .select('business_id, service_area_id')
+        .eq('id', tableId)
         .single();
-      businessId = branchData?.business_id || '';
+      businessId = tData?.business_id || '';
+      if (!serviceAreaId) serviceAreaId = tData?.service_area_id || null;
     } catch {
       // ignore
     }
 
-    const created: TableSession = {
-      id: `ts_${crypto.randomBytes(8).toString('hex')}`,
+    const insertPayload = {
       business_id: businessId,
       branch_id: branchId,
-      service_area_id: serviceAreaId || null,
+      service_area_id: serviceAreaId,
       table_id: tableId,
       status: 'active',
       opened_at: new Date().toISOString(),
-      expires_at: null,
-      closed_at: null,
       created_at: new Date().toISOString(),
     };
 
-    memoryTableSessions.set(tableId, created);
-
     try {
-      const admin = createAdminClient();
-      await admin.from('table_sessions').insert(created);
-    } catch {
-      // ignore
+      const { data: created } = await admin
+        .from('table_sessions')
+        .insert(insertPayload)
+        .select('*')
+        .single();
+
+      if (created) {
+        return created as TableSession;
+      }
+    } catch (err) {
+      console.warn('[OrderSecurityService.openTableSession] Insert warning:', err);
     }
 
-    return created;
+    return {
+      id: `ts_${tableId}`,
+      ...insertPayload,
+    } as TableSession;
   }
 
   /**
-   * Closes active table session.
+   * Closes an active table session.
    */
   static async closeTableSession(tableId: string): Promise<boolean> {
-    if (memoryTableSessions.has(tableId)) {
-      const sess = memoryTableSessions.get(tableId)!;
-      sess.status = 'closed';
-      sess.closed_at = new Date().toISOString();
-      memoryTableSessions.set(tableId, sess);
-    }
-
+    const admin = createAdminClient();
     try {
-      const admin = createAdminClient();
       await admin
         .from('table_sessions')
         .update({
@@ -439,10 +462,9 @@ export class OrderSecurityService {
       .from('branches')
       .select('latitude, longitude')
       .eq('id', branchId)
-      .single();
+      .maybeSingle();
 
     if (!branch || branch.latitude == null || branch.longitude == null) {
-      // If branch coordinates not set, default to verified with warning
       return { verified: true, reason: 'Branch coordinates not configured' };
     }
 
@@ -588,7 +610,6 @@ export class OrderSecurityService {
       if (tSession && tSession.status === 'active') {
         tableSessionObj = tSession as TableSession;
       } else {
-        // Create table session if table is active
         tableSessionObj = await this.openTableSession(branchId, tableId);
       }
     }
@@ -683,8 +704,8 @@ export class OrderSecurityService {
       | 'PAYMENT_METHOD_REJECTED';
     safeMetadata?: Record<string, unknown>;
   }): Promise<void> {
-    const admin = createAdminClient();
     try {
+      const admin = createAdminClient();
       await admin.from('order_security_audit_logs').insert({
         business_id: input.businessId,
         branch_id: input.branchId,
@@ -692,9 +713,10 @@ export class OrderSecurityService {
         actor_user_id: input.actorUserId || null,
         event_type: input.eventType,
         safe_metadata: input.safeMetadata || {},
+        created_at: new Date().toISOString(),
       });
     } catch (err) {
-      console.warn('Failed to log security audit event:', err);
+      console.warn('[OrderSecurityService.logSecurityEvent] Audit log write warning:', err);
     }
   }
 }

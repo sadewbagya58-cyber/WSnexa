@@ -13,6 +13,8 @@ export interface BranchInfo {
   require_table_selection?: boolean;
   require_table_pin?: boolean;
   table_pin_length?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ActiveTenantContext {

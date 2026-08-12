@@ -45,18 +45,12 @@ export const DEFAULT_PAYMENT_METHODS: Array<{
   },
 ];
 
-const memoryPaymentMethods = new Map<string, BranchPaymentMethod[]>();
-
 export class BranchPaymentService {
   /**
-   * Retrieves configured payment methods for a branch.
-   * Auto-seeds defaults if no payment methods have been configured yet.
+   * Retrieves configured payment methods for a branch directly from DB.
+   * Auto-seeds defaults if no payment methods have been configured yet for this branch.
    */
   static async getBranchPaymentMethods(branchId: string): Promise<BranchPaymentMethod[]> {
-    if (memoryPaymentMethods.has(branchId)) {
-      return memoryPaymentMethods.get(branchId)!;
-    }
-
     const admin = createAdminClient();
 
     try {
@@ -67,11 +61,10 @@ export class BranchPaymentService {
         .order('sort_order', { ascending: true });
 
       if (existing && existing.length > 0) {
-        memoryPaymentMethods.set(branchId, existing as BranchPaymentMethod[]);
         return existing as BranchPaymentMethod[];
       }
-    } catch {
-      // ignore table missing
+    } catch (err) {
+      console.warn('[BranchPaymentService.getBranchPaymentMethods] DB fetch warning:', err);
     }
 
     let businessId = '';
@@ -80,14 +73,13 @@ export class BranchPaymentService {
         .from('branches')
         .select('business_id')
         .eq('id', branchId)
-        .single();
+        .maybeSingle();
       businessId = branchData?.business_id || '';
     } catch {
       // ignore
     }
 
-    const seedRows: BranchPaymentMethod[] = DEFAULT_PAYMENT_METHODS.map((m) => ({
-      id: `pm_${branchId}_${m.method}`,
+    const seedRows = DEFAULT_PAYMENT_METHODS.map((m) => ({
       business_id: businessId,
       branch_id: branchId,
       method: m.method,
@@ -107,19 +99,28 @@ export class BranchPaymentService {
         .order('sort_order', { ascending: true });
 
       if (seeded && seeded.length > 0) {
-        memoryPaymentMethods.set(branchId, seeded as BranchPaymentMethod[]);
         return seeded as BranchPaymentMethod[];
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[BranchPaymentService.getBranchPaymentMethods] DB seed warning:', err);
     }
 
-    memoryPaymentMethods.set(branchId, seedRows);
-    return seedRows;
+    return DEFAULT_PAYMENT_METHODS.map((m) => ({
+      id: `pm_${branchId}_${m.method}`,
+      business_id: businessId,
+      branch_id: branchId,
+      method: m.method,
+      display_name: m.display_name,
+      instructions: m.instructions,
+      is_enabled: m.is_enabled,
+      sort_order: m.sort_order,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
   }
 
   /**
-   * Updates or toggles a specific payment method for a branch.
+   * Updates or toggles a specific payment method for a branch in the database.
    */
   static async updateBranchPaymentMethod(
     branchId: string,
@@ -131,28 +132,47 @@ export class BranchPaymentService {
       sort_order?: number;
     }
   ): Promise<{ success: boolean; message?: string }> {
-    const existingMethods = await this.getBranchPaymentMethods(branchId);
-    const updatedList = existingMethods.map((m) => {
-      if (m.method === method) {
-        return {
-          ...m,
-          ...updates,
-          updated_at: new Date().toISOString(),
-        };
-      }
-      return m;
-    });
+    const admin = createAdminClient();
 
-    memoryPaymentMethods.set(branchId, updatedList);
-
+    let businessId = '';
     try {
-      const admin = createAdminClient();
-      const target = updatedList.find((m) => m.method === method);
-      if (target) {
-        await admin.from('branch_payment_methods').upsert(target, { onConflict: 'branch_id,method' });
-      }
+      const { data: branchData } = await admin
+        .from('branches')
+        .select('business_id')
+        .eq('id', branchId)
+        .maybeSingle();
+      businessId = branchData?.business_id || '';
     } catch {
       // ignore
+    }
+
+    // Get current method record or default
+    const existingMethods = await this.getBranchPaymentMethods(branchId);
+    const existing = existingMethods.find((m) => m.method === method);
+
+    const payload = {
+      business_id: businessId,
+      branch_id: branchId,
+      method,
+      display_name: updates.display_name !== undefined ? updates.display_name : (existing?.display_name || method),
+      instructions: updates.instructions !== undefined ? updates.instructions : (existing?.instructions || ''),
+      is_enabled: updates.is_enabled !== undefined ? updates.is_enabled : (existing?.is_enabled ?? true),
+      sort_order: updates.sort_order !== undefined ? updates.sort_order : (existing?.sort_order ?? 1),
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { error } = await admin
+        .from('branch_payment_methods')
+        .upsert(payload, { onConflict: 'branch_id,method' });
+
+      if (error) {
+        console.error('[BranchPaymentService.updateBranchPaymentMethod] Error:', error.message);
+        return { success: false, message: error.message };
+      }
+    } catch (err) {
+      console.error('[BranchPaymentService.updateBranchPaymentMethod] Exception:', err);
+      return { success: false, message: 'Failed to update payment method.' };
     }
 
     return { success: true };
@@ -163,7 +183,11 @@ export class BranchPaymentService {
    */
   static async isMethodEnabled(branchId: string, requestedMethod: string): Promise<boolean> {
     const methods = await this.getBranchPaymentMethods(branchId);
-    const found = methods.find((m) => m.method === requestedMethod || m.method.replace('_', '') === requestedMethod.replace('_', ''));
+    const found = methods.find(
+      (m) =>
+        m.method === requestedMethod ||
+        m.method.replace(/_/g, '') === requestedMethod.replace(/_/g, '')
+    );
     return Boolean(found && found.is_enabled);
   }
 }

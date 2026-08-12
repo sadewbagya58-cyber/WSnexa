@@ -118,6 +118,10 @@ export async function getPublicOrderTrackingStateAction(
     reward_points_redeemed_snapshot: number;
     currency: string;
     updated_at: string;
+    approval_status?: string;
+    approved_at?: string | null;
+    rejected_at?: string | null;
+    rejection_reason?: string | null;
     customer_user_id: string | null;
     table?: { id: string; name: string } | null;
   }>
@@ -170,6 +174,10 @@ export async function getPublicOrderTrackingStateAction(
       reward_points_redeemed_snapshot: order.reward_points_redeemed_snapshot || 0,
       currency: order.currency,
       updated_at: order.updated_at,
+      approval_status: (order as { approval_status?: string }).approval_status || 'approved',
+      approved_at: (order as { approved_at?: string | null }).approved_at || null,
+      rejected_at: (order as { rejected_at?: string | null }).rejected_at || null,
+      rejection_reason: (order as { rejection_reason?: string | null }).rejection_reason || null,
       customer_user_id: (order as { customer_user_id?: string | null }).customer_user_id || null,
       table: order.table ? { id: order.table.id, name: order.table.name } : null,
     },

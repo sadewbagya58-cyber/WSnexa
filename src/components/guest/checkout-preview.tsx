@@ -11,16 +11,55 @@ import { isTableAccessVerified } from '@/features/cart/cart-types';
 import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
 import { submitGuestOrderAction } from '@/server/actions/order';
 
+import { BranchPaymentMethod, BranchOrderSecuritySettings } from '@/types/database.types';
+
 interface CheckoutPreviewProps {
   token: string;
   branchName: string;
   businessName: string;
+  enabledPaymentMethods?: BranchPaymentMethod[];
+  securitySettings?: BranchOrderSecuritySettings | null;
 }
+
+const PAYMENT_METHOD_MAP: Record<string, { icon: string; title: string; description: string; enumValue: 'pay_at_counter' | 'cash' | 'card' | 'qr_pay' | 'online' }> = {
+  pay_at_counter: {
+    icon: '🏪',
+    title: 'Pay at Counter',
+    description: 'Pay at the main cashier counter when ready.',
+    enumValue: 'pay_at_counter',
+  },
+  cash: {
+    icon: '💵',
+    title: 'Cash',
+    description: 'Pay cash to cashier or waiter upon delivery.',
+    enumValue: 'cash',
+  },
+  card: {
+    icon: '💳',
+    title: 'Card at Venue',
+    description: 'Pay via venue card terminal.',
+    enumValue: 'card',
+  },
+  qr_payment: {
+    icon: '📱',
+    title: 'Venue QR Pay',
+    description: 'Scan venue mobile banking QR at counter.',
+    enumValue: 'qr_pay',
+  },
+  online_payment: {
+    icon: '🌐',
+    title: 'Pay Online Now',
+    description: 'Pay securely online.',
+    enumValue: 'online',
+  },
+};
 
 export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   token,
   branchName,
   businessName,
+  enabledPaymentMethods,
+  securitySettings,
 }) => {
   const router = useRouter();
   const { state, clearCart } = useCart();
@@ -28,12 +67,80 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [guestNotes, setGuestNotes] = useState('');
+
+  const activeMethods = React.useMemo(() => {
+    if (enabledPaymentMethods && enabledPaymentMethods.length > 0) {
+      return enabledPaymentMethods;
+    }
+    return [
+      { method: 'pay_at_counter', display_name: 'Pay at Counter', instructions: '', is_enabled: true, sort_order: 1 },
+      { method: 'cash', display_name: 'Cash', instructions: '', is_enabled: true, sort_order: 2 },
+      { method: 'card', display_name: 'Card at Venue', instructions: '', is_enabled: true, sort_order: 3 },
+    ] as BranchPaymentMethod[];
+  }, [enabledPaymentMethods]);
+
   const [paymentMethod, setPaymentMethod] = useState<
     'pay_at_counter' | 'cash' | 'card' | 'qr_pay' | 'online'
-  >('pay_at_counter');
+  >(() => {
+    const first = activeMethods[0]?.method;
+    return PAYMENT_METHOD_MAP[first]?.enumValue || 'pay_at_counter';
+  });
+
+  const [locationState, setLocationState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    coords?: { latitude: number; longitude: number; accuracy?: number };
+    errorMessage?: string;
+  }>({ status: 'idle' });
+
   const [inputPin, setInputPin] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleVerifyLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setLocationState({
+        status: 'error',
+        errorMessage: 'Geolocation is not supported by your mobile browser.',
+      });
+      return;
+    }
+
+    setLocationState({ status: 'loading' });
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const accuracy = pos.coords.accuracy;
+        if (accuracy > 500) {
+          setLocationState({
+            status: 'error',
+            errorMessage: 'Your location is not accurate enough. Move closer to an open area and try again.',
+          });
+          return;
+        }
+
+        setLocationState({
+          status: 'success',
+          coords: {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          },
+        });
+      },
+      (err) => {
+        let msg = 'We could not determine your location.';
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = 'Location permission is required by this venue to place an order.';
+        } else if (err.code === err.TIMEOUT) {
+          msg = 'Location check took too long. Try again.';
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = 'Location information is currently unavailable.';
+        }
+        setLocationState({ status: 'error', errorMessage: msg });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  };
 
   const guestNameId = useId();
   const guestPhoneId = useId();
@@ -108,6 +215,13 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         idempotencyKey: getOrCreateIdempotencyKey(),
         cartItems: cartItemsPayload,
         selectedRewardId: state.selectedReward?.id || null,
+        userCoordinates: locationState.coords
+          ? {
+              latitude: locationState.coords.latitude,
+              longitude: locationState.coords.longitude,
+              accuracy: locationState.coords.accuracy,
+            }
+          : null,
       });
 
       if (!res.success || !res.data) {
@@ -284,6 +398,46 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
             </div>
           </div>
 
+          {/* Geolocation Verification Card if required by venue security */}
+          {securitySettings?.require_location_verification && (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-2xs space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📍</span>
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-blue-950">
+                    Location Verification Required
+                  </h3>
+                  <p className="text-[11px] text-blue-800 mt-0.5">
+                    This venue requires device location verification to ensure you are physically present at the venue.
+                  </p>
+                </div>
+              </div>
+
+              {locationState.status === 'success' ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-100 p-3 rounded-xl border border-emerald-300">
+                  <span>✅</span>
+                  <span>Location Verified Successfully</span>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleVerifyLocation}
+                  disabled={locationState.status === 'loading'}
+                  className="w-full text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px]"
+                >
+                  {locationState.status === 'loading' ? 'Verifying Device Location...' : '📍 Verify My Location'}
+                </Button>
+              )}
+
+              {locationState.errorMessage && (
+                <div className="p-3 rounded-xl bg-amber-100 border border-amber-300 text-amber-950 text-xs font-medium space-y-1">
+                  <div className="font-bold">⚠️ Location Check Notice</div>
+                  <p>{locationState.errorMessage}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Payment Method Selection Card */}
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
             <div>
@@ -291,81 +445,44 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 Payment Method
               </h2>
               <p className="text-xs text-zinc-600 mt-0.5">
-                Select your preferred payment method
+                Select your preferred payment method enabled by this venue
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-2.5">
-              {[
-                {
-                  value: 'pay_at_counter',
-                  icon: '🏪',
-                  title: 'Pay at Counter',
-                  description: 'Pay when you are ready at the cashier.',
-                  disabled: false,
-                },
-                {
-                  value: 'cash',
-                  icon: '💵',
-                  title: 'Cash',
-                  description: 'Pay cash to the cashier or waiter.',
-                  disabled: false,
-                },
-                {
-                  value: 'card',
+              {activeMethods.map((m) => {
+                const info = PAYMENT_METHOD_MAP[m.method] || {
                   icon: '💳',
-                  title: 'Card',
-                  description: 'Pay using the venue card terminal.',
-                  disabled: false,
-                },
-                {
-                  value: 'qr_pay',
-                  icon: '📱',
-                  title: 'QR Pay',
-                  description: 'Scan the venue’s external payment QR at the counter.',
-                  disabled: false,
-                },
-                {
-                  value: 'online',
-                  icon: '🌐',
-                  title: 'Online Payment',
-                  description: 'Coming Soon',
-                  disabled: true,
-                },
-              ].map((method) => {
-                const isSelected = paymentMethod === method.value;
+                  title: m.display_name || m.method,
+                  description: m.instructions || 'Pay at venue',
+                  enumValue: 'pay_at_counter',
+                };
+
+                const isSelected = paymentMethod === info.enumValue;
 
                 return (
                   <button
-                    key={method.value}
+                    key={m.method}
                     type="button"
-                    disabled={method.disabled}
-                    onClick={() => setPaymentMethod(method.value as typeof paymentMethod)}
+                    onClick={() => setPaymentMethod(info.enumValue)}
                     className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-center justify-between touch-manipulation ${
-                      method.disabled
-                        ? 'opacity-50 cursor-not-allowed bg-zinc-100 border-zinc-200 text-zinc-400'
-                        : isSelected
+                      isSelected
                         ? 'border-zinc-950 bg-zinc-950 text-white shadow-sm ring-1 ring-zinc-950'
                         : 'border-zinc-200 bg-white text-zinc-900 hover:border-zinc-300 hover:bg-zinc-50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-xl shrink-0">{method.icon}</span>
+                      <span className="text-xl shrink-0">{info.icon}</span>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold">{method.title}</span>
-                          {method.disabled && (
-                            <Badge variant="neutral" className="text-[10px] py-0 px-1.5 font-semibold bg-zinc-200 text-zinc-700 border-zinc-300">
-                              Coming Soon
-                            </Badge>
-                          )}
+                          <span className="text-xs font-bold">{m.display_name || info.title}</span>
                         </div>
                         <p
                           className={`text-[11px] mt-0.5 ${
                             isSelected ? 'text-zinc-300' : 'text-zinc-500'
                           }`}
                         >
-                          {method.description}
+                          {m.instructions || info.description}
                         </p>
                       </div>
                     </div>

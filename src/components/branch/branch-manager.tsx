@@ -52,12 +52,35 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
   const [requireTableSelection, setRequireTableSelection] = useState<boolean>(true);
   const [requireTablePin, setRequireTablePin] = useState<boolean>(false);
   const [tablePinLength, setTablePinLength] = useState<number>(4);
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
+  const [geoLocating, setGeoLocating] = useState<boolean>(false);
 
   const filteredBranches = branches.filter((b) => {
     if (filter === 'active') return b.status === 'active';
     if (filter === 'archived') return b.status === 'archived';
     return true;
   });
+
+  const handleUseCurrentLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setErrorMsg('Geolocation is not supported by your browser.');
+      return;
+    }
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude.toString());
+        setLongitude(pos.coords.longitude.toString());
+        setGeoLocating(false);
+      },
+      (err) => {
+        setErrorMsg(`Failed to get location: ${err.message}`);
+        setGeoLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const openCreateModal = () => {
     setEditingBranch(null);
@@ -71,6 +94,8 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
     setRequireTableSelection(true);
     setRequireTablePin(false);
     setTablePinLength(4);
+    setLatitude('');
+    setLongitude('');
     setErrorMsg(null);
     setModalOpen(true);
   };
@@ -87,6 +112,8 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
     setRequireTableSelection(branch.require_table_selection ?? true);
     setRequireTablePin(branch.require_table_pin ?? false);
     setTablePinLength(branch.table_pin_length ?? 4);
+    setLatitude(branch.latitude != null ? branch.latitude.toString() : '');
+    setLongitude(branch.longitude != null ? branch.longitude.toString() : '');
     setErrorMsg(null);
     setModalOpen(true);
   };
@@ -108,6 +135,8 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
         require_table_selection: requireTableSelection,
         require_table_pin: requireTablePin,
         table_pin_length: tablePinLength,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
       });
 
       setLoading(false);
@@ -128,6 +157,8 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
         require_table_selection: requireTableSelection,
         require_table_pin: requireTablePin,
         table_pin_length: tablePinLength,
+        latitude: latitude ? parseFloat(latitude) : null,
+        longitude: longitude ? parseFloat(longitude) : null,
       });
 
       setLoading(false);
@@ -427,6 +458,52 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                   onChange={(e) => setAddressLine1(e.target.value)}
                   className="w-full rounded-xl border border-zinc-300 p-2.5 text-xs text-zinc-950 focus:border-zinc-950 focus:outline-none"
                 />
+              </div>
+
+              {/* Venue Geolocation Coordinates */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-blue-950 uppercase tracking-wider">
+                    📍 Venue GPS Location Coordinates
+                  </h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUseCurrentLocation}
+                    disabled={geoLocating}
+                    className="text-[11px] font-bold bg-white text-blue-900 border-blue-300 hover:bg-blue-100"
+                  >
+                    {geoLocating ? 'Locating...' : '📍 Use Current Location'}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-blue-800 leading-relaxed">
+                  Used by the Order Security Engine to verify customers are physically inside the venue before allowing checkout.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 7.2906"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 p-2.5 text-xs font-mono text-zinc-950 bg-white focus:border-zinc-950 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 80.6337"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-300 p-2.5 text-xs font-mono text-zinc-950 bg-white focus:border-zinc-950 focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Ordering & Table PIN Settings */}

@@ -14,6 +14,8 @@ export interface CreateBranchInput {
   require_table_selection?: boolean;
   require_table_pin?: boolean;
   table_pin_length?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface UpdateBranchInput extends Partial<CreateBranchInput> {
@@ -83,6 +85,8 @@ export class BranchService {
         require_table_selection: input.require_table_selection ?? true,
         require_table_pin: input.require_table_pin ?? false,
         table_pin_length: input.table_pin_length ?? 4,
+        latitude: input.latitude ?? null,
+        longitude: input.longitude ?? null,
       });
 
     if (insertErr) {
@@ -144,6 +148,8 @@ export class BranchService {
     if (input.require_table_selection !== undefined) updateData.require_table_selection = input.require_table_selection;
     if (input.require_table_pin !== undefined) updateData.require_table_pin = input.require_table_pin;
     if (input.table_pin_length !== undefined) updateData.table_pin_length = input.table_pin_length;
+    if (input.latitude !== undefined) updateData.latitude = input.latitude;
+    if (input.longitude !== undefined) updateData.longitude = input.longitude;
 
     const { data, error } = await supabase
       .from('branches')

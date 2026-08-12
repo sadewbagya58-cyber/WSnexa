@@ -130,8 +130,12 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
                 Offline
               </span>
             )}
-            <Badge variant={statusVariantMap[order.status] || 'neutral'}>
-              {statusEmojiMap[order.status] || '📦'} {order.status.toUpperCase()}
+            <Badge variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}>
+              {order.approval_status === 'pending_waiter_approval'
+                ? '🛡️ WAITING FOR WAITER'
+                : order.approval_status === 'rejected'
+                ? '❌ REJECTED'
+                : `${statusEmojiMap[order.status] || '📦'} ${order.status.toUpperCase()}`}
             </Badge>
           </div>
         </div>
@@ -140,8 +144,12 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {/* Status Card */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm text-center space-y-3">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-4xl border border-emerald-200 shadow-inner">
-            {statusEmojiMap[order.status] || '🎉'}
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-4xl border border-amber-200 shadow-inner">
+            {order.approval_status === 'pending_waiter_approval'
+              ? '🛡️'
+              : order.approval_status === 'rejected'
+              ? '🛑'
+              : statusEmojiMap[order.status] || '🎉'}
           </div>
           <div>
             <span className="text-[11px] font-extrabold uppercase tracking-widest text-zinc-400">
@@ -152,16 +160,30 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             </h2>
           </div>
           <p className="text-xs text-zinc-600 max-w-sm mx-auto leading-relaxed font-medium">
-            {order.status === 'pending' && 'Your order has been received by the kitchen. Preparation will begin shortly.'}
-            {order.status === 'confirmed' && 'Your order has been confirmed by the kitchen.'}
-            {order.status === 'preparing' && 'Your meal is actively being prepared in the kitchen!'}
-            {order.status === 'ready' && 'Your order is ready! It will be served to your table shortly.'}
-            {order.status === 'completed' && 'Order completed. Thank you for dining with us!'}
-            {order.status === 'cancelled' && 'This order was cancelled.'}
+            {order.approval_status === 'pending_waiter_approval' && (
+              <span className="text-amber-800 font-bold">
+                Your order is awaiting waiter confirmation before being sent to the kitchen.
+              </span>
+            )}
+            {order.approval_status === 'rejected' && (
+              <span className="text-rose-700 font-bold">
+                Order rejected by staff. Reason: {order.rejection_reason || 'Table/session verification failed.'}
+              </span>
+            )}
+            {order.approval_status !== 'pending_waiter_approval' && order.approval_status !== 'rejected' && (
+              <>
+                {order.status === 'pending' && 'Your order has been received by the kitchen. Preparation will begin shortly.'}
+                {order.status === 'confirmed' && 'Your order has been confirmed by the kitchen.'}
+                {order.status === 'preparing' && 'Your meal is actively being prepared in the kitchen!'}
+                {order.status === 'ready' && 'Your order is ready! It will be served to your table shortly.'}
+                {order.status === 'completed' && 'Order completed. Thank you for dining with us!'}
+                {order.status === 'cancelled' && 'This order was cancelled.'}
+              </>
+            )}
           </p>
 
           {/* Timeline Progress Tracker */}
-          {order.status !== 'cancelled' && (
+          {order.status !== 'cancelled' && order.approval_status !== 'pending_waiter_approval' && order.approval_status !== 'rejected' && (
             <div className="pt-4 border-t border-zinc-100">
               <div className="relative flex items-center justify-between">
                 {steps.map((step, idx) => {

@@ -33,6 +33,8 @@ export default async function BranchesPage() {
     require_table_selection: (b as unknown as { require_table_selection?: boolean }).require_table_selection ?? true,
     require_table_pin: (b as unknown as { require_table_pin?: boolean }).require_table_pin ?? false,
     table_pin_length: (b as unknown as { table_pin_length?: number }).table_pin_length ?? 4,
+    latitude: (b as unknown as { latitude?: number | null }).latitude ?? null,
+    longitude: (b as unknown as { longitude?: number | null }).longitude ?? null,
   }));
 
   return (

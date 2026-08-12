@@ -59,6 +59,9 @@ export interface OrderRecord {
   service_area_id?: string | null;
   service_area_name_snapshot?: string | null;
   approval_status?: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   location_verified?: boolean;
   table?: {
     id: string;
@@ -438,6 +441,8 @@ export class OrderService {
       `)
       .eq('branch_id', context.activeBranch.id)
       .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+      .neq('approval_status', 'pending_waiter_approval')
+      .neq('approval_status', 'rejected')
       .order('created_at', { ascending: true });
 
     return (data as unknown as OrderRecord[]) || [];

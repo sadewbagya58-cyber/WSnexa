@@ -1,4 +1,6 @@
 import { QrService } from '@/server/services/qr.service';
+import { BranchPaymentService } from '@/server/services/branch-payment.service';
+import { OrderSecurityService } from '@/server/services/order-security.service';
 import { CheckoutPreview } from '@/components/guest/checkout-preview';
 import { CartProvider } from '@/features/cart/cart-context';
 
@@ -34,12 +36,21 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const branchId = payload.branch.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
 
+  const [paymentMethods, securitySettings] = await Promise.all([
+    BranchPaymentService.getBranchPaymentMethods(branchId),
+    OrderSecurityService.getBranchSecuritySettings(branchId),
+  ]);
+
+  const enabledPaymentMethods = paymentMethods.filter((m) => m.is_enabled);
+
   return (
     <CartProvider branchId={branchId} currency={currency}>
       <CheckoutPreview
         token={token}
         branchName={payload.branch.name}
         businessName={payload.business.name}
+        enabledPaymentMethods={enabledPaymentMethods}
+        securitySettings={securitySettings}
       />
     </CartProvider>
   );

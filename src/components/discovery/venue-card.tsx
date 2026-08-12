@@ -14,8 +14,10 @@ export function VenueCard({ venue }: VenueCardProps) {
     .replace('_', ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase());
 
+  const hasOrdering = venue.has_wsnexa_ordering ?? venue.is_accepting_orders;
+
   return (
-    <div className="group rounded-3xl border border-zinc-200 bg-white shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between">
+    <div className="group rounded-3xl border border-zinc-200 bg-white shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col justify-between max-w-full">
       {/* Cover Header */}
       <div className="relative h-48 w-full bg-zinc-900 overflow-hidden">
         {venue.cover_image_url ? (
@@ -33,15 +35,15 @@ export function VenueCard({ venue }: VenueCardProps) {
         )}
 
         {/* Top Badges */}
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none gap-2">
           <Badge className="bg-zinc-950/80 backdrop-blur-md text-amber-400 font-extrabold text-[10px] px-2.5 py-1 border border-zinc-800">
             {typeFormatted}
           </Badge>
           <Badge
-            variant={venue.is_accepting_orders ? 'success' : 'neutral'}
+            variant={hasOrdering ? 'success' : 'neutral'}
             className="text-[10px] font-bold px-2 py-0.5"
           >
-            {venue.is_accepting_orders ? '• Accepting Orders' : 'Not Accepting Orders'}
+            {hasOrdering ? '✓ WSNexa Ordering Available' : 'View Venue Only'}
           </Badge>
         </div>
 
@@ -80,7 +82,7 @@ export function VenueCard({ venue }: VenueCardProps) {
         </div>
 
         {/* Footer Meta & Link */}
-        <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
+        <div className="pt-3 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600 flex-wrap gap-1">
           <div className="flex items-center gap-1.5 font-bold">
             <span className="text-amber-500">★</span>
             <span className="text-zinc-950 font-black">
@@ -91,15 +93,23 @@ export function VenueCard({ venue }: VenueCardProps) {
             ) : null}
           </div>
 
-          <span className="text-[11px] font-bold text-zinc-400">📍 {venue.city}</span>
+          <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400">
+            {venue.distance_text ? (
+              <span className="text-emerald-900 font-extrabold bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">
+                📍 {venue.distance_text}
+              </span>
+            ) : (
+              <span>📍 {venue.city}</span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Action Button Link */}
+      {/* Action Button Link (min-h-[44px] touch target) */}
       <div className="p-4 pt-0">
         <Link
           href={`/venues/${venue.slug}`}
-          className="w-full block text-center py-2.5 rounded-xl bg-zinc-950 hover:bg-amber-500 hover:text-black text-white text-xs font-extrabold transition-all"
+          className="w-full flex items-center justify-center min-h-[44px] rounded-xl bg-zinc-950 hover:bg-amber-500 hover:text-black text-white text-xs font-extrabold transition-all"
         >
           Explore Venue →
         </Link>

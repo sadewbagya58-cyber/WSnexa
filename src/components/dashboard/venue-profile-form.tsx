@@ -39,6 +39,9 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     isPublished: initialProfile?.is_published || false,
     isAcceptingOrders: initialProfile?.is_accepting_orders ?? true,
     featuredBranchId: initialProfile?.featured_branch_id || '',
+    bookingUrl: initialProfile?.booking_url || '',
+    agodaUrl: initialProfile?.agoda_url || '',
+    externalBookingUrl: initialProfile?.external_booking_url || '',
   });
 
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(Boolean(initialProfile?.slug));
@@ -344,6 +347,60 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               placeholder="+94 11 234 5678"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
             />
+          </div>
+        </div>
+
+        {/* External Links & Booking Section */}
+        <div className="border-t border-zinc-100 pt-4 space-y-4">
+          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Website & External Hotel Booking Links</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Official Website</label>
+              <input
+                name="websiteUrl"
+                type="text"
+                value={formData.websiteUrl}
+                onChange={handleChange}
+                placeholder="https://aurahotel.com"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Booking.com Listing URL</label>
+              <input
+                name="bookingUrl"
+                type="text"
+                value={formData.bookingUrl}
+                onChange={handleChange}
+                placeholder="https://www.booking.com/hotel/..."
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Agoda Listing URL</label>
+              <input
+                name="agodaUrl"
+                type="text"
+                value={formData.agodaUrl}
+                onChange={handleChange}
+                placeholder="https://www.agoda.com/..."
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Direct Reservation Engine URL</label>
+              <input
+                name="externalBookingUrl"
+                type="text"
+                value={formData.externalBookingUrl}
+                onChange={handleChange}
+                placeholder="https://reserve.aurahotel.com"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
           </div>
         </div>
 

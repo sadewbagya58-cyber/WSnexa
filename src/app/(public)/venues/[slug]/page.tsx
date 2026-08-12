@@ -11,6 +11,8 @@ import { VenueFavoriteService } from '@/server/services/venue-favorite.service';
 import { VenueReviewService } from '@/server/services/venue-review.service';
 import { FavoriteButton } from '@/components/discovery/favorite-button';
 import { ReviewForm } from '@/components/discovery/review-form';
+import { GoogleMapView } from '@/components/maps/google-map-view';
+import { getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
 
 interface VenuePageProps {
   params: Promise<{ slug: string }>;
@@ -50,12 +52,15 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
   const priceDisplay = '$'.repeat(venue.price_level || 2);
   const typeFormatted = venue.venue_type.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
+  const hasOrdering = venue.has_wsnexa_ordering ?? venue.is_accepting_orders;
+  const directionsUrl = getGoogleMapsDirectionsUrl(venue.latitude, venue.longitude, venue.address_public || venue.city);
+
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between">
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between overflow-x-hidden max-w-full">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-200 text-zinc-950 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/explore" className="flex items-center gap-2 font-black text-sm text-zinc-700 hover:text-zinc-950">
+          <Link href="/explore" className="flex items-center gap-2 font-black text-sm text-zinc-700 hover:text-zinc-950 min-h-[44px]">
             ← Back to Explore
           </Link>
           <div className="flex items-center gap-3">
@@ -84,7 +89,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
       </div>
 
       {/* Main Details Area */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 -mt-16 relative z-10 space-y-8 pb-16">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 -mt-16 relative z-10 space-y-8 pb-16 max-w-full">
         {/* Profile Card Header */}
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -119,18 +124,18 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               </div>
             </div>
 
-            {/* Ordering Availability & Handoff */}
+            {/* Ordering Availability & WSNexa Badge */}
             <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
               <Badge
-                variant={venue.is_accepting_orders ? 'success' : 'neutral'}
+                variant={hasOrdering ? 'success' : 'neutral'}
                 className="text-xs font-bold px-3 py-1 self-start sm:self-end"
               >
-                {venue.is_accepting_orders ? '• Accepting Orders' : 'Not Accepting Orders'}
+                {hasOrdering ? '✓ WSNexa Ordering Available' : 'View Venue Only'}
               </Badge>
 
-              {venue.qr_token ? (
+              {venue.qr_token && hasOrdering ? (
                 <Link href={`/m/${venue.qr_token}`}>
-                  <Button className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-black text-xs px-6 py-2.5 shadow-md">
+                  <Button className="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-black text-xs px-6 py-2.5 shadow-md min-h-[44px]">
                     📖 Browse Menu & Order
                   </Button>
                 </Link>
@@ -160,26 +165,104 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
             </div>
           )}
 
-          {/* Contact Details */}
-          <div className="pt-4 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-semibold text-zinc-600">
-            {venue.phone_public && <div>📞 <strong>Phone:</strong> {venue.phone_public}</div>}
-            {venue.email_public && <div>✉️ <strong>Email:</strong> {venue.email_public}</div>}
-            {venue.website_url && (
-              <div>
-                🌐 <strong>Website:</strong>{' '}
-                <a href={venue.website_url} target="_blank" rel="noreferrer" className="text-amber-600 hover:underline">
-                  Visit Website
-                </a>
+          {/* Contact Details & External Links */}
+          <div className="pt-4 border-t border-zinc-100 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-semibold text-zinc-600">
+              {venue.phone_public && <div>📞 <strong>Phone:</strong> {venue.phone_public}</div>}
+              {venue.email_public && <div>✉️ <strong>Email:</strong> {venue.email_public}</div>}
+              {venue.website_url && (
+                <div>
+                  🌐 <strong>Website:</strong>{' '}
+                  <a href={venue.website_url} target="_blank" rel="noreferrer" className="text-amber-600 hover:underline">
+                    Visit Website
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* External Booking Links (Booking.com, Agoda, External Direct) */}
+            {(venue.booking_url || venue.agoda_url || venue.external_booking_url) && (
+              <div className="pt-3 border-t border-zinc-100 space-y-2">
+                <h4 className="text-[11px] font-black uppercase tracking-wider text-zinc-500">
+                  🏨 Hotel Booking & Reservations
+                </h4>
+                <div className="flex flex-wrap items-center gap-2">
+                  {venue.booking_url && (
+                    <a
+                      href={venue.booking_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold hover:bg-blue-100 transition-colors flex items-center gap-1.5 min-h-[38px]"
+                    >
+                      <span>🏨</span> Booking.com
+                    </a>
+                  )}
+
+                  {venue.agoda_url && (
+                    <a
+                      href={venue.agoda_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5 min-h-[38px]"
+                    >
+                      <span>🌴</span> Agoda
+                    </a>
+                  )}
+
+                  {venue.external_booking_url && (
+                    <a
+                      href={venue.external_booking_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold hover:bg-purple-100 transition-colors flex items-center gap-1.5 min-h-[38px]"
+                    >
+                      <span>🔑</span> Direct Reservation
+                    </a>
+                  )}
+                </div>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Public Venue Map Section */}
+        <div className="rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black text-zinc-950">Location & Directions</h2>
+              <p className="text-xs text-zinc-500 font-medium">
+                📍 {venue.address_public || venue.city}, {venue.country}
+              </p>
+            </div>
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs transition-all shadow-2xs min-h-[44px]"
+            >
+              🧭 Get Directions in Google Maps
+            </a>
+          </div>
+
+          <GoogleMapView
+            singleVenue={{
+              displayName: venue.display_name,
+              venueType: venue.venue_type,
+              address: venue.address_public,
+              city: venue.city,
+              lat: venue.latitude,
+              lng: venue.longitude,
+              isAcceptingOrders: hasOrdering,
+            }}
+            height="360px"
+          />
         </div>
 
         {/* Menu Preview Catalog */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black text-zinc-950">Menu Preview</h2>
-            {venue.qr_token && (
+            {venue.qr_token && hasOrdering && (
               <Link href={`/m/${venue.qr_token}`} className="text-xs font-extrabold text-amber-600 hover:underline">
                 View Full Digital Menu →
               </Link>
@@ -286,7 +369,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
       <footer className="bg-white border-t border-zinc-200 text-zinc-600 text-xs py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between">
           <span>© {new Date().getFullYear()} WSNexa Venue Discovery</span>
-          <Link href="/explore" className="text-zinc-950 hover:underline font-extrabold">
+          <Link href="/explore" className="text-zinc-950 hover:underline font-extrabold min-h-[44px] flex items-center">
             Explore All Venues →
           </Link>
         </div>

@@ -89,6 +89,9 @@ export class VenueProfileService {
       is_published: input.isPublished || false,
       is_accepting_orders: input.isAcceptingOrders ?? true,
       featured_branch_id: input.featuredBranchId || null,
+      booking_url: input.bookingUrl || null,
+      agoda_url: input.agodaUrl || null,
+      external_booking_url: input.externalBookingUrl || null,
       updated_at: new Date().toISOString(),
     };
 

@@ -57,6 +57,9 @@ export const venueProfileSchema = z.object({
   isPublished: z.boolean().default(false),
   isAcceptingOrders: z.boolean().default(true),
   featuredBranchId: z.string().uuid('Invalid featured branch ID').optional().nullable(),
+  bookingUrl: z.string().url('Invalid Booking.com URL').optional().nullable().or(z.literal('')),
+  agodaUrl: z.string().url('Invalid Agoda URL').optional().nullable().or(z.literal('')),
+  externalBookingUrl: z.string().url('Invalid external booking URL').optional().nullable().or(z.literal('')),
 });
 
 export type VenueProfileInput = z.infer<typeof venueProfileSchema>;
@@ -67,10 +70,15 @@ export const venueSearchQuerySchema = z.object({
   priceLevel: z.number().int().min(1).max(4).optional(),
   city: z.string().optional(),
   acceptingOrdersOnly: z.boolean().optional(),
+  orderingAvailableOnly: z.boolean().optional(),
+  hasPublicMenuOnly: z.boolean().optional(),
   minRating: z.number().min(0).max(5).optional(),
-  sort: z.enum(['recommended', 'rating', 'reviews', 'newest']).default('recommended'),
-  page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(50).default(12),
+  userLat: z.number().min(-90).max(90).optional(),
+  userLng: z.number().min(-180).max(180).optional(),
+  radiusKm: z.number().positive().optional(),
+  sort: z.enum(['recommended', 'nearest', 'rating', 'reviews', 'trending', 'newest']).default('recommended'),
+  page: z.number().int().min(1).optional().default(1),
+  limit: z.number().int().min(1).max(50).optional().default(12),
 });
 
 export type VenueSearchQuery = z.infer<typeof venueSearchQuerySchema>;

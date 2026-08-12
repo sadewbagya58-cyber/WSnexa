@@ -53,6 +53,7 @@ export const createGuestOrderSchema = z.object({
     longitude: z.number(),
     accuracy: z.number().optional(),
   }).optional().nullable(),
+  locationProof: z.string().optional().nullable(),
 });
 
 export const orderAccessSchema = z.object({

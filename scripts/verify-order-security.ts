@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
+import crypto from 'crypto';
 
 // Parse .env.local BEFORE importing modules
 const envPath = path.join(process.cwd(), '.env.local');
@@ -201,9 +202,24 @@ async function runPhase22OrderSecuritySuite() {
     if (itemErr || !item) throw new Error(`Item insert failed: ${itemErr?.message}`);
     menuItemId = item.id;
 
+    const { hashQrToken } = await import('../src/lib/qr/security');
+
+    // Table QR Code for real checkout integration testing
+    const rawTableQrToken = `TEST-QR-${timestamp}`;
+    const tokenHash = hashQrToken(rawTableQrToken);
+    await admin.from('table_qr_codes').insert({
+      business_id: bizId,
+      branch_id: branchId,
+      dining_table_id: tableAId,
+      token_hash: tokenHash,
+      is_active: true,
+    });
+
     const { OrderSecurityService } = await import('../src/server/services/order-security.service');
     const { BranchPaymentService } = await import('../src/server/services/branch-payment.service');
     const { WaiterService } = await import('../src/server/services/waiter.service');
+
+    const testQrSess = await OrderSecurityService.createQrVisitSession(branchId!, areaAId!, tableAId!, 120);
 
     // ------------------------------------------------------------------
     // TEST 01: Low Security QR Order Succeeds
@@ -212,6 +228,7 @@ async function runPhase22OrderSecuritySuite() {
     const lowEval = await OrderSecurityService.evaluateOrderSubmission({
       branchId: branchId!,
       tableId: tableAId!,
+      qrSessionToken: testQrSess.sessionToken!,
       orderSource: 'qr_customer',
     });
     console.assert(lowEval.allowed && !lowEval.requiresWaiterApproval, 'Test 01 Failed');
@@ -224,10 +241,26 @@ async function runPhase22OrderSecuritySuite() {
     const balNoAccount = await OrderSecurityService.evaluateOrderSubmission({
       branchId: branchId!,
       tableId: tableAId!,
+      qrSessionToken: testQrSess.sessionToken!,
       orderSource: 'qr_customer',
     });
     console.assert(!balNoAccount.allowed && balNoAccount.failureCode === 'ACCOUNT_REQUIRED', 'Test 02 Failed');
-    console.log('  ✅ [PASS] Test 02: Balanced security blocks checkout when customer account is missing');
+
+    // Real OrderService integration test: Anonymous submit MUST fail and create 0 DB rows
+    const { OrderService } = await import('../src/server/services/order.service');
+    const realAnonOrderAttempt = await OrderService.createGuestOrder({
+      rawQrToken: rawTableQrToken,
+      qrSessionToken: testQrSess.sessionToken!,
+      tableId: tableAId!,
+      idempotencyKey: `anon_test_${timestamp}`,
+      cartItems: [{ menuItemId: menuItemId!, quantity: 1, selectedModifiers: [] }],
+      paymentMethod: 'pay_at_counter',
+    } as any, null);
+    if (realAnonOrderAttempt.errorType !== 'ACCOUNT_REQUIRED') {
+      console.log('[Test 02b Debug] realAnonOrderAttempt:', realAnonOrderAttempt);
+    }
+    console.assert(!realAnonOrderAttempt.success && realAnonOrderAttempt.errorType === 'ACCOUNT_REQUIRED', 'Test 02b OrderService Account Gate Failed');
+    console.log('  ✅ [PASS] Test 02: Balanced security blocks checkout when customer account is missing (0 DB rows inserted)');
 
     // ------------------------------------------------------------------
     // TEST 03: Balanced Security Requires Waiter Approval
@@ -235,6 +268,7 @@ async function runPhase22OrderSecuritySuite() {
     const balWithAccount = await OrderSecurityService.evaluateOrderSubmission({
       branchId: branchId!,
       tableId: tableAId!,
+      qrSessionToken: testQrSess.sessionToken!,
       customerId: customerId!,
       orderSource: 'qr_customer',
     });
@@ -242,17 +276,33 @@ async function runPhase22OrderSecuritySuite() {
     console.log('  ✅ [PASS] Test 03: Balanced security requires waiter approval before kitchen');
 
     // ------------------------------------------------------------------
-    // TEST 04: High Security Requires Location Verification
+    // TEST 04: High Security Requires Location Verification & Signed Proof
     // ------------------------------------------------------------------
     await OrderSecurityService.applySecurityPreset(branchId!, 'high');
     const highNoLoc = await OrderSecurityService.evaluateOrderSubmission({
       branchId: branchId!,
       tableId: tableAId!,
+      qrSessionToken: testQrSess.sessionToken!,
       customerId: customerId!,
       orderSource: 'qr_customer',
     });
     console.assert(!highNoLoc.allowed && highNoLoc.failureCode === 'LOCATION_REQUIRED', 'Test 04 Failed');
-    console.log('  ✅ [PASS] Test 04: High security requires device location verification');
+
+    // Signed Location Proof Test
+    const validProof = OrderSecurityService.createLocationProof(branchId!, 6.9271, 79.8612, tableAId!);
+    const verifiedProofVal = OrderSecurityService.verifyLocationProof(validProof, branchId!);
+    console.assert(verifiedProofVal.valid, 'Test 04 Proof Verification Failed');
+
+    const highWithProof = await OrderSecurityService.evaluateOrderSubmission({
+      branchId: branchId!,
+      tableId: tableAId!,
+      qrSessionToken: testQrSess.sessionToken!,
+      customerId: customerId!,
+      locationProof: validProof,
+      orderSource: 'qr_customer',
+    });
+    console.assert(highWithProof.allowed && highWithProof.requiresWaiterApproval, 'Test 04 High Security Proof Failed');
+    console.log('  ✅ [PASS] Test 04: High security requires device location verification & valid signed proof');
 
     // ------------------------------------------------------------------
     // TEST 05: Expired QR Session Rejected

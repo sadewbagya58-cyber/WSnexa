@@ -9,7 +9,7 @@ import { useCart } from '@/features/cart/cart-context';
 import { formatCurrency, calculateRewardDiscountCents } from '@/features/cart/cart-calculations';
 import { isTableAccessVerified } from '@/features/cart/cart-types';
 import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
-import { submitGuestOrderAction } from '@/server/actions/order';
+import { submitGuestOrderAction, generateLocationProofAction } from '@/server/actions/order';
 
 import { BranchPaymentMethod, BranchOrderSecuritySettings } from '@/types/database.types';
 
@@ -19,6 +19,7 @@ interface CheckoutPreviewProps {
   businessName: string;
   enabledPaymentMethods?: BranchPaymentMethod[];
   securitySettings?: BranchOrderSecuritySettings | null;
+  isLoggedIn?: boolean;
 }
 
 const PAYMENT_METHOD_MAP: Record<string, { icon: string; title: string; description: string; enumValue: 'pay_at_counter' | 'cash' | 'card' | 'qr_pay' | 'online' }> = {
@@ -60,6 +61,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   businessName,
   enabledPaymentMethods,
   securitySettings,
+  isLoggedIn = false,
 }) => {
   const router = useRouter();
   const { state, clearCart } = useCart();
@@ -89,6 +91,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   const [locationState, setLocationState] = useState<{
     status: 'idle' | 'loading' | 'success' | 'error';
     coords?: { latitude: number; longitude: number; accuracy?: number };
+    proof?: string;
     errorMessage?: string;
   }>({ status: 'idle' });
 
@@ -108,12 +111,27 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
     setLocationState({ status: 'loading' });
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const accuracy = pos.coords.accuracy;
         if (accuracy > 500) {
           setLocationState({
             status: 'error',
             errorMessage: 'Your location is not accurate enough. Move closer to an open area and try again.',
+          });
+          return;
+        }
+
+        const proofRes = await generateLocationProofAction(
+          state.branchId,
+          pos.coords.latitude,
+          pos.coords.longitude,
+          state.confirmedTable?.tableId
+        );
+
+        if (!proofRes.success || !proofRes.data?.proof) {
+          setLocationState({
+            status: 'error',
+            errorMessage: proofRes.message || 'Device location verification failed.',
           });
           return;
         }
@@ -125,6 +143,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
             longitude: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
           },
+          proof: proofRes.data.proof,
         });
       },
       (err) => {
@@ -222,6 +241,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               accuracy: locationState.coords.accuracy,
             }
           : null,
+        locationProof: locationState.proof || null,
       });
 
       if (!res.success || !res.data) {
@@ -397,6 +417,37 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               )}
             </div>
           </div>
+
+          {/* Customer Account Sign-In Card if required by venue security */}
+          {securitySettings?.require_customer_account && !isLoggedIn && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-2xs space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔐</span>
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                    Sign-in Required by Venue
+                  </h3>
+                  <p className="text-[11px] text-amber-800 mt-0.5 font-medium leading-relaxed">
+                    This venue requires a customer account before placing an order. Sign in to continue.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Link
+                  href={`/login?redirectTo=${encodeURIComponent(`/m/${token}/checkout`)}`}
+                  className="w-1/2 text-center text-xs font-extrabold py-3 rounded-xl bg-amber-900 hover:bg-amber-950 text-white shadow-xs"
+                >
+                  Sign In to Order
+                </Link>
+                <Link
+                  href={`/register?redirectTo=${encodeURIComponent(`/m/${token}/checkout`)}`}
+                  className="w-1/2 text-center text-xs font-extrabold py-3 rounded-xl bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 shadow-xs"
+                >
+                  Create Account
+                </Link>
+              </div>
+            </div>
+          )}
 
           {/* Geolocation Verification Card if required by venue security */}
           {securitySettings?.require_location_verification && (
@@ -581,22 +632,38 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            <Button
-              type="submit"
-              className="w-full text-sm font-extrabold py-3.5 shadow-md bg-zinc-950 hover:bg-zinc-800 text-white"
-              disabled={isSubmitting}
-            >
-              {isSubmitting
-                ? 'Placing Order...'
-                : `Confirm & Submit Order (${formatCurrency(
-                    Math.max(
-                      0,
-                      state.subtotalCents -
-                        calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
-                    ),
-                    state.currency
-                  )})`}
-            </Button>
+            {(() => {
+              const isAccountGateBlocked = Boolean(securitySettings?.require_customer_account) && !isLoggedIn;
+              const isLocationGateBlocked = Boolean(securitySettings?.require_location_verification) && locationState.status !== 'success';
+              const isSubmitDisabled = isSubmitting || isAccountGateBlocked || isLocationGateBlocked;
+
+              let buttonText = `Confirm & Submit Order (${formatCurrency(
+                Math.max(
+                  0,
+                  state.subtotalCents -
+                    calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                ),
+                state.currency
+              )})`;
+
+              if (isSubmitting) buttonText = 'Placing Order...';
+              else if (isAccountGateBlocked) buttonText = '🔐 Sign in Required to Place Order';
+              else if (isLocationGateBlocked) buttonText = '📍 Verify Device Location First';
+
+              return (
+                <Button
+                  type="submit"
+                  className={`w-full text-sm font-extrabold py-3.5 shadow-md ${
+                    isSubmitDisabled
+                      ? 'bg-zinc-300 text-zinc-600 cursor-not-allowed border-zinc-300 shadow-none'
+                      : 'bg-zinc-950 hover:bg-zinc-800 text-white'
+                  }`}
+                  disabled={isSubmitDisabled}
+                >
+                  {buttonText}
+                </Button>
+              );
+            })()}
 
             <Link href={`/m/${token}`} className="block text-center">
               <span className="text-xs font-bold text-zinc-600 hover:text-zinc-950 underline">

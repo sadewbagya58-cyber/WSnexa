@@ -36,6 +36,11 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const branchId = payload.branch.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
 
+  const { createClient } = await import('@/lib/supabase/server');
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isLoggedIn = Boolean(user);
+
   const [paymentMethods, securitySettings] = await Promise.all([
     BranchPaymentService.getBranchPaymentMethods(branchId),
     OrderSecurityService.getBranchSecuritySettings(branchId),
@@ -51,6 +56,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
         businessName={payload.business.name}
         enabledPaymentMethods={enabledPaymentMethods}
         securitySettings={securitySettings}
+        isLoggedIn={isLoggedIn}
       />
     </CartProvider>
   );

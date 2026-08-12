@@ -260,7 +260,28 @@ function PendingOrderApprovalsSection({ branchId }: { branchId: string }) {
     setProcessingId(null);
   };
 
-  if (loading || approvals.length === 0) return null;
+  if (loading) return null;
+
+  if (approvals.length === 0) {
+    return (
+      <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 space-y-2 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🛡️</span>
+            <h3 className="font-extrabold text-sm text-amber-950">
+              Pending Order Approvals (0)
+            </h3>
+          </div>
+          <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+            Queue Empty
+          </span>
+        </div>
+        <p className="text-xs text-amber-900/80 font-medium">
+          No orders are waiting for your approval. New customer orders requiring waiter confirmation will appear here automatically.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 space-y-4 shadow-2xs">

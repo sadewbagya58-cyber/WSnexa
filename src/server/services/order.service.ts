@@ -190,6 +190,14 @@ export class OrderService {
       .eq('token_hash', tokenHash)
       .single();
 
+    if (!tableData || !tableData.branch_id) {
+      return {
+        success: false,
+        message: 'Invalid or expired QR code token. Please scan the venue QR code again.',
+        errorType: 'INVALID_OR_REVOKED_QR',
+      };
+    }
+
     const branchObj = Array.isArray(tableData?.branches) ? tableData?.branches[0] : tableData?.branches;
     if (branchObj?.ordering_mode === 'waiter_only') {
       return {
@@ -199,7 +207,7 @@ export class OrderService {
       };
     }
 
-    const targetBranchId = tableData?.branch_id;
+    const targetBranchId = tableData.branch_id;
 
     // 2b. Server-side Payment Method Validation
     if (targetBranchId && paymentMethod) {
@@ -227,18 +235,20 @@ export class OrderService {
     let secEvalResult: import('./order-security.service').SecurityEvaluationResult | null = null;
     const extendedInput = input as CreateGuestOrderInput & {
       qrSessionToken?: string;
-      userCoordinates?: { latitude: number; longitude: number };
+      userCoordinates?: { latitude: number; longitude: number; accuracy?: number };
+      locationProof?: string;
       isServerVerifiedOnlinePayment?: boolean;
     };
 
     if (targetBranchId) {
       const { OrderSecurityService } = await import('./order-security.service');
-      secEvalResult = await OrderSecurityService.evaluateOrderSubmission({
+      secEvalResult = await OrderSecurityService.authorizeQrCheckout({
         branchId: targetBranchId,
         tableId: tableId || null,
         qrSessionToken: extendedInput.qrSessionToken || rawQrToken || null,
         customerId: activeUserId || null,
         userCoordinates: extendedInput.userCoordinates || null,
+        locationProof: extendedInput.locationProof || null,
         isServerVerifiedOnlinePayment: Boolean(extendedInput.isServerVerifiedOnlinePayment),
         orderSource: 'qr_customer',
       });

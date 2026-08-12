@@ -32,7 +32,8 @@ export interface SecurityEvaluationInput {
   tableId?: string | null;
   qrSessionToken?: string | null;
   customerId?: string | null;
-  userCoordinates?: { latitude: number; longitude: number } | null;
+  userCoordinates?: { latitude: number; longitude: number; accuracy?: number } | null;
+  locationProof?: string | null;
   isServerVerifiedOnlinePayment?: boolean;
   orderSource?: 'qr_customer' | 'waiter' | 'pos_cashier' | 'other';
 }
@@ -55,7 +56,52 @@ export interface SecurityEvaluationResult {
 
 export class OrderSecurityService {
   /**
-   * Retrieves branch security settings directly from DB, auto-seeding defaults if not yet created.
+   * Generates a signed, short-lived (15-minute) location verification proof token.
+   */
+  static createLocationProof(
+    branchId: string,
+    latitude: number,
+    longitude: number,
+    tableId?: string | null
+  ): string {
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15m expiry
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'wsnexa_loc_secret';
+    const dataToSign = `${branchId}:${tableId || ''}:${latitude}:${longitude}:${expiresAt}`;
+    const signature = crypto.createHmac('sha256', secret).update(dataToSign).digest('hex');
+    const payload = { branchId, tableId: tableId || null, latitude, longitude, expiresAt, signature };
+    return Buffer.from(JSON.stringify(payload)).toString('base64url');
+  }
+
+  /**
+   * Validates a signed location verification proof token.
+   */
+  static verifyLocationProof(
+    proofString: string,
+    expectedBranchId: string
+  ): { valid: boolean; latitude?: number; longitude?: number; reason?: string } {
+    try {
+      const raw = Buffer.from(proofString, 'base64url').toString('utf8');
+      const payload = JSON.parse(raw);
+      if (!payload.expiresAt || payload.expiresAt < Date.now()) {
+        return { valid: false, reason: 'Location verification expired. Please verify your location again.' };
+      }
+      if (payload.branchId !== expectedBranchId) {
+        return { valid: false, reason: 'Location verification belongs to another branch.' };
+      }
+      const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'wsnexa_loc_secret';
+      const dataToSign = `${payload.branchId}:${payload.tableId || ''}:${payload.latitude}:${payload.longitude}:${payload.expiresAt}`;
+      const expectedSig = crypto.createHmac('sha256', secret).update(dataToSign).digest('hex');
+      if (payload.signature !== expectedSig) {
+        return { valid: false, reason: 'Invalid location verification proof.' };
+      }
+      return { valid: true, latitude: payload.latitude, longitude: payload.longitude };
+    } catch {
+      return { valid: false, reason: 'Invalid location verification format.' };
+    }
+  }
+
+  /**
+   * Retrieves branch security settings directly from DB at submission time.
    */
   static async getBranchSecuritySettings(branchId: string): Promise<BranchOrderSecuritySettings> {
     const admin = createAdminClient();
@@ -455,7 +501,7 @@ export class OrderSecurityService {
     branchId: string,
     userLat: number,
     userLng: number
-  ): Promise<{ verified: boolean; distanceMeters?: number; allowedRadiusMeters?: number; reason?: string }> {
+  ): Promise<{ verified: boolean; distanceMeters?: number; allowedRadiusMeters?: number; reason?: string; errorCode?: string }> {
     const admin = createAdminClient();
 
     const { data: branch } = await admin
@@ -465,7 +511,11 @@ export class OrderSecurityService {
       .maybeSingle();
 
     if (!branch || branch.latitude == null || branch.longitude == null) {
-      return { verified: true, reason: 'Branch coordinates not configured' };
+      return {
+        verified: false,
+        reason: 'This venue has not completed its location setup. Please ask a staff member for assistance.',
+        errorCode: 'VENUE_LOCATION_NOT_CONFIGURED',
+      };
     }
 
     const settings = await this.getBranchSecuritySettings(branchId);
@@ -485,7 +535,17 @@ export class OrderSecurityService {
       distanceMeters: Math.round(distance),
       allowedRadiusMeters: radius,
       reason: verified ? 'Within allowed radius' : `Device is ${Math.round(distance)}m away (max allowed ${radius}m)`,
+      errorCode: verified ? undefined : 'LOCATION_OUTSIDE_RADIUS',
     };
+  }
+
+  /**
+   * Single Authoritative Server Gate for QR Order Checkouts.
+   */
+  static async authorizeQrCheckout(
+    input: SecurityEvaluationInput
+  ): Promise<SecurityEvaluationResult> {
+    return this.evaluateOrderSubmission(input);
   }
 
   /**
@@ -500,6 +560,7 @@ export class OrderSecurityService {
       qrSessionToken,
       customerId,
       userCoordinates,
+      locationProof,
       isServerVerifiedOnlinePayment = false,
       orderSource = 'qr_customer',
     } = input;
@@ -519,6 +580,7 @@ export class OrderSecurityService {
       };
     }
 
+    // Always fetch LATEST settings from DB at submission time
     const settings = await this.getBranchSecuritySettings(branchId);
 
     // Verified online payment bypass logic
@@ -572,7 +634,7 @@ export class OrderSecurityService {
             qrVal.errorType === 'EXPIRED'
               ? 'This table session has expired. Please scan the WSNexa QR code again.'
               : 'Invalid or revoked QR session. Please scan the WSNexa QR code again.',
-          failureCode: 'QR_SESSION_EXPIRED',
+          failureCode: qrVal.errorType === 'EXPIRED' ? 'QR_SESSION_EXPIRED' : 'QR_SESSION_REVOKED',
         };
       }
 
@@ -627,7 +689,7 @@ export class OrderSecurityService {
             tableSession: tableSessionObj ? 'passed' : 'not_applicable',
             paymentBypass: 'not_applicable',
           },
-          failureReason: 'Account login is required by this venue before placing an order.',
+          failureReason: 'Sign in to place your order at this venue.',
           failureCode: 'ACCOUNT_REQUIRED',
         };
       }
@@ -635,7 +697,61 @@ export class OrderSecurityService {
 
     // 4. Check Location Verification Requirement
     if (settings.require_location_verification) {
-      if (!userCoordinates || typeof userCoordinates.latitude !== 'number' || typeof userCoordinates.longitude !== 'number') {
+      let locVerified = false;
+
+      if (locationProof) {
+        const pCheck = this.verifyLocationProof(locationProof, branchId);
+        if (!pCheck.valid) {
+          return {
+            allowed: false,
+            requiresWaiterApproval: false,
+            checks: {
+              qrSession: settings.require_active_qr_session ? 'passed' : 'not_applicable',
+              customerAccount: settings.require_customer_account ? 'passed' : 'not_applicable',
+              location: 'failed',
+              tableSession: tableSessionObj ? 'passed' : 'not_applicable',
+              paymentBypass: 'not_applicable',
+            },
+            failureReason: pCheck.reason || 'Invalid location proof.',
+            failureCode: 'LOCATION_REQUIRED',
+          };
+        }
+        locVerified = true;
+      } else if (userCoordinates && typeof userCoordinates.latitude === 'number' && typeof userCoordinates.longitude === 'number') {
+        if (userCoordinates.accuracy && userCoordinates.accuracy > 500) {
+          return {
+            allowed: false,
+            requiresWaiterApproval: false,
+            checks: {
+              qrSession: settings.require_active_qr_session ? 'passed' : 'not_applicable',
+              customerAccount: settings.require_customer_account ? 'passed' : 'not_applicable',
+              location: 'failed',
+              tableSession: tableSessionObj ? 'passed' : 'not_applicable',
+              paymentBypass: 'not_applicable',
+            },
+            failureReason: 'Your location is not accurate enough. Move closer to an open area and try again.',
+            failureCode: 'LOCATION_INACCURATE',
+          };
+        }
+
+        const locCheck = await this.verifyLocation(branchId, userCoordinates.latitude, userCoordinates.longitude);
+        if (!locCheck.verified) {
+          return {
+            allowed: false,
+            requiresWaiterApproval: false,
+            checks: {
+              qrSession: settings.require_active_qr_session ? 'passed' : 'not_applicable',
+              customerAccount: settings.require_customer_account ? 'passed' : 'not_applicable',
+              location: 'failed',
+              tableSession: tableSessionObj ? 'passed' : 'not_applicable',
+              paymentBypass: 'not_applicable',
+            },
+            failureReason: locCheck.reason || 'Device location is outside the venue ordering radius.',
+            failureCode: locCheck.errorCode || 'LOCATION_OUTSIDE_RADIUS',
+          };
+        }
+        locVerified = true;
+      } else {
         return {
           allowed: false,
           requiresWaiterApproval: false,
@@ -648,23 +764,6 @@ export class OrderSecurityService {
           },
           failureReason: 'Location access is required by this venue before placing an order.',
           failureCode: 'LOCATION_REQUIRED',
-        };
-      }
-
-      const locCheck = await this.verifyLocation(branchId, userCoordinates.latitude, userCoordinates.longitude);
-      if (!locCheck.verified) {
-        return {
-          allowed: false,
-          requiresWaiterApproval: false,
-          checks: {
-            qrSession: settings.require_active_qr_session ? 'passed' : 'not_applicable',
-            customerAccount: settings.require_customer_account ? 'passed' : 'not_applicable',
-            location: 'failed',
-            tableSession: tableSessionObj ? 'passed' : 'not_applicable',
-            paymentBypass: 'not_applicable',
-          },
-          failureReason: locCheck.reason || 'Device location is outside the venue ordering radius.',
-          failureCode: 'LOCATION_OUTSIDE_RADIUS',
         };
       }
     }

@@ -184,3 +184,34 @@ export async function getPublicOrderTrackingStateAction(
   };
 }
 
+/**
+ * Generates a short-lived server-signed location verification proof token.
+ */
+export async function generateLocationProofAction(
+  branchId: string,
+  latitude: number,
+  longitude: number,
+  tableId?: string | null
+): Promise<ActionResponse<{ proof: string }>> {
+  try {
+    const { OrderSecurityService } = await import('@/server/services/order-security.service');
+    const locCheck = await OrderSecurityService.verifyLocation(branchId, latitude, longitude);
+    if (!locCheck.verified) {
+      return {
+        success: false,
+        message: locCheck.reason || 'Device location is outside the venue ordering radius.',
+      };
+    }
+    const proof = OrderSecurityService.createLocationProof(branchId, latitude, longitude, tableId);
+    return {
+      success: true,
+      data: { proof },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: (err as Error).message || 'Failed to verify location.',
+    };
+  }
+}
+

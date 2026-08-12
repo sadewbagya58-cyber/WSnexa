@@ -140,7 +140,7 @@ async function runVenueMapsVerificationSuite() {
       bookingUrl: 'https://www.booking.com/hotel/us/grand-ocean.html',
       agodaUrl: 'https://www.agoda.com/grand-ocean-resort/hotel',
       externalBookingUrl: 'https://reserve.grandocean.com',
-    } as unknown as Record<string, unknown>);
+    });
 
     console.assert(upsertRes.success, 'Venue Profile Upsert Failed');
 
@@ -187,7 +187,7 @@ async function runVenueMapsVerificationSuite() {
       isAcceptingOrders: false,
       latitude: null,
       longitude: null,
-    } as unknown as Record<string, unknown>);
+    });
 
     // ------------------------------------------------------------------
     // TEST 1: Haversine Server Distance Math Correctness

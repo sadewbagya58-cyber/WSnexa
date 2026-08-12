@@ -125,12 +125,10 @@ export class VenueDiscoveryService {
       query = query.order('created_at', { ascending: false });
     }
 
-    const { data: rawVenues, count: totalCount, error } = await query;
+    const { data: rawVenues, error } = await query;
     if (error || !rawVenues) {
       return { venues: [], total: 0, page, limit, totalPages: 0 };
     }
-
-    const total = totalCount || 0;
 
     const venueIds = rawVenues.map((v) => v.id);
     const businessIds = rawVenues.map((v) => v.business_id);

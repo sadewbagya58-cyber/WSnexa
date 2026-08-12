@@ -62,7 +62,7 @@ export const venueProfileSchema = z.object({
   externalBookingUrl: z.string().url('Invalid external booking URL').optional().nullable().or(z.literal('')),
 });
 
-export type VenueProfileInput = z.infer<typeof venueProfileSchema>;
+export type VenueProfileInput = z.input<typeof venueProfileSchema>;
 
 export const venueSearchQuerySchema = z.object({
   query: z.string().optional(),

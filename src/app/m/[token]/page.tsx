@@ -29,10 +29,26 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
     );
   }
 
-  const payload = menuData as unknown as React.ComponentProps<typeof PublicGuestMenu>;
+  const payload = menuData as unknown as React.ComponentProps<typeof PublicGuestMenu> & { qrVisitSessionToken?: string };
   const branchId = payload.branch.id;
   const businessId = payload.business.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
+  const qrVisitSessionToken = payload.qrVisitSessionToken || null;
+
+  if (qrVisitSessionToken) {
+    try {
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      cookieStore.set(`wsnexa_qrs_${branchId}`, qrVisitSessionToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7200, // 2 hours
+      });
+    } catch {
+      // ignore outside request context
+    }
+  }
 
   const supabase = await createClient();
   const {
@@ -43,7 +59,7 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
   const loyaltyAccount = user ? await LoyaltyService.getCustomerAccount(user.id, businessId) : null;
 
   return (
-    <CartProvider branchId={branchId} currency={currency}>
+    <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
       <PublicGuestMenu
         token={token}
         business={payload.business}

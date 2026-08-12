@@ -147,7 +147,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     setVerifying(true);
     setVerifyError(null);
 
-    const res = await verifyTableAccessAction(branch.id, selectedTableId, pinInput);
+    const res = await verifyTableAccessAction(
+      branch.id,
+      selectedTableId,
+      pinInput,
+      state.qrVisitSessionToken || undefined
+    );
 
     setVerifying(false);
 

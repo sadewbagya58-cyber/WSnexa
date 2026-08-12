@@ -183,14 +183,81 @@ export class OrderService {
       }
     }
 
-    // 2. Check branch ordering_mode (WAITER_ONLY mode blocks customer QR ordering)
-    const { data: tableData } = await admin
-      .from('table_qr_codes')
-      .select('branch_id, branches(business_id, ordering_mode)')
-      .eq('token_hash', tokenHash)
-      .single();
+    const extendedInput = input as CreateGuestOrderInput & {
+      qrVisitSessionToken?: string;
+      qrSessionToken?: string;
+      userCoordinates?: { latitude: number; longitude: number; accuracy?: number };
+      locationProof?: string;
+      isServerVerifiedOnlinePayment?: boolean;
+    };
 
-    if (!tableData || !tableData.branch_id) {
+    let sessionTokenToUse = extendedInput.qrVisitSessionToken || extendedInput.qrSessionToken || null;
+    let targetBranchId: string | null = null;
+    let targetBusinessId: string | null = null;
+
+    const { OrderSecurityService } = await import('./order-security.service');
+
+    // 1. Try resolving target branch from active QR visit session token
+    if (sessionTokenToUse) {
+      const sessionVal = await OrderSecurityService.validateQrVisitSession(sessionTokenToUse);
+      if (sessionVal.valid && sessionVal.session) {
+        targetBranchId = sessionVal.session.branch_id;
+        targetBusinessId = sessionVal.session.business_id;
+      }
+    }
+
+    // 2. If branch not found via visit session, resolve static rawQrToken against all QR tables
+    if (!targetBranchId) {
+      // 2a. Table QR Codes
+      const { data: tQr } = await admin
+        .from('table_qr_codes')
+        .select('branch_id, business_id')
+        .eq('token_hash', tokenHash)
+        .maybeSingle();
+
+      if (tQr && tQr.branch_id) {
+        targetBranchId = tQr.branch_id;
+        targetBusinessId = tQr.business_id;
+      } else {
+        // 2b. Branch QR Codes
+        const { data: bQr } = await admin
+          .from('branch_qr_codes')
+          .select('branch_id, business_id')
+          .eq('token_hash', tokenHash)
+          .maybeSingle();
+
+        if (bQr && bQr.branch_id) {
+          targetBranchId = bQr.branch_id;
+          targetBusinessId = bQr.business_id;
+        } else {
+          // 2c. QR Visit Sessions directly
+          const { data: qSession } = await admin
+            .from('qr_visit_sessions')
+            .select('branch_id, business_id')
+            .eq('session_token_hash', tokenHash)
+            .maybeSingle();
+
+          if (qSession && qSession.branch_id) {
+            targetBranchId = qSession.branch_id;
+            targetBusinessId = qSession.business_id;
+          } else if (tableId) {
+            // 2d. Table Context fallback
+            const { data: tableData } = await admin
+              .from('dining_tables')
+              .select('branch_id, business_id')
+              .eq('id', tableId)
+              .maybeSingle();
+
+            if (tableData && tableData.branch_id) {
+              targetBranchId = tableData.branch_id;
+              targetBusinessId = tableData.business_id;
+            }
+          }
+        }
+      }
+    }
+
+    if (!targetBranchId) {
       return {
         success: false,
         message: 'Invalid or expired QR code token. Please scan the venue QR code again.',
@@ -198,8 +265,14 @@ export class OrderService {
       };
     }
 
-    const branchObj = Array.isArray(tableData?.branches) ? tableData?.branches[0] : tableData?.branches;
-    if (branchObj?.ordering_mode === 'waiter_only') {
+    // Check branch ordering_mode (WAITER_ONLY mode blocks customer QR ordering)
+    const { data: branchData } = await admin
+      .from('branches')
+      .select('business_id, ordering_mode')
+      .eq('id', targetBranchId)
+      .maybeSingle();
+
+    if (branchData?.ordering_mode === 'waiter_only') {
       return {
         success: false,
         message: 'Please ask a staff member to place your order.',
@@ -207,17 +280,37 @@ export class OrderService {
       };
     }
 
-    const targetBranchId = tableData.branch_id;
+    // Auto-create/reconcile visit session token if missing or invalid
+    if (!sessionTokenToUse) {
+      const sessionRes = await OrderSecurityService.createQrVisitSession(
+        targetBranchId,
+        null,
+        tableId || null
+      );
+      if (sessionRes.success && sessionRes.sessionToken) {
+        sessionTokenToUse = sessionRes.sessionToken;
+      }
+    }
+
+    // SAFE DIAGNOSTICS LOGGING (NO SECRETS LOGGED)
+    console.log('[OrderService.createGuestOrder Safe Diagnostics]:', {
+      rawQrTokenPrefix: rawQrToken ? rawQrToken.substring(0, 8) : null,
+      qrVisitSessionTokenPresent: Boolean(sessionTokenToUse),
+      targetBranchIdPrefix: targetBranchId ? targetBranchId.substring(0, 8) : null,
+      tableIdPrefix: tableId ? tableId.substring(0, 8) : null,
+      hasLocationProof: Boolean(extendedInput.locationProof),
+      hasTableAccessProof: Boolean(signedTableAccessProof),
+      authenticatedUser: Boolean(activeUserId),
+    });
 
     // 2b. Server-side Payment Method Validation
-    if (targetBranchId && paymentMethod) {
+    if (paymentMethod) {
       const { BranchPaymentService } = await import('./branch-payment.service');
       const isMethodOk = await BranchPaymentService.isMethodEnabled(targetBranchId, paymentMethod);
       if (!isMethodOk) {
-        const { OrderSecurityService } = await import('./order-security.service');
-        if (branchObj?.business_id) {
+        if (targetBusinessId || branchData?.business_id) {
           await OrderSecurityService.logSecurityEvent({
-            businessId: branchObj.business_id,
+            businessId: targetBusinessId || branchData!.business_id,
             branchId: targetBranchId,
             eventType: 'PAYMENT_METHOD_REJECTED',
             safeMetadata: { paymentMethod },
@@ -233,19 +326,11 @@ export class OrderService {
 
     // 2c. Authoritative Server-side Order Security Engine Evaluation
     let secEvalResult: import('./order-security.service').SecurityEvaluationResult | null = null;
-    const extendedInput = input as CreateGuestOrderInput & {
-      qrSessionToken?: string;
-      userCoordinates?: { latitude: number; longitude: number; accuracy?: number };
-      locationProof?: string;
-      isServerVerifiedOnlinePayment?: boolean;
-    };
-
     if (targetBranchId) {
-      const { OrderSecurityService } = await import('./order-security.service');
       secEvalResult = await OrderSecurityService.authorizeQrCheckout({
         branchId: targetBranchId,
         tableId: tableId || null,
-        qrSessionToken: extendedInput.qrSessionToken || rawQrToken || null,
+        qrSessionToken: sessionTokenToUse,
         customerId: activeUserId || null,
         userCoordinates: extendedInput.userCoordinates || null,
         locationProof: extendedInput.locationProof || null,
@@ -254,9 +339,9 @@ export class OrderService {
       });
 
       if (!secEvalResult.allowed) {
-        if (branchObj?.business_id) {
+        if (targetBusinessId || branchData?.business_id) {
           await OrderSecurityService.logSecurityEvent({
-            businessId: branchObj.business_id,
+            businessId: targetBusinessId || branchData!.business_id,
             branchId: targetBranchId,
             eventType: 'ORDER_SECURITY_REJECTED',
             safeMetadata: { reason: secEvalResult.failureReason, code: secEvalResult.failureCode },

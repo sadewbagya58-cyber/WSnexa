@@ -45,6 +45,7 @@ export interface CartState {
   branchId: string;
   currency: string;
   confirmedTable: ConfirmedTableContext | null;
+  qrVisitSessionToken?: string | null;
   selectedReward?: LoyaltyRewardRecord | null;
   lines: CartLine[];
   subtotalCents: number;

@@ -638,7 +638,8 @@ export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = t
 export async function verifyTableAccessAction(
   branchId: string,
   tableId: string,
-  inputPin?: string
+  inputPin?: string,
+  qrVisitSessionToken?: string
 ): Promise<
   ActionResponse<{
     table?: { id: string; name: string; code: string; table_number: number | null; capacity: number };
@@ -679,6 +680,15 @@ export async function verifyTableAccessAction(
   }
 
   console.log('[verifyTableAccessAction] Request:', { branchId, tableId, inputPinProvided: Boolean(inputPin) });
+
+  if (qrVisitSessionToken && payload.table?.id) {
+    try {
+      const { OrderSecurityService } = await import('@/server/services/order-security.service');
+      await OrderSecurityService.bindTableToQrVisitSession(qrVisitSessionToken, payload.table.id);
+    } catch {
+      // ignore
+    }
+  }
 
   // Generate signed table access proof for secure order submission without persisting raw PIN
   const proofData = payload.table

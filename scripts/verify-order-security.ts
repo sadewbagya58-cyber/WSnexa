@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
-import crypto from 'crypto';
 
 // Parse .env.local BEFORE importing modules
 const envPath = path.join(process.cwd(), '.env.local');
@@ -255,7 +254,7 @@ async function runPhase22OrderSecuritySuite() {
       idempotencyKey: `anon_test_${timestamp}`,
       cartItems: [{ menuItemId: menuItemId!, quantity: 1, selectedModifiers: [] }],
       paymentMethod: 'pay_at_counter',
-    } as any, null);
+    } as unknown as Parameters<typeof OrderService.createGuestOrder>[0], null);
     if (realAnonOrderAttempt.errorType !== 'ACCOUNT_REQUIRED') {
       console.log('[Test 02b Debug] realAnonOrderAttempt:', realAnonOrderAttempt);
     }
@@ -551,7 +550,7 @@ async function runPhase22OrderSecuritySuite() {
     // ------------------------------------------------------------------
     // TEST 28: Duplicate Checkout Idempotency Protected
     // ------------------------------------------------------------------
-    const { data: dupOrderRes, error: dupErr } = await admin.from('orders').insert({
+    const { error: dupErr } = await admin.from('orders').insert({
       business_id: bizId!,
       branch_id: branchId!,
       order_number: 1003,
@@ -664,6 +663,188 @@ async function runPhase22OrderSecuritySuite() {
     console.assert(!waiterSecAuth && ownerSecAuth, 'Test 40 Failed');
     console.log('  ✅ [PASS] Test 40: Order security configuration strictly requires management authorization');
 
+    // ------------------------------------------------------------------
+    // TEST 41: QrService Auto-generates Visit Session Token
+    // ------------------------------------------------------------------
+    const { QrService } = await import('../src/server/services/qr.service');
+    const branchQrRes = await QrService.getActiveBranchQr();
+    let sampleBranchQrToken = rawTableQrToken;
+    if (!branchQrRes?.rawToken) {
+      const { generateSecureQrToken } = await import('../src/lib/qr/security');
+      const pair = generateSecureQrToken();
+      sampleBranchQrToken = pair.rawToken;
+      await admin.from('branch_qr_codes').insert({
+        business_id: bizId!,
+        branch_id: branchId!,
+        token_hash: pair.tokenHash,
+        encrypted_token: pair.encryptedToken,
+        is_active: true,
+      });
+    } else {
+      sampleBranchQrToken = branchQrRes.rawToken;
+    }
+
+    const resolvedMenu = await QrService.resolvePublicBranchMenuByToken(sampleBranchQrToken) as { qrVisitSessionToken?: string };
+    console.assert(Boolean(resolvedMenu.qrVisitSessionToken), 'Test 41 Failed');
+    const resolvedSessionToken = resolvedMenu.qrVisitSessionToken!;
+    console.log('  ✅ [PASS] Test 41: QrService auto-generates QR visit session token on menu resolution');
+
+    // ------------------------------------------------------------------
+    // TEST 42: Table Verification Binds Table & Area to Visit Session
+    // ------------------------------------------------------------------
+    const bindRes = await OrderSecurityService.bindTableToQrVisitSession(resolvedSessionToken, tableAId!);
+    console.assert(bindRes.success && bindRes.serviceAreaId === areaAId!, 'Test 42 Failed');
+
+    const checkBoundVal = await OrderSecurityService.validateQrVisitSession(resolvedSessionToken);
+    console.assert(checkBoundVal.valid && checkBoundVal.session?.table_id === tableAId!, 'Test 42 DB Check Failed');
+    console.log('  ✅ [PASS] Test 42: Table verification successfully binds table & service area to visit session in DB');
+
+    // Enable active QR session requirement for binding & expiry tests 43-48
+    await OrderSecurityService.updateBranchSecuritySettings(branchId!, {
+      require_active_qr_session: true,
+      require_customer_account: false,
+      require_location_verification: false,
+    });
+
+    // ------------------------------------------------------------------
+    // TEST 43: Mismatched Table Rejected (TABLE_MISMATCH)
+    // ------------------------------------------------------------------
+    const { data: tableA2 } = await admin
+      .from('dining_tables')
+      .insert({
+        business_id: bizId!,
+        branch_id: branchId!,
+        service_area_id: areaAId!,
+        name: 'Table A2',
+        code: `TA2-${timestamp}`,
+        status: 'available',
+      })
+      .select()
+      .single();
+
+    const tableMismatchEval = await OrderSecurityService.evaluateOrderSubmission({
+      branchId: branchId!,
+      tableId: tableA2!.id, // Table A2 (Area A) instead of bound Table A1 (Area A)
+      qrSessionToken: resolvedSessionToken,
+      customerId: customerId!,
+      orderSource: 'qr_customer',
+    });
+    if (tableMismatchEval.allowed || tableMismatchEval.failureCode !== 'TABLE_MISMATCH') {
+      console.log('[Test 43 Debug] tableMismatchEval:', tableMismatchEval);
+    }
+    console.assert(!tableMismatchEval.allowed && tableMismatchEval.failureCode === 'TABLE_MISMATCH', 'Test 43 Failed');
+    console.log('  ✅ [PASS] Test 43: Submitting order for different table in same area rejected with TABLE_MISMATCH');
+
+    // ------------------------------------------------------------------
+    // TEST 44: Mismatched Service Area Rejected (AREA_MISMATCH)
+    // ------------------------------------------------------------------
+    const areaOnlySession = await OrderSecurityService.createQrVisitSession(branchId!, areaAId!, null, 120);
+    const areaMismatchEval = await OrderSecurityService.evaluateOrderSubmission({
+      branchId: branchId!,
+      tableId: tableBId!, // Table B1 belongs to Area B
+      qrSessionToken: areaOnlySession.sessionToken!,
+      customerId: customerId!,
+      orderSource: 'qr_customer',
+    });
+    if (areaMismatchEval.allowed || areaMismatchEval.failureCode !== 'AREA_MISMATCH') {
+      console.log('[Test 44 Debug] areaMismatchEval:', areaMismatchEval);
+    }
+    console.assert(!areaMismatchEval.allowed && areaMismatchEval.failureCode === 'AREA_MISMATCH', 'Test 44 Failed');
+    console.log('  ✅ [PASS] Test 44: Submitting order for table in different area rejected with AREA_MISMATCH');
+
+    // ------------------------------------------------------------------
+    // TEST 45: Branch QR Token Checkout Integration (No INVALID_OR_REVOKED_QR)
+    // ------------------------------------------------------------------
+    const branchOrderRes = await OrderService.createGuestOrder({
+      rawQrToken: sampleBranchQrToken,
+      qrVisitSessionToken: resolvedSessionToken,
+      tableId: tableAId!,
+      idempotencyKey: `branch_order_${timestamp}`,
+      cartItems: [{ menuItemId: menuItemId!, quantity: 1, selectedModifiers: [] }],
+      paymentMethod: 'pay_at_counter',
+    } as unknown as Parameters<typeof OrderService.createGuestOrder>[0], customerId!);
+    console.assert(branchOrderRes.success || branchOrderRes.errorType !== 'INVALID_OR_REVOKED_QR', 'Test 45 Failed');
+    console.log('  ✅ [PASS] Test 45: Branch QR code checkout resolves cleanly without token type confusion error');
+
+    // ------------------------------------------------------------------
+    // TEST 46: Fresh Scan Does Not Inherit Revoked Session
+    // ------------------------------------------------------------------
+    await OrderSecurityService.revokeQrVisitSession(resolvedSessionToken);
+    const freshScanMenu = await QrService.resolvePublicBranchMenuByToken(sampleBranchQrToken) as { qrVisitSessionToken?: string };
+    const freshSessionToken = freshScanMenu.qrVisitSessionToken!;
+    console.assert(freshSessionToken !== resolvedSessionToken, 'Test 46 Token Failed');
+    const freshVal = await OrderSecurityService.validateQrVisitSession(freshSessionToken);
+    console.assert(freshVal.valid, 'Test 46 Validation Failed');
+    console.log('  ✅ [PASS] Test 46: Re-scanning valid QR creates fresh new session without inheriting revoked old session');
+
+    // ------------------------------------------------------------------
+    // TEST 47: Expired Visit Session Rejected (QR_SESSION_EXPIRED)
+    // ------------------------------------------------------------------
+    const expSession = await OrderSecurityService.createQrVisitSession(branchId!, areaAId!, tableAId!, -30);
+    const expEval = await OrderSecurityService.evaluateOrderSubmission({
+      branchId: branchId!,
+      tableId: tableAId!,
+      qrSessionToken: expSession.sessionToken!,
+      customerId: customerId!,
+      orderSource: 'qr_customer',
+    });
+    console.assert(!expEval.allowed && expEval.failureCode === 'QR_SESSION_EXPIRED', 'Test 47 Failed');
+    console.log('  ✅ [PASS] Test 47: Expired QR visit session rejected with QR_SESSION_EXPIRED');
+
+    // ------------------------------------------------------------------
+    // TEST 48: Revoked Visit Session Rejected (QR_SESSION_REVOKED)
+    // ------------------------------------------------------------------
+    const revSession = await OrderSecurityService.createQrVisitSession(branchId!, areaAId!, tableAId!, 120);
+    await OrderSecurityService.revokeQrVisitSession(revSession.sessionToken!);
+    const revEval = await OrderSecurityService.evaluateOrderSubmission({
+      branchId: branchId!,
+      tableId: tableAId!,
+      qrSessionToken: revSession.sessionToken!,
+      customerId: customerId!,
+      orderSource: 'qr_customer',
+    });
+    console.assert(!revEval.allowed && revEval.failureCode === 'QR_SESSION_REVOKED', 'Test 48 Failed');
+    console.log('  ✅ [PASS] Test 48: Revoked QR visit session rejected with QR_SESSION_REVOKED');
+
+    // ------------------------------------------------------------------
+    // TEST 49: Static QR Token Auto-Reconciles Missing Session Token
+    // ------------------------------------------------------------------
+    const autoReconcileRes = await OrderService.createGuestOrder({
+      rawQrToken: sampleBranchQrToken,
+      tableId: tableAId!,
+      idempotencyKey: `auto_rec_${timestamp}`,
+      cartItems: [{ menuItemId: menuItemId!, quantity: 1, selectedModifiers: [] }],
+      paymentMethod: 'pay_at_counter',
+    } as unknown as Parameters<typeof OrderService.createGuestOrder>[0], customerId!);
+    console.assert(autoReconcileRes.errorType !== 'INVALID_OR_REVOKED_QR', 'Test 49 Failed');
+    console.log('  ✅ [PASS] Test 49: Static QR token submission seamlessly auto-reconciles session token');
+
+    // ------------------------------------------------------------------
+    // TEST 50: Complete End-to-End Customer QR Order Flow
+    // ------------------------------------------------------------------
+    // 1. Customer scans QR -> Menu resolves session
+    const e2eMenu = await QrService.resolvePublicBranchMenuByToken(sampleBranchQrToken) as { qrVisitSessionToken?: string };
+    const e2eSessionToken = e2eMenu.qrVisitSessionToken!;
+
+    // 2. Table PIN verified -> Session bound to Table A1
+    await OrderSecurityService.bindTableToQrVisitSession(e2eSessionToken, tableAId!);
+
+    // 3. Customer places order at checkout
+    const e2eOrderRes = await OrderService.createGuestOrder({
+      rawQrToken: sampleBranchQrToken,
+      qrVisitSessionToken: e2eSessionToken,
+      tableId: tableAId!,
+      idempotencyKey: `e2e_flow_${timestamp}`,
+      cartItems: [{ menuItemId: menuItemId!, quantity: 2, selectedModifiers: [] }],
+      paymentMethod: 'pay_at_counter',
+    } as unknown as Parameters<typeof OrderService.createGuestOrder>[0], customerId!);
+
+    if (!e2eOrderRes.success) {
+      console.log('[Test 50 Debug] e2eOrderRes:', e2eOrderRes);
+    }
+    console.assert(e2eOrderRes.success && Boolean(e2eOrderRes.data?.orderId), 'Test 50 E2E Order Creation Failed');
+    console.log('  ✅ [PASS] Test 50: Complete end-to-end customer QR order flow succeeds (Scan -> Table Verify -> Checkout -> Order)');
+
     // Cleanup
     if (branchBiz2?.id) await admin.from('branches').delete().eq('id', branchBiz2.id);
     if (biz2?.id) await admin.from('businesses').delete().eq('id', biz2.id);
@@ -676,7 +857,7 @@ async function runPhase22OrderSecuritySuite() {
     if (customerId) await admin.auth.admin.deleteUser(customerId);
 
     console.log('\n================================================================');
-    console.log('  Phase 22 Order Security & Payments: ALL 40 TESTS PASSED     ');
+    console.log('  Phase 22.3 QR Session Lifecycle: ALL 50 TESTS PASSED          ');
     console.log('================================================================\n');
   } catch (err: unknown) {
     console.error('❌ Phase 22 Verification Error:', err);

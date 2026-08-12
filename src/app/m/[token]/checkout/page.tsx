@@ -31,10 +31,23 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const payload = menuData as unknown as {
     business: { name: string; currency: string };
     branch: { id: string; name: string; currency?: string };
+    qrVisitSessionToken?: string;
   };
 
   const branchId = payload.branch.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
+  let qrVisitSessionToken = payload.qrVisitSessionToken || null;
+
+  if (!qrVisitSessionToken) {
+    try {
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      const cookieVal = cookieStore.get(`wsnexa_qrs_${branchId}`);
+      if (cookieVal) qrVisitSessionToken = cookieVal.value;
+    } catch {
+      // ignore outside request context
+    }
+  }
 
   const { createClient } = await import('@/lib/supabase/server');
   const supabase = await createClient();
@@ -49,7 +62,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const enabledPaymentMethods = paymentMethods.filter((m) => m.is_enabled);
 
   return (
-    <CartProvider branchId={branchId} currency={currency}>
+    <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
       <CheckoutPreview
         token={token}
         branchName={payload.branch.name}

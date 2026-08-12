@@ -291,6 +291,22 @@ export class QrService {
     const payload = data as Record<string, unknown>;
     payload.rawToken = rawToken;
 
+    const branchObj = payload.branch as { id?: string };
+    const serviceAreaId = (payload.service_area_id as string) || null;
+    const tableId = (payload.table_id as string) || null;
+
+    if (branchObj && branchObj.id) {
+      const { OrderSecurityService } = await import('./order-security.service');
+      const sessionRes = await OrderSecurityService.createQrVisitSession(
+        branchObj.id,
+        serviceAreaId,
+        tableId
+      );
+      if (sessionRes.success && sessionRes.sessionToken) {
+        payload.qrVisitSessionToken = sessionRes.sessionToken;
+      }
+    }
+
     return payload;
   }
 

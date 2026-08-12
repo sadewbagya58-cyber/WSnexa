@@ -34,7 +34,8 @@ type CartAction =
   | { type: 'REMOVE_LINE'; payload: { lineId: string } }
   | { type: 'CLEAR_CART' }
   | { type: 'SET_TABLE_CONTEXT'; payload: ConfirmedTableContext | null }
-  | { type: 'SET_SELECTED_REWARD'; payload: LoyaltyRewardRecord | null };
+  | { type: 'SET_SELECTED_REWARD'; payload: LoyaltyRewardRecord | null }
+  | { type: 'SET_QR_VISIT_SESSION_TOKEN'; payload: string | null };
 
 const initialCartState: CartState = {
   branchId: '',
@@ -254,6 +255,15 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       break;
     }
 
+    case 'SET_QR_VISIT_SESSION_TOKEN': {
+      nextState = {
+        ...state,
+        qrVisitSessionToken: action.payload,
+        updatedAt: new Date().toISOString(),
+      };
+      break;
+    }
+
     default:
       return state;
   }
@@ -288,6 +298,7 @@ interface CartContextValue {
   clearCart: () => void;
   setConfirmedTable: (table: ConfirmedTableContext | null) => void;
   setSelectedReward: (reward: LoyaltyRewardRecord | null) => void;
+  setQrVisitSessionToken: (token: string | null) => void;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -295,8 +306,9 @@ const CartContext = createContext<CartContextValue | null>(null);
 export const CartProvider: React.FC<{
   branchId: string;
   currency: string;
+  qrVisitSessionToken?: string | null;
   children: ReactNode;
-}> = ({ branchId, currency, children }) => {
+}> = ({ branchId, currency, qrVisitSessionToken, children }) => {
   const [state, dispatch] = useReducer(cartReducer, {
     ...initialCartState,
     branchId,
@@ -307,7 +319,11 @@ export const CartProvider: React.FC<{
   useEffect(() => {
     const loaded = loadCartFromStorage(branchId, currency);
     if (loaded) {
-      dispatch({ type: 'HYDRATE_CART', payload: loaded });
+      const merged = {
+        ...loaded,
+        qrVisitSessionToken: qrVisitSessionToken || loaded.qrVisitSessionToken || null,
+      };
+      dispatch({ type: 'HYDRATE_CART', payload: merged });
     } else {
       dispatch({
         type: 'HYDRATE_CART',
@@ -315,11 +331,12 @@ export const CartProvider: React.FC<{
           ...initialCartState,
           branchId,
           currency: currency.toUpperCase(),
+          qrVisitSessionToken: qrVisitSessionToken || null,
           isHydrated: true,
         },
       });
     }
-  }, [branchId, currency]);
+  }, [branchId, currency, qrVisitSessionToken]);
 
   const addLine = (item: {
     menuItemId: string;
@@ -365,6 +382,10 @@ export const CartProvider: React.FC<{
     dispatch({ type: 'SET_SELECTED_REWARD', payload: reward });
   };
 
+  const setQrVisitSessionToken = (token: string | null) => {
+    dispatch({ type: 'SET_QR_VISIT_SESSION_TOKEN', payload: token });
+  };
+
   return (
     <CartContext.Provider
       value={{
@@ -376,6 +397,7 @@ export const CartProvider: React.FC<{
         clearCart,
         setConfirmedTable,
         setSelectedReward,
+        setQrVisitSessionToken,
       }}
     >
       {children}

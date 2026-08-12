@@ -38,6 +38,7 @@ export const cartItemInputSchema = z.object({
 
 export const createGuestOrderSchema = z.object({
   rawQrToken: z.string().min(1, 'Branch QR token is required'),
+  qrVisitSessionToken: z.string().optional().nullable(),
   tableId: z.string().uuid().optional().nullable(),
   inputPin: z.string().optional().nullable(),
   signedTableAccessProof: z.string().optional().nullable(),

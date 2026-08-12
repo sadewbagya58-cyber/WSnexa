@@ -349,13 +349,23 @@ export class OrderSecurityService {
   /**
    * Revokes an active QR visit session.
    */
-  static async revokeQrVisitSession(sessionId: string): Promise<boolean> {
+  static async revokeQrVisitSession(identifier: string): Promise<boolean> {
+    if (!identifier) return false;
     const admin = createAdminClient();
     try {
-      await admin
-        .from('qr_visit_sessions')
-        .update({ revoked_at: new Date().toISOString() })
-        .eq('id', sessionId);
+      const isRawToken = identifier.startsWith('WSN-QRS-') || identifier.length > 36;
+      if (isRawToken) {
+        const tokenHash = crypto.createHash('sha256').update(identifier.trim()).digest('hex');
+        await admin
+          .from('qr_visit_sessions')
+          .update({ revoked_at: new Date().toISOString() })
+          .eq('session_token_hash', tokenHash);
+      } else {
+        await admin
+          .from('qr_visit_sessions')
+          .update({ revoked_at: new Date().toISOString() })
+          .eq('id', identifier);
+      }
     } catch {
       // ignore
     }
@@ -397,9 +407,50 @@ export class OrderSecurityService {
         return { valid: false, session, errorType: 'EXPIRED' };
       }
 
+      // Safely update last_activity_at asynchronously
+      void admin
+        .from('qr_visit_sessions')
+        .update({ last_activity_at: new Date().toISOString() })
+        .eq('session_token_hash', tokenHash);
+
       return { valid: true, session };
     } catch {
       return { valid: false, errorType: 'NOT_FOUND' };
+    }
+  }
+
+  /**
+   * Binds a verified dining table (and its service area) to an active QR visit session.
+   */
+  static async bindTableToQrVisitSession(
+    sessionToken: string,
+    tableId: string
+  ): Promise<{ success: boolean; serviceAreaId?: string }> {
+    if (!sessionToken || !tableId) return { success: false };
+    const tokenHash = crypto.createHash('sha256').update(sessionToken.trim()).digest('hex');
+    const admin = createAdminClient();
+
+    try {
+      const { data: tData } = await admin
+        .from('dining_tables')
+        .select('service_area_id')
+        .eq('id', tableId)
+        .maybeSingle();
+
+      const serviceAreaId = tData?.service_area_id || null;
+
+      await admin
+        .from('qr_visit_sessions')
+        .update({
+          table_id: tableId,
+          service_area_id: serviceAreaId,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq('session_token_hash', tokenHash);
+
+      return { success: true, serviceAreaId: serviceAreaId || undefined };
+    } catch {
+      return { success: false };
     }
   }
 
@@ -598,11 +649,10 @@ export class OrderSecurityService {
       };
     }
 
-    let qrSessionObj: QrVisitSession | undefined;
-
     // 1. Check Active QR Visit Session Requirement
-    if (settings.require_active_qr_session) {
-      if (!qrSessionToken) {
+    let qrSessionObj: QrVisitSession | null = null;
+    if (settings.require_active_qr_session || (qrSessionToken && qrSessionToken.trim().length > 0)) {
+      if (!qrSessionToken && settings.require_active_qr_session) {
         return {
           allowed: false,
           requiresWaiterApproval: false,
@@ -618,7 +668,7 @@ export class OrderSecurityService {
         };
       }
 
-      const qrVal = await this.validateQrVisitSession(qrSessionToken);
+      const qrVal = await this.validateQrVisitSession(qrSessionToken || '');
       if (!qrVal.valid || !qrVal.session) {
         return {
           allowed: false,
@@ -654,6 +704,49 @@ export class OrderSecurityService {
           },
           failureReason: 'QR session belongs to a different branch location.',
           failureCode: 'BRANCH_MISMATCH',
+        };
+      }
+
+      // Verify QR session service area matches table service area if bound
+      if (qrSessionObj.service_area_id && tableId) {
+        const admin = createAdminClient();
+        const { data: tData } = await admin
+          .from('dining_tables')
+          .select('service_area_id')
+          .eq('id', tableId)
+          .maybeSingle();
+
+        if (tData && tData.service_area_id && tData.service_area_id !== qrSessionObj.service_area_id) {
+          return {
+            allowed: false,
+            requiresWaiterApproval: false,
+            checks: {
+              qrSession: 'failed',
+              customerAccount: 'not_applicable',
+              location: 'not_applicable',
+              tableSession: 'not_applicable',
+              paymentBypass: 'not_applicable',
+            },
+            failureReason: 'QR session is restricted to a different service area.',
+            failureCode: 'AREA_MISMATCH',
+          };
+        }
+      }
+
+      // Verify QR session table matches order table if bound
+      if (qrSessionObj.table_id && tableId && qrSessionObj.table_id !== tableId) {
+        return {
+          allowed: false,
+          requiresWaiterApproval: false,
+          checks: {
+            qrSession: 'failed',
+            customerAccount: 'not_applicable',
+            location: 'not_applicable',
+            tableSession: 'not_applicable',
+            paymentBypass: 'not_applicable',
+          },
+          failureReason: 'QR session is bound to a different dining table.',
+          failureCode: 'TABLE_MISMATCH',
         };
       }
     }
@@ -697,8 +790,6 @@ export class OrderSecurityService {
 
     // 4. Check Location Verification Requirement
     if (settings.require_location_verification) {
-      let locVerified = false;
-
       if (locationProof) {
         const pCheck = this.verifyLocationProof(locationProof, branchId);
         if (!pCheck.valid) {
@@ -716,7 +807,6 @@ export class OrderSecurityService {
             failureCode: 'LOCATION_REQUIRED',
           };
         }
-        locVerified = true;
       } else if (userCoordinates && typeof userCoordinates.latitude === 'number' && typeof userCoordinates.longitude === 'number') {
         if (userCoordinates.accuracy && userCoordinates.accuracy > 500) {
           return {
@@ -750,7 +840,6 @@ export class OrderSecurityService {
             failureCode: locCheck.errorCode || 'LOCATION_OUTSIDE_RADIUS',
           };
         }
-        locVerified = true;
       } else {
         return {
           allowed: false,

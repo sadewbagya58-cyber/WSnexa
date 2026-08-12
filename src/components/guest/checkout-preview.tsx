@@ -224,6 +224,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
 
       const res = await submitGuestOrderAction({
         rawQrToken: token,
+        qrVisitSessionToken: state.qrVisitSessionToken || null,
         tableId: state.confirmedTable?.tableId || null,
         inputPin: inputPin.trim() || null,
         signedTableAccessProof: state.confirmedTable?.signedTableAccessProof || null,

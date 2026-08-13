@@ -4,7 +4,7 @@ import * as path from 'path';
 
 // Parse .env.local BEFORE importing modules
 try {
-  // @ts-ignore
+  // @ts-expect-error Mock server-only in standalone script
   require.cache[require.resolve('server-only')] = {
     id: require.resolve('server-only'),
     filename: require.resolve('server-only'),

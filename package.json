@@ -36,7 +36,8 @@
     "verify:mobile-ui": "tsx scripts/verify-mobile-ui.ts",
     "verify:order-security": "tsx scripts/verify-order-security.ts",
     "verify:venue-maps": "tsx scripts/verify-venue-maps.ts",
-    "verify:venue-publishing": "tsx scripts/verify-venue-publishing.ts"
+    "verify:venue-publishing": "tsx scripts/verify-venue-publishing.ts",
+    "verify:launch-readiness": "tsx scripts/verify-launch-readiness.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

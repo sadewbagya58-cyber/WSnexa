@@ -63,12 +63,20 @@ export default async function AdminVenuesPage({
           </p>
         </div>
 
-        <Link
-          href="/admin/venues/new"
-          className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs px-5 py-3 rounded-2xl shadow-2xs text-center flex items-center justify-center gap-2 min-h-[44px]"
-        >
-          <span>➕ Create Venue as Admin</span>
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/admin/launch-readiness"
+            className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs px-5 py-3 rounded-2xl shadow-2xs text-center flex items-center justify-center gap-2 min-h-[44px]"
+          >
+            <span>🚀 Launch Readiness</span>
+          </Link>
+          <Link
+            href="/admin/venues/new"
+            className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs px-5 py-3 rounded-2xl shadow-2xs text-center flex items-center justify-center gap-2 min-h-[44px]"
+          >
+            <span>➕ Create Venue</span>
+          </Link>
+        </div>
       </div>
 
       <AdminVenueListClient initialVenues={venues} initialQuery={resolvedParams.query || ''} />

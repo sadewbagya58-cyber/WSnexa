@@ -85,14 +85,23 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
           )}
         </div>
 
-        <Button
-          variant="outline"
-          className="text-xs font-bold"
-          onClick={() => router.refresh()}
-          disabled={isPending}
-        >
-          {isPending ? 'Updating...' : '🔄 Refresh Queue'}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[40px]"
+            onClick={() => router.push('/dashboard/waiter/menu')}
+          >
+            🍽️ Take New Order / Menu
+          </Button>
+
+          <Button
+            variant="outline"
+            className="text-xs font-bold min-h-[40px]"
+            onClick={() => router.refresh()}
+            disabled={isPending}
+          >
+            {isPending ? 'Updating...' : '🔄 Refresh Queue'}
+          </Button>
+        </div>
       </div>
 
       {requests.length === 0 ? (

@@ -40,11 +40,18 @@ export function MenuBrandHeader({
   const displayName = venueDisplayName || businessName;
   const locationText = address || city || addressLine1 || null;
 
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() || '')
+    .join('') || displayName.slice(0, 2).toUpperCase();
+
   return (
     <div className="bg-white border-b border-zinc-200/80 px-4 pt-4 pb-3 shadow-2xs">
       <div className="max-w-2xl mx-auto flex flex-col items-center text-center space-y-2">
         {/* Circular Venue Logo */}
-        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-zinc-200 bg-zinc-100 overflow-hidden shadow-xs flex items-center justify-center shrink-0">
+        <div className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-full border-2 border-zinc-200 bg-zinc-950 text-white overflow-hidden shadow-xs flex items-center justify-center shrink-0">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -53,8 +60,8 @@ export function MenuBrandHeader({
               className="h-full w-full object-cover"
             />
           ) : (
-            <span className="text-2xl font-black text-zinc-400">
-              {displayName.charAt(0).toUpperCase()}
+            <span className="text-xl sm:text-2xl font-black font-mono tracking-widest text-white">
+              {initials}
             </span>
           )}
         </div>

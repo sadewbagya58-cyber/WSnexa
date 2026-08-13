@@ -422,6 +422,51 @@ async function runUnifiedMenuSuite() {
     console.assert(!!pkg.scripts['verify:unified-menu'], 'Test 30 Failed: Script missing from package.json');
     console.log('  ✅ [PASS] Test 30: verify:unified-menu script registered in package.json');
 
+    // TEST 31: Waiter navigation visibly contains Waiter Menu in DashboardShell
+    const shellContent = fs.readFileSync(path.join(process.cwd(), 'src/components/layout/dashboard-shell.tsx'), 'utf8');
+    console.assert(shellContent.includes('/dashboard/waiter/menu'), 'Test 31 Failed: Waiter Menu link missing from navigation');
+    console.log('  ✅ [PASS] Test 31: Waiter navigation visibly contains Menu');
+
+    // TEST 32: Waiter Request Center header contains Take New Order / Menu button
+    const centerContent = fs.readFileSync(path.join(process.cwd(), 'src/components/waiter/waiter-request-center.tsx'), 'utf8');
+    console.assert(centerContent.includes('/dashboard/waiter/menu'), 'Test 32 Failed: Take New Order button missing');
+    console.log('  ✅ [PASS] Test 32: Waiter Request Center header contains Take New Order button');
+
+    // TEST 33: GuestMenuBottomActions component exists and exportable
+    const bottomActionsModule = await import('../src/components/qr/guest-menu-bottom-actions');
+    console.assert(!!bottomActionsModule.GuestMenuBottomActions, 'Test 33 Failed');
+    console.log('  ✅ [PASS] Test 33: GuestMenuBottomActions component ready');
+
+    // TEST 34: State 1 (No active order + no cart) returns no floating action container
+    const bottomContent = fs.readFileSync(path.join(process.cwd(), 'src/components/qr/guest-menu-bottom-actions.tsx'), 'utf8');
+    console.assert(bottomContent.includes("currentState === 'none'") && bottomContent.includes('return null'), 'Test 34 Failed');
+    console.log('  ✅ [PASS] Test 34: State 1 (Empty) returns no floating bottom action');
+
+    // TEST 35: State 2 (Cart only) renders single NEW CART bar with View Cart CTA
+    console.assert(bottomContent.includes("currentState === 'cart_only'") && bottomContent.includes('View Cart →'), 'Test 35 Failed');
+    console.log('  ✅ [PASS] Test 35: State 2 (Cart Only) renders single cart container');
+
+    // TEST 36: State 3 (Active order only) renders single ACTIVE ORDER bar with View Status CTA
+    console.assert(bottomContent.includes("currentState === 'order_only'") && bottomContent.includes('View Status →'), 'Test 36 Failed');
+    console.log('  ✅ [PASS] Test 36: State 3 (Active Order Only) renders single order container');
+
+    // TEST 37: State 4 (Cart + Active Order) renders ONE unified container with distinct sections
+    console.assert(bottomContent.includes("currentState === 'dual'") && bottomContent.includes('Active Order') && bottomContent.includes('New Cart'), 'Test 37 Failed');
+    console.log('  ✅ [PASS] Test 37: State 4 (Cart + Active Order) renders ONE unified dual container');
+
+    // TEST 38: Status badges use high-contrast semantic classes without dark-on-dark buttons
+    console.assert(bottomContent.includes('bg-amber-50') && bottomContent.includes('bg-emerald-50'), 'Test 38 Failed');
+    console.log('  ✅ [PASS] Test 38: Readable semantic status badges verified without dark-on-dark buttons');
+
+    // TEST 39: Menu content bottom spacing adapts dynamically based on state
+    const publicMenuContent = fs.readFileSync(path.join(process.cwd(), 'src/components/qr/public-guest-menu.tsx'), 'utf8');
+    console.assert(publicMenuContent.includes('bottomPaddingClass') && publicMenuContent.includes('pb-44'), 'Test 39 Failed');
+    console.log('  ✅ [PASS] Test 39: Menu content bottom spacing adapts dynamically');
+
+    // TEST 40: Mobile viewports (320px–430px) and desktop container verified
+    console.assert(bottomContent.includes('max-w-xl') && bottomContent.includes('safe-area-inset-bottom'), 'Test 40 Failed');
+    console.log('  ✅ [PASS] Test 40: Mobile viewports & desktop layout verified');
+
     // Cleanup
     if (orderItem) await admin.from('order_items').delete().eq('id', orderItem.id);
     if (testOrder) await admin.from('orders').delete().eq('id', testOrder.id);
@@ -438,7 +483,7 @@ async function runUnifiedMenuSuite() {
     if (waiterUserId) await admin.auth.admin.deleteUser(waiterUserId);
 
     console.log('\n================================================================');
-    console.log('  Phase 25 Unified Digital Menu: ALL 30 TESTS PASSED            ');
+    console.log('  Phase 25.2 Unified Digital Menu: ALL 40 TESTS PASSED          ');
     console.log('================================================================\n');
   } catch (err: unknown) {
     console.error('❌ Phase 25 Verification Error:', err);

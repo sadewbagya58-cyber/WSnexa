@@ -94,6 +94,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         { label: 'Cashier POS', href: '/dashboard/cashier' },
         { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
         { label: 'Waiter Assistance', href: '/dashboard/waiter' },
+        { label: 'Waiter Menu', href: '/dashboard/waiter/menu' },
       ],
     },
     {

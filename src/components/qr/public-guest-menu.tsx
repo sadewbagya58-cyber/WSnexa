@@ -9,7 +9,7 @@ import { MenuSearch } from '@/components/menu/menu-search';
 import { CategoryTabs } from '@/components/menu/category-tabs';
 import { MenuItemCard } from '@/components/menu/menu-item-card';
 import { MenuItemDetails } from '@/components/menu/menu-item-details';
-import { FloatingCartBar } from '../guest/floating-cart-bar';
+import { GuestMenuBottomActions } from './guest-menu-bottom-actions';
 import { CartDrawer } from '../guest/cart-drawer';
 import { RewardsDrawer } from '../loyalty/rewards-drawer';
 import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
@@ -236,8 +236,17 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     setCartDrawerOpen(false);
   };
 
+  const [bottomState, setBottomState] = useState<'none' | 'cart_only' | 'order_only' | 'dual'>('none');
+
+  const bottomPaddingClass =
+    bottomState === 'dual'
+      ? 'pb-44 sm:pb-48'
+      : bottomState === 'none'
+      ? 'pb-8'
+      : 'pb-24 sm:pb-28';
+
   return (
-    <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-24">
+    <div className={`min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 ${bottomPaddingClass}`}>
       {/* Brand Header */}
       <MenuBrandHeader
         logoUrl={business.logo_url}
@@ -354,8 +363,14 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         />
       )}
 
-      {/* Sticky Floating Mobile Cart Bar */}
-      <FloatingCartBar onOpenCart={() => setCartDrawerOpen(true)} />
+      {/* Unified Floating Bottom Actions */}
+      <GuestMenuBottomActions
+        branchId={branch.id}
+        token={token}
+        currency={branch.currency || business.currency || 'USD'}
+        onOpenCart={() => setCartDrawerOpen(true)}
+        onStateChange={setBottomState}
+      />
 
       {/* Slide-Over Cart Drawer */}
       <CartDrawer

@@ -110,6 +110,8 @@ async function runMediaAndSlugVerification() {
       city: 'Bentota',
       addressPublic: '100 Beach Road',
       country: 'US',
+      latitude: 6.4251,
+      longitude: 79.9982,
       isPublished: true,
       isAcceptingOrders: true,
       priceLevel: 3,

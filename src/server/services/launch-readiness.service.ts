@@ -70,7 +70,7 @@ export class LaunchReadinessService {
       });
     }
 
-    // 2. Environment Variables Audit
+    // 2. Environment Variables Audit (Secure — Never expose secret values)
     const envVars = [
       { key: 'NEXT_PUBLIC_SUPABASE_URL', label: 'Supabase Public URL', required: true },
       { key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', label: 'Supabase Anon Key', required: true },
@@ -104,12 +104,50 @@ export class LaunchReadinessService {
           category: 'environment',
           name: env.label,
           status: 'operational',
-          details: `Configured properly (${val!.substring(0, 8)}...)`,
+          details: `Configured properly (present)`,
         });
       }
     }
 
-    // 3. Row Level Security (RLS) Policy Audit
+    // 3. Storage Bucket Audit (Actual Project Buckets: business-assets, venue-media)
+    const projectBuckets = [
+      { id: 'business-assets', name: 'Business Assets Bucket' },
+      { id: 'venue-media', name: 'Venue Media Bucket' },
+    ];
+
+    for (const bkt of projectBuckets) {
+      try {
+        const { data, error } = await admin.storage.getBucket(bkt.id);
+        if (error || !data) {
+          checks.push({
+            id: `storage_${bkt.id}`,
+            category: 'storage',
+            name: bkt.name,
+            status: 'warning',
+            details: `Storage bucket '${bkt.id}' note: ${error?.message || 'Bucket not found or needs creation'}`,
+          });
+        } else {
+          checks.push({
+            id: `storage_${bkt.id}`,
+            category: 'storage',
+            name: bkt.name,
+            status: 'operational',
+            details: `Bucket '${bkt.id}' active and accessible (public: ${data.public ? 'yes' : 'no'})`,
+          });
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        checks.push({
+          id: `storage_${bkt.id}`,
+          category: 'storage',
+          name: bkt.name,
+          status: 'warning',
+          details: `Bucket '${bkt.id}' audit error: ${msg}`,
+        });
+      }
+    }
+
+    // 4. Row Level Security (RLS) Policy Audit
     const keyTables = ['businesses', 'branches', 'orders', 'user_profiles', 'venue_public_profiles', 'dining_tables'];
     for (const table of keyTables) {
       try {
@@ -128,7 +166,7 @@ export class LaunchReadinessService {
             category: 'security',
             name: `Table Security (${table})`,
             status: 'operational',
-            details: `RLS active. Row count accessible safely. (${count || 0} records)`,
+            details: `RLS active. Accessible safely (${count || 0} records)`,
           });
         }
       } catch (err: unknown) {
@@ -143,7 +181,7 @@ export class LaunchReadinessService {
       }
     }
 
-    // 4. System Metrics Aggregation
+    // 5. System Metrics Aggregation
     let metrics = {
       totalBusinesses: 0,
       activeBranches: 0,
@@ -184,8 +222,8 @@ export class LaunchReadinessService {
         category: 'metrics',
         name: 'Super Admin Authority',
         status: metrics.superAdminsCount > 0 ? 'operational' : 'warning',
-        details: metrics.superAdminsCount > 0 
-          ? `✓ System has ${metrics.superAdminsCount} active Super Admin account(s).` 
+        details: metrics.superAdminsCount > 0
+          ? `✓ System has ${metrics.superAdminsCount} active Super Admin account(s).`
           : '⚠ No Super Admin accounts registered yet.',
       });
     } catch (err: unknown) {
@@ -199,7 +237,7 @@ export class LaunchReadinessService {
       });
     }
 
-    // 5. Calculate Health Score
+    // 6. Calculate Health Score
     const totalChecks = checks.length;
     const criticalCount = checks.filter((c) => c.status === 'critical').length;
     const warningCount = checks.filter((c) => c.status === 'warning').length;

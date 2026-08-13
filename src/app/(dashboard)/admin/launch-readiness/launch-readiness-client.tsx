@@ -27,6 +27,7 @@ export function LaunchReadinessClient({ initialReport }: LaunchReadinessClientPr
     latitude: 6.9271,
     longitude: 79.8612,
     template: 'resort' as 'resort' | 'restaurant' | 'cafe',
+    isPublished: false,
   });
 
   const handleRunDiagnostics = async () => {
@@ -317,6 +318,19 @@ export function LaunchReadinessClient({ initialReport }: LaunchReadinessClientPr
                     className="w-full rounded-2xl border border-zinc-200 p-2.5 text-xs font-semibold text-zinc-950 mt-1"
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1 pb-1">
+                <input
+                  type="checkbox"
+                  id="isPublishedToggle"
+                  checked={pilotData.isPublished}
+                  onChange={(e) => setPilotData({ ...pilotData, isPublished: e.target.checked })}
+                  className="w-4 h-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 accent-zinc-950 cursor-pointer"
+                />
+                <label htmlFor="isPublishedToggle" className="text-xs font-bold text-zinc-700 cursor-pointer">
+                  Publish Venue Immediately (Default: Unpublished)
+                </label>
               </div>
 
               <div className="pt-3 flex items-center justify-end gap-2">

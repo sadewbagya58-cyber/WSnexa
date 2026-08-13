@@ -10,6 +10,7 @@ export interface InitializePilotInput {
   latitude: number;
   longitude: number;
   template: 'resort' | 'restaurant' | 'cafe';
+  isPublished?: boolean;
 }
 
 export interface PilotOnboardingResult {
@@ -77,7 +78,7 @@ export class PilotOnboardingService {
         return { success: false, message: `Failed to create pilot main branch: ${branchErr?.message}` };
       }
 
-      // 4. Create Venue Public Profile
+      // 4. Create Venue Public Profile (Unpublished by default for publication safety)
       const { data: profile, error: profileErr } = await admin
         .from('venue_public_profiles')
         .insert({
@@ -94,7 +95,7 @@ export class PilotOnboardingService {
           latitude: input.latitude,
           longitude: input.longitude,
           price_level: 3,
-          is_published: true,
+          is_published: input.isPublished ?? false,
           is_accepting_orders: true,
         })
         .select('id')

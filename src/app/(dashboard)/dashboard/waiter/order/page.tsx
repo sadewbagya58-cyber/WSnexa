@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { createClient } from '@/lib/supabase/server';
 import { ServiceAreaService } from '@/server/services/service-area.service';
+import { MenuCatalogService } from '@/server/services/menu-catalog.service';
 import { WaiterOrderBuilder } from '@/components/waiter/waiter-order-builder';
 
 export default async function WaiterOrderPage() {
@@ -42,33 +43,26 @@ export default async function WaiterOrderPage() {
     serviceAreaId: t.service_area_id,
   }));
 
-  // Fetch menu items with category names
-  const { data: itemsData } = await supabase
-    .from('menu_items')
-    .select('id, name, price, description, is_available, category:menu_categories(name)')
-    .eq('business_id', context.business.id)
-    .eq('is_available', true)
-    .is('deleted_at', null);
+  // Fetch canonical branch menu catalog from MenuCatalogService
+  const catalog = await MenuCatalogService.getBranchMenuCatalog(
+    context.business.id,
+    context.activeBranch.id
+  );
 
-  const menuItems = (itemsData || []).map((i) => {
-    const categoryName = Array.isArray(i.category)
-      ? i.category[0]?.name
-      : (i.category as { name?: string } | null)?.name || 'General';
-    return {
-      id: i.id,
-      name: i.name,
-      price: i.price,
-      description: i.description,
-      categoryName,
-    };
-  });
+  if (!catalog) {
+    redirect('/dashboard');
+  }
+
+  const waiterName = context.user.email ? context.user.email.split('@')[0] : 'Staff';
 
   return (
     <WaiterOrderBuilder
       areas={areas.map((a) => ({ id: a.id, name: a.name }))}
       tables={tables}
-      menuItems={menuItems}
+      catalog={catalog}
       activeBranchName={context.activeBranch.name}
+      waiterName={waiterName}
     />
   );
 }
+

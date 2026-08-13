@@ -66,6 +66,7 @@ const MASTER_VERIFICATION_SUITES: VerificationSuiteDef[] = [
   { name: 'Order Security & Anti-Tamper Verification', script: 'scripts/verify-order-security.ts' },
   { name: 'Venue Maps & Geolocation Verification', script: 'scripts/verify-venue-maps.ts' },
   { name: 'Venue Publishing & Location Guard Verification', script: 'scripts/verify-venue-publishing.ts' },
+  { name: 'Unified Digital Menu & Catalog Verification', script: 'scripts/verify-unified-menu.ts' },
 ];
 
 async function runLaunchReadinessVerification() {

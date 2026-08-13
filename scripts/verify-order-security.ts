@@ -567,7 +567,7 @@ async function runPhase22OrderSecuritySuite() {
     // ------------------------------------------------------------------
     // TEST 29: Existing Loyalty Functional
     // ------------------------------------------------------------------
-    const { data: loyAccount } = await admin.from('customer_loyalty_accounts').insert({ business_id: bizId!, user_id: customerId!, total_points: 500 }).select().single();
+    const { data: loyAccount } = await admin.from('customer_loyalty_accounts').insert({ business_id: bizId!, user_id: customerId!, points_balance: 500 }).select().single();
     console.assert(Boolean(loyAccount), 'Test 29 Failed');
     console.log('  ✅ [PASS] Test 29: Existing customer loyalty system remains 100% operational');
 

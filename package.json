@@ -37,6 +37,7 @@
     "verify:order-security": "tsx scripts/verify-order-security.ts",
     "verify:venue-maps": "tsx scripts/verify-venue-maps.ts",
     "verify:venue-publishing": "tsx scripts/verify-venue-publishing.ts",
+    "verify:unified-menu": "tsx scripts/verify-unified-menu.ts",
     "verify:launch-readiness": "tsx scripts/verify-launch-readiness.ts"
   },
   "dependencies": {

@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { verifyTableAccessAction } from '@/server/actions/table';
 import { useCart } from '@/features/cart/cart-context';
-import { ItemDetailSheet } from '../guest/item-detail-sheet';
+import { MenuBrandHeader } from '@/components/menu/menu-brand-header';
+import { MenuSearch } from '@/components/menu/menu-search';
+import { CategoryTabs } from '@/components/menu/category-tabs';
+import { MenuItemCard } from '@/components/menu/menu-item-card';
+import { MenuItemDetails } from '@/components/menu/menu-item-details';
 import { FloatingCartBar } from '../guest/floating-cart-bar';
 import { CartDrawer } from '../guest/cart-drawer';
 import { RewardsDrawer } from '../loyalty/rewards-drawer';
-import { formatCurrency } from '@/features/cart/cart-calculations';
 import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
 import { CustomerLoyaltyAccountRecord, LoyaltyRewardRecord } from '@/lib/validation/loyalty';
 
@@ -104,6 +106,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   const { state, addLine, editLine, setConfirmedTable } = useCart();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<(typeof items)[0] | null>(null);
   const [rewardsDrawerOpen, setRewardsDrawerOpen] = useState<boolean>(false);
   const [editingCartLine, setEditingCartLine] = useState<{
@@ -128,8 +131,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const filteredItems = items.filter((item) => {
-    if (selectedCategory === 'all') return true;
-    return item.category_id === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
+    const matchesSearch =
+      !searchQuery.trim() ||
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
   });
 
   const handleConfirmTable = async (e: React.FormEvent) => {
@@ -231,21 +238,13 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-24">
-      {/* Top Banner & Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 py-3 shadow-xs">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              {business.name}
-            </span>
-            <h1 className="text-base font-black tracking-tight text-zinc-950 flex items-center gap-2">
-              {branch.name}
-              <Badge variant="neutral" className="text-[10px] py-0">
-                Digital Menu
-              </Badge>
-            </h1>
-          </div>
-
+      {/* Brand Header */}
+      <MenuBrandHeader
+        logoUrl={business.logo_url}
+        businessName={business.name}
+        branchName={branch.name}
+        address={branch.city || branch.address_line1 || undefined}
+        rightActions={
           <div className="flex items-center gap-2">
             {/* Loyalty Rewards Pill Button */}
             <button
@@ -289,10 +288,10 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               </button>
             )}
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
         {/* Table Selection Prompt Banner */}
         {branch.require_table_selection && !isTableAccessVerified(state.confirmedTable) && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">
@@ -308,93 +307,34 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           </div>
         )}
 
-        {/* Categories Horizontal Scroll */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('all')}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-              selectedCategory === 'all'
-                ? 'bg-zinc-950 text-white shadow-xs'
-                : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-            }`}
-          >
-            All Items ({items.length})
-          </button>
-          {categories.map((cat) => {
-            const count = items.filter((i) => i.category_id === cat.id).length;
-            if (count === 0) return null;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                  selectedCategory === cat.id
-                    ? 'bg-zinc-950 text-white shadow-xs'
-                    : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                }`}
-              >
-                {cat.name} ({count})
-              </button>
-            );
-          })}
-        </div>
+        {/* Search Bar */}
+        <MenuSearch value={searchQuery} onChange={setSearchQuery} />
 
-        {/* Menu Items List */}
-        <div className="space-y-3">
-          {filteredItems.map((item) => {
-            const isOutOfStock = item.availability_status === 'out_of_stock';
+        {/* Categories Horizontal Sticky Tabs */}
+        <CategoryTabs
+          categories={categories}
+          items={items}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+        />
 
-            return (
-              <div
-                key={item.id}
-                onClick={() => {
-                  setEditingCartLine(null);
-                  setSelectedItem(item);
-                }}
-                className="group cursor-pointer rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs hover:border-zinc-400 hover:shadow-xs transition-all flex items-start justify-between gap-4"
-              >
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-zinc-950 group-hover:text-zinc-900">
-                      {item.name}
-                    </h3>
-                    {item.is_featured && <Badge variant="warning">Featured</Badge>}
-                    {isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
-                  </div>
-                  {item.description && (
-                    <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
-                      {item.description}
-                    </p>
-                  )}
-                  <div className="pt-1 text-sm font-black text-zinc-950">
-                    {formatCurrency(item.price_cents, item.currency)}
-                  </div>
-                </div>
-
-                {item.primary_image_url ? (
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.primary_image_url}
-                      alt={item.name}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="h-20 w-20 shrink-0 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 flex items-center justify-center text-xl text-zinc-400">
-                    🍽️
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {/* Menu Items Grid/List */}
+        <div className="space-y-3 pt-1">
+          {filteredItems.map((item) => (
+            <MenuItemCard
+              key={item.id}
+              item={item}
+              currency={branch.currency || business.currency || 'USD'}
+              onClick={() => {
+                setEditingCartLine(null);
+                setSelectedItem(item);
+              }}
+            />
+          ))}
 
           {filteredItems.length === 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-xs text-zinc-500">
-              No items available in this category.
+              No items matching your search or selected category.
             </div>
           )}
         </div>
@@ -402,7 +342,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
       {/* Item Details & Modifiers Sheet */}
       {selectedItem && (
-        <ItemDetailSheet
+        <MenuItemDetails
           item={selectedItem}
           currency={branch.currency || business.currency || 'USD'}
           editingLine={editingCartLine}

@@ -34,7 +34,9 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     websiteUrl: initialProfile?.website_url || '',
     addressPublic: initialProfile?.address_public || '',
     city: initialProfile?.city || '',
-    country: initialProfile?.country || 'US',
+    country: initialProfile?.country || 'LK',
+    latitude: initialProfile?.latitude != null ? Number(initialProfile.latitude) : ('' as number | string),
+    longitude: initialProfile?.longitude != null ? Number(initialProfile.longitude) : ('' as number | string),
     priceLevel: initialProfile?.price_level || 2,
     isPublished: initialProfile?.is_published || false,
     isAcceptingOrders: initialProfile?.is_accepting_orders ?? true,
@@ -46,7 +48,27 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
 
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(Boolean(initialProfile?.slug));
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [showMapPreview, setShowMapPreview] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+  const isLocComplete = Boolean(
+    formData.addressPublic &&
+      formData.addressPublic.trim().length >= 1 &&
+      formData.city &&
+      formData.city.trim().length >= 1 &&
+      formData.country &&
+      formData.latitude !== '' &&
+      formData.latitude != null &&
+      !isNaN(Number(formData.latitude)) &&
+      Number(formData.latitude) >= -90 &&
+      Number(formData.latitude) <= 90 &&
+      formData.longitude !== '' &&
+      formData.longitude != null &&
+      !isNaN(Number(formData.longitude)) &&
+      Number(formData.longitude) >= -180 &&
+      Number(formData.longitude) <= 180
+  );
 
   const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -76,14 +98,49 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     }
   };
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setMessage({ success: false, text: 'Geolocation is not supported by your browser.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLoading(false);
+        setFormData((prev) => ({
+          ...prev,
+          latitude: Number(pos.coords.latitude.toFixed(6)),
+          longitude: Number(pos.coords.longitude.toFixed(6)),
+        }));
+        setShowMapPreview(true);
+        setMessage({ success: true, text: '📍 Coordinates detected from current location!' });
+      },
+      (err) => {
+        setGeoLoading(false);
+        setMessage({ success: false, text: `Location access error: ${err.message}` });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const scrollToLocationSection = () => {
+    const el = document.getElementById('venue-location-section');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const handleSave = async (shouldPublish?: boolean) => {
     setLoading(true);
     setMessage(null);
+
+    const latVal = formData.latitude !== '' && formData.latitude != null ? Number(formData.latitude) : null;
+    const lngVal = formData.longitude !== '' && formData.longitude != null ? Number(formData.longitude) : null;
 
     const payload = {
       ...formData,
       slug: normalizeVenueSlug(formData.slug || formData.displayName),
       venueType: formData.venueType as 'restaurant' | 'hotel' | 'cafe' | 'resort' | 'villa' | 'guest_house' | 'food_court' | 'cloud_kitchen' | 'other',
+      latitude: latVal,
+      longitude: lngVal,
       isPublished: shouldPublish !== undefined ? shouldPublish : formData.isPublished,
       priceLevel: Number(formData.priceLevel),
     };
@@ -99,7 +156,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
         isPublished: payload.isPublished,
       }));
     } else {
-      setMessage({ success: false, text: res.message || 'Failed to save profile.' });
+      setMessage({ success: false, text: res.message || 'Failed to update profile.' });
     }
   };
 
@@ -309,45 +366,147 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           </div>
         </div>
 
-        {/* Public Location & Contact */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Public Address *</label>
-            <input
-              name="addressPublic"
-              type="text"
-              value={formData.addressPublic}
-              onChange={handleChange}
-              placeholder="123 Ocean Avenue"
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
-              required
-            />
+        {/* Public Location & Coordinates Section */}
+        <div id="venue-location-section" className="border-t border-zinc-100 pt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-950 flex items-center gap-2">
+              <span>📍 Venue Location & Map Setup</span>
+              {isLocComplete ? (
+                <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[10px]">
+                  ✓ Location configured
+                </Badge>
+              ) : (
+                <Badge className="bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[10px]">
+                  ⚠ Location setup incomplete
+                </Badge>
+              )}
+            </h3>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleUseCurrentLocation}
+                disabled={geoLoading}
+                className="text-xs font-bold border-zinc-200 text-zinc-800"
+              >
+                {geoLoading ? 'Detecting...' : '📍 Use Current Location'}
+              </Button>
+
+              {formData.latitude !== '' && formData.longitude !== '' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMapPreview(!showMapPreview)}
+                  className="text-xs font-bold border-zinc-200 text-zinc-800"
+                >
+                  {showMapPreview ? 'Hide Map' : '🗺 Preview on Map'}
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">City *</label>
-            <input
-              name="city"
-              type="text"
-              value={formData.city}
-              onChange={handleChange}
-              placeholder="Colombo"
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
-              required
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Public Address *</label>
+              <input
+                name="addressPublic"
+                type="text"
+                value={formData.addressPublic}
+                onChange={handleChange}
+                placeholder="123 Ocean Avenue"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">City *</label>
+              <input
+                name="city"
+                type="text"
+                value={formData.city}
+                onChange={handleChange}
+                placeholder="Colombo"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Country *</label>
+              <select
+                name="country"
+                value={formData.country}
+                onChange={handleChange}
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              >
+                <option value="LK">Sri Lanka (LK)</option>
+                <option value="US">United States (US)</option>
+                <option value="GB">United Kingdom (GB)</option>
+                <option value="AE">United Arab Emirates (AE)</option>
+                <option value="SG">Singapore (SG)</option>
+                <option value="TH">Thailand (TH)</option>
+                <option value="IN">India (IN)</option>
+                <option value="AU">Australia (AU)</option>
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Public Phone</label>
-            <input
-              name="phonePublic"
-              type="text"
-              value={formData.phonePublic}
-              onChange={handleChange}
-              placeholder="+94 11 234 5678"
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
-            />
+          {/* Coordinates */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Latitude (-90 to 90) *</label>
+              <input
+                name="latitude"
+                type="number"
+                step="any"
+                min="-90"
+                max="90"
+                value={formData.latitude}
+                onChange={handleChange}
+                placeholder="e.g. 6.927079"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Longitude (-180 to 180) *</label>
+              <input
+                name="longitude"
+                type="number"
+                step="any"
+                min="-180"
+                max="180"
+                value={formData.longitude}
+                onChange={handleChange}
+                placeholder="e.g. 79.861244"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+            </div>
           </div>
+
+          {/* Map Preview Box */}
+          {showMapPreview && formData.latitude !== '' && formData.longitude !== '' && (
+            <div className="rounded-2xl border border-zinc-200 overflow-hidden bg-zinc-50 p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-zinc-700">
+                <span>Location Preview: ({formData.latitude}, {formData.longitude})</span>
+                <a
+                  href={`https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-amber-600 underline font-extrabold"
+                >
+                  Open in Google Maps ↗
+                </a>
+              </div>
+              <div className="h-48 rounded-xl bg-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-600 border border-zinc-300">
+                <span>📍 Map Pin at [{formData.latitude}, {formData.longitude}]</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* External Links & Booking Section */}
@@ -423,25 +582,47 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
         </div>
 
         {/* Actions Footer */}
-        <div className="pt-4 border-t border-zinc-100 flex items-center justify-end gap-3">
-          <Button
-            type="button"
-            onClick={() => handleSave(false)}
-            disabled={loading}
-            variant="outline"
-            className="text-xs font-extrabold py-3"
-          >
-            {loading ? 'Saving...' : '💾 Save Draft'}
-          </Button>
+        <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          {!isLocComplete ? (
+            <div className="text-xs font-bold text-amber-700 flex items-center gap-2">
+              <span>⚠ Complete your venue location before publishing.</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={scrollToLocationSection}
+                className="text-amber-800 underline font-black text-xs hover:bg-amber-100 p-1"
+              >
+                Set Venue Location
+              </Button>
+            </div>
+          ) : (
+            <div className="text-xs font-bold text-emerald-700">
+              ✓ Venue location complete & ready to publish live.
+            </div>
+          )}
 
-          <Button
-            type="button"
-            onClick={() => handleSave(true)}
-            disabled={loading}
-            className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-3 px-6 shadow-2xs"
-          >
-            {loading ? 'Saving...' : '🚀 Save & Publish Live'}
-          </Button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <Button
+              type="button"
+              onClick={() => handleSave(false)}
+              disabled={loading}
+              variant="outline"
+              className="text-xs font-extrabold py-3"
+            >
+              {loading ? 'Saving...' : '💾 Save Draft'}
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => handleSave(true)}
+              disabled={loading || !isLocComplete}
+              title={!isLocComplete ? 'Complete your venue location before publishing.' : 'Publish venue live'}
+              className="bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-3 px-6 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Saving...' : '🚀 Save & Publish Live'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

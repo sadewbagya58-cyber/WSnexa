@@ -260,12 +260,8 @@ export class VenueDiscoveryService {
 
     // Apply sorting in memory
     if (params.sort === 'nearest') {
-      venues.sort((a, b) => {
-        if (a.distance_km == null && b.distance_km == null) return 0;
-        if (a.distance_km == null) return 1; // missing coordinates placed last
-        if (b.distance_km == null) return -1;
-        return a.distance_km - b.distance_km;
-      });
+      venues = venues.filter((v) => v.distance_km != null);
+      venues.sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0));
     } else if (params.sort === 'rating') {
       venues.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0));
     } else if (params.sort === 'reviews') {
@@ -348,6 +344,8 @@ export class VenueDiscoveryService {
 
     return {
       ...(profile as VenuePublicProfileRecord),
+      latitude: profile.latitude != null ? Number(profile.latitude) : null,
+      longitude: profile.longitude != null ? Number(profile.longitude) : null,
       average_rating,
       review_count,
       qr_token,

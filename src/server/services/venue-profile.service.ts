@@ -52,7 +52,7 @@ export class VenueProfileService {
       };
     }
 
-    // Validation for publish status: require minimum mandatory fields
+    // Validation for publish status: require minimum mandatory fields & location coordinates
     if (input.isPublished) {
       if (!input.displayName || input.displayName.trim().length === 0) {
         return { success: false, message: 'Display Name is required to publish venue profile.' };
@@ -65,6 +65,41 @@ export class VenueProfileService {
       }
       if (!input.addressPublic || input.addressPublic.trim().length === 0) {
         return { success: false, message: 'Public Address is required to publish venue profile.' };
+      }
+
+      // Resolve coordinates from featured branch if set or from direct input
+      let hasValidCoords = false;
+      if (
+        input.latitude != null &&
+        input.longitude != null &&
+        input.latitude >= -90 &&
+        input.latitude <= 90 &&
+        input.longitude >= -180 &&
+        input.longitude <= 180
+      ) {
+        hasValidCoords = true;
+      } else if (input.featuredBranchId) {
+        const { data: branchData } = await admin
+          .from('branches')
+          .select('latitude, longitude')
+          .eq('id', input.featuredBranchId)
+          .maybeSingle();
+
+        if (
+          branchData &&
+          branchData.latitude != null &&
+          branchData.longitude != null &&
+          branchData.latitude >= -90 &&
+          branchData.latitude <= 90 &&
+          branchData.longitude >= -180 &&
+          branchData.longitude <= 180
+        ) {
+          hasValidCoords = true;
+        }
+      }
+
+      if (!hasValidCoords) {
+        return { success: false, message: 'Please configure a valid venue location before publishing.' };
       }
     }
 

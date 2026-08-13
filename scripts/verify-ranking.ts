@@ -101,6 +101,8 @@ async function runRankingVerification() {
       city: 'Colombo',
       addressPublic: '100 Galle Road',
       country: 'US',
+      latitude: 6.9271,
+      longitude: 79.8612,
       isPublished: true,
       isAcceptingOrders: true,
       priceLevel: 3,
@@ -114,6 +116,8 @@ async function runRankingVerification() {
       city: 'Kandy',
       addressPublic: '50 Lake Drive',
       country: 'US',
+      latitude: 7.2906,
+      longitude: 80.6337,
       isPublished: true,
       isAcceptingOrders: true,
       priceLevel: 2,
@@ -395,14 +399,21 @@ async function runRankingVerification() {
   } finally {
     if (bizAId || bizBId || bizCId) {
       console.log('\n🧹 Cleaning up test ranking data...');
-      if (bizAId) await admin.from('businesses').delete().eq('id', bizAId);
-      if (bizBId) await admin.from('businesses').delete().eq('id', bizBId);
-      if (bizCId) await admin.from('businesses').delete().eq('id', bizCId);
-      if (cust1Id) await admin.auth.admin.deleteUser(cust1Id);
-      if (cust2Id) await admin.auth.admin.deleteUser(cust2Id);
-      if (staffId) await admin.auth.admin.deleteUser(staffId);
+      const testBizIds = [bizAId, bizBId, bizCId].filter(Boolean);
+      for (const bId of testBizIds) {
+        await admin.from('orders').delete().eq('business_id', bId);
+        await admin.from('venue_reviews').delete().eq('business_id', bId);
+        await admin.from('venue_favorites').delete().filter('venue_profile_id', 'in', `(select id from venue_public_profiles where business_id = '${bId}')`);
+        await admin.from('venue_public_profiles').delete().eq('business_id', bId);
+        await admin.from('branches').delete().eq('business_id', bId);
+        await admin.from('business_memberships').delete().eq('business_id', bId);
+        await admin.from('businesses').delete().eq('id', bId);
+      }
+      if (cust1Id) await admin.auth.admin.deleteUser(cust1Id).catch(() => {});
+      if (cust2Id) await admin.auth.admin.deleteUser(cust2Id).catch(() => {});
+      if (staffId) await admin.auth.admin.deleteUser(staffId).catch(() => {});
       for (const rId of createdReviewers) {
-        await admin.auth.admin.deleteUser(rId);
+        await admin.auth.admin.deleteUser(rId).catch(() => {});
       }
       console.log('  ✅ Cleanup completed.');
     }

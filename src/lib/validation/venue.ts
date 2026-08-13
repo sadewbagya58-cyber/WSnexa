@@ -25,6 +25,30 @@ export function normalizeVenueSlug(input: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+export function isVenueLocationComplete(profileOrBranch: {
+  addressPublic?: string | null;
+  city?: string | null;
+  country?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}): boolean {
+  if (!profileOrBranch) return false;
+  const hasAddress = Boolean(profileOrBranch.addressPublic && profileOrBranch.addressPublic.trim().length >= 1);
+  const hasCity = Boolean(profileOrBranch.city && profileOrBranch.city.trim().length >= 1);
+  const hasCountry = Boolean(profileOrBranch.country && profileOrBranch.country.trim().length >= 2);
+  const hasLat =
+    profileOrBranch.latitude != null &&
+    !isNaN(profileOrBranch.latitude) &&
+    profileOrBranch.latitude >= -90 &&
+    profileOrBranch.latitude <= 90;
+  const hasLng =
+    profileOrBranch.longitude != null &&
+    !isNaN(profileOrBranch.longitude) &&
+    profileOrBranch.longitude >= -180 &&
+    profileOrBranch.longitude <= 180;
+  return hasAddress && hasCity && hasCountry && hasLat && hasLng;
+}
+
 export const venueProfileSchema = z.object({
   displayName: z
     .string()

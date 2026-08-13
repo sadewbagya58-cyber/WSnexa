@@ -102,6 +102,8 @@ async function runVenueDiscoveryVerification() {
       city: 'Bentota',
       country: 'US',
       addressPublic: '100 Beach Road',
+      latitude: 6.425,
+      longitude: 79.998,
       priceLevel: 4,
       isPublished: true,
       isAcceptingOrders: true,
@@ -274,12 +276,19 @@ async function runVenueDiscoveryVerification() {
   } finally {
     if (bizAId || bizBId) {
       console.log('\n🧹 Cleaning up test discovery business data...');
-      if (bizAId) await admin.from('businesses').delete().eq('id', bizAId);
-      if (bizBId) await admin.from('businesses').delete().eq('id', bizBId);
-      if (ownerAId) await admin.auth.admin.deleteUser(ownerAId);
-      if (ownerBId) await admin.auth.admin.deleteUser(ownerBId);
-      if (customer1Id) await admin.auth.admin.deleteUser(customer1Id);
-      if (customer2Id) await admin.auth.admin.deleteUser(customer2Id);
+      const testBizIds = [bizAId, bizBId].filter(Boolean);
+      for (const bId of testBizIds) {
+        await admin.from('venue_reviews').delete().eq('business_id', bId);
+        await admin.from('venue_favorites').delete().filter('venue_profile_id', 'in', `(select id from venue_public_profiles where business_id = '${bId}')`);
+        await admin.from('venue_public_profiles').delete().eq('business_id', bId);
+        await admin.from('branches').delete().eq('business_id', bId);
+        await admin.from('business_memberships').delete().eq('business_id', bId);
+        await admin.from('businesses').delete().eq('id', bId);
+      }
+      if (ownerAId) await admin.auth.admin.deleteUser(ownerAId).catch(() => {});
+      if (ownerBId) await admin.auth.admin.deleteUser(ownerBId).catch(() => {});
+      if (customer1Id) await admin.auth.admin.deleteUser(customer1Id).catch(() => {});
+      if (customer2Id) await admin.auth.admin.deleteUser(customer2Id).catch(() => {});
       console.log('  ✅ Cleanup completed.');
     }
   }

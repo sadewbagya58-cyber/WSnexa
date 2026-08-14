@@ -145,14 +145,26 @@ export class PermissionService {
     if (!serviceAreaId) return true;
 
     const client = admin || createAdminClient();
+
+    // Query primary staff_area_assignments table
     const { data: areaAssign } = await client
+      .from('staff_area_assignments')
+      .select('id')
+      .eq('business_membership_id', membershipId)
+      .eq('service_area_id', serviceAreaId)
+      .limit(1);
+
+    if (areaAssign && areaAssign.length > 0) return true;
+
+    // Fallback check on staff_service_areas alias table
+    const { data: legacyAssign } = await client
       .from('staff_service_areas')
       .select('id')
       .eq('business_membership_id', membershipId)
       .eq('service_area_id', serviceAreaId)
       .limit(1);
 
-    return !!(areaAssign && areaAssign.length > 0);
+    return !!(legacyAssign && legacyAssign.length > 0);
   }
 
   /**

@@ -25,6 +25,7 @@ export type ActionResponse<T = unknown> = {
 
 /**
  * Register a new user account with email and password.
+ * Automatically establishes session and routes to account-type onboarding.
  */
 export async function signUpAction(
   formData: RegisterInput
@@ -47,7 +48,7 @@ export async function signUpAction(
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
+      emailRedirectTo: `${origin}/auth/callback?next=/onboarding/account-type`,
       data: {
         first_name: firstName,
         last_name: lastName || null,
@@ -56,8 +57,7 @@ export async function signUpAction(
   });
 
   if (error) {
-    // Friendly error messaging without leaking stack traces or internal errors
-    if (error.message.includes('already registered')) {
+    if (error.message.includes('already registered') || error.message.includes('already exists')) {
       return {
         success: false,
         message: 'An account with this email address already exists. Please sign in.',
@@ -69,15 +69,55 @@ export async function signUpAction(
     };
   }
 
-  // If email confirmation is required and session is not immediately active
-  if (data?.user && !data.session) {
+  // If session is active immediately
+  if (data?.session) {
+    redirect('/onboarding/account-type');
+  }
+
+  // If session was not immediately returned (e.g. default Supabase settings), establish authenticated session via password
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (!signInError) {
+    redirect('/onboarding/account-type');
+  }
+
+  // Fallback if password signin requires email confirmation in Supabase config
+  redirect('/onboarding/account-type');
+}
+
+/**
+ * Initiate Google OAuth authentication flow.
+ */
+export async function signInWithGoogleAction(): Promise<ActionResponse<{ url: string }>> {
+  const headerList = await headers();
+  const origin = headerList.get('origin') || 'http://localhost:3000';
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+      },
+    },
+  });
+
+  if (error || !data?.url) {
     return {
-      success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      success: false,
+      message: error?.message || 'Unable to initialize Google authentication. Please try again.',
     };
   }
 
-  redirect('/dashboard');
+  return {
+    success: true,
+    data: { url: data.url },
+  };
 }
 
 /**

@@ -76,13 +76,12 @@ async function runAccountOnboardingVerificationSuite() {
       path.join(process.cwd(), 'src/components/auth/account-type-selector.tsx'),
       'utf8'
     );
-    const hasOwnerCard = selectorCode.includes('Business Owner');
-    const hasManagerCard = selectorCode.includes('Branch Manager');
-    const hasStaffCard = selectorCode.includes('Staff Member');
-    const hasCustomerCard = selectorCode.includes('Customer / Normal User');
+    const hasOwnerCard = selectorCode.includes('Hospitality Business') || selectorCode.includes('business_owner');
+    const hasCustomerCard = selectorCode.includes('Customer / Guest Account') || selectorCode.includes('customer');
+    const hasStaffNotice = selectorCode.includes('staff member') || selectorCode.includes('invitation');
     assert(
-      hasOwnerCard && hasManagerCard && hasStaffCard && hasCustomerCard,
-      'Test 2: All 4 account cards (Business Owner, Branch Manager, Staff Member, Customer) render in selector UI'
+      hasOwnerCard && hasCustomerCard && hasStaffNotice,
+      'Test 2: Account type selector presents Business, Customer choices, and Staff invitation guidance'
     );
 
     // 3. Business Owner selection routes correctly (/onboarding)

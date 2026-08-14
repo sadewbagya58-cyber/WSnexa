@@ -14,34 +14,18 @@ export function AccountTypeSelector() {
   const options = [
     {
       id: 'business_owner' as OnboardingIntent,
-      title: 'Business Owner',
+      title: 'Hospitality Business',
       icon: '🏢',
-      description: 'Manage your hospitality business, branches, menus, staff, POS, and revenue analytics.',
-      badge: 'Full Access',
+      description: 'Create and manage your restaurant, cafe, resort, or venue operations, menus, tables, POS, and team.',
+      badge: 'Business Setup',
       requiresInvite: false,
     },
     {
-      id: 'branch_manager' as OnboardingIntent,
-      title: 'Branch Manager',
-      icon: '🏬',
-      description: 'Manage an assigned branch location, staff, kitchen orders, and branch reports.',
-      badge: 'Requires Invite',
-      requiresInvite: true,
-    },
-    {
-      id: 'staff' as OnboardingIntent,
-      title: 'Staff Member',
-      icon: '👨‍🍳',
-      description: 'Access assigned staff area (Cashier POS, Kitchen Queue, or Waiter Request Center).',
-      badge: 'Requires Invite',
-      requiresInvite: true,
-    },
-    {
       id: 'customer' as OnboardingIntent,
-      title: 'Customer / Normal User',
+      title: 'Customer / Guest Account',
       icon: '🍽️',
-      description: 'Order food, track hospitality activity, view order history, and save favorite venues.',
-      badge: 'Instant Access',
+      description: 'Discover venues, place digital orders, track dining history, and manage your guest rewards.',
+      badge: 'Guest Account',
       requiresInvite: false,
     },
   ];
@@ -126,6 +110,10 @@ export function AccountTypeSelector() {
       >
         {isSubmitting ? 'Saving Preference...' : 'Continue'}
       </button>
+
+      <p className="text-center text-xs text-zinc-500 pt-2">
+        Are you a staff member joining an existing venue? Ask your manager for an invitation link to access your assigned workspace directly.
+      </p>
     </div>
   );
 }

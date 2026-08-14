@@ -1,9 +1,40 @@
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Bypass server-only guard
+try {
+  /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
+  // @ts-ignore
+  require.cache[require.resolve('server-only')] = {
+    id: require.resolve('server-only'),
+    filename: require.resolve('server-only'),
+    loaded: true,
+    exports: {},
+  };
+} catch {}
+
+const envPath = path.join(process.cwd(), '.env.local');
+if (fs.existsSync(envPath)) {
+  const envConfig = fs.readFileSync(envPath, 'utf8');
+  for (const line of envConfig.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const key = trimmed.substring(0, idx).trim();
+        const value = trimmed.substring(idx + 1).trim().replace(/^["']|["']$/g, '');
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 import { registerSchema, profileUpdateSchema } from '../src/lib/validation/auth';
 
 /**
  * Automated Verification Suite for Phase 2 Authentication & Security
  */
-function runAuthVerificationSuite() {
+async function runAuthVerificationSuite() {
   console.log('🧪 Running Phase 2 Authentication & Security Verification Suite...\n');
 
   let passed = 0;
@@ -89,6 +120,18 @@ function runAuthVerificationSuite() {
     !clientEnvKeys.includes('SUPABASE_SERVICE_ROLE_KEY'),
     'Test 7: SUPABASE_SERVICE_ROLE_KEY excluded from client environment bundle'
   );
+
+  // Test 8: Google OAuth action exists and generates Supabase auth URL
+  const { signInWithGoogleAction } = await import('../src/server/actions/auth');
+  assert(typeof signInWithGoogleAction === 'function', 'Test 8: signInWithGoogleAction server action exported');
+
+  // Test 9: Public register page includes Google OAuth and email registration
+  const registerPageCode = fs.readFileSync(path.join(process.cwd(), 'src/app/(public)/register/page.tsx'), 'utf8');
+  assert(registerPageCode.includes('Continue with Google') && registerPageCode.includes('Create Account'), 'Test 9: Public register page renders Google OAuth CTA and Email Signup');
+
+  // Test 10: Public login page includes Google OAuth and Email Signin
+  const loginPageCode = fs.readFileSync(path.join(process.cwd(), 'src/app/(public)/login/page.tsx'), 'utf8');
+  assert(loginPageCode.includes('Continue with Google') && loginPageCode.includes('Sign In'), 'Test 10: Public login page renders Google OAuth CTA and Email Signin');
 
   console.log(`\n📊 Verification Summary: ${passed} Passed, ${failed} Failed\n`);
   if (failed > 0) {

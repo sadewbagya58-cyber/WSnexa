@@ -4,50 +4,123 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
-import { RouteProgress } from '@/components/ui/route-progress';
-import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
-
-import { ActiveBranchSwitcher } from './active-branch-switcher';
+import { ActiveBranchSwitcher } from '@/components/layout/active-branch-switcher';
+import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo } from '@/types';
 
-import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
-
 interface DashboardShellProps {
+  children: React.ReactNode;
+  userRole: string;
+  userPermissions?: string[];
+  userName?: string;
+  userEmail?: string;
   businessName: string;
   activeBranch: BranchInfo | null;
   branches: BranchInfo[];
-  userEmail: string;
-  userName: string;
-  userRole: string;
-  userPermissions?: string[];
-  children: React.ReactNode;
 }
 
 interface NavItem {
   label: string;
   href: string;
   badge?: string;
-  disabled?: boolean;
 }
 
 interface NavSection {
-  sectionTitle: string;
+  title: string;
   items: NavItem[];
 }
 
+const rawNavSections: NavSection[] = [
+  {
+    title: 'OVERVIEW',
+    items: [
+      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Reports & Analytics', href: '/dashboard/reports' },
+    ],
+  },
+  {
+    title: 'VENUE SETUP',
+    items: [
+      { label: 'Business Profile', href: '/dashboard/business' },
+      { label: 'Public Venue Profile', href: '/dashboard/venue-profile' },
+      { label: 'Branches', href: '/dashboard/branches' },
+      { label: 'Dining Setup', href: '/dashboard/dining' },
+      { label: 'Team & Members', href: '/dashboard/team' },
+      { label: 'Staff Invitations', href: '/dashboard/team/invites' },
+    ],
+  },
+  {
+    title: 'MENU',
+    items: [
+      { label: 'Menu Overview', href: '/dashboard/menu' },
+      { label: 'Categories', href: '/dashboard/menu/categories' },
+      { label: 'Menu Items', href: '/dashboard/menu/items' },
+    ],
+  },
+  {
+    title: 'OPERATIONS',
+    items: [
+      { label: 'Cashier POS', href: '/dashboard/cashier' },
+      { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
+      { label: 'Waiter Assistance', href: '/dashboard/waiter' },
+      { label: 'Waiter Menu', href: '/dashboard/waiter/menu' },
+    ],
+  },
+  {
+    title: 'GROWTH & GUESTS',
+    items: [
+      { label: 'Customer Reviews', href: '/dashboard/reviews' },
+      { label: 'Reputation & Rankings', href: '/dashboard/reputation' },
+      { label: 'Loyalty & Rewards', href: '/dashboard/loyalty' },
+    ],
+  },
+  {
+    title: 'SETTINGS',
+    items: [
+      { label: 'Order Security', href: '/dashboard/settings/order-security' },
+      { label: 'Payment Methods', href: '/dashboard/settings/payments' },
+    ],
+  },
+];
+
+function formatRoleLabel(role: string): string {
+  switch (role) {
+    case 'business_owner':
+      return 'Business Owner';
+    case 'branch_manager':
+      return 'Branch Manager';
+    case 'cashier':
+      return 'Cashier';
+    case 'kitchen_staff':
+      return 'Kitchen';
+    case 'waiter':
+      return 'Waiter';
+    default:
+      return role.replace(/_/g, ' ');
+  }
+}
+
 export const DashboardShell: React.FC<DashboardShellProps> = ({
+  children,
+  userRole,
+  userPermissions = [],
+  userName,
+  userEmail,
   businessName,
   activeBranch,
   branches,
-  userEmail,
-  userName,
-  userRole,
-  userPermissions,
-  children,
 }) => {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Close drawer on path change
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    setMobileOpen(false);
+    setUserMenuOpen(false);
+  }
 
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
@@ -61,132 +134,45 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     };
   }, [mobileOpen]);
 
-  const rawNavSections: NavSection[] = [
-    {
-      sectionTitle: 'OVERVIEW',
-      items: [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Reports & Analytics', href: '/dashboard/reports' },
-      ],
-    },
-    {
-      sectionTitle: 'VENUE SETUP',
-      items: [
-        { label: 'Business Profile', href: '/dashboard/business' },
-        { label: 'Public Venue Profile', href: '/dashboard/venue-profile' },
-        { label: 'Branches', href: '/dashboard/branches' },
-        { label: 'Dining Setup', href: '/dashboard/dining' },
-        { label: 'Team & Members', href: '/dashboard/team' },
-        { label: 'Staff Invitations', href: '/dashboard/team/invites' },
-      ],
-    },
-    {
-      sectionTitle: 'MENU',
-      items: [
-        { label: 'Menu Overview', href: '/dashboard/menu' },
-        { label: 'Categories', href: '/dashboard/menu/categories' },
-        { label: 'Menu Items', href: '/dashboard/menu/items' },
-      ],
-    },
-    {
-      sectionTitle: 'OPERATIONS',
-      items: [
-        { label: 'Cashier POS', href: '/dashboard/cashier' },
-        { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
-        { label: 'Waiter Assistance', href: '/dashboard/waiter' },
-        { label: 'Waiter Menu', href: '/dashboard/waiter/menu' },
-      ],
-    },
-    {
-      sectionTitle: 'GROWTH & GUESTS',
-      items: [
-        { label: 'Customer Reviews', href: '/dashboard/reviews' },
-        { label: 'Reputation & Rankings', href: '/dashboard/reputation' },
-        { label: 'Loyalty & Rewards', href: '/dashboard/loyalty' },
-      ],
-    },
-    {
-      sectionTitle: 'SETTINGS',
-      items: [
-        { label: 'Order Security', href: '/dashboard/settings/order-security' },
-        { label: 'Payment Methods', href: '/dashboard/settings/payments' },
-      ],
-    },
-  ];
-
-  // Filter sections by granted user permissions
-  const navSections: NavSection[] =
-    userRole === 'business_owner'
-      ? rawNavSections
-      : rawNavSections
-          .map((sec) => {
-            const filteredItems = sec.items.filter((item) => {
-              const reqKey = getRequiredPermissionForRoute(item.href);
-              if (!reqKey) return true;
-              return userPermissions ? userPermissions.includes(reqKey) : true;
-            });
-            return { ...sec, items: filteredItems };
-          })
-          .filter((sec) => sec.items.length > 0);
-
-  const formatRoleLabel = (role: string) => {
-    switch (role) {
-      case 'business_owner':
-        return 'Business Owner';
-      case 'branch_manager':
-        return 'Branch Manager';
-      case 'cashier':
-        return 'Cashier';
-      case 'kitchen_staff':
-        return 'Kitchen Staff';
-      case 'waiter':
-        return 'Waiter';
-      default:
-        return role;
-    }
-  };
-
-  const isActive = (href: string) => {
-    if (href === '/dashboard') return pathname === '/dashboard';
-    if (href === '#') return false;
-    return pathname.startsWith(href);
-  };
+  // Filter navigation items by user permissions
+  const allowedNavSections = rawNavSections
+    .map((sec) => ({
+      ...sec,
+      items: sec.items.filter((item) => {
+        if (userRole === 'business_owner') return true;
+        const requiredPerm = getRequiredPermissionForRoute(item.href);
+        if (!requiredPerm) return true;
+        return userPermissions.includes(requiredPerm);
+      }),
+    }))
+    .filter((sec) => sec.items.length > 0);
 
   const renderNavLinks = () => (
     <div className="space-y-6">
-      {navSections.map((section, sIdx) => (
-        <div key={sIdx} className="space-y-2">
-          <h3 className="px-3 text-[11px] font-extrabold uppercase tracking-wider text-zinc-400">
-            {section.sectionTitle}
+      {allowedNavSections.map((sec, secIdx) => (
+        <div key={secIdx} className="space-y-1">
+          <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+            {sec.title}
           </h3>
-          <div className="space-y-1">
-            {section.items.map((item, idx) => {
-              const active = isActive(item.href);
-
-              if (item.disabled) {
-                return (
-                  <div
-                    key={idx}
-                    className="flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-medium text-zinc-400 cursor-not-allowed opacity-60"
-                  >
-                    <span>{item.label}</span>
-                    {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
-                  </div>
-                );
-              }
+          <div className="space-y-0.5 pt-1">
+            {sec.items.map((item) => {
+              const isActive =
+                item.href === '/dashboard'
+                  ? pathname === '/dashboard'
+                  : pathname.startsWith(item.href);
 
               return (
                 <Link
-                  key={idx}
+                  key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold touch-manipulation transition-all duration-100 active:scale-[0.98] ${
-                    active
-                      ? 'bg-zinc-950 text-white font-bold shadow-sm'
+                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] ${
+                    isActive
+                      ? 'bg-zinc-950 text-white shadow-xs'
                       : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
                   }`}
                 >
-                  <span>{item.label}</span>
+                  <span className="truncate">{item.label}</span>
                   {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
                 </Link>
               );
@@ -199,11 +185,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
-      <RouteProgress />
-      <RoutePrefetcher />
-
-      {/* Top Bar Header */}
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/90 px-3 sm:px-6 backdrop-blur min-w-0">
+      {/* Top Bar Header with safe area top inset */}
+      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 pt-[env(safe-area-inset-top,0px)] pb-1 sm:pb-0">
         {/* Left Side: Logo & Active Branch Switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {/* Logo */}
@@ -290,7 +273,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       {/* Main Body with Sidebar + Content */}
       <div className="flex flex-1 min-w-0">
         {/* Desktop Sidebar */}
-        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem)] sticky top-16">
+        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem-env(safe-area-inset-top,0px))] sticky top-[calc(4rem+env(safe-area-inset-top,0px))]">
           {renderNavLinks()}
         </aside>
 
@@ -301,7 +284,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileOpen(false)}
             />
-            <aside className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen">
+            <aside className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen">
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                   <span className="font-black text-sm text-zinc-950 uppercase tracking-wider">Navigation Menu</span>

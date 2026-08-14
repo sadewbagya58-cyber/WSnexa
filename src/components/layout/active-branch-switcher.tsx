@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { BranchInfo } from '@/types';
 import { switchActiveBranchAction } from '@/server/actions/branch-switcher';
 
@@ -54,11 +56,14 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
   branches,
   isOwner,
 }) => {
+  const pathname = usePathname();
   const [switching, setSwitching] = useState<boolean>(false);
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [pendingBranchId, setPendingBranchId] = useState<string | null>(null);
 
   if (!activeBranch || branches.length === 0) return null;
+
+  const isBranchesPage = pathname.startsWith('/dashboard/branches');
 
   const executeBranchSwitch = async (branchId: string) => {
     setSwitching(true);
@@ -116,13 +121,13 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
         <>
           {/* Backdrop for closing */}
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-2xs z-40"
+            className="fixed inset-0 bg-black/50 backdrop-blur-2xs z-50"
             onClick={() => setDropdownOpen(false)}
           />
 
           {/* Mobile Bottom Sheet & Desktop Dropdown Container */}
           <div
-            className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-5 duration-200 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-1 sm:w-72 sm:rounded-2xl sm:p-3 sm:shadow-2xl sm:animate-in sm:fade-in"
+            className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-2xl animate-in slide-in-from-bottom-5 duration-200 max-h-[85vh] overflow-y-auto sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-1 sm:w-72 sm:rounded-2xl sm:p-3 sm:shadow-2xl sm:animate-in sm:fade-in sm:max-h-none"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
@@ -133,7 +138,7 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
               <button
                 type="button"
                 onClick={() => setDropdownOpen(false)}
-                className="h-8 w-8 rounded-full bg-zinc-100 text-zinc-500 font-bold text-xs flex items-center justify-center sm:hidden"
+                className="h-8 w-8 rounded-full bg-zinc-100 text-zinc-500 font-bold text-xs flex items-center justify-center sm:hidden min-h-[32px] touch-manipulation"
               >
                 ✕
               </button>
@@ -180,14 +185,15 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
               })}
             </div>
 
-            {isOwner && (
+            {isOwner && !isBranchesPage && (
               <div className="pt-3 border-t border-zinc-100 text-center mt-1">
-                <a
+                <Link
                   href="/dashboard/branches"
-                  className="inline-block w-full py-2.5 rounded-xl bg-zinc-100 text-zinc-950 font-extrabold text-xs hover:bg-zinc-200 transition-colors"
+                  onClick={() => setDropdownOpen(false)}
+                  className="inline-block w-full py-2.5 rounded-xl bg-zinc-100 text-zinc-950 font-extrabold text-xs hover:bg-zinc-200 transition-colors min-h-[44px] flex items-center justify-center"
                 >
                   ⚙️ Manage All Branches →
-                </a>
+                </Link>
               </div>
             )}
           </div>

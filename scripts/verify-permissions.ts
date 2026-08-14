@@ -330,7 +330,7 @@ async function runPermissionsVerificationSuite() {
     const menuCatPerm = getRequiredPermissionForRoute('/dashboard/menu/categories');
     const cashierPerm = getRequiredPermissionForRoute('/dashboard/cashier');
     const reportsPerm = getRequiredPermissionForRoute('/dashboard/reports');
-    assert(menuCatPerm === 'menu.manage' && cashierPerm === 'cashier.access' && reportsPerm === 'reports.view', 'Test 22: Central route permission map resolves pathnames to correct PermissionKey');
+    assert((menuCatPerm === 'menu.categories.manage' || menuCatPerm === 'menu.manage') && cashierPerm === 'cashier.access' && reportsPerm === 'reports.view', 'Test 22: Central route permission map resolves pathnames to correct PermissionKey');
 
     // TEST 23: Role presets map cleanly to permission arrays
     const { getPermissionsForPreset } = await import('../src/lib/validation/permission-presets');

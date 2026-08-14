@@ -1,42 +1,115 @@
 import { z } from 'zod';
 
 export const permissionKeyEnum = z.enum([
+  // Orders
   'orders.view',
+  'orders.create',
   'orders.update_status',
   'orders.cancel',
-  'kitchen.access',
-  'kitchen.update',
-  'cashier.access',
-  'payments.record',
-  'payments.view',
-  'receipts.print',
+  'orders.history.view',
+
+  // Waiter
+  'waiter.access',
   'waiter.requests.view',
   'waiter.requests.manage',
+  'waiter.orders.create',
+
+  // Kitchen
+  'kitchen.access',
+  'kitchen.orders.view',
+  'kitchen.update',
+
+  // Cashier & Payments
+  'cashier.access',
+  'payments.view',
+  'payments.record',
+  'payments.void',
+  'payments.refund',
+  'receipts.print',
+
+  // Menu Catalog
   'menu.view',
-  'menu.manage',
+  'menu.manage', // Preserved for backward compatibility
+  'menu.items.create',
+  'menu.items.edit',
+  'menu.price.update',
+  'menu.availability.update',
+  'menu.items.delete',
+  'menu.categories.manage',
+  'menu.modifiers.manage',
+
+  // Dining & Tables
   'tables.view',
-  'tables.manage',
-  'qr.manage',
-  'staff.view',
-  'staff.manage',
-  'invitations.manage',
+  'tables.manage', // Preserved for backward compatibility
+  'tables.status.update',
+  'tables.create',
+  'tables.edit',
+  'tables.delete',
+
+  // Service Areas
+  'areas.view',
+  'areas.manage',
+
+  // QR Codes & Security
+  'qr.view',
+  'qr.manage', // Preserved for backward compatibility
+  'qr.generate',
+  'qr.security.reset',
+
+  // Reports & Analytics
   'reports.view',
+  'reports.financial.view',
   'reports.export',
+
+  // Staff & Team
+  'staff.view',
+  'staff.manage', // Preserved for backward compatibility
+  'staff.invite',
+  'staff.edit',
+  'staff.suspend',
+  'staff.role.assign',
+  'staff.branch.assign',
+  'staff.area.assign',
+
+  // Roles & Permissions Administration
+  'roles.view',
+  'roles.manage',
+  'permissions.override.manage',
+
+  // Branches
+  'branches.view',
+  'branches.operational.manage',
   'branches.manage',
+
+  // Business Settings
+  'business.view',
   'business.settings.manage',
-  'owner.transfer',
+
+  // Venue Profile
   'venue_profile.view',
   'venue_profile.manage',
+
+  // Reviews & Reputation
   'reviews.view',
   'reviews.respond',
   'reviews.moderate',
   'reputation.view',
   'reputation.export',
+
+  // Loyalty & Rewards
   'loyalty.view',
   'loyalty.manage',
   'loyalty.rewards.manage',
   'loyalty.customers.view',
   'loyalty.points.adjust',
+
+  // Order Security Engine
+  'order_security.view',
+  'order_security.manage',
+
+  // Owner Only
+  'invitations.manage', // Preserved for backward compatibility
+  'owner.transfer',
 ]);
 
 export type PermissionKey = z.infer<typeof permissionKeyEnum>;
@@ -44,6 +117,10 @@ export type PermissionKey = z.infer<typeof permissionKeyEnum>;
 export const ownerOnlyPermissions: PermissionKey[] = [
   'business.settings.manage',
   'owner.transfer',
+  'branches.manage',
+  'order_security.manage',
+  'roles.manage',
+  'permissions.override.manage',
 ];
 
 export const createCustomRoleSchema = z.object({

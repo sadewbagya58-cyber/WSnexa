@@ -33,64 +33,142 @@ export function SimplePermissionEditor({
 
   const capabilityGroups: CapabilityGroup[] = [
     {
-      category: 'Orders',
+      category: 'Orders Operations',
       items: [
         {
-          label: 'View Orders',
-          description: 'View active and historical guest orders',
+          label: 'View Active Orders',
+          description: 'View live operational guest orders',
           keys: ['orders.view'],
+        },
+        {
+          label: 'Create Orders',
+          description: 'Create new table or guest orders',
+          keys: ['orders.create'],
         },
         {
           label: 'Update Order Status',
           description: 'Change order status (e.g. preparing, ready, completed)',
           keys: ['orders.update_status'],
         },
+        {
+          label: 'Cancel Orders',
+          description: 'Cancel or void active orders',
+          keys: ['orders.cancel'],
+          warning: 'Can cancel live orders',
+        },
+        {
+          label: 'View Order History',
+          description: 'View historical completed and cancelled order records',
+          keys: ['orders.history.view'],
+        },
       ],
     },
     {
-      category: 'Kitchen',
+      category: 'Waiter & Table Service',
       items: [
         {
-          label: 'Use Kitchen Display Screen',
-          description: 'Access kitchen display and ticket queue',
+          label: 'Access Waiter Workspace',
+          description: 'Access waiter service center and table operations',
+          keys: ['waiter.access'],
+        },
+        {
+          label: 'View Waiter Requests',
+          description: 'View guest table calls and assistance requests',
+          keys: ['waiter.requests.view'],
+        },
+        {
+          label: 'Manage Waiter Requests',
+          description: 'Acknowledge, clear, or resolve waiter requests',
+          keys: ['waiter.requests.manage'],
+        },
+        {
+          label: 'Create Waiter Table Orders',
+          description: 'Place orders on behalf of guests from waiter workspace',
+          keys: ['waiter.orders.create'],
+        },
+      ],
+    },
+    {
+      category: 'Kitchen Display (KDS)',
+      items: [
+        {
+          label: 'Access Kitchen Display Screen',
+          description: 'Access kitchen display system queue',
           keys: ['kitchen.access'],
         },
         {
-          label: 'Update Kitchen Tickets',
+          label: 'View Kitchen Tickets',
+          description: 'View active kitchen order tickets',
+          keys: ['kitchen.orders.view'],
+        },
+        {
+          label: 'Update Kitchen Ticket State',
           description: 'Mark items preparing or ready in kitchen',
           keys: ['kitchen.update'],
         },
       ],
     },
     {
-      category: 'Cashier & Payments',
+      category: 'Cashier & Billing',
       items: [
         {
-          label: 'Use Cashier POS Terminal',
-          description: 'Access billing and settlement terminal',
+          label: 'Access Cashier POS',
+          description: 'Access billing terminal and order settlements',
           keys: ['cashier.access'],
         },
         {
-          label: 'Record Payments & Print Receipts',
-          description: 'Confirm cash/card payments and print receipts',
-          keys: ['payments.record', 'receipts.print', 'payments.view'],
-          warning: 'Can receive and record money',
+          label: 'View Payment Audit Logs',
+          description: 'View payment transaction history',
+          keys: ['payments.view'],
+        },
+        {
+          label: 'Record Payments & Receipts',
+          description: 'Confirm cash, card, or QR payments and print receipts',
+          keys: ['payments.record', 'receipts.print'],
+          warning: 'Handles monetary transactions',
+        },
+        {
+          label: 'Void & Refund Payments',
+          description: 'Void un-settled records or issue customer refunds',
+          keys: ['payments.void', 'payments.refund'],
+          warning: 'High risk payment operations',
         },
       ],
     },
     {
-      category: 'Menu Catalog',
+      category: 'Menu Management',
       items: [
         {
           label: 'View Menu Catalog',
-          description: 'View categories, items, and modifiers',
+          description: 'View menu categories, items, and pricing',
           keys: ['menu.view'],
         },
         {
-          label: 'Manage Menu & Prices',
-          description: 'Add, edit, or delete menu items and prices',
-          keys: ['menu.manage'],
-          warning: 'Can change menu prices',
+          label: 'Create & Edit Menu Items',
+          description: 'Add new items or edit item name, description, and images',
+          keys: ['menu.items.create', 'menu.items.edit'],
+        },
+        {
+          label: 'Update Prices',
+          description: 'Modify item base prices and modifier prices',
+          keys: ['menu.price.update'],
+          warning: 'Modifies pricing',
+        },
+        {
+          label: 'Toggle Stock Status',
+          description: 'Toggle item availability (in stock / sold out)',
+          keys: ['menu.availability.update'],
+        },
+        {
+          label: 'Delete Menu Items',
+          description: 'Archive or delete menu items from catalog',
+          keys: ['menu.items.delete'],
+          warning: 'Permanently removes menu items',
+        },
+        {
+          label: 'Manage Categories & Modifiers',
+          description: 'Create and organize categories and modifier groups',
+          keys: ['menu.categories.manage', 'menu.modifiers.manage'],
         },
       ],
     },
@@ -99,54 +177,61 @@ export function SimplePermissionEditor({
       items: [
         {
           label: 'View Dining Tables',
-          description: 'View floor plans and table statuses',
+          description: 'View table visual floor plans and occupancy',
           keys: ['tables.view'],
         },
         {
-          label: 'Manage Dining Tables',
-          description: 'Add or edit tables and service areas',
-          keys: ['tables.manage'],
+          label: 'Update Table Status',
+          description: 'Mark table status (available, occupied, reserved)',
+          keys: ['tables.status.update'],
         },
         {
-          label: 'Generate Table QR Codes',
-          description: 'Print secure digital menu QR codes',
-          keys: ['qr.manage'],
-        },
-      ],
-    },
-    {
-      category: 'Customer Service',
-      items: [
-        {
-          label: 'View Waiter Requests',
-          description: 'View guest table calls and assistance requests',
-          keys: ['waiter.requests.view'],
+          label: 'Create & Edit Table Layout',
+          description: 'Add, edit, or remove floor tables',
+          keys: ['tables.create', 'tables.edit'],
         },
         {
-          label: 'Manage Waiter Requests',
-          description: 'Acknowledge and clear guest calls',
-          keys: ['waiter.requests.manage'],
+          label: 'Manage Service Areas',
+          description: 'Create and organize dining service areas',
+          keys: ['areas.view', 'areas.manage'],
+        },
+        {
+          label: 'Generate QR Ordering Cards',
+          description: 'Download and print table QR ordering codes',
+          keys: ['qr.view', 'qr.generate'],
         },
       ],
     },
     {
-      category: 'Staff & Team',
+      category: 'Team & Access Control',
       items: [
         {
-          label: 'View Staff Directory',
-          description: 'View list of team members and roles',
+          label: 'View Staff Roster',
+          description: 'View team members list and branch assignments',
           keys: ['staff.view'],
         },
         {
-          label: 'Manage Staff & Overrides',
-          description: 'Assign roles, custom roles, and overrides',
-          keys: ['staff.manage'],
-          warning: 'Can manage other staff',
+          label: 'Invite & Edit Staff',
+          description: 'Send invitations and update staff profile details',
+          keys: ['staff.invite', 'staff.edit'],
         },
         {
-          label: 'Create Staff Invitations',
-          description: 'Generate single-use staff invitation codes',
-          keys: ['invitations.manage'],
+          label: 'Suspend & Reactivate Staff',
+          description: 'Suspend or restore staff membership access',
+          keys: ['staff.suspend'],
+          warning: 'Can suspend staff access',
+        },
+        {
+          label: 'Assign Roles & Service Areas',
+          description: 'Assign roles, custom roles, and service areas to staff',
+          keys: ['staff.role.assign', 'staff.branch.assign', 'staff.area.assign'],
+          warning: 'Manages staff permissions and scopes',
+        },
+        {
+          label: 'Manage Custom Roles & Overrides',
+          description: 'Create custom roles or set explicit member overrides',
+          keys: ['roles.view', 'roles.manage', 'permissions.override.manage'],
+          warning: 'Full access control administration',
         },
       ],
     },
@@ -154,26 +239,41 @@ export function SimplePermissionEditor({
       category: 'Reports & Analytics',
       items: [
         {
-          label: 'View Sales Analytics',
-          description: 'View executive sales and operational reports',
+          label: 'View Operational Reports',
+          description: 'View daily order counts and operational summaries',
           keys: ['reports.view'],
         },
         {
-          label: 'Export Financial Reports',
-          description: 'Download revenue data to CSV or Excel',
+          label: 'View Financial Analytics',
+          description: 'View revenue breakdowns, margins, and sales metrics',
+          keys: ['reports.financial.view'],
+          warning: 'Access to financial revenue data',
+        },
+        {
+          label: 'Export Sales Reports',
+          description: 'Download revenue analytics data to CSV/Excel',
           keys: ['reports.export'],
-          warning: 'Can export financial data',
         },
       ],
     },
     {
-      category: 'Branch Settings',
+      category: 'Branch & Business Settings',
       items: [
         {
-          label: 'Manage Branch Settings',
-          description: 'Edit branch details and configurations',
-          keys: ['branches.manage'],
-          warning: 'Can change branch settings',
+          label: 'View Branch Directory',
+          description: 'View branch locations and details',
+          keys: ['branches.view'],
+        },
+        {
+          label: 'Manage Branch Operations',
+          description: 'Configure branch ordering modes and hours',
+          keys: ['branches.operational.manage'],
+        },
+        {
+          label: 'Manage Branch Entities & Business Settings',
+          description: 'Create branches, edit legal settings, or configure security',
+          keys: ['branches.manage', 'business.view', 'business.settings.manage'],
+          warning: 'Business administration level',
         },
       ],
     },

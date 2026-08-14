@@ -135,6 +135,27 @@ export class PermissionService {
   }
 
   /**
+   * Helper to verify service area scope boundary for area-sensitive operations.
+   */
+  static async verifyServiceAreaBoundary(
+    membershipId: string,
+    serviceAreaId: string | null,
+    admin?: ReturnType<typeof createAdminClient>
+  ): Promise<boolean> {
+    if (!serviceAreaId) return true;
+
+    const client = admin || createAdminClient();
+    const { data: areaAssign } = await client
+      .from('staff_service_areas')
+      .select('id')
+      .eq('business_membership_id', membershipId)
+      .eq('service_area_id', serviceAreaId)
+      .limit(1);
+
+    return !!(areaAssign && areaAssign.length > 0);
+  }
+
+  /**
    * Helper to return all effective permission keys for a user in a business/branch.
    */
   static async getMemberEffectivePermissions(

@@ -30,14 +30,12 @@ export async function createMenuCategoryAction(
     return { success: false, message: 'Unauthorized or active business branch not found.' };
   }
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'menu.manage'
-  );
+  const canManage =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
   if (!canManage) {
-    return { success: false, message: 'Forbidden. Missing required permission menu.manage.' };
+    return { success: false, message: 'Forbidden. Missing required permission to create category.' };
   }
 
   const parsed = createMenuCategorySchema.safeParse(formData);
@@ -121,13 +119,11 @@ export async function updateMenuCategoryAction(
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'menu.manage'
-  );
-  if (!canManage) return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
+  const canManage =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canManage) return { success: false, message: 'Forbidden. Missing required category permission.' };
 
   const parsed = updateMenuCategorySchema.safeParse(formData);
   if (!parsed.success) {
@@ -169,13 +165,11 @@ export async function archiveMenuCategoryAction(categoryId: string): Promise<Act
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'menu.manage'
-  );
-  if (!canManage) return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
+  const canManage =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canManage) return { success: false, message: 'Forbidden. Missing required category permission.' };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -209,14 +203,12 @@ export async function createMenuItemAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'menu.manage'
-  );
-  if (!canManage) {
-    return { success: false, message: 'Forbidden. Missing required menu.manage permission.' };
+  const canCreate =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.create')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canCreate) {
+    return { success: false, message: 'Forbidden. Missing required permission menu.items.create.' };
   }
 
   const parsed = createMenuItemSchema.safeParse(formData);
@@ -334,6 +326,25 @@ export async function updateMenuItemAction(
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
 
   const { id, price, ...rest } = parsed.data;
+
+  // Check specific price or edit permission
+  const isPriceChanging = price !== undefined;
+  let canUpdate = false;
+
+  if (isPriceChanging) {
+    canUpdate =
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.price.update')) ||
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+  } else {
+    canUpdate =
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.edit')) ||
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+  }
+
+  if (!canUpdate) {
+    return { success: false, message: 'Forbidden. Missing required menu item update permission.' };
+  }
+
   const supabase = await createClient();
 
   const updateData: Record<string, unknown> = {
@@ -372,6 +383,14 @@ export async function updateMenuItemAvailabilityAction(
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
+  const canUpdate =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.availability.update')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canUpdate) {
+    return { success: false, message: 'Forbidden. Missing permission menu.availability.update.' };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_items')
@@ -396,6 +415,12 @@ export async function toggleMenuItemFeaturedAction(
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
+  const canUpdate =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.edit')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canUpdate) return { success: false, message: 'Forbidden.' };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from('menu_items')
@@ -416,6 +441,12 @@ export async function toggleMenuItemFeaturedAction(
 export async function archiveMenuItemAction(itemId: string): Promise<ActionResponse> {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+
+  const canDelete =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.delete')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canDelete) return { success: false, message: 'Forbidden. Missing permission menu.items.delete.' };
 
   const supabase = await createClient();
   const { error } = await supabase

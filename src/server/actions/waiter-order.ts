@@ -35,14 +35,12 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     }
 
     // 1. Permission authorization check
-    const hasPermission = await PermissionService.hasPermission(
-      tenant.user.id,
-      tenant.business.id,
-      tenant.activeBranch.id,
-      'orders.view'
-    );
+    const hasCreatePerm =
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'waiter.orders.create')) ||
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'orders.create')) ||
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'orders.view'));
 
-    if (!hasPermission) {
+    if (!hasCreatePerm) {
       return { success: false, message: "You don't have permission to place orders for this branch." };
     }
 
@@ -73,10 +71,14 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       return { success: false, message: 'Selected table is no longer available in this branch.' };
     }
 
-    // 4. Verify waiter service area authorization if user has role 'waiter'
-    if (tenant.membership.role === 'waiter' && table.service_area_id) {
+    // 4. Verify waiter service area authorization if user has area restrictions
+    if (
+      tenant.membership.role !== 'business_owner' &&
+      tenant.membership.role !== 'branch_manager' &&
+      table.service_area_id
+    ) {
       const { data: areaAssigns } = await admin
-        .from('staff_area_assignments')
+        .from('staff_service_areas')
         .select('service_area_id')
         .eq('business_membership_id', tenant.membership.id);
 

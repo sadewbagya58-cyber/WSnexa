@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { ActiveBranchSwitcher } from '@/components/layout/active-branch-switcher';
+import { SidebarBranchPicker } from '@/components/layout/sidebar-branch-picker';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo } from '@/types';
 
@@ -19,10 +20,14 @@ interface DashboardShellProps {
   branches: BranchInfo[];
 }
 
+// ── Static nav structure ────────────────────────────────────────────────────
+
 interface NavItem {
   label: string;
   href: string;
   badge?: string;
+  /** When true this item is rendered by a custom component instead of a plain Link */
+  custom?: boolean;
 }
 
 interface NavSection {
@@ -43,7 +48,8 @@ const rawNavSections: NavSection[] = [
     items: [
       { label: 'Business Profile', href: '/dashboard/business' },
       { label: 'Public Venue Profile', href: '/dashboard/venue-profile' },
-      { label: 'Branches', href: '/dashboard/branches' },
+      // Branches is rendered by SidebarBranchPicker on mobile; as a plain link on desktop
+      { label: 'Branches', href: '/dashboard/branches', custom: true },
       { label: 'Dining Setup', href: '/dashboard/dining' },
       { label: 'Team & Members', href: '/dashboard/team' },
       { label: 'Staff Invitations', href: '/dashboard/team/invites' },
@@ -85,20 +91,16 @@ const rawNavSections: NavSection[] = [
 
 function formatRoleLabel(role: string): string {
   switch (role) {
-    case 'business_owner':
-      return 'Business Owner';
-    case 'branch_manager':
-      return 'Branch Manager';
-    case 'cashier':
-      return 'Cashier';
-    case 'kitchen_staff':
-      return 'Kitchen';
-    case 'waiter':
-      return 'Waiter';
-    default:
-      return role.replace(/_/g, ' ');
+    case 'business_owner':   return 'Business Owner';
+    case 'branch_manager':   return 'Branch Manager';
+    case 'cashier':          return 'Cashier';
+    case 'kitchen_staff':    return 'Kitchen';
+    case 'waiter':           return 'Waiter';
+    default:                 return role.replace(/_/g, ' ');
   }
 }
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({
   children,
@@ -114,7 +116,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Close drawer on path change
+  // Close drawer on path change (runs at render time to avoid effect-based setState lint)
   const [prevPathname, setPrevPathname] = useState(pathname);
   if (prevPathname !== pathname) {
     setPrevPathname(pathname);
@@ -124,17 +126,11 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  // Filter navigation items by user permissions
+  // Permission-filtered nav sections
   const allowedNavSections = rawNavSections
     .map((sec) => ({
       ...sec,
@@ -147,7 +143,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     }))
     .filter((sec) => sec.items.length > 0);
 
-  const renderNavLinks = () => (
+  // ── Desktop nav: plain links for every item ──────────────────────────────
+
+  const renderDesktopNavLinks = () => (
     <div className="space-y-6">
       {allowedNavSections.map((sec, secIdx) => (
         <div key={secIdx} className="space-y-1">
@@ -160,6 +158,55 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 item.href === '/dashboard'
                   ? pathname === '/dashboard'
                   : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] ${
+                    isActive
+                      ? 'bg-zinc-950 text-white shadow-xs'
+                      : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
+                  }`}
+                >
+                  <span className="truncate">{item.label}</span>
+                  {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Mobile nav: Branches item replaced by SidebarBranchPicker ────────────
+
+  const renderMobileNavLinks = () => (
+    <div className="space-y-6">
+      {allowedNavSections.map((sec, secIdx) => (
+        <div key={secIdx} className="space-y-1">
+          <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+            {sec.title}
+          </h3>
+          <div className="space-y-0.5 pt-1">
+            {sec.items.map((item) => {
+              const isActive =
+                item.href === '/dashboard'
+                  ? pathname === '/dashboard'
+                  : pathname.startsWith(item.href);
+
+              // Branches: render expandable picker
+              if (item.custom && item.href === '/dashboard/branches') {
+                return (
+                  <SidebarBranchPicker
+                    key={item.href}
+                    activeBranch={activeBranch}
+                    branches={branches}
+                    isOwner={userRole === 'business_owner'}
+                    onClose={() => setMobileOpen(false)}
+                  />
+                );
+              }
 
               return (
                 <Link
@@ -183,13 +230,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     </div>
   );
 
+  // ── JSX ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
-      {/* Top Bar Header with safe area top inset */}
+
+      {/* ── Top Bar Header ──────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 pt-[env(safe-area-inset-top,0px)] pb-1 sm:pb-0">
-        {/* Left Side: Logo & Active Branch Switcher */}
+
+        {/* Left: Logo + (mobile) business badge | (desktop) business + branch switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98]">
             <span className="rounded-lg bg-zinc-950 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-extrabold text-white tracking-widest">
               WSNEXA
@@ -198,12 +248,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
           <span className="text-zinc-300 shrink-0">|</span>
 
-          {/* Active Business & Branch Switcher */}
-          <div className="flex items-center gap-2 min-w-0 flex-1 max-w-[210px] xs:max-w-[280px] sm:max-w-none">
-            <Badge variant="neutral" className="hidden font-semibold text-zinc-900 md:inline-flex shrink-0">
+          {/* Mobile: compact business name only */}
+          <span className="lg:hidden text-xs font-bold text-zinc-700 truncate max-w-[140px] xs:max-w-[180px]">
+            🏢 {businessName}
+          </span>
+
+          {/* Desktop ≥ 1024px: full business + active branch switcher */}
+          <div className="hidden lg:flex items-center gap-2 min-w-0">
+            <Badge variant="neutral" className="font-semibold text-zinc-900 shrink-0">
               🏢 {businessName}
             </Badge>
-
             <ActiveBranchSwitcher
               activeBranch={activeBranch}
               branches={branches}
@@ -212,9 +266,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
 
-        {/* Right Side: Desktop Profile Trigger & Mobile Navigation Hamburger */}
+        {/* Right: Desktop profile dropdown + mobile hamburger */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* User Profile Dropdown Trigger (Desktop >= 1024px) */}
+
+          {/* Desktop user profile dropdown */}
           <div className="relative hidden lg:block">
             <button
               type="button"
@@ -237,7 +292,6 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   <p className="text-[11px] text-zinc-500 truncate">{userEmail}</p>
                   <p className="mt-1 text-[10px] text-zinc-400 font-medium">Role: {formatRoleLabel(userRole)}</p>
                 </div>
-
                 <div className="py-1">
                   <form action="/api/auth/logout" method="POST">
                     <button
@@ -252,7 +306,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             )}
           </div>
 
-          {/* Mobile Drawer Hamburger (< 1024px) */}
+          {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -270,43 +324,48 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         </div>
       </header>
 
-      {/* Main Body with Sidebar + Content */}
+      {/* ── Main Body ───────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-w-0">
+
         {/* Desktop Sidebar */}
         <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem-env(safe-area-inset-top,0px))] sticky top-[calc(4rem+env(safe-area-inset-top,0px))]">
-          {renderNavLinks()}
+          {renderDesktopNavLinks()}
         </aside>
 
         {/* Mobile Drawer Overlay */}
         {mobileOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
+            {/* Backdrop */}
             <div
               className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileOpen(false)}
             />
+
+            {/* Drawer panel */}
             <aside className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen">
               <div className="space-y-6">
+                {/* Drawer header */}
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                  <span className="font-black text-sm text-zinc-950 uppercase tracking-wider">Navigation Menu</span>
+                  <span className="font-black text-sm text-zinc-950 uppercase tracking-wider">Navigation</span>
                   <button
                     type="button"
                     onClick={() => setMobileOpen(false)}
                     className="flex min-h-[44px] min-w-[44px] items-center justify-center text-zinc-500 hover:text-zinc-950 text-xs font-extrabold touch-manipulation"
                   >
-                    ✕ Close
+                    ✕
                   </button>
                 </div>
 
-                {/* Mobile Business & Branch Header */}
-                <div className="rounded-2xl bg-zinc-50 p-3.5 space-y-1 border border-zinc-200/80">
+                {/* Business card */}
+                <div className="rounded-2xl bg-zinc-50 p-3.5 border border-zinc-200/80">
                   <p className="text-xs font-black text-zinc-950 truncate">🏢 {businessName}</p>
-                  <p className="text-xs font-semibold text-zinc-700 truncate">📍 {activeBranch?.name || 'Primary Branch'}</p>
                 </div>
 
-                {renderNavLinks()}
+                {/* Mobile nav links (with SidebarBranchPicker for Branches) */}
+                {renderMobileNavLinks()}
               </div>
 
-              {/* Persistent Mobile Account Footer */}
+              {/* Account footer */}
               <div className="border-t border-zinc-200 pt-4 mt-6 space-y-3 shrink-0">
                 <div className="rounded-xl bg-zinc-50 p-3 space-y-1 border border-zinc-200/60">
                   <div className="font-extrabold text-xs text-zinc-950 truncate">{userName || userEmail}</div>
@@ -329,7 +388,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         )}
 
-        {/* Main Content Area */}
+        {/* Main content */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           {children}
         </main>

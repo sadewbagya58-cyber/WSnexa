@@ -123,6 +123,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       {
         id: string;
         modifier_group_id: string;
+        group_name: string;
         name: string;
         price_cents: number;
         menu_item_id: string;
@@ -134,7 +135,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       const { data: optionsData } = await admin
         .from('modifier_options')
         .select(
-          'id, modifier_group_id, name, price_cents, additional_price_cents, modifier_groups!inner(id, menu_item_id, menu_items!inner(id, branch_id))'
+          'id, modifier_group_id, name, price_cents, additional_price_cents, modifier_groups!inner(id, name, menu_item_id, menu_items!inner(id, branch_id))'
         )
         .in('id', allModifierOptionIds);
 
@@ -147,6 +148,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
           additional_price_cents?: number | null;
           modifier_groups?: {
             id: string;
+            name?: string | null;
             menu_item_id: string;
             menu_items?: { id: string; branch_id: string } | null;
           } | null;
@@ -156,6 +158,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
           optionMap.set(opt.id, {
             id: opt.id,
             modifier_group_id: opt.modifier_group_id,
+            group_name: opt.modifier_groups?.name || 'Option Group',
             name: opt.name,
             price_cents: modPriceCents,
             menu_item_id: opt.modifier_groups?.menu_item_id || '',
@@ -264,9 +267,11 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     const orderItemRows = orderItemsPayload.map((itemPayload) => ({
       order_id: newOrder.id,
       menu_item_id: itemPayload.menu_item_id,
+      item_name_snapshot: itemPayload.item_name_snapshot,
+      unit_price_cents_snapshot: itemPayload.unit_price_cents_snapshot,
       quantity: itemPayload.quantity,
-      unit_price_cents: itemPayload.unit_price_cents,
-      notes: itemPayload.notes || null,
+      line_subtotal_cents: itemPayload.line_subtotal_cents,
+      special_instructions: itemPayload.special_instructions,
     }));
 
     const { data: insertedItems, error: itemsErr } = await admin
@@ -290,11 +295,14 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
         const orderItemId = itemMapByMenuId.get(op.menu_item_id);
         if (orderItemId && op.selectedModifiers) {
           for (const mod of op.selectedModifiers) {
+            const optDetails = optionMap.get(mod.optionId);
             modifierRows.push({
               order_item_id: orderItemId,
+              modifier_group_id: mod.groupId,
               modifier_option_id: mod.optionId,
-              name_snapshot: mod.nameSnapshot,
-              price_cents_snapshot: mod.priceSnapshot,
+              group_name_snapshot: optDetails?.group_name || 'Option Group',
+              option_name_snapshot: mod.nameSnapshot,
+              additional_price_cents_snapshot: mod.priceSnapshot,
             });
           }
         }

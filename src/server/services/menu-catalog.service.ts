@@ -152,11 +152,12 @@ export class MenuCatalogService {
       .eq('business_id', businessId)
       .maybeSingle();
 
-    // 4. Fetch Menu Categories
+    // 4. Fetch Menu Categories for active branch ONLY
     const { data: categoriesData } = await admin
       .from('menu_categories')
       .select('id, name, slug, description, display_order')
       .eq('business_id', businessId)
+      .eq('branch_id', branchId)
       .is('deleted_at', null)
       .order('display_order', { ascending: true });
 
@@ -168,13 +169,14 @@ export class MenuCatalogService {
       display_order: c.display_order ?? 0,
     }));
 
-    // 5. Fetch Menu Items (Excluding hidden/deleted items)
+    // 5. Fetch Menu Items for active branch ONLY (Excluding hidden/deleted items)
     const { data: itemsData } = await admin
       .from('menu_items')
       .select(
         'id, category_id, name, slug, description, price_cents, availability_status, is_featured, primary_image_url, display_order'
       )
       .eq('business_id', businessId)
+      .eq('branch_id', branchId)
       .neq('availability_status', 'hidden')
       .is('deleted_at', null)
       .order('display_order', { ascending: true });

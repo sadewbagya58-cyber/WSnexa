@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createWaiterOrderAction } from '@/server/actions/waiter-order';
 import { BranchMenuCatalog, CatalogMenuItem } from '@/server/services/menu-catalog.service';
@@ -11,6 +11,11 @@ import { MenuItemCard } from '@/components/menu/menu-item-card';
 import { MenuItemDetails } from '@/components/menu/menu-item-details';
 import { QuantityStepper } from '@/components/guest/quantity-stepper';
 import { formatCurrency, calculateLineUnitPriceCents } from '@/features/cart/cart-calculations';
+import {
+  saveWaiterCartToStorage,
+  loadWaiterCartFromStorage,
+  clearWaiterCartStorage,
+} from '@/features/cart/waiter-cart-storage';
 
 export interface WaiterAreaOption {
   id: string;
@@ -49,6 +54,9 @@ interface WaiterOrderBuilderProps {
   catalog: BranchMenuCatalog;
   activeBranchName: string;
   waiterName?: string;
+  businessId?: string;
+  activeBranchId?: string;
+  userId?: string;
 }
 
 export function WaiterOrderBuilder({
@@ -57,9 +65,14 @@ export function WaiterOrderBuilder({
   catalog,
   activeBranchName,
   waiterName = 'Staff',
+  businessId,
+  activeBranchId,
+  userId,
 }: WaiterOrderBuilderProps) {
   const router = useRouter();
   const currency = catalog.branch.currency || catalog.business.currency || 'USD';
+  const effectiveBizId = businessId || catalog.business.id;
+  const effectiveBranchId = activeBranchId || catalog.branch.id;
 
   const [selectedAreaId, setSelectedAreaId] = useState<string>(areas[0]?.id || '');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
@@ -73,7 +86,63 @@ export function WaiterOrderBuilder({
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [branchNotice, setBranchNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const prevBranchIdRef = React.useRef<string>(effectiveBranchId);
+
+  // Restore saved draft from storage for current branch on mount
+  useEffect(() => {
+    const loaded = loadWaiterCartFromStorage(effectiveBizId, effectiveBranchId, userId);
+    if (loaded) {
+      const validCart = loaded.cart.filter((c) =>
+        catalog.items.some((i) => i.id === c.menuItemId)
+      );
+      const validTable = tables.find((t) => t.id === loaded.selectedTableId);
+      const validArea = areas.find((a) => a.id === loaded.selectedAreaId);
+
+      queueMicrotask(() => {
+        setCart(validCart);
+        if (validTable) setSelectedTableId(validTable.id);
+        if (validArea) setSelectedAreaId(validArea.id);
+        setOrderNotes(loaded.orderNotes || '');
+      });
+    }
+  }, [effectiveBizId, effectiveBranchId, userId, catalog.items, tables, areas]);
+
+  // Detect branch switch and reset client state safely
+  useEffect(() => {
+    if (prevBranchIdRef.current !== effectiveBranchId) {
+      clearWaiterCartStorage(effectiveBizId, prevBranchIdRef.current, userId);
+      prevBranchIdRef.current = effectiveBranchId;
+      setCart([]);
+      setSelectedTableId('');
+      setSelectedAreaId(areas[0]?.id || '');
+      setOrderNotes('');
+      setStep('table');
+      setSearchQuery('');
+      setSelectedCategory('all');
+      setBranchNotice('Branch changed. Your previous waiter order draft was cleared.');
+    }
+  }, [effectiveBranchId, effectiveBizId, userId, areas]);
+
+  // Persist draft on state changes
+  useEffect(() => {
+    if (cart.length > 0 || selectedTableId || orderNotes) {
+      saveWaiterCartToStorage({
+        businessId: effectiveBizId,
+        branchId: effectiveBranchId,
+        userId,
+        selectedAreaId,
+        selectedTableId,
+        orderNotes,
+        cart,
+        updatedAt: Date.now(),
+      });
+    } else {
+      clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
+    }
+  }, [effectiveBizId, effectiveBranchId, userId, selectedAreaId, selectedTableId, orderNotes, cart]);
 
   const filteredTables = tables.filter((t) => !selectedAreaId || t.serviceAreaId === selectedAreaId);
   const selectedTable = tables.find((t) => t.id === selectedTableId);
@@ -87,6 +156,19 @@ export function WaiterOrderBuilder({
       (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
+
+  const handleGoToReview = () => {
+    const validCart = cart.filter((c) => catalog.items.some((i) => i.id === c.menuItemId));
+    if (validCart.length !== cart.length) {
+      setCart(validCart);
+      setErrorMsg('Some items in your cart were no longer available in this branch and were removed.');
+    }
+    if (validCart.length > 0) {
+      setStep('cart');
+    } else {
+      setStep('menu');
+    }
+  };
 
   const handleAddToCart = (configuredItem: {
     menuItemId: string;
@@ -176,6 +258,7 @@ export function WaiterOrderBuilder({
 
       if (res.success) {
         setSuccessMsg(`Order #${res.orderNumber} created successfully!`);
+        clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
         setCart([]);
         setOrderNotes('');
         setTimeout(() => {
@@ -209,9 +292,34 @@ export function WaiterOrderBuilder({
 
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
         {/* Feedback Alerts */}
+        {branchNotice && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-900 flex items-center justify-between gap-2">
+            <div>ℹ️ {branchNotice}</div>
+            <button
+              type="button"
+              onClick={() => setBranchNotice(null)}
+              className="text-xs font-bold text-amber-700 hover:text-amber-950 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {errorMsg && (
-          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 flex items-center gap-2">
-            ⚠️ {errorMsg}
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              ⚠️ {errorMsg}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                router.refresh();
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-900 font-extrabold text-[11px] shrink-0 border border-red-300"
+            >
+              🔄 Refresh Menu
+            </button>
           </div>
         )}
         {successMsg && (
@@ -247,7 +355,7 @@ export function WaiterOrderBuilder({
           </button>
           <button
             type="button"
-            onClick={() => cart.length > 0 && setStep('cart')}
+            onClick={() => cart.length > 0 && handleGoToReview()}
             disabled={cart.length === 0}
             className={`py-2 rounded-xl border transition-all ${
               step === 'cart'
@@ -384,7 +492,7 @@ export function WaiterOrderBuilder({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setStep('cart')}
+                  onClick={() => handleGoToReview()}
                   className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-white text-zinc-950 hover:bg-zinc-100 shadow-md"
                 >
                   Review Order →

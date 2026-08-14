@@ -10,6 +10,45 @@ interface ActiveBranchSwitcherProps {
   isOwner: boolean;
 }
 
+function checkAnyWaiterCartItems(): boolean {
+  if (typeof window === 'undefined' || !window.sessionStorage) return false;
+  try {
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i);
+      if (key && key.startsWith('wsnexa_waiter_cart:')) {
+        const raw = window.sessionStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.cart && parsed.cart.length > 0) {
+            return true;
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+function clearAllWaiterCarts(): void {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const key = window.sessionStorage.key(i);
+      if (key && key.startsWith('wsnexa_waiter_cart:')) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
   activeBranch,
   branches,
@@ -17,17 +56,16 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
 }) => {
   const [switching, setSwitching] = useState<boolean>(false);
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
+  const [pendingBranchId, setPendingBranchId] = useState<string | null>(null);
 
   if (!activeBranch || branches.length === 0) return null;
 
-  const handleBranchSelect = async (branchId: string) => {
-    if (branchId === activeBranch.id) {
-      setDropdownOpen(false);
-      return;
-    }
-
+  const executeBranchSwitch = async (branchId: string) => {
     setSwitching(true);
     setDropdownOpen(false);
+    setPendingBranchId(null);
+
+    clearAllWaiterCarts();
 
     const res = await switchActiveBranchAction(branchId);
     setSwitching(false);
@@ -36,6 +74,20 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
       window.location.reload();
     } else {
       alert(res.message || 'Failed to switch branch');
+    }
+  };
+
+  const handleBranchSelect = (branchId: string) => {
+    if (branchId === activeBranch.id) {
+      setDropdownOpen(false);
+      return;
+    }
+
+    if (checkAnyWaiterCartItems()) {
+      setPendingBranchId(branchId);
+      setDropdownOpen(false);
+    } else {
+      executeBranchSwitch(branchId);
     }
   };
 
@@ -140,6 +192,36 @@ export const ActiveBranchSwitcher: React.FC<ActiveBranchSwitcherProps> = ({
             )}
           </div>
         </>
+      )}
+
+      {/* Confirmation Modal when switching branch with active waiter draft */}
+      {pendingBranchId && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 border border-zinc-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2 text-amber-600 font-extrabold text-sm uppercase tracking-wide">
+              ⚠️ Switch Branch?
+            </div>
+            <p className="text-xs text-zinc-700 leading-relaxed font-medium">
+              Switching branches will clear the current waiter order draft.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingBranchId(null)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-300 text-zinc-700 font-bold text-xs hover:bg-zinc-100 min-h-[44px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => executeBranchSwitch(pendingBranchId)}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-extrabold text-xs hover:bg-red-700 shadow-sm min-h-[44px]"
+              >
+                Switch Branch
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

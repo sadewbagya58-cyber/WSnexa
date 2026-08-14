@@ -75,48 +75,133 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       }
     }
 
-    // 4. Fetch menu items for price calculation
-    const menuItemIds = input.items.map((i) => i.menuItemId);
+    // 4. Validate menu items in ONE single pass with strict branch isolation
+    const uniqueItemIds = Array.from(new Set(input.items.map((i) => i.menuItemId)));
     const { data: menuItems } = await supabase
       .from('menu_items')
-      .select('id, name, price')
-      .in('id', menuItemIds);
+      .select('id, name, price_cents, availability_status, branch_id, business_id')
+      .in('id', uniqueItemIds)
+      .eq('business_id', tenant.business.id)
+      .eq('branch_id', tenant.activeBranch.id)
+      .is('deleted_at', null);
 
     const itemMap = new Map((menuItems || []).map((m) => [m.id, m]));
 
-    let totalAmount = 0;
+    if (itemMap.size !== uniqueItemIds.length) {
+      console.error(
+        '[createWaiterOrderAction] Item validation failed. Submitted unique IDs:',
+        uniqueItemIds,
+        'Found items in active branch:',
+        Array.from(itemMap.keys()),
+        'Active branch ID:',
+        tenant.activeBranch.id
+      );
+      return {
+        success: false,
+        message: 'An item in this order is no longer available for this branch. Please refresh the menu and try again.',
+      };
+    }
+
+    // 4b. Fetch and validate selected modifiers
+    const allModifierOptionIds = input.items
+      .flatMap((i) => i.selectedModifiers || [])
+      .map((m) => m.optionId);
+
+    const optionMap = new Map<
+      string,
+      {
+        id: string;
+        modifier_group_id: string;
+        name: string;
+        price_cents: number;
+        menu_item_id: string;
+        branch_id: string;
+      }
+    >();
+
+    if (allModifierOptionIds.length > 0) {
+      const { data: optionsData } = await supabase
+        .from('modifier_options')
+        .select(
+          'id, modifier_group_id, name, price_cents, additional_price_cents, modifier_groups!inner(id, menu_item_id, menu_items!inner(id, branch_id))'
+        )
+        .in('id', allModifierOptionIds);
+
+      if (optionsData) {
+        type OptionRow = {
+          id: string;
+          modifier_group_id: string;
+          name: string;
+          price_cents?: number | null;
+          additional_price_cents?: number | null;
+          modifier_groups?: {
+            id: string;
+            menu_item_id: string;
+            menu_items?: { id: string; branch_id: string } | null;
+          } | null;
+        };
+        for (const opt of optionsData as unknown as OptionRow[]) {
+          const modPriceCents = opt.price_cents ?? opt.additional_price_cents ?? 0;
+          optionMap.set(opt.id, {
+            id: opt.id,
+            modifier_group_id: opt.modifier_group_id,
+            name: opt.name,
+            price_cents: modPriceCents,
+            menu_item_id: opt.modifier_groups?.menu_item_id || '',
+            branch_id: opt.modifier_groups?.menu_items?.branch_id || '',
+          });
+        }
+      }
+    }
+
+    let totalSubtotalCents = 0;
     const orderItemsPayload = [];
 
     for (const itemInput of input.items) {
       const item = itemMap.get(itemInput.menuItemId);
       if (!item) {
-        return { success: false, message: `Menu item not found: ${itemInput.menuItemId}` };
+        return {
+          success: false,
+          message: 'An item in this order is no longer available for this branch. Please refresh the menu and try again.',
+        };
       }
 
-      let unitPrice = item.price;
-      const modSnapshots = [];
+      if (item.availability_status === 'out_of_stock' || item.availability_status === 'hidden') {
+        return {
+          success: false,
+          message: `Item "${item.name}" is currently unavailable or sold out. Please refresh the menu.`,
+        };
+      }
 
-      if (itemInput.selectedModifiers) {
+      let unitPriceCents = item.price_cents || 0;
+
+      if (itemInput.selectedModifiers && itemInput.selectedModifiers.length > 0) {
         for (const mod of itemInput.selectedModifiers) {
-          unitPrice += mod.priceSnapshot;
-          modSnapshots.push({
-            group_id: mod.groupId,
-            option_id: mod.optionId,
-            name_snapshot: mod.nameSnapshot,
-            price_snapshot: mod.priceSnapshot,
-          });
+          const opt = optionMap.get(mod.optionId);
+          if (
+            !opt ||
+            opt.modifier_group_id !== mod.groupId ||
+            opt.menu_item_id !== itemInput.menuItemId ||
+            opt.branch_id !== tenant.activeBranch.id
+          ) {
+            return {
+              success: false,
+              message: 'Selected item options belong to another menu item or branch. Please refresh the menu.',
+            };
+          }
+          unitPriceCents += opt.price_cents;
         }
       }
 
-      const itemTotal = unitPrice * itemInput.quantity;
-      totalAmount += itemTotal;
+      const lineSubtotalCents = unitPriceCents * itemInput.quantity;
+      totalSubtotalCents += lineSubtotalCents;
 
       orderItemsPayload.push({
         menu_item_id: item.id,
         item_name_snapshot: item.name,
         quantity: itemInput.quantity,
-        unit_price_cents_snapshot: Math.round(unitPrice * 100),
-        line_subtotal_cents: Math.round(itemTotal * 100),
+        unit_price_cents_snapshot: unitPriceCents,
+        line_subtotal_cents: lineSubtotalCents,
         special_instructions: itemInput.notes || null,
       });
     }
@@ -131,7 +216,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     });
 
     const orderNumber = seqData || Math.floor(1000 + Math.random() * 9000);
-    const totalCents = Math.round(totalAmount * 100);
+    const totalCents = totalSubtotalCents;
 
     const { data: newOrder, error: orderErr } = await supabase
       .from('orders')

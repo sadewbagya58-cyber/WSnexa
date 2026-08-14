@@ -5,6 +5,9 @@ import { ServiceAreaService } from '@/server/services/service-area.service';
 import { MenuCatalogService } from '@/server/services/menu-catalog.service';
 import { WaiterOrderBuilder } from '@/components/waiter/waiter-order-builder';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default async function WaiterOrderPage() {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) {
@@ -60,6 +63,9 @@ export default async function WaiterOrderPage() {
       areas={areas.map((a) => ({ id: a.id, name: a.name }))}
       tables={tables}
       catalog={catalog}
+      businessId={context.business.id}
+      activeBranchId={context.activeBranch.id}
+      userId={context.user.id}
       activeBranchName={context.activeBranch.name}
       waiterName={waiterName}
     />

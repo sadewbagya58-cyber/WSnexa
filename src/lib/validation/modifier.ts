@@ -55,17 +55,30 @@ export const createModifierGroupSchema = z
     }
   );
 
-export const updateModifierGroupSchema = z.object({
-  id: z.string().uuid('Invalid modifier group ID'),
-  name: z.string().trim().min(1).max(100).optional(),
-  description: z.string().trim().max(500).optional().nullable(),
-  selectionType: z.enum(MODIFIER_SELECTION_TYPES).optional(),
-  isRequired: z.boolean().optional(),
-  minSelections: z.number().int().min(0).optional(),
-  maxSelections: z.number().int().min(1).optional().nullable(),
-  displayOrder: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-});
+export const updateModifierGroupSchema = z
+  .object({
+    id: z.string().uuid('Invalid modifier group ID'),
+    name: z.string().trim().min(1).max(100).optional(),
+    description: z.string().trim().max(500).optional().nullable(),
+    selectionType: z.enum(MODIFIER_SELECTION_TYPES).optional(),
+    isRequired: z.boolean().optional(),
+    minSelections: z.number().int().min(0).optional(),
+    maxSelections: z.number().int().min(1).optional().nullable(),
+    displayOrder: z.number().int().min(0).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.minSelections !== undefined && data.maxSelections !== undefined && data.maxSelections !== null) {
+        return data.minSelections <= data.maxSelections;
+      }
+      return true;
+    },
+    {
+      message: 'Minimum selections cannot exceed maximum selections',
+      path: ['minSelections'],
+    }
+  );
 
 export const createModifierOptionSchema = z.object({
   modifierGroupId: z.string().uuid('Please select a valid modifier group'),

@@ -1,11 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { LoyaltyRewardRecord, CustomerLoyaltyAccountRecord } from '@/lib/validation/loyalty';
 import { useCart } from '@/features/cart/cart-context';
 
@@ -29,32 +27,64 @@ export function RewardsDrawer({
   const pathname = usePathname();
   const { state: cartState, setSelectedReward } = useCart();
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const pointsBalance = loyaltyAccount?.pointsBalance || 0;
   const selectedRewardId = cartState.selectedReward?.id || null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="max-w-lg w-full bg-zinc-900 border-zinc-800 text-white p-6 space-y-6 max-h-[85vh] flex flex-col">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rewards-modal-title"
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-lg bg-white border border-zinc-200 text-zinc-950 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-5 max-h-[85vh] flex flex-col animate-in zoom-in-95">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+        <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl">🎁</span>
-              <h2 className="text-lg font-black tracking-tight">Available Rewards</h2>
+              <span className="text-xl" aria-hidden>🎁</span>
+              <h2 id="rewards-modal-title" className="text-lg font-black text-zinc-950 tracking-tight">
+                Available Rewards
+              </h2>
             </div>
             {isAuthenticated && (
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-xs text-zinc-500 font-medium mt-1">
                 Current venue balance:{' '}
-                <strong className="text-amber-400 font-mono font-bold text-sm">{pointsBalance} pts</strong>
+                <strong className="text-amber-600 font-mono font-bold text-sm">{pointsBalance} pts</strong>
               </p>
             )}
           </div>
           <button
             type="button"
+            aria-label="Close rewards modal"
             onClick={onClose}
-            className="text-zinc-400 hover:text-white font-bold text-lg p-1"
+            className="text-zinc-400 hover:text-zinc-700 font-bold text-lg p-2 rounded-full hover:bg-zinc-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation focus:outline-none focus:ring-2 focus:ring-zinc-300"
           >
             ✕
           </button>
@@ -63,27 +93,27 @@ export function RewardsDrawer({
         {/* Content */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           {!isAuthenticated ? (
-            <div className="p-6 text-center bg-zinc-950/60 border border-zinc-800 rounded-2xl space-y-4">
-              <div className="text-4xl">🔐</div>
-              <div>
-                <h3 className="text-base font-bold text-white">Sign in to use your rewards</h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Sign in with your customer account to apply venue points & redeem discounts.
+            <div className="p-6 text-center bg-amber-50/60 border border-amber-200 rounded-2xl space-y-4">
+              <div className="text-4xl" aria-hidden>🔐</div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-zinc-950">Sign in to use your rewards</h3>
+                <p className="text-xs text-zinc-600 font-medium">
+                  Sign in with your customer account to apply venue points &amp; redeem discounts.
                 </p>
               </div>
-              <div className="pt-2">
+              <div className="pt-2 space-y-2">
                 <Link href={`/login?returnTo=${encodeURIComponent(pathname)}`}>
-                  <Button className="w-full font-bold bg-amber-500 hover:bg-amber-400 text-black">
+                  <Button className="w-full font-extrabold text-xs py-3.5 bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white rounded-xl min-h-[44px] touch-manipulation shadow-xs">
                     Sign In to Account
                   </Button>
                 </Link>
-                <p className="text-[10px] text-zinc-500 mt-2">
+                <p className="text-[11px] text-zinc-500 font-medium">
                   Signing in preserves your current table PIN and cart items!
                 </p>
               </div>
             </div>
           ) : availableRewards.length === 0 ? (
-            <div className="p-8 text-center text-zinc-500 text-sm italic">
+            <div className="p-8 text-center text-xs font-semibold text-zinc-500 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
               No rewards available for this venue right now.
             </div>
           ) : (
@@ -94,61 +124,63 @@ export function RewardsDrawer({
               const minSpendMet = !reward.minOrderValueCents || subtotalCents >= reward.minOrderValueCents;
 
               let typeLabel = '';
-              if (reward.rewardType === 'fixed_discount') {
-                typeLabel = `LKR ${(reward.discountAmountCents || 0) / 100} OFF`;
-              } else if (reward.rewardType === 'percentage_discount') {
+              if (reward.rewardType === 'fixed_discount' && reward.discountAmountCents) {
+                typeLabel = `LKR ${(reward.discountAmountCents / 100).toLocaleString()} OFF`;
+              } else if (reward.rewardType === 'percentage_discount' && reward.discountPercentage) {
                 typeLabel = `${reward.discountPercentage}% OFF`;
               } else if (reward.rewardType === 'free_item') {
                 typeLabel = 'Free Menu Item';
-              } else {
+              } else if (reward.title) {
                 typeLabel = reward.title;
               }
 
               return (
                 <div
                   key={reward.id}
-                  className={`p-4 rounded-xl border transition-all ${
+                  className={`p-4 rounded-2xl border transition-all space-y-3 ${
                     isSelected
-                      ? 'bg-amber-500/10 border-amber-500'
-                      : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
+                      ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs'
+                      : 'bg-white border-zinc-200 hover:border-zinc-300 shadow-2xs'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-white text-sm">{reward.title}</h4>
-                        <Badge variant="neutral" className="text-[10px] bg-zinc-800 text-amber-400 border-amber-500/30">
-                          {typeLabel}
-                        </Badge>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-zinc-950 text-sm">{reward.title}</h4>
+                        {typeLabel.trim() && (
+                          <span className="bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold text-[11px] px-2 py-0.5 rounded-md">
+                            {typeLabel}
+                          </span>
+                        )}
                       </div>
                       {reward.description && (
-                        <p className="text-xs text-zinc-400 mt-1">{reward.description}</p>
+                        <p className="text-xs text-zinc-600 font-medium leading-relaxed">{reward.description}</p>
                       )}
                       {reward.minOrderValueCents > 0 && (
-                        <p className="text-[10px] text-zinc-500 mt-1">
+                        <p className="text-[11px] text-zinc-500 font-semibold">
                           Min. spend required: LKR {(reward.minOrderValueCents / 100).toLocaleString()}
                         </p>
                       )}
                     </div>
-                    <div className="text-right whitespace-nowrap">
-                      <span className="text-xs font-black text-amber-400 block">
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-black text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl inline-block">
                         {reward.pointsRequired} pts
                       </span>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="mt-4 pt-3 border-t border-zinc-900 flex items-center justify-between">
+                  <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
                     {isSelected ? (
-                      <div className="flex items-center justify-between w-full">
-                        <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
-                          <span>✓</span> Selected for Cart
+                      <div className="flex items-center justify-between w-full gap-2">
+                        <span className="text-xs text-emerald-800 font-extrabold flex items-center gap-1">
+                          <span aria-hidden>✓</span> Selected for Cart
                         </span>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedReward(null)}
-                          className="text-xs border-rose-500/50 text-rose-400 hover:bg-rose-500/10"
+                          className="text-xs border-zinc-300 text-rose-600 hover:bg-rose-50 font-extrabold min-h-[40px] touch-manipulation"
                         >
                           Remove
                         </Button>
@@ -161,15 +193,15 @@ export function RewardsDrawer({
                           setSelectedReward(reward);
                           onClose();
                         }}
-                        className="w-full font-bold bg-amber-500 hover:bg-amber-400 text-black text-xs disabled:opacity-50"
+                        className="w-full font-extrabold bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs py-3 rounded-xl min-h-[44px] touch-manipulation shadow-xs disabled:opacity-50 disabled:pointer-events-none"
                       >
                         {minSpendMet
                           ? `Use ${reward.pointsRequired} Points`
-                          : `Min order LKR ${reward.minOrderValueCents / 100} required`}
+                          : `Min order LKR ${(reward.minOrderValueCents / 100).toLocaleString()} required`}
                       </Button>
                     ) : (
-                      <div className="w-full text-center py-1.5 px-3 rounded-lg bg-zinc-900 text-zinc-500 text-xs font-semibold">
-                        [{pointsNeeded} more point{pointsNeeded > 1 ? 's' : ''} needed]
+                      <div className="w-full text-center py-3 px-4 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-600 text-xs font-bold min-h-[44px] flex items-center justify-center">
+                        Need {pointsNeeded} more point{pointsNeeded > 1 ? 's' : ''}
                       </div>
                     )}
                   </div>
@@ -180,12 +212,16 @@ export function RewardsDrawer({
         </div>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-zinc-800 flex justify-end">
-          <Button variant="outline" onClick={onClose} className="text-xs font-bold border-zinc-700">
+        <div className="pt-3 border-t border-zinc-100 flex justify-end">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="bg-white border-zinc-300 text-zinc-900 hover:bg-zinc-100 text-xs font-extrabold px-5 py-2.5 rounded-xl min-h-[44px] touch-manipulation focus:ring-2 focus:ring-zinc-300"
+          >
             Close
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

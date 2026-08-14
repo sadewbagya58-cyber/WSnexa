@@ -26,6 +26,7 @@ export interface ValidationResult {
 
 /**
  * Validates selected modifier option IDs against public menu catalog modifier groups.
+ * Operates on customer-available options to prevent dead-end validation errors when zero options exist.
  */
 export function validateItemModifiers(
   modifierGroups: CatalogModifierGroup[] | undefined | null,
@@ -37,7 +38,10 @@ export function validateItemModifiers(
 
   for (const group of groups) {
     const selectedOptionIds = selectedOptionsMap[group.id] || [];
-    
+
+    // Filter for options that are active and available for customer selection
+    const availableOptions = (group.options || []).filter((o) => o.is_available);
+
     // Check for duplicate option IDs in selection
     const uniqueOptionIds = Array.from(new Set(selectedOptionIds));
     if (uniqueOptionIds.length !== selectedOptionIds.length) {
@@ -47,39 +51,33 @@ export function validateItemModifiers(
 
     const count = uniqueOptionIds.length;
 
-    // Check requirement & min selections
-    if (group.is_required && count === 0) {
-      errors[group.id] = `Please select an option for ${group.name}`;
+    // Effective minimum cannot exceed the number of available options rendered
+    const requiredMin = group.min_selections > 0 ? group.min_selections : group.is_required ? 1 : 0;
+    const effectiveMin = Math.min(requiredMin, availableOptions.length);
+
+    // Check requirement & min selections against effective available options count
+    if (effectiveMin > 0 && count < effectiveMin) {
+      errors[group.id] = effectiveMin === 1 ? 'Choose an option' : `Choose at least ${effectiveMin} options`;
       continue;
     }
 
-    if (group.min_selections > 0 && count < group.min_selections) {
-      errors[group.id] = `Please select at least ${group.min_selections} option(s) for ${group.name}`;
-      continue;
-    }
-
-    // Check max selections
+    // Check max selections limit
     if (group.max_selections > 0 && count > group.max_selections) {
-      errors[group.id] = `You can select at most ${group.max_selections} option(s) for ${group.name}`;
+      errors[group.id] = `Select at most ${group.max_selections} option${group.max_selections > 1 ? 's' : ''}`;
       continue;
     }
 
     // Check single selection rule
     if (group.selection_type === 'single' && count > 1) {
-      errors[group.id] = `Only one option allowed for ${group.name}`;
+      errors[group.id] = 'Only one option allowed';
       continue;
     }
 
     // Validate each selected option belongs to group and is active/available
     for (const optId of uniqueOptionIds) {
-      const optionDef = group.options.find((o) => o.id === optId);
+      const optionDef = availableOptions.find((o) => o.id === optId);
       if (!optionDef) {
-        errors[group.id] = `Invalid option selected for ${group.name}`;
-        break;
-      }
-
-      if (!optionDef.is_available) {
-        errors[group.id] = `Option "${optionDef.name}" is currently unavailable`;
+        errors[group.id] = 'Invalid or unavailable option selected';
         break;
       }
 

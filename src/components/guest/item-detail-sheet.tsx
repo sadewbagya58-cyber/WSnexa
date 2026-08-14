@@ -63,11 +63,9 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
       }
     } else if (item.modifier_groups) {
       for (const group of item.modifier_groups) {
-        if (group.is_required && group.selection_type === 'single' && group.options.length > 0) {
-          const firstAvailable = group.options.find((o) => o.is_available);
-          if (firstAvailable) {
-            initialMap[group.id] = [firstAvailable.id];
-          }
+        const availableOptions = (group.options || []).filter((o) => o.is_available);
+        if (group.is_required && group.selection_type === 'single' && availableOptions.length > 0) {
+          initialMap[group.id] = [availableOptions[0].id];
         }
       }
     }
@@ -256,7 +254,7 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
             type="button"
             disabled={isOutOfStock}
             onClick={handleFormSubmit}
-            className="flex-1 py-3.5 text-sm font-bold shadow-md"
+            className="flex-1 py-3.5 text-sm font-bold shadow-md min-h-[44px] touch-manipulation"
           >
             {isOutOfStock
               ? 'Out of Stock'

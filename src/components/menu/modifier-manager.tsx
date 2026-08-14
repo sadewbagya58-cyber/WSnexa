@@ -66,6 +66,11 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
     e.preventDefault();
     if (!groupForm.name.trim()) return;
 
+    if (groupForm.selectionType === 'multiple' && groupForm.maxSelections > 0 && groupForm.minSelections > groupForm.maxSelections) {
+      setErrorMsg('Minimum selections cannot exceed maximum selections.');
+      return;
+    }
+
     setGroupLoading(true);
     setErrorMsg(null);
 
@@ -162,8 +167,8 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
         </p>
 
         {errorMsg && (
-          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-            {errorMsg}
+          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 font-semibold">
+            ⚠️ {errorMsg}
           </div>
         )}
 
@@ -266,102 +271,119 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
 
       {/* Modifier Groups List */}
       <div className="space-y-6">
-        {groups.map((group) => (
-          <Card key={group.id} className="p-6">
-            <div className="flex items-start justify-between border-b border-zinc-100 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-zinc-950">{group.name}</h3>
-                  <Badge variant={group.is_required ? 'neutral' : 'warning'}>
-                    {group.is_required ? 'Required' : 'Optional'}
-                  </Badge>
-                  <Badge variant="neutral">
-                    {group.selection_type === 'single' ? 'Single Choice' : `Multiple (Max ${group.max_selections || '∞'})`}
-                  </Badge>
-                </div>
-                {group.description && (
-                  <p className="mt-1 text-xs text-zinc-500">{group.description}</p>
-                )}
-              </div>
+        {groups.map((group) => {
+          const hasZeroOptions = group.modifier_options.length === 0;
+          const isGroupRequired = group.is_required || group.min_selections > 0;
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleArchiveGroup(group.id)}
-              >
-                Archive Group
-              </Button>
-            </div>
-
-            {/* Group Options List */}
-            <div className="mt-4 space-y-3">
-              <h4 className="text-xs font-semibold text-zinc-500">Options ({group.modifier_options.length})</h4>
-              
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-                {group.modifier_options.map((opt) => (
-                  <div
-                    key={opt.id}
-                    className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 p-3"
-                  >
-                    <div>
-                      <span className="text-xs font-bold text-zinc-900">{opt.name}</span>
-                      <p className="text-[11px] font-semibold text-zinc-600">
-                        {opt.additional_price_cents > 0
-                          ? `+${currency} ${formatMinorUnitsToDecimal(opt.additional_price_cents)}`
-                          : 'Free'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 text-[11px]"
-                      onClick={() => handleArchiveOption(group.id, opt.id)}
-                    >
-                      Remove
-                    </Button>
+          return (
+            <Card key={group.id} className="p-6">
+              <div className="flex items-start justify-between border-b border-zinc-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-zinc-950">{group.name}</h3>
+                    <Badge variant={group.is_required ? 'neutral' : 'warning'}>
+                      {group.is_required ? 'Required' : 'Optional'}
+                    </Badge>
+                    <Badge variant="neutral">
+                      {group.selection_type === 'single'
+                        ? 'Single Choice'
+                        : `Multiple (Max ${group.max_selections || '∞'})`}
+                    </Badge>
+                    {isGroupRequired && hasZeroOptions && (
+                      <Badge variant="destructive">⚠️ 0 Options (Guest optional until options added)</Badge>
+                    )}
                   </div>
-                ))}
+                  {group.description && (
+                    <p className="mt-1 text-xs text-zinc-500">{group.description}</p>
+                  )}
+                  {isGroupRequired && hasZeroOptions && (
+                    <p className="mt-1 text-xs font-semibold text-amber-700">
+                      Add options below so customers can select required modifiers.
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleArchiveGroup(group.id)}
+                >
+                  Archive Group
+                </Button>
               </div>
 
-              {/* Add Option Form */}
-              <form
-                onSubmit={(e) => handleCreateOption(group.id, e)}
-                className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
-              >
-                <input
-                  type="text"
-                  required
-                  placeholder="New option name (e.g. Medium, Extra Bacon)"
-                  value={optionForms[group.id]?.name || ''}
-                  onChange={(e) =>
-                    setOptionForms({
-                      ...optionForms,
-                      [group.id]: { ...(optionForms[group.id] || { price: '' }), name: e.target.value },
-                    })
-                  }
-                  className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-900 focus:border-zinc-950 focus:outline-none"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder={`+ Price (${currency})`}
-                  value={optionForms[group.id]?.price || ''}
-                  onChange={(e) =>
-                    setOptionForms({
-                      ...optionForms,
-                      [group.id]: { ...(optionForms[group.id] || { name: '' }), price: e.target.value },
-                    })
-                  }
-                  className="w-32 rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-900 focus:border-zinc-950 focus:outline-none"
-                />
-                <Button type="submit" size="sm" disabled={optionLoading === group.id}>
-                  {optionLoading === group.id ? 'Adding...' : '+ Add Option'}
-                </Button>
-              </form>
-            </div>
-          </Card>
-        ))}
+              {/* Group Options List */}
+              <div className="mt-4 space-y-3">
+                <h4 className="text-xs font-semibold text-zinc-500">
+                  Options ({group.modifier_options.length})
+                </h4>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+                  {group.modifier_options.map((opt) => (
+                    <div
+                      key={opt.id}
+                      className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 p-3"
+                    >
+                      <div>
+                        <span className="text-xs font-bold text-zinc-900">{opt.name}</span>
+                        <p className="text-[11px] font-semibold text-zinc-600">
+                          {opt.additional_price_cents > 0
+                            ? `+${currency} ${formatMinorUnitsToDecimal(opt.additional_price_cents)}`
+                            : 'Free'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() => handleArchiveOption(group.id, opt.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Option Form */}
+                <form
+                  onSubmit={(e) => handleCreateOption(group.id, e)}
+                  className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center"
+                >
+                  <input
+                    type="text"
+                    required
+                    placeholder="New option name (e.g. Medium, Extra Bacon)"
+                    value={optionForms[group.id]?.name || ''}
+                    onChange={(e) =>
+                      setOptionForms({
+                        ...optionForms,
+                        [group.id]: { ...(optionForms[group.id] || { price: '' }), name: e.target.value },
+                      })
+                    }
+                    className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder={`+ Price (${currency})`}
+                    value={optionForms[group.id]?.price || ''}
+                    onChange={(e) =>
+                      setOptionForms({
+                        ...optionForms,
+                        [group.id]: { ...(optionForms[group.id] || { name: '' }), price: e.target.value },
+                      })
+                    }
+                    className="w-32 rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                  />
+                  <Button type="submit" size="sm" disabled={optionLoading === group.id}>
+                    {optionLoading === group.id ? 'Adding...' : '+ Add Option'}
+                  </Button>
+                </form>
+              </div>
+            </Card>
+          );
+        })}
 
         {groups.length === 0 && (
           <Card className="p-8 text-center text-xs text-zinc-500">

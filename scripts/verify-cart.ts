@@ -202,6 +202,147 @@ async function runCartVerification() {
   const stateJson = JSON.stringify(sampleState);
   assert(!stateJson.includes('table_pin') && !stateJson.includes('pin_hash'), 'No raw Table PIN or PIN hash present in cart state');
 
+  // --- Category 7: Modifier Dead-End & Option Normalization Regression Tests ---
+  
+  // Case A: Required modifier group + available options -> customer must select minimum
+  const reqGroupWithAvailable: CatalogModifierGroup[] = [
+    {
+      id: 'g_req_avail',
+      name: 'Spice Level',
+      description: null,
+      selection_type: 'single',
+      min_selections: 1,
+      max_selections: 1,
+      is_required: true,
+      options: [
+        { id: 'opt_mild', name: 'Mild', price_cents: 0, is_available: true },
+        { id: 'opt_hot', name: 'Hot', price_cents: 0, is_available: true },
+      ],
+    },
+  ];
+  const caseAResFail = validateItemModifiers(reqGroupWithAvailable, {});
+  assert(!caseAResFail.isValid && caseAResFail.errors.g_req_avail === 'Choose an option', 'Case A: Required group with available options requires selection');
+
+  const caseAResPass = validateItemModifiers(reqGroupWithAvailable, { g_req_avail: ['opt_mild'] });
+  assert(caseAResPass.isValid, 'Case A: Customer selecting required option passes validation');
+
+  // Case B: Optional modifier group -> customer can continue without selection
+  const optGroup: CatalogModifierGroup[] = [
+    {
+      id: 'g_opt',
+      name: 'Extra Sauce',
+      description: null,
+      selection_type: 'single',
+      min_selections: 0,
+      max_selections: 1,
+      is_required: false,
+      options: [
+        { id: 'opt_bbq', name: 'BBQ', price_cents: 50, is_available: true },
+      ],
+    },
+  ];
+  const caseBRes = validateItemModifiers(optGroup, {});
+  assert(caseBRes.isValid, 'Case B: Optional modifier group allows continuing without selection');
+
+  // Case C: Required modifier group where all options become unavailable -> NO impossible customer dead-end
+  const reqGroupAllUnavailable: CatalogModifierGroup[] = [
+    {
+      id: 'g_deadend',
+      name: 'rgrg',
+      description: null,
+      selection_type: 'single',
+      min_selections: 1,
+      max_selections: 1,
+      is_required: true,
+      options: [
+        { id: 'opt_old1', name: 'Old Option 1', price_cents: 0, is_available: false },
+        { id: 'opt_old2', name: 'Old Option 2', price_cents: 0, is_available: false },
+      ],
+    },
+  ];
+  const caseCRes = validateItemModifiers(reqGroupAllUnavailable, {});
+  assert(caseCRes.isValid, 'Case C: Required modifier group where all options are unavailable produces NO customer dead-end (isValid: true)');
+
+  // Case C2: Required group with 0 options total -> NO dead-end
+  const reqGroupZeroOpts: CatalogModifierGroup[] = [
+    {
+      id: 'g_empty',
+      name: 'Empty Required Group',
+      description: null,
+      selection_type: 'single',
+      min_selections: 1,
+      max_selections: 1,
+      is_required: true,
+      options: [],
+    },
+  ];
+  const caseC2Res = validateItemModifiers(reqGroupZeroOpts, {});
+  assert(caseC2Res.isValid, 'Case C2: Required group with 0 options total produces NO customer dead-end');
+
+  // Case D: min_selection greater than available option count -> effective minimum capped safely
+  const minExceedsAvail: CatalogModifierGroup[] = [
+    {
+      id: 'g_min_exceed',
+      name: 'Dressing',
+      description: null,
+      selection_type: 'multiple',
+      min_selections: 3, // Requires 3, but only 1 option available!
+      max_selections: 3,
+      is_required: true,
+      options: [
+        { id: 'opt_ranch', name: 'Ranch', price_cents: 0, is_available: true },
+      ],
+    },
+  ];
+  const caseDRes = validateItemModifiers(minExceedsAvail, { g_min_exceed: ['opt_ranch'] });
+  assert(caseDRes.isValid, 'Case D: min_selections greater than available option count is capped at available count');
+
+  // Case E: max selection enforced correctly
+  const maxEnforced: CatalogModifierGroup[] = [
+    {
+      id: 'g_max',
+      name: 'Toppings',
+      description: null,
+      selection_type: 'multiple',
+      min_selections: 0,
+      max_selections: 1,
+      is_required: false,
+      options: [
+        { id: 'opt_t1', name: 'T1', price_cents: 10, is_available: true },
+        { id: 'opt_t2', name: 'T2', price_cents: 10, is_available: true },
+      ],
+    },
+  ];
+  const caseEResOver = validateItemModifiers(maxEnforced, { g_max: ['opt_t1', 'opt_t2'] });
+  assert(!caseEResOver.isValid && caseEResOver.errors.g_max === 'Select at most 1 option', 'Case E: Exceeding max selection correctly rejected');
+
+  // Case F: modifier price × quantity calculated correctly
+  const basePrice = 1000; // $10.00
+  const snapshots = [
+    { groupId: 'g1', groupName: 'Add-on', optionId: 'o1', optionName: 'Extra Cheese', additionalPriceCents: 150 }, // +$1.50
+    { groupId: 'g2', groupName: 'Add-on 2', optionId: 'o2', optionName: 'Bacon', additionalPriceCents: 200 }, // +$2.00
+  ]; // Unit price = $13.50 = 1350 cents
+  const qty = 11;
+  const lineUnitPrice = calculateLineUnitPriceCents(basePrice, snapshots);
+  const lineTotal = calculateLineTotalCents(lineUnitPrice, qty);
+  assert(lineUnitPrice === 1350, 'Case F: Base price $10.00 + $1.50 + $2.00 = $13.50 unit price');
+  assert(lineTotal === 14850, 'Case F: Unit price $13.50 × 11 quantity = $148.50 (14850 cents)');
+
+  // Case G: Editing cart item preserves correct selections/pricing
+  const existingLine: CartLine = {
+    lineId: 'line_edit_123',
+    menuItemId: 'item_pizza',
+    itemName: 'Custom Pizza',
+    quantity: 2,
+    basePriceCents: 1200,
+    selectedModifiers: snapshots,
+    unitPriceCents: 1550,
+    lineTotalCents: 3100,
+  };
+  const updatedUnitPrice = calculateLineUnitPriceCents(existingLine.basePriceCents, existingLine.selectedModifiers);
+  const updatedLineTotal = calculateLineTotalCents(updatedUnitPrice, 3);
+  assert(updatedUnitPrice === 1550 && updatedLineTotal === 4650, 'Case G: Editing cart line quantity updates line total without duplicating modifier prices');
+
   console.log('\n================================================================');
   console.log(`   Verification Finished: ${passed} / ${total} Tests PASSED   `);
   console.log('================================================================\n');

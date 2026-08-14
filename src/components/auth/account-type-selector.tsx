@@ -28,6 +28,14 @@ export function AccountTypeSelector() {
       badge: 'Guest Account',
       requiresInvite: false,
     },
+    {
+      id: 'staff' as OnboardingIntent,
+      title: 'Staff Member',
+      icon: '👥',
+      description: 'Join an existing hospitality business using an invitation from your manager or business owner.',
+      badge: 'JOIN A TEAM',
+      requiresInvite: true,
+    },
   ];
 
   const handleContinue = async () => {
@@ -46,7 +54,7 @@ export function AccountTypeSelector() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-black text-zinc-950 uppercase tracking-wider">What best describes you?</h1>
         <p className="text-sm text-zinc-600">
@@ -60,7 +68,7 @@ export function AccountTypeSelector() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {options.map((opt) => {
           const isSelected = selectedIntent === opt.id;
           return (
@@ -106,14 +114,10 @@ export function AccountTypeSelector() {
       <button
         onClick={handleContinue}
         disabled={!selectedIntent || isSubmitting}
-        className="w-full py-3.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-sm uppercase tracking-wider rounded-xl transition-all disabled:opacity-40 shadow-lg active:scale-95"
+        className="w-full py-3.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-sm uppercase tracking-wider rounded-xl transition-all disabled:opacity-40 shadow-lg active:scale-95 min-h-[44px]"
       >
         {isSubmitting ? 'Saving Preference...' : 'Continue'}
       </button>
-
-      <p className="text-center text-xs text-zinc-500 pt-2">
-        Are you a staff member joining an existing venue? Ask your manager for an invitation link to access your assigned workspace directly.
-      </p>
     </div>
   );
 }

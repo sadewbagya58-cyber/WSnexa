@@ -50,12 +50,15 @@ async function runAccountOnboardingVerificationSuite() {
 
   try {
     // 1. Fresh authenticated unclassified user sees selector route
-    const { data: unclassAuth } = await admin.auth.admin.createUser({
+    const { data: unclassAuth, error: uErr } = await admin.auth.admin.createUser({
       email: `unclass_${timestamp}@test.com`,
       password: 'TestPassword123!',
       email_confirm: true,
     });
-    unclassifiedUserId = unclassAuth.user!.id;
+    if (uErr || !unclassAuth.user) {
+      throw new Error(`Failed to create test unclassified user: ${uErr?.message}`);
+    }
+    unclassifiedUserId = unclassAuth.user.id;
 
     await admin.from('user_profiles').upsert([
       { id: unclassifiedUserId, first_name: 'Unclassified', last_name: 'User' },
@@ -78,10 +81,10 @@ async function runAccountOnboardingVerificationSuite() {
     );
     const hasOwnerCard = selectorCode.includes('Hospitality Business') || selectorCode.includes('business_owner');
     const hasCustomerCard = selectorCode.includes('Customer / Guest Account') || selectorCode.includes('customer');
-    const hasStaffNotice = selectorCode.includes('staff member') || selectorCode.includes('invitation');
+    const hasStaffCard = selectorCode.includes('Staff Member') || selectorCode.includes('JOIN A TEAM');
     assert(
-      hasOwnerCard && hasCustomerCard && hasStaffNotice,
-      'Test 2: Account type selector presents Business, Customer choices, and Staff invitation guidance'
+      hasOwnerCard && hasCustomerCard && hasStaffCard,
+      'Test 2: Account type selector presents all 3 account choices (Hospitality Business, Customer, Staff Member)'
     );
 
     // 3. Business Owner selection routes correctly (/onboarding)
@@ -97,12 +100,15 @@ async function runAccountOnboardingVerificationSuite() {
     );
 
     // 4. Customer selection routes correctly (/customer)
-    const { data: customerAuth } = await admin.auth.admin.createUser({
+    const { data: customerAuth, error: custErr } = await admin.auth.admin.createUser({
       email: `cust_${timestamp}@test.com`,
       password: 'TestPassword123!',
       email_confirm: true,
     });
-    customerUserId = customerAuth.user!.id;
+    if (custErr || !customerAuth.user) {
+      throw new Error(`Failed to create test customer user: ${custErr?.message}`);
+    }
+    customerUserId = customerAuth.user.id;
     await admin.from('user_profiles').upsert([{ id: customerUserId, first_name: 'Cust', last_name: 'User' }]);
 
     const custSaveRes = await AccountService.saveOnboardingIntent(customerUserId, 'customer');

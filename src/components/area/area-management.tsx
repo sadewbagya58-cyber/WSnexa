@@ -49,21 +49,22 @@ export function AreaManagement({
         setCreateName('');
         setCreateDesc('');
         setIsCreateOpen(false);
-        if (res.area) {
+        if ('area' in res && res.area) {
+          const area = res.area as Record<string, unknown>;
           setAreas((prev) => [
             ...prev,
             {
-              id: res.area.id,
-              businessId: res.area.business_id,
-              branchId: res.area.branch_id,
-              name: res.area.name,
-              code: res.area.code,
-              description: res.area.description,
-              isActive: res.area.is_active,
+              id: area.id as string,
+              businessId: area.business_id as string,
+              branchId: area.branch_id as string,
+              name: area.name as string,
+              code: area.code as string,
+              description: area.description as string | null,
+              isActive: area.is_active as boolean,
               tableCount: 0,
               staffCount: 0,
               activeOrderCount: 0,
-              createdAt: res.area.created_at,
+              createdAt: area.created_at as string,
             },
           ]);
         }

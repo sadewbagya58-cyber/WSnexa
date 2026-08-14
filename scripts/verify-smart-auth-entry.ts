@@ -262,6 +262,27 @@ async function runSmartAuthEntryVerification() {
     );
     assertTest(unclassifiedRoute === '/onboarding/account-type', 'Unclassified user without membership routes to /onboarding/account-type', `Got: ${unclassifiedRoute}`);
 
+    console.log('\n--- 9. LAYOUT ARCHITECTURE & NAVBAR ISOLATION ---');
+    const rootLayoutCode = fs.readFileSync(path.join(process.cwd(), 'src/app/layout.tsx'), 'utf8');
+    const publicLayoutCode = fs.readFileSync(path.join(process.cwd(), 'src/app/(public)/layout.tsx'), 'utf8');
+    const dashboardLayoutCode = fs.readFileSync(path.join(process.cwd(), 'src/app/(dashboard)/layout.tsx'), 'utf8');
+
+    assertTest(!rootLayoutCode.includes('<Header') && !rootLayoutCode.includes('PublicNavbar'), 'Root layout (src/app/layout.tsx) excludes global PublicNavbar');
+    assertTest(publicLayoutCode.includes('<Header'), 'Public layout (src/app/(public)/layout.tsx) includes PublicNavbar for public/auth routes');
+    assertTest(!dashboardLayoutCode.includes('<Header') && !dashboardLayoutCode.includes('PublicNavbar'), 'Dashboard layout (src/app/(dashboard)/layout.tsx) excludes PublicNavbar');
+
+    const publicPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(public)/page.tsx'));
+    const explorePageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(public)/explore/page.tsx'));
+    const loginPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(public)/login/page.tsx'));
+    const dashboardPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/page.tsx'));
+    const waiterPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/waiter/page.tsx'));
+    const kitchenPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/kitchen/page.tsx'));
+    const cashierPageExists = fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/cashier/page.tsx'));
+    const adminVenuesExists = fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/admin/venues/page.tsx'));
+
+    assertTest(publicPageExists && explorePageExists && loginPageExists, 'Public marketing and auth routes (/ , /explore, /login) are grouped under (public)');
+    assertTest(dashboardPageExists && waiterPageExists && kitchenPageExists && cashierPageExists && adminVenuesExists, 'Dashboard and admin application routes (/dashboard, /dashboard/waiter, /dashboard/kitchen, /dashboard/cashier, /admin/venues) are isolated under (dashboard)');
+
   } catch (err) {
     console.error('❌ Verification suite execution error:', err);
     process.exitCode = 1;

@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
 
 export const metadata: Metadata = {
   title: 'WSNexa — Smart Hospitality. Simplified.',
-  description: 'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
+  description:
+    'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
 };
 
 export default function RootLayout({
@@ -16,9 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-white text-zinc-950">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        {children}
       </body>
     </html>
   );

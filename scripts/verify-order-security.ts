@@ -567,7 +567,7 @@ async function runPhase22OrderSecuritySuite() {
     // ------------------------------------------------------------------
     // TEST 29: Existing Loyalty Functional
     // ------------------------------------------------------------------
-    const { data: loyAccount } = await admin.from('customer_loyalty_accounts').insert({ business_id: bizId!, user_id: customerId!, points_balance: 500 }).select().single();
+    const { data: loyAccount } = await admin.from('customer_loyalty_accounts').upsert({ business_id: bizId!, customer_user_id: customerId!, points_balance: 500 }, { onConflict: 'business_id,customer_user_id' }).select().single();
     console.assert(Boolean(loyAccount), 'Test 29 Failed');
     console.log('  ✅ [PASS] Test 29: Existing customer loyalty system remains 100% operational');
 
@@ -613,8 +613,12 @@ async function runPhase22OrderSecuritySuite() {
     // ------------------------------------------------------------------
     // TEST 35: Missing Location Rejected When Required
     // ------------------------------------------------------------------
+    await OrderSecurityService.updateBranchSecuritySettings(branchId!, { require_location_verification: true });
     const missingLocEval = await OrderSecurityService.evaluateOrderSubmission({
       branchId: branchId!,
+      tableId: tableAId!,
+      customerId: customerId!,
+      qrSessionToken: testQrSess.sessionToken!,
       userCoordinates: null,
       orderSource: 'qr_customer',
     });

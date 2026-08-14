@@ -1,44 +1,40 @@
 import React from 'react';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { AccountService } from '@/server/services/account.service';
+import { PublicNavbar } from './public-navbar';
 
 export const Header = async () => {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let workspaceRoute = '/dashboard';
+
+  if (user) {
+    const admin = createAdminClient();
+    const [{ data: profile }, { data: membership }] = await Promise.all([
+      admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at')
+        .eq('id', user.id)
+        .single(),
+      admin
+        .from('business_memberships')
+        .select('id, business_id, role, membership_status')
+        .eq('user_id', user.id)
+        .eq('membership_status', 'active')
+        .limit(1)
+        .single(),
+    ]);
+
+    workspaceRoute = await AccountService.resolveAccountRoute(user, profile, membership);
+  }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center space-x-2">
-          <span className="text-xl font-bold tracking-tight text-zinc-950">WSNexa</span>
-          <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">OS</span>
-        </Link>
-        <nav className="flex items-center space-x-4">
-          {user ? (
-            <Link
-              href="/dashboard"
-              className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
-            >
-              Go to Dashboard →
-            </Link>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/register"
-                className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
-              >
-                Get Started
-              </Link>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
+    <PublicNavbar
+      isAuthenticated={!!user}
+      workspaceRoute={workspaceRoute}
+    />
   );
 };

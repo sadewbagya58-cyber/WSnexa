@@ -49,7 +49,7 @@ export async function GET(request: Request) {
           .limit(1)
           .single();
 
-        targetRoute = AccountService.resolveAccountRoute(
+        targetRoute = await AccountService.resolveAccountRoute(
           user,
           profile as MinimalUserProfile,
           membership as MinimalMembership

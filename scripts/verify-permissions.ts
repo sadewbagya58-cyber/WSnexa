@@ -318,7 +318,7 @@ async function runPermissionsVerificationSuite() {
 
     // TEST 21: Existing Phase 1-14 behavior remains intact
     const { AccountService } = await import('../src/server/services/account.service');
-    const existingRoute = AccountService.resolveAccountRoute(
+    const existingRoute = await AccountService.resolveAccountRoute(
       { id: ownerUserId! },
       { id: ownerUserId!, onboarding_intent: null },
       { id: 'm', business_id: bizId!, role: 'business_owner', membership_status: 'active' }

@@ -61,7 +61,7 @@ async function runAccountOnboardingVerificationSuite() {
       { id: unclassifiedUserId, first_name: 'Unclassified', last_name: 'User' },
     ]);
 
-    const routeFresh = AccountService.resolveAccountRoute(
+    const routeFresh = await AccountService.resolveAccountRoute(
       { id: unclassifiedUserId },
       { id: unclassifiedUserId, onboarding_intent: null },
       null
@@ -87,7 +87,7 @@ async function runAccountOnboardingVerificationSuite() {
 
     // 3. Business Owner selection routes correctly (/onboarding)
     const newOwnerUserId = `new_owner_${timestamp}`;
-    const routeOwnerSelection = AccountService.resolveAccountRoute(
+    const routeOwnerSelection = await AccountService.resolveAccountRoute(
       { id: newOwnerUserId },
       { id: newOwnerUserId, onboarding_intent: 'business_owner' },
       null
@@ -163,7 +163,7 @@ async function runAccountOnboardingVerificationSuite() {
       { business_id: biz.id, user_id: ownerUserId, role: 'business_owner', membership_status: 'active' },
     ]);
 
-    const routeOwnerExist = AccountService.resolveAccountRoute(
+    const routeOwnerExist = await AccountService.resolveAccountRoute(
       { id: ownerUserId },
       { id: ownerUserId, onboarding_intent: null },
       { id: 'm1', business_id: biz.id, role: 'business_owner', membership_status: 'active' }
@@ -186,7 +186,7 @@ async function runAccountOnboardingVerificationSuite() {
       { business_id: biz.id, user_id: cashierUserId, role: 'cashier', membership_status: 'active' },
     ]);
 
-    const routeCashierExist = AccountService.resolveAccountRoute(
+    const routeCashierExist = await AccountService.resolveAccountRoute(
       { id: cashierUserId },
       { id: cashierUserId, onboarding_intent: null },
       { id: 'm2', business_id: biz.id, role: 'cashier', membership_status: 'active' }

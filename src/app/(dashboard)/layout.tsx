@@ -26,7 +26,7 @@ export default async function DashboardLayout({
       .eq('id', user.id)
       .single();
 
-    const targetRoute = AccountService.resolveAccountRoute(user, userProfile, null);
+    const targetRoute = await AccountService.resolveAccountRoute(user, userProfile, null);
     redirect(targetRoute);
   }
 

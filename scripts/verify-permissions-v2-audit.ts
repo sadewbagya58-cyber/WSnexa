@@ -4,7 +4,7 @@ import { pathToFileURL } from 'url';
 
 // Bypass server-only guard
 try {
-  /* eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/ban-ts-comment */
+  /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
   // @ts-ignore
   require.cache[require.resolve('server-only')] = {
     id: require.resolve('server-only'),

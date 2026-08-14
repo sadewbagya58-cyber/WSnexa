@@ -133,7 +133,7 @@ export async function signInAction(
         .single(),
     ]);
 
-    targetRoute = AccountService.resolveAccountRoute(
+    targetRoute = await AccountService.resolveAccountRoute(
       user,
       profile,
       membership

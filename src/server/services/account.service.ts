@@ -29,11 +29,12 @@ export class AccountService {
    * 4. Unverified Owner intent -> /onboarding
    * 5. Unclassified account (no intent) -> /onboarding/account-type
    */
-  static resolveAccountRoute(
+  static async resolveAccountRoute(
     user: { id: string },
     profile: MinimalUserProfile | null,
-    membership: MinimalMembership | null
-  ): string {
+    membership: (MinimalMembership & { custom_role_id?: string | null }) | null,
+    permissions?: string[]
+  ): Promise<string> {
     const isMembershipActive = membership && (
       membership.membership_status === 'active' ||
       membership.status === 'active'
@@ -41,8 +42,55 @@ export class AccountService {
 
     // 1. Verified Active Business Membership Routing (Highest Priority)
     if (isMembershipActive && membership) {
+      // Business Owner always has full access to main dashboard
+      if (membership.role === 'business_owner') {
+        return '/dashboard';
+      }
+
+      // Custom Role assigned: resolve workspace from effective permissions
+      if (membership.custom_role_id || permissions) {
+        let perms = permissions;
+        if (!perms && membership.business_id) {
+          try {
+            const { PermissionService } = await import('@/server/services/permission.service');
+            perms = await PermissionService.getMemberEffectivePermissions(user.id, membership.business_id, null);
+          } catch {
+            perms = [];
+          }
+        }
+
+        const has = (key: string) => perms?.includes(key);
+
+        if (has('waiter.access') || has('waiter.orders.create') || has('waiter.requests.view')) {
+          return '/dashboard/waiter';
+        }
+        if (has('kitchen.access') || has('kitchen.orders.view') || has('kitchen.update')) {
+          return '/dashboard/kitchen';
+        }
+        if (has('cashier.access') || has('payments.record') || has('receipts.print')) {
+          return '/dashboard/cashier';
+        }
+        if (has('reports.view') || has('reports.financial.view')) {
+          return '/dashboard/reports';
+        }
+        if (has('menu.view') || has('menu.items.create') || has('menu.manage')) {
+          return '/dashboard/menu';
+        }
+        if (has('tables.view') || has('tables.status.update') || has('tables.manage')) {
+          return '/dashboard/tables';
+        }
+        if (has('staff.view') || has('staff.manage')) {
+          return '/dashboard/team';
+        }
+        if (has('orders.view') || has('orders.create')) {
+          return '/dashboard';
+        }
+
+        return '/dashboard';
+      }
+
+      // Standard built-in roles without custom role override
       switch (membership.role) {
-        case 'business_owner':
         case 'branch_manager':
           return '/dashboard';
         case 'cashier':
@@ -52,28 +100,35 @@ export class AccountService {
         case 'waiter':
           return '/dashboard/waiter';
         default:
-          return '/dashboard';
+          break;
       }
+
+      return '/dashboard';
+    }
+
+    // 2. Suspended or Deactivated Membership -> Pending Access
+    if (membership && (membership.membership_status === 'suspended' || membership.membership_status === 'inactive' || membership.status === 'suspended')) {
+      return '/account/pending-access';
     }
 
     const intent = profile?.onboarding_intent;
 
-    // 2. Customer intent or initialized Customer Profile
+    // 3. Customer intent or initialized Customer Profile
     if (intent === 'customer' || profile?.customer_profile_created_at) {
       return '/customer';
     }
 
-    // 3. Manager/Staff intent WITHOUT verified server-side membership -> Pending Access
+    // 4. Manager/Staff intent WITHOUT verified server-side active membership -> Pending Access
     if (intent === 'branch_manager' || intent === 'staff') {
       return '/account/pending-access';
     }
 
-    // 4. Business Owner intent without registered business -> Onboarding Flow
+    // 5. Business Owner intent without registered business -> Onboarding Flow
     if (intent === 'business_owner') {
       return '/onboarding';
     }
 
-    // 5. Unclassified Account (Missing intent and missing business membership) -> Account-Type Selection
+    // 6. Unclassified Account (Missing intent and missing business membership) -> Account-Type Selection
     return '/onboarding/account-type';
   }
 
@@ -135,7 +190,7 @@ export class AccountService {
       .limit(1)
       .single();
 
-    const targetRoute = this.resolveAccountRoute(
+    const targetRoute = await this.resolveAccountRoute(
       { id: userId },
       updatedProfile as MinimalUserProfile,
       membership as MinimalMembership

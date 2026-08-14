@@ -344,7 +344,7 @@ async function runStaffInvitationsVerificationSuite() {
 
     // TEST 24: Existing staff still log in normally without re-claiming
     const { AccountService } = await import('../src/server/services/account.service');
-    const existingRoute = AccountService.resolveAccountRoute(
+    const existingRoute = await AccountService.resolveAccountRoute(
       { id: cashierUserId! },
       { id: cashierUserId!, onboarding_intent: 'staff' },
       { id: 'm', business_id: bizId!, role: 'cashier', membership_status: 'active' }
@@ -352,7 +352,7 @@ async function runStaffInvitationsVerificationSuite() {
     assert(existingRoute === '/dashboard/cashier', 'Test 24: Existing staff log in normally and resolve to operational workspace');
 
     // TEST 25: Customer account cannot gain role by changing onboarding_intent alone
-    const customerNoMemRoute = AccountService.resolveAccountRoute(
+    const customerNoMemRoute = await AccountService.resolveAccountRoute(
       { id: wrongEmailUserId },
       { id: wrongEmailUserId, onboarding_intent: 'branch_manager' },
       null

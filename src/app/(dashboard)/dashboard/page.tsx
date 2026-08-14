@@ -82,8 +82,8 @@ export default async function DashboardOverviewPage() {
         title={`Welcome to ${business.name}`}
         description={`Active Branch: ${activeBranch.name} • Timezone: ${activeBranch.timezone}`}
         primaryAction={{
-          label: '+ Add Table',
-          href: '/dashboard/tables/new',
+          label: '🍽️ Dining Setup',
+          href: '/dashboard/dining',
         }}
         secondaryAction={{
           label: '+ Add Menu Item',

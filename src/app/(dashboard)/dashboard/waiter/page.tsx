@@ -38,6 +38,7 @@ export default async function WaiterPage() {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Waiter Assistance' },
         ]}
+        helpSlug="waiter-dashboard-overview"
       />
 
       <WaiterRequestCenter

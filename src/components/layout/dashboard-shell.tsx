@@ -87,6 +87,12 @@ const rawNavSections: NavSection[] = [
       { label: 'Payment Methods', href: '/dashboard/settings/payments' },
     ],
   },
+  {
+    title: 'SUPPORT & GUIDANCE',
+    items: [
+      { label: 'Help Center', href: '/dashboard/help' },
+    ],
+  },
 ];
 
 function formatRoleLabel(role: string): string {

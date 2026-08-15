@@ -48,6 +48,7 @@ export default async function MenuDashboardPage() {
           label: 'Manage Categories',
           href: '/dashboard/menu/categories',
         }}
+        helpSlug="creating-menu-categories"
       />
 
       {/* Navigation Sub-Tabs */}

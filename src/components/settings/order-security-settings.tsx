@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { BranchOrderSecuritySettings, SecurityPresetLevel } from '@/types/database.types';
 import { updateBranchOrderSecuritySettingsAction, applySecurityPresetAction } from '@/server/actions/order-security';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 interface OrderSecuritySettingsProps {
   branchId: string;
@@ -90,11 +91,16 @@ export function OrderSecuritySettings({
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="border-b border-zinc-200 pb-4">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950">Order Security Engine</h1>
-        <p className="text-xs text-zinc-500 mt-1">
-          Configure anti-fake-order controls for <strong className="text-zinc-800">{branchName}</strong>. Protect your venue from remote spam orders and fake checkouts.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950">Order Security Engine</h1>
+          <p className="text-xs text-zinc-500 mt-1">
+            Configure anti-fake-order controls for <strong className="text-zinc-800">{branchName}</strong>. Protect your venue from remote spam orders and fake checkouts.
+          </p>
+        </div>
+        <div className="shrink-0">
+          <ContextualHelpButton explicitSlug="understanding-order-security-levels" />
+        </div>
       </div>
 
       {feedbackMsg && (

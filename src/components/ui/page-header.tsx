@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 interface BreadcrumbItem {
   label: string;
@@ -24,6 +25,8 @@ interface PageHeaderProps {
     icon?: React.ReactNode;
   };
   backHref?: string;
+  helpSlug?: string;
+  showHelp?: boolean;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -33,6 +36,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   primaryAction,
   secondaryAction,
   backHref,
+  helpSlug,
+  showHelp,
 }) => {
   return (
     <div className="space-y-3 pb-2 border-b border-zinc-200">
@@ -79,9 +84,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
         </div>
 
-        {/* Action Buttons */}
-        {(primaryAction || secondaryAction) && (
+        {/* Action Buttons & Contextual Help */}
+        {(primaryAction || secondaryAction || helpSlug || showHelp) && (
           <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
+            {(helpSlug || showHelp) && (
+              <ContextualHelpButton explicitSlug={helpSlug} />
+            )}
+
             {secondaryAction &&
               (secondaryAction.href ? (
                 <Link href={secondaryAction.href}>

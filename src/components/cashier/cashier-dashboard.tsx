@@ -9,6 +9,7 @@ import { ReceiptModal } from './receipt-modal';
 import { CashierOrderRecord } from '@/server/services/payment.service';
 import { acknowledgeBillRequestAction } from '@/server/actions/payment';
 import { useCashierRealtime } from '@/hooks/use-cashier-realtime';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 interface CashierDashboardProps {
   branchId: string;
@@ -150,7 +151,10 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Contextual Help */}
+          <ContextualHelpButton explicitSlug="cashier-pos-dashboard-overview" />
+
           {/* Sound Toggle */}
           <Button
             variant="outline"

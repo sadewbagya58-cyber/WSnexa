@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { AreaManager } from '@/components/table/area-manager';
 import { TableGrid } from '@/components/table/table-grid';
 import { BranchQrManager } from '@/components/qr/branch-qr-manager';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 interface WorkspaceServiceArea {
   id: string;
@@ -112,8 +113,9 @@ export function DiningSetupWorkspace({
           </p>
         </div>
 
-        {/* Quick Route Links */}
-        <div className="flex items-center gap-2">
+        {/* Quick Route Links & Contextual Help */}
+        <div className="flex flex-wrap items-center gap-2">
+          <ContextualHelpButton explicitSlug="creating-service-areas-and-tables" />
           <Link href="/dashboard/tables/bulk">
             <Button variant="outline" size="sm" className="text-xs font-bold min-h-[44px]">
               ⚡ Bulk Generator

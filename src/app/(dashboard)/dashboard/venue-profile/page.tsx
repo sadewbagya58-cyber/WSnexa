@@ -6,6 +6,7 @@ import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PermissionService } from '@/server/services/permission.service';
 import { VenueProfileService } from '@/server/services/venue-profile.service';
 import { VenueProfileForm } from '@/components/dashboard/venue-profile-form';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 export const metadata: Metadata = {
   title: 'Public Venue Profile | WSNexa B2B',
@@ -51,6 +52,9 @@ export default async function VenueProfileDashboardPage() {
           <p className="text-xs text-zinc-500 font-medium">
             Configure your public profile visible on WSNexa Explore. Control branding, descriptions, contact info, and publication status.
           </p>
+        </div>
+        <div className="shrink-0">
+          <ContextualHelpButton explicitSlug="setting-up-public-venue-profile" />
         </div>
       </div>
 

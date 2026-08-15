@@ -32,6 +32,7 @@ export default async function KitchenPage() {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Kitchen Queue' },
         ]}
+        helpSlug="kitchen-queue-overview"
       />
 
       <KitchenOrderQueue

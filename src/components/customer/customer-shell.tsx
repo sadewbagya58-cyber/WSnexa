@@ -99,12 +99,14 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
                     <span>👤</span> Account Profile
                   </Link>
 
-                  <a
-                    href="/api/auth/logout"
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    <span>🚪</span> Log Out
-                  </a>
+                  <form action="/api/auth/logout" method="POST">
+                    <button
+                      type="submit"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors min-h-[44px] touch-manipulation"
+                    >
+                      <span>🚪</span> Log Out
+                    </button>
+                  </form>
                 </div>
               </>
             )}

@@ -28,12 +28,14 @@ export default function AccountTypeError({
           >
             🔄 Retry
           </button>
-          <a
-            href="/api/auth/logout"
-            className="text-xs text-zinc-500 hover:text-zinc-400 font-medium py-1 transition-colors"
-          >
-            Log Out / Switch Account
-          </a>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="text-xs text-zinc-500 hover:text-zinc-400 font-medium py-1 transition-colors"
+            >
+              Log Out / Switch Account
+            </button>
+          </form>
         </div>
       </div>
     </div>

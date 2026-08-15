@@ -77,7 +77,7 @@ const rawNavSections: NavSection[] = [
     items: [
       { label: 'Customer Reviews', href: '/dashboard/reviews' },
       { label: 'Reputation & Rankings', href: '/dashboard/reputation' },
-      { label: 'Loyalty & Rewards', href: '/dashboard/loyalty' },
+      { label: 'Loyalty & Rewards', href: '/dashboard/loyalty', badge: 'Soon' },
     ],
   },
   {

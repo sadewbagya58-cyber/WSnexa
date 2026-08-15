@@ -14,6 +14,7 @@ import { CartDrawer } from '../guest/cart-drawer';
 import { RewardsDrawer } from '../loyalty/rewards-drawer';
 import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
 import { CustomerLoyaltyAccountRecord, LoyaltyRewardRecord } from '@/lib/validation/loyalty';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 interface PublicGuestMenuProps {
   token: string;
@@ -256,18 +257,20 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         rightActions={
           <div className="flex items-center gap-2">
             {/* Loyalty Rewards Pill Button */}
-            <button
-              type="button"
-              onClick={() => setRewardsDrawerOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 hover:bg-amber-100 transition-all shadow-2xs"
-            >
-              <span>🎁</span>
-              {isAuthenticated ? (
-                <span className="font-extrabold text-amber-900">{loyaltyAccount?.pointsBalance || 0} pts</span>
-              ) : (
-                <span>Rewards</span>
-              )}
-            </button>
+            {IS_LOYALTY_ENABLED && (
+              <button
+                type="button"
+                onClick={() => setRewardsDrawerOpen(true)}
+                className="flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 hover:bg-amber-100 transition-all shadow-2xs"
+              >
+                <span>🎁</span>
+                {isAuthenticated ? (
+                  <span className="font-extrabold text-amber-900">{loyaltyAccount?.pointsBalance || 0} pts</span>
+                ) : (
+                  <span>Rewards</span>
+                )}
+              </button>
+            )}
 
             {/* Table Selection Status Pill */}
             {branch.require_table_selection && (
@@ -471,14 +474,16 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       )}
 
       {/* Rewards Drawer Modal */}
-      <RewardsDrawer
-        isOpen={rewardsDrawerOpen}
-        onClose={() => setRewardsDrawerOpen(false)}
-        isAuthenticated={isAuthenticated}
-        loyaltyAccount={loyaltyAccount}
-        availableRewards={availableRewards}
-        subtotalCents={state.subtotalCents}
-      />
+      {IS_LOYALTY_ENABLED && (
+        <RewardsDrawer
+          isOpen={rewardsDrawerOpen}
+          onClose={() => setRewardsDrawerOpen(false)}
+          isAuthenticated={isAuthenticated}
+          loyaltyAccount={loyaltyAccount}
+          availableRewards={availableRewards}
+          subtotalCents={state.subtotalCents}
+        />
+      )}
     </div>
   );
 };

@@ -11,6 +11,7 @@ import {
   AdjustPointsInput,
 } from '@/lib/validation/loyalty';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 export async function getProgramSettingsAction() {
   const context = await resolveActiveBusinessContext();
@@ -23,6 +24,10 @@ export async function getProgramSettingsAction() {
 }
 
 export async function updateProgramSettingsAction(input: LoyaltyProgramSettingsInput) {
+  if (!IS_LOYALTY_ENABLED) {
+    return { success: false, message: 'Loyalty & Rewards configuration is planned for a future update.' };
+  }
+
   const context = await resolveActiveBusinessContext();
   if (!context || !context.business) {
     return { success: false, message: 'Unauthorized.' };
@@ -37,6 +42,10 @@ export async function updateProgramSettingsAction(input: LoyaltyProgramSettingsI
 }
 
 export async function getAvailableRewardsAction(businessId: string) {
+  if (!IS_LOYALTY_ENABLED) {
+    return { success: true, rewards: [] };
+  }
+
   let targetBizId = businessId;
   if (targetBizId === 'current') {
     const context = await resolveActiveBusinessContext();
@@ -48,6 +57,10 @@ export async function getAvailableRewardsAction(businessId: string) {
 }
 
 export async function createRewardAction(input: CreateRewardInput) {
+  if (!IS_LOYALTY_ENABLED) {
+    return { success: false, message: 'Reward creation is planned for a future update.' };
+  }
+
   const context = await resolveActiveBusinessContext();
   if (!context || !context.business) {
     return { success: false, message: 'Unauthorized.' };
@@ -62,6 +75,10 @@ export async function createRewardAction(input: CreateRewardInput) {
 }
 
 export async function redeemRewardAction(businessId: string, rewardId: string, orderId?: string) {
+  if (!IS_LOYALTY_ENABLED) {
+    return { success: false, message: 'Loyalty reward redemption is planned for a future update.' };
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -73,6 +90,10 @@ export async function redeemRewardAction(businessId: string, rewardId: string, o
 }
 
 export async function adjustCustomerPointsAction(input: AdjustPointsInput) {
+  if (!IS_LOYALTY_ENABLED) {
+    return { success: false, message: 'Points adjustments are disabled in this version.' };
+  }
+
   const context = await resolveActiveBusinessContext();
   if (!context || !context.business) {
     return { success: false, message: 'Unauthorized.' };

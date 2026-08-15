@@ -7,6 +7,7 @@ import { useCart } from '@/features/cart/cart-context';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { QuantityStepper } from './quantity-stepper';
 import { CartLine } from '@/features/cart/cart-types';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 interface CartDrawerProps {
   token: string;
@@ -197,7 +198,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Footer */}
         {state.lines.length > 0 && (
           <div className="p-5 border-t border-zinc-200 bg-zinc-50 space-y-4">
-            {state.selectedReward && (
+            {IS_LOYALTY_ENABLED && state.selectedReward && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">

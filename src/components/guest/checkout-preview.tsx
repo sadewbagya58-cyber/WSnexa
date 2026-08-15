@@ -10,6 +10,7 @@ import { formatCurrency, calculateRewardDiscountCents } from '@/features/cart/ca
 import { isTableAccessVerified } from '@/features/cart/cart-types';
 import { saveActiveOrderToStorage } from '@/features/cart/active-order-storage';
 import { submitGuestOrderAction, generateLocationProofAction } from '@/server/actions/order';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 import { BranchPaymentMethod, BranchOrderSecuritySettings } from '@/types/database.types';
 
@@ -234,7 +235,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         paymentMethod,
         idempotencyKey: getOrCreateIdempotencyKey(),
         cartItems: cartItemsPayload,
-        selectedRewardId: state.selectedReward?.id || null,
+        selectedRewardId: IS_LOYALTY_ENABLED ? (state.selectedReward?.id || null) : null,
         userCoordinates: locationState.coords
           ? {
               latitude: locationState.coords.latitude,
@@ -598,7 +599,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 <span>Subtotal</span>
                 <span className="font-mono font-bold">{formatCurrency(state.subtotalCents, state.currency)}</span>
               </div>
-              {state.selectedReward && (
+              {IS_LOYALTY_ENABLED && state.selectedReward && (
                 <>
                   <div className="flex justify-between text-xs text-emerald-600 font-bold">
                     <span>Reward — {state.selectedReward.title}</span>
@@ -622,7 +623,9 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                     Math.max(
                       0,
                       state.subtotalCents -
-                        calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                        (IS_LOYALTY_ENABLED && state.selectedReward
+                          ? calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                          : 0)
                     ),
                     state.currency
                   )}
@@ -638,12 +641,12 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               const isLocationGateBlocked = Boolean(securitySettings?.require_location_verification) && locationState.status !== 'success';
               const isSubmitDisabled = isSubmitting || isAccountGateBlocked || isLocationGateBlocked;
 
+              const effectiveDiscount = IS_LOYALTY_ENABLED && state.selectedReward
+                ? calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
+                : 0;
+
               let buttonText = `Confirm & Submit Order (${formatCurrency(
-                Math.max(
-                  0,
-                  state.subtotalCents -
-                    calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
-                ),
+                Math.max(0, state.subtotalCents - effectiveDiscount),
                 state.currency
               )})`;
 

@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getAvailableRewardsAction, createRewardAction } from '@/server/actions/loyalty';
 import { LoyaltyRewardRecord, RewardType } from '@/lib/validation/loyalty';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 export default function LoyaltyRewardsPage() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(IS_LOYALTY_ENABLED);
   const [rewards, setRewards] = useState<LoyaltyRewardRecord[]>([]);
   const [showDrawer, setShowDrawer] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -25,6 +26,8 @@ export default function LoyaltyRewardsPage() {
   const [minOrderValueCents] = useState(0);
 
   useEffect(() => {
+    if (!IS_LOYALTY_ENABLED) return;
+
     let ignore = false;
     async function fetchRewards() {
       const res = await getAvailableRewardsAction('current');
@@ -43,6 +46,7 @@ export default function LoyaltyRewardsPage() {
 
   async function handleCreateReward(e: React.FormEvent) {
     e.preventDefault();
+    if (!IS_LOYALTY_ENABLED) return;
     setSaving(true);
     setMsg(null);
 
@@ -72,17 +76,76 @@ export default function LoyaltyRewardsPage() {
     setSaving(false);
   }
 
+  // ── 1. Coming Soon State for V1 ──────────────────────────────────────────
+  if (!IS_LOYALTY_ENABLED) {
+    return (
+      <div className="space-y-6 max-w-5xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <Link href="/dashboard/loyalty" className="text-xs font-bold text-zinc-500 hover:text-zinc-950">
+                ← Loyalty Overview
+              </Link>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <h1 className="text-2xl font-black text-zinc-950 tracking-tight">
+                🏆 Rewards Catalog
+              </h1>
+              <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-extrabold text-[10px]">
+                Coming Soon
+              </Badge>
+            </div>
+            <p className="text-xs font-semibold text-zinc-500 mt-1">
+              Reward creation and voucher configuration will be enabled in a future WSNexa update.
+            </p>
+          </div>
+
+          <Link href="/dashboard/loyalty">
+            <Button variant="outline" size="sm" className="text-xs font-bold">
+              ← Return to Loyalty
+            </Button>
+          </Link>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-200 bg-white p-8 sm:p-12 text-center space-y-6 shadow-2xs">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-3xl mx-auto shadow-2xs">
+            🏆
+          </div>
+
+          <div className="space-y-2 max-w-lg mx-auto">
+            <h2 className="text-xl sm:text-2xl font-black text-zinc-950">
+              Rewards Catalog Coming Soon
+            </h2>
+            <p className="text-xs sm:text-sm font-semibold text-zinc-500 leading-relaxed">
+              When released, you will be able to create custom fixed discounts, percentage vouchers, and complimentary food/beverage redemptions linked to patron points balances.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              href="/dashboard/loyalty"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-zinc-950 px-6 py-2.5 text-xs font-extrabold text-white shadow-2xs hover:bg-zinc-800 active:scale-[0.97] transition-all cursor-pointer"
+            >
+              ← Back to Loyalty Hub
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 2. Full Active Catalog (Preserved for Future Update) ──────────────────
   return (
     <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
           <div className="flex items-center gap-2">
             <Link href="/dashboard/loyalty" className="text-sm font-semibold text-zinc-500 hover:text-zinc-900">
               ← Loyalty Settings
             </Link>
           </div>
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight mt-1">
+          <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight mt-1">
             🏆 Rewards Catalog
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
@@ -104,149 +167,147 @@ export default function LoyaltyRewardsPage() {
         </div>
       )}
 
-      {/* Rewards Grid / List */}
       {loading ? (
         <div className="p-8 text-center text-zinc-500">Loading Rewards Catalog...</div>
       ) : rewards.length === 0 ? (
         <Card className="p-12 text-center">
-          <div className="text-4xl mb-3">🎁</div>
-          <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-            No rewards created yet.
-          </h3>
+          <div className="text-4xl mb-3">🏆</div>
+          <h3 className="text-xl font-bold">No active rewards created yet.</h3>
           <p className="max-w-md mx-auto text-sm text-zinc-500 mt-2">
-            Create your first reward (e.g. Free Coffee, LKR 500 Discount, or 10% Off) to encourage repeat visits.
+            Reward your best patrons with discounts, vouchers, or free drinks!
           </p>
-          <Button onClick={() => setShowDrawer(true)} className="mt-6 font-bold">
-            + Create Your First Reward
-          </Button>
+          <div className="mt-6">
+            <Button onClick={() => setShowDrawer(true)} className="font-bold">
+              Create First Reward
+            </Button>
+          </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {rewards.map((r) => (
-            <Card key={r.id} className="relative overflow-hidden">
-              <div className="pb-2">
+            <Card key={r.id} className="flex flex-col justify-between">
+              <div className="space-y-2">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">{r.title}</h3>
-                    <p className="text-xs text-zinc-500 mt-1">{r.description || 'No description provided.'}</p>
-                  </div>
-                  <Badge variant="warning" className="font-extrabold text-sm px-3 py-1">
-                    {r.pointsRequired} Points
+                  <h3 className="text-lg font-bold">{r.title}</h3>
+                  <Badge variant={r.isActive ? 'success' : 'neutral'}>
+                    {r.isActive ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
+                {r.description && <p className="text-xs text-zinc-500">{r.description}</p>}
               </div>
-              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs font-medium text-zinc-500">
-                <span>
-                  Type:{' '}
-                  <strong className="text-zinc-900 dark:text-white">
-                    {r.rewardType === 'fixed_discount'
-                      ? `LKR ${(r.discountAmountCents || 0) / 100} Off`
-                      : r.rewardType === 'percentage_discount'
-                      ? `${r.discountPercentage}% Off`
-                      : r.rewardType}
-                  </strong>
-                </span>
-                <span>{r.isActive ? '● Active' : '○ Inactive'}</span>
+
+              <div className="pt-4 mt-4 border-t border-zinc-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-zinc-400 uppercase font-bold block">Cost</span>
+                  <span className="text-xl font-black text-amber-600">{r.pointsRequired} pts</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-zinc-400 uppercase font-bold block">Benefit</span>
+                  <span className="text-sm font-bold text-zinc-800">
+                    {r.rewardType === 'fixed_discount' && `LKR ${(r.discountAmountCents || 0) / 100} OFF`}
+                    {r.rewardType === 'percentage_discount' && `${r.discountPercentage}% OFF`}
+                    {r.rewardType === 'free_item' && `Free Item`}
+                  </span>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Create Reward Drawer/Modal */}
+      {/* Create Reward Drawer */}
       {showDrawer && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="max-w-lg w-full bg-white dark:bg-zinc-900 p-6 space-y-6">
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4">
-              <h2 className="text-lg font-bold">Create New Reward</h2>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <h3 className="text-lg font-bold">Create Loyalty Reward</h3>
               <button
                 type="button"
                 onClick={() => setShowDrawer(false)}
-                className="text-zinc-500 hover:text-zinc-900 font-bold"
+                className="text-zinc-400 hover:text-zinc-600 text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleCreateReward} className="space-y-4">
-              <div className="space-y-2">
-                <label className="font-semibold text-sm block">Reward Title</label>
+              <div>
+                <label className="block text-xs font-bold text-zinc-700">Reward Title *</label>
                 <input
+                  type="text"
                   required
                   value={title}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-                  placeholder="e.g. Free Coffee or LKR 500 Discount"
-                  className="h-10 px-3 rounded-md border border-zinc-200 w-full text-sm"
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. 500 LKR Off Any Order"
+                  className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="font-semibold text-sm block">Description (Optional)</label>
+              <div>
+                <label className="block text-xs font-bold text-zinc-700">Points Required *</label>
                 <input
-                  value={description}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)}
-                  placeholder="e.g. Valid on any order above LKR 1000"
-                  className="h-10 px-3 rounded-md border border-zinc-200 w-full text-sm"
+                  type="number"
+                  min="1"
+                  required
+                  value={pointsRequired}
+                  onChange={(e) => setPointsRequired(Number(e.target.value))}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="font-semibold text-sm block">Points Required</label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    value={pointsRequired}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPointsRequired(Number(e.target.value))}
-                    className="h-10 px-3 rounded-md border border-zinc-200 w-full text-sm"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="font-semibold text-sm block">Reward Type</label>
-                  <select
-                    value={rewardType}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRewardType(e.target.value as RewardType)}
-                    className="w-full h-10 px-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm"
-                  >
-                    <option value="fixed_discount">Fixed Amount Discount (LKR)</option>
-                    <option value="percentage_discount">Percentage Discount (%)</option>
-                    <option value="free_item">Free Menu Item</option>
-                    <option value="custom">Custom Reward</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-zinc-700">Reward Type</label>
+                <select
+                  value={rewardType}
+                  onChange={(e) => setRewardType(e.target.value as RewardType)}
+                  className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
+                >
+                  <option value="fixed_discount">Fixed Amount Discount (LKR)</option>
+                  <option value="percentage_discount">Percentage Discount (%)</option>
+                </select>
               </div>
 
               {rewardType === 'fixed_discount' && (
-                <div className="space-y-2">
-                  <label className="font-semibold text-sm block">Discount Amount (Cents)</label>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700">Discount Amount (LKR) *</label>
                   <input
                     type="number"
-                    min={0}
-                    value={discountAmountCents}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDiscountAmountCents(Number(e.target.value))}
-                    placeholder="50000 (500 LKR)"
-                    className="h-10 px-3 rounded-md border border-zinc-200 w-full text-sm"
+                    min="1"
+                    required
+                    value={discountAmountCents / 100}
+                    onChange={(e) => setDiscountAmountCents(Number(e.target.value) * 100)}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
                   />
                 </div>
               )}
 
               {rewardType === 'percentage_discount' && (
-                <div className="space-y-2">
-                  <label className="font-semibold text-sm block">Discount Percentage (%)</label>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700">Discount Percentage (%) *</label>
                   <input
                     type="number"
-                    min={1}
-                    max={100}
+                    min="1"
+                    max="100"
+                    required
                     value={discountPercentage}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDiscountPercentage(Number(e.target.value))}
-                    className="h-10 px-3 rounded-md border border-zinc-200 w-full text-sm"
+                    onChange={(e) => setDiscountPercentage(Number(e.target.value))}
+                    className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
                   />
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700">Short Description (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Terms or details for redemption..."
+                  className="mt-1 w-full rounded-xl border border-zinc-200 p-2.5 text-sm font-semibold"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setShowDrawer(false)}>
                   Cancel
                 </Button>

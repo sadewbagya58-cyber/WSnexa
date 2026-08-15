@@ -8,6 +8,7 @@ import { formatCurrency } from '@/features/cart/cart-calculations';
 import { VenueRankingMetrics, CustomerPersonalizedInsight } from '@/lib/validation/ranking';
 import { VenueCarousel } from '@/components/discovery/venue-carousel';
 import { CustomerLoyaltyAccountRecord } from '@/lib/validation/loyalty';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 interface CustomerDashboardProps {
   displayName: string;
@@ -54,17 +55,32 @@ export function CustomerDashboard({
         <Link href="/customer/loyalty" className="block group">
           <div className="bg-white border border-zinc-200 hover:border-zinc-300 transition-all rounded-2xl p-5 space-y-2 shadow-xs group-hover:shadow-md">
             <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-              <span>Loyalty Points</span>
+              <span>Loyalty & Rewards</span>
               <span className="text-base">🎁</span>
             </div>
-            <div className="text-3xl font-black text-zinc-950">
-              {totalLoyaltyPoints} <span className="text-sm font-bold text-zinc-500">pts</span>
-            </div>
-            <div className="text-[11px] text-zinc-500">
-              {loyaltyAccounts && loyaltyAccounts.length > 0
-                ? `${loyaltyAccounts.length} active venue program${loyaltyAccounts.length > 1 ? 's' : ''}`
-                : 'Across participating venues'}
-            </div>
+            {IS_LOYALTY_ENABLED ? (
+              <>
+                <div className="text-3xl font-black text-zinc-950">
+                  {totalLoyaltyPoints} <span className="text-sm font-bold text-zinc-500">pts</span>
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  {loyaltyAccounts && loyaltyAccounts.length > 0
+                    ? `${loyaltyAccounts.length} active venue program${loyaltyAccounts.length > 1 ? 's' : ''}`
+                    : 'Across participating venues'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-sm font-black text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                    Coming Soon
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500 font-medium">
+                  Points & rewards in upcoming update →
+                </div>
+              </>
+            )}
           </div>
         </Link>
 

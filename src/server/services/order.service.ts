@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { hashQrToken, hashTablePin } from '@/lib/qr/security';
 import { verifySignedTableAccessProof } from '@/lib/qr/table-access-proof';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 import {
   CreateGuestOrderInput,
   createGuestOrderSchema,
@@ -367,7 +368,7 @@ export class OrderService {
       p_cart_items: cartItems,
       p_payment_method: paymentMethod || 'pay_at_counter',
       p_customer_user_id: activeUserId || null,
-      p_selected_reward_id: parsed.data.selectedRewardId || null,
+      p_selected_reward_id: IS_LOYALTY_ENABLED ? (parsed.data.selectedRewardId || null) : null,
     });
 
     const rpcPayload = data as { success?: boolean; error?: string; order_id?: string } | null;

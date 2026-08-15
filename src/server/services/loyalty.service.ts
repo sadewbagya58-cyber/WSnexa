@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 import type {
   LoyaltyProgramSettingsInput,
   CreateRewardInput,
@@ -194,6 +195,10 @@ export class LoyaltyService {
    * 4. Order has not already earned points.
    */
   static async processOrderPointsEarning(orderId: string) {
+    if (!IS_LOYALTY_ENABLED) {
+      return { success: false, code: 'FEATURE_DISABLED', message: 'Loyalty points earning is temporarily disabled for V1.' };
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch order details
@@ -378,6 +383,10 @@ export class LoyaltyService {
    * Redeem a reward securely for a customer.
    */
   static async redeemReward(userId: string, businessId: string, rewardId: string, orderId?: string) {
+    if (!IS_LOYALTY_ENABLED) {
+      return { success: false, code: 'FEATURE_DISABLED', message: 'Loyalty reward redemption is temporarily disabled for V1.' };
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch reward details

@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server';
 import { QrService } from '@/server/services/qr.service';
 import { LoyaltyService } from '@/server/services/loyalty.service';
 import { PublicGuestMenu } from '@/components/qr/public-guest-menu';
-import { GuestActiveOrderBanner } from '@/components/guest/guest-active-order-banner';
 import { CartProvider } from '@/features/cart/cart-context';
 
 interface PublicMenuPageProps {
@@ -72,7 +71,6 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
         loyaltyAccount={loyaltyAccount}
         availableRewards={availableRewards}
       />
-      <GuestActiveOrderBanner branchId={branchId} token={token} />
     </CartProvider>
   );
 }

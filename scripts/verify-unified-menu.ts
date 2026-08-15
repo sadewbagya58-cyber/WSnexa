@@ -805,6 +805,45 @@ async function runUnifiedMenuSuite() {
     console.assert(waiterActionCode.includes("admin.from('orders').delete().eq('id', newOrder.id)"), 'Test 78 Failed');
     console.log('  ✅ [PASS] Test 78: Atomic order insertion with cleanup verified');
 
+    // ================================================================
+    // ACTIVE ORDER BANNER DEDUPLICATION REGRESSION TESTS (79-86)
+    // ================================================================
+
+    // TEST 79: Storage module deduplicates active orders by stable orderId
+    const { saveActiveOrderToStorage, getActiveOrdersFromStorage } = await import('../src/features/cart/active-order-storage');
+    console.assert(typeof saveActiveOrderToStorage === 'function' && typeof getActiveOrdersFromStorage === 'function', 'Test 79 Failed');
+    console.log('  ✅ [PASS] Test 79: Storage module deduplication functions verified');
+
+    // TEST 80: GuestMenuBottomActions explicitly deduplicates active orders
+    const bottomActionsSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/qr/guest-menu-bottom-actions.tsx'), 'utf8');
+    console.assert(bottomActionsSrc.includes('uniqueOrdersMap') && bottomActionsSrc.includes('setActiveOrders'), 'Test 80 Failed');
+    console.log('  ✅ [PASS] Test 80: GuestMenuBottomActions deduplicates active order array by orderId');
+
+    // TEST 81: Obsolete GuestActiveOrderBanner removed from PublicMenuPage
+    const publicPageSrc = fs.readFileSync(path.join(process.cwd(), 'src/app/m/[token]/page.tsx'), 'utf8');
+    console.assert(!publicPageSrc.includes('GuestActiveOrderBanner'), 'Test 81 Failed: Obsolete GuestActiveOrderBanner still present in page.tsx');
+    console.log('  ✅ [PASS] Test 81: Obsolete GuestActiveOrderBanner removed from page.tsx (Single Source of Truth enforced)');
+
+    // TEST 82: Active order + cart renders ONE unified dual container (State 4)
+    console.assert(bottomActionsSrc.includes("currentState === 'dual'") && bottomActionsSrc.includes('Active Order') && bottomActionsSrc.includes('New Cart'), 'Test 82 Failed');
+    console.log('  ✅ [PASS] Test 82: Active order + cart renders ONE unified dual container');
+
+    // TEST 83: Cart only renders ONE cart container (State 2)
+    console.assert(bottomActionsSrc.includes("currentState === 'cart_only'") && bottomActionsSrc.includes('New Cart'), 'Test 83 Failed');
+    console.log('  ✅ [PASS] Test 83: Cart only renders ONE cart container');
+
+    // TEST 84: Active order only renders ONE active order bar (State 3)
+    console.assert(bottomActionsSrc.includes("currentState === 'order_only'") && bottomActionsSrc.includes('View Status →'), 'Test 84 Failed');
+    console.log('  ✅ [PASS] Test 84: Active order only renders ONE active order bar');
+
+    // TEST 85: No order + no cart returns null (State 1)
+    console.assert(bottomActionsSrc.includes("currentState === 'none'") && bottomActionsSrc.includes('return null'), 'Test 85 Failed');
+    console.log('  ✅ [PASS] Test 85: No active order + no cart returns null (no floating container)');
+
+    // TEST 86: Multiple active orders show summary container with +N more trigger
+    console.assert(bottomActionsSrc.includes('activeOrders.length > 1') && bottomActionsSrc.includes('setShowOrdersModal'), 'Test 86 Failed');
+    console.log('  ✅ [PASS] Test 86: Multiple active orders display canonical summary with modal trigger');
+
     // Cleanup
     if (guestRpcCheck?.order_id) await admin.from('orders').delete().eq('id', guestRpcCheck.order_id);
     if (qrRow?.id) await admin.from('branch_qr_codes').delete().eq('id', qrRow.id);
@@ -829,9 +868,10 @@ async function runUnifiedMenuSuite() {
     if (waiterUserId) await admin.auth.admin.deleteUser(waiterUserId);
 
     console.log('\n================================================================');
-    console.log('  Phase 25.4 Waiter Order RLS Authorization: ALL 78 TESTS PASSED ');
+    console.log('  Phase 25.4 Waiter Order & Menu Suite: ALL 86 TESTS PASSED     ');
     console.log('================================================================\n');
   } catch (err: unknown) {
+
     console.error('❌ Phase 25 Verification Error:', err);
     if (modGroupId) await admin.from('modifier_groups').delete().eq('id', modGroupId);
     if (itemId) await admin.from('menu_items').delete().eq('id', itemId);

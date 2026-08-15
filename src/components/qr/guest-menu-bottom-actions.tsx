@@ -35,7 +35,14 @@ export function GuestMenuBottomActions({
   useEffect(() => {
     const handleStorage = () => {
       const orders = getActiveOrdersFromStorage(branchId);
-      setActiveOrders(orders);
+      // Explicit deduplication by stable orderId
+      const uniqueOrdersMap = new Map<string, SafeActiveOrderRecord>();
+      for (const ord of orders) {
+        if (ord && ord.orderId && !uniqueOrdersMap.has(ord.orderId)) {
+          uniqueOrdersMap.set(ord.orderId, ord);
+        }
+      }
+      setActiveOrders(Array.from(uniqueOrdersMap.values()));
     };
 
     handleStorage();
@@ -46,7 +53,7 @@ export function GuestMenuBottomActions({
   const hasActiveOrders = activeOrders.length > 0;
   const primaryOrder = hasActiveOrders ? activeOrders[0] : null;
 
-  // Determine State
+  // Determine Canonical 4-State Behavior
   let currentState: 'none' | 'cart_only' | 'order_only' | 'dual' = 'none';
   if (!hasActiveOrders && !hasCartItems) {
     currentState = 'none';

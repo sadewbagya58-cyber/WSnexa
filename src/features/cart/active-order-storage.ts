@@ -17,6 +17,7 @@ const RETENTION_HOURS = 24;
 
 /**
  * Saves a new active order safely into sessionStorage.
+ * Automatically deduplicates orders by stable orderId.
  */
 export function saveActiveOrderToStorage(record: SafeActiveOrderRecord): void {
   if (typeof window === 'undefined') return;
@@ -39,6 +40,7 @@ export function saveActiveOrderToStorage(record: SafeActiveOrderRecord): void {
 
 /**
  * Retrieves valid active orders for a branch from sessionStorage.
+ * Guarantees deduplication by stable orderId.
  */
 export function getActiveOrdersFromStorage(branchId: string): SafeActiveOrderRecord[] {
   if (typeof window === 'undefined') return [];
@@ -52,11 +54,15 @@ export function getActiveOrdersFromStorage(branchId: string): SafeActiveOrderRec
     const now = Date.now();
     const cutoffMs = RETENTION_HOURS * 60 * 60 * 1000;
 
-    // Filter by 24h retention and valid safe schema
+    // Filter by 24h retention, valid schema, and deduplicate by orderId
+    const seenOrderIds = new Set<string>();
     const valid = items.filter((item) => {
       if (!item || !item.orderId || !item.accessToken || !item.createdAt) return false;
+      if (seenOrderIds.has(item.orderId)) return false;
       const createdTime = new Date(item.createdAt).getTime();
-      return now - createdTime < cutoffMs;
+      if (now - createdTime >= cutoffMs) return false;
+      seenOrderIds.add(item.orderId);
+      return true;
     });
 
     if (valid.length !== items.length) {

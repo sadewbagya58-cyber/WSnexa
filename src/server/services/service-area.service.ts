@@ -194,6 +194,36 @@ export class ServiceAreaService {
   static async deleteArea(areaId: string, businessId: string, branchId: string, client?: SupabaseClient) {
     const supabase = client || (await createClient());
 
+    // 1. Dependency check: active tables assigned to area
+    const { count, error: tableCountErr } = await supabase
+      .from('dining_tables')
+      .select('id', { count: 'exact', head: true })
+      .eq('service_area_id', areaId)
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .is('deleted_at', null);
+
+    if (tableCountErr) {
+      return { success: false, message: 'Failed to verify tables assigned to service area.' };
+    }
+
+    if (count && count > 0) {
+      return {
+        success: false,
+        message: `Cannot delete this service area because ${count} table${count > 1 ? 's are' : ' is'} assigned to it. Move or delete those tables first.`,
+        tableCount: count,
+      };
+    }
+
+    // 2. Safe staff area assignment cleanup
+    await supabase
+      .from('staff_area_assignments')
+      .delete()
+      .eq('service_area_id', areaId)
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId);
+
+    // 3. Soft delete area
     const { error } = await supabase
       .from('service_areas')
       .update({ deleted_at: new Date().toISOString(), is_active: false })
@@ -207,6 +237,7 @@ export class ServiceAreaService {
 
     return { success: true, message: 'Area deleted successfully.' };
   }
+
 
   /**
    * Gets assigned area IDs for a staff membership.

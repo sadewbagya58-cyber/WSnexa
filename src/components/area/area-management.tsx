@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { FormattedServiceArea } from '@/server/services/service-area.service';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import {
   createServiceAreaAction,
   updateServiceAreaAction,
@@ -30,6 +31,10 @@ export function AreaManagement({
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editActive, setEditActive] = useState(true);
+
+  // Delete & Blocked Modal state
+  const [deletingArea, setDeletingArea] = useState<FormattedServiceArea | null>(null);
+  const [blockedTableCount, setBlockedTableCount] = useState<number | null>(null);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -104,19 +109,26 @@ export function AreaManagement({
     });
   };
 
-  const handleDeleteArea = async (areaId: string, areaName: string) => {
-    if (!confirm(`Are you sure you want to delete service area "${areaName}"?`)) return;
+  const handleConfirmDeleteArea = async () => {
+    if (!deletingArea) return;
 
     setErrorMsg(null);
     setSuccessMsg(null);
 
     startTransition(async () => {
-      const res = await deleteServiceAreaAction(areaId);
+      const res = await deleteServiceAreaAction(deletingArea.id);
       if (res.success) {
-        setSuccessMsg(`Area "${areaName}" deleted.`);
-        setAreas((prev) => prev.filter((a) => a.id !== areaId));
+        setSuccessMsg(`Area "${deletingArea.name}" deleted.`);
+        setAreas((prev) => prev.filter((a) => a.id !== deletingArea.id));
+        setDeletingArea(null);
+        setBlockedTableCount(null);
       } else {
-        setErrorMsg(res.message || 'Failed to delete service area.');
+        if ('tableCount' in res && typeof res.tableCount === 'number' && res.tableCount > 0) {
+          setBlockedTableCount(res.tableCount);
+        } else {
+          setErrorMsg(res.message || 'Failed to delete service area.');
+          setDeletingArea(null);
+        }
       }
     });
   };
@@ -151,7 +163,7 @@ export function AreaManagement({
           </div>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 transition-colors shadow-xs"
+            className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center px-4 py-2.5 rounded-xl text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 transition-colors shadow-xs touch-manipulation"
           >
             + Create Area
           </button>
@@ -159,12 +171,12 @@ export function AreaManagement({
 
         {/* Feedback Banners */}
         {errorMsg && (
-          <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800 font-medium">
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800">
             {errorMsg}
           </div>
         )}
         {successMsg && (
-          <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800 font-medium">
+          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
             {successMsg}
           </div>
         )}
@@ -179,7 +191,7 @@ export function AreaManagement({
             <button
               type="button"
               onClick={() => handleOrderingModeChange('qr_only')}
-              className={`p-4 rounded-lg border text-left transition-all ${
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
                 orderingMode === 'qr_only'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -194,7 +206,7 @@ export function AreaManagement({
             <button
               type="button"
               onClick={() => handleOrderingModeChange('waiter_only')}
-              className={`p-4 rounded-lg border text-left transition-all ${
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
                 orderingMode === 'waiter_only'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -209,7 +221,7 @@ export function AreaManagement({
             <button
               type="button"
               onClick={() => handleOrderingModeChange('qr_and_waiter')}
-              className={`p-4 rounded-lg border text-left transition-all ${
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
                 orderingMode === 'qr_and_waiter'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -233,7 +245,7 @@ export function AreaManagement({
             </p>
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="inline-flex items-center justify-center px-4 py-2 text-sm font-extrabold bg-zinc-950 text-white rounded-lg hover:bg-zinc-800"
+              className="inline-flex min-h-[44px] items-center justify-center px-4 py-2 text-sm font-extrabold bg-zinc-950 text-white rounded-xl hover:bg-zinc-800 touch-manipulation"
             >
               + Create First Area
             </button>
@@ -289,13 +301,16 @@ export function AreaManagement({
                       setEditDesc(area.description || '');
                       setEditActive(area.isActive);
                     }}
-                    className="flex-1 py-2 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center"
+                    className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center touch-manipulation transition-colors"
                   >
-                    Manage
+                    Edit Area
                   </button>
                   <button
-                    onClick={() => handleDeleteArea(area.id, area.name)}
-                    className="px-3 py-2 rounded-lg text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
+                    onClick={() => {
+                      setDeletingArea(area);
+                      setBlockedTableCount(null);
+                    }}
+                    className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-center touch-manipulation transition-colors"
                   >
                     Delete
                   </button>
@@ -309,12 +324,12 @@ export function AreaManagement({
       {/* Create Area Modal */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-lg font-bold text-zinc-950">Create Service Area</h3>
               <button
                 onClick={() => setIsCreateOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-sm font-bold"
+                className="text-zinc-400 hover:text-zinc-600 min-h-[44px] min-w-[44px] text-sm font-bold"
               >
                 ✕
               </button>
@@ -331,7 +346,7 @@ export function AreaManagement({
                   placeholder="e.g. Pool Area, Rooftop, Garden"
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
+                  className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
                 />
               </div>
 
@@ -344,22 +359,22 @@ export function AreaManagement({
                   placeholder="e.g. Outdoor pool deck tables & loungers"
                   value={createDesc}
                   onChange={(e) => setCreateDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
+                  className="w-full p-3 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="px-4 py-2 rounded-lg text-sm font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending || !createName.trim()}
-                  className="px-4 py-2 rounded-lg text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50"
                 >
                   {isPending ? 'Saving...' : 'Save Area'}
                 </button>
@@ -372,12 +387,12 @@ export function AreaManagement({
       {/* Edit Area Modal */}
       {editingArea && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl border border-zinc-200 shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-lg font-bold text-zinc-950">Edit Service Area</h3>
               <button
                 onClick={() => setEditingArea(null)}
-                className="text-zinc-400 hover:text-zinc-600 text-sm font-bold"
+                className="text-zinc-400 hover:text-zinc-600 min-h-[44px] min-w-[44px] text-sm font-bold"
               >
                 ✕
               </button>
@@ -393,7 +408,7 @@ export function AreaManagement({
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
+                  className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
                 />
               </div>
 
@@ -405,11 +420,11 @@ export function AreaManagement({
                   rows={3}
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
+                  className="w-full p-3 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
                   id="editActive"
@@ -422,18 +437,18 @@ export function AreaManagement({
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setEditingArea(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending || !editName.trim()}
-                  className="px-4 py-2 rounded-lg text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50"
                 >
                   {isPending ? 'Updating...' : 'Update Area'}
                 </button>
@@ -441,6 +456,40 @@ export function AreaManagement({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Delete / Blocked Confirmation Modal */}
+      {deletingArea && (
+        <ConfirmationModal
+          isOpen={true}
+          onClose={() => {
+            setDeletingArea(null);
+            setBlockedTableCount(null);
+          }}
+          title={
+            blockedTableCount !== null
+              ? 'Cannot Delete Service Area'
+              : `Delete Service Area "${deletingArea.name}"?`
+          }
+          description={
+            blockedTableCount !== null
+              ? `Cannot delete this service area because ${blockedTableCount} table${blockedTableCount > 1 ? 's are' : ' is'} assigned to it. Move or delete those tables first.`
+              : 'This removes the service area from active operations. Staff assignments will be cleared.'
+          }
+          isDestructive={blockedTableCount === null}
+          confirmLabel="Delete Area"
+          cancelLabel={blockedTableCount !== null ? 'Close' : 'Cancel'}
+          isLoading={isPending}
+          onConfirm={blockedTableCount === null ? handleConfirmDeleteArea : undefined}
+          blockedAction={
+            blockedTableCount !== null
+              ? {
+                  actionLabel: 'View Tables',
+                  actionHref: '/dashboard/tables',
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

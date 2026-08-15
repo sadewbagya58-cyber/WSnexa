@@ -4,11 +4,22 @@ import { revalidatePath } from 'next/cache';
 import { resolveActiveBusinessContext } from '../tenant/resolver';
 import { ServiceAreaService } from '../services/service-area.service';
 
+import { PermissionService } from '@/server/services/permission.service';
+
 export async function createServiceAreaAction(name: string, description?: string | null) {
   try {
     const tenant = await resolveActiveBusinessContext();
     if (!tenant || !tenant.activeBranch) {
       return { success: false, message: 'Unauthorized or active branch context not found.' };
+    }
+
+    const canManage =
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'areas.manage')) ||
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'tables.manage')) ||
+      tenant.membership?.role === 'business_owner';
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden. Missing required area permission.' };
     }
 
     const res = await ServiceAreaService.createArea(
@@ -41,6 +52,15 @@ export async function updateServiceAreaAction(
       return { success: false, message: 'Unauthorized or active branch context not found.' };
     }
 
+    const canManage =
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'areas.manage')) ||
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'tables.manage')) ||
+      tenant.membership?.role === 'business_owner';
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden. Missing required area permission.' };
+    }
+
     const res = await ServiceAreaService.updateArea(
       areaId,
       tenant.business.id,
@@ -67,6 +87,15 @@ export async function deleteServiceAreaAction(areaId: string) {
       return { success: false, message: 'Unauthorized or active branch context not found.' };
     }
 
+    const canManage =
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'areas.manage')) ||
+      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'tables.manage')) ||
+      tenant.membership?.role === 'business_owner';
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden. Missing required area permission.' };
+    }
+
     const res = await ServiceAreaService.deleteArea(
       areaId,
       tenant.business.id,
@@ -82,6 +111,7 @@ export async function deleteServiceAreaAction(areaId: string) {
     return { success: false, message: (err as Error).message || 'Failed to delete service area.' };
   }
 }
+
 
 export async function assignStaffToAreasAction(membershipId: string, areaIds: string[]) {
   try {

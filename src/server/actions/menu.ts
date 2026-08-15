@@ -161,7 +161,9 @@ export async function updateMenuCategoryAction(
 /**
  * Archives (soft deletes) a menu category.
  */
-export async function archiveMenuCategoryAction(categoryId: string): Promise<ActionResponse> {
+export async function archiveMenuCategoryAction(
+  categoryId: string
+): Promise<ActionResponse<{ itemCount?: number }>> {
   const context = await resolveActiveBusinessContext();
   if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
 
@@ -172,6 +174,28 @@ export async function archiveMenuCategoryAction(categoryId: string): Promise<Act
   if (!canManage) return { success: false, message: 'Forbidden. Missing required category permission.' };
 
   const supabase = await createClient();
+
+  // Check for active (non-deleted) menu items referencing this category
+  const { count, error: countError } = await supabase
+    .from('menu_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('category_id', categoryId)
+    .eq('business_id', context.business.id)
+    .eq('branch_id', context.activeBranch.id)
+    .is('deleted_at', null);
+
+  if (countError) {
+    return { success: false, message: 'Failed to verify category menu items.' };
+  }
+
+  if (count && count > 0) {
+    return {
+      success: false,
+      message: `This category contains ${count} menu item${count > 1 ? 's' : ''}. Move or delete these items before deleting the category.`,
+      data: { itemCount: count },
+    };
+  }
+
   const { error } = await supabase
     .from('menu_categories')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
@@ -189,6 +213,9 @@ export async function archiveMenuCategoryAction(categoryId: string): Promise<Act
   });
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/categories');
+  revalidatePath('/m/[token]', 'layout');
+  revalidatePath('/dashboard/waiter');
   return { success: true, message: 'Menu category archived.' };
 }
 
@@ -327,22 +354,57 @@ export async function updateMenuItemAction(
 
   const { id, price, ...rest } = parsed.data;
 
-  // Check specific price or edit permission
   const isPriceChanging = price !== undefined;
-  let canUpdate = false;
+  const isAvailabilityChanging = rest.availabilityStatus !== undefined;
+  const isGeneralChanging =
+    rest.name !== undefined ||
+    rest.categoryId !== undefined ||
+    rest.description !== undefined ||
+    rest.isFeatured !== undefined ||
+    rest.displayOrder !== undefined ||
+    rest.primaryImageUrl !== undefined;
 
-  if (isPriceChanging) {
-    canUpdate =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.price.update')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
-  } else {
-    canUpdate =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.edit')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+  const hasMenuManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'menu.manage'
+  );
+
+  if (isPriceChanging && !hasMenuManage) {
+    const canPrice = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'menu.price.update'
+    );
+    if (!canPrice) {
+      return { success: false, message: 'Forbidden. Missing required permission menu.price.update.' };
+    }
   }
 
-  if (!canUpdate) {
-    return { success: false, message: 'Forbidden. Missing required menu item update permission.' };
+  if (isAvailabilityChanging && !hasMenuManage) {
+    const canAvail = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'menu.availability.update'
+    );
+    if (!canAvail) {
+      return { success: false, message: 'Forbidden. Missing required permission menu.availability.update.' };
+    }
+  }
+
+  if (isGeneralChanging && !hasMenuManage) {
+    const canEdit = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'menu.items.edit'
+    );
+    if (!canEdit) {
+      return { success: false, message: 'Forbidden. Missing required permission menu.items.edit.' };
+    }
   }
 
   const supabase = await createClient();
@@ -370,6 +432,9 @@ export async function updateMenuItemAction(
   if (error) return { success: false, message: error.message };
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/items');
+  revalidatePath('/m/[token]', 'layout');
+  revalidatePath('/dashboard/waiter');
   return { success: true, message: 'Menu item updated.' };
 }
 
@@ -402,6 +467,9 @@ export async function updateMenuItemAvailabilityAction(
   if (error) return { success: false, message: error.message };
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/items');
+  revalidatePath('/m/[token]', 'layout');
+  revalidatePath('/dashboard/waiter');
   return { success: true, message: `Availability status updated to ${availabilityStatus}.` };
 }
 
@@ -432,6 +500,9 @@ export async function toggleMenuItemFeaturedAction(
   if (error) return { success: false, message: error.message };
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/items');
+  revalidatePath('/m/[token]', 'layout');
+  revalidatePath('/dashboard/waiter');
   return { success: true, message: 'Featured status updated.' };
 }
 
@@ -459,5 +530,9 @@ export async function archiveMenuItemAction(itemId: string): Promise<ActionRespo
   if (error) return { success: false, message: error.message };
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/items');
+  revalidatePath('/m/[token]', 'layout');
+  revalidatePath('/dashboard/waiter');
   return { success: true, message: 'Menu item archived.' };
 }
+

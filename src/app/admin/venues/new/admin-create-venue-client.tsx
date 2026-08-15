@@ -136,12 +136,12 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             key={s.num}
             type="button"
             onClick={() => setStep(s.num)}
-            className={`py-2 rounded-xl text-xs font-black transition-colors ${
+            className={`py-2 rounded-xl text-xs font-black transition-all active:scale-[0.97] cursor-pointer touch-manipulation ${
               step === s.num
                 ? 'bg-amber-500 text-black shadow-2xs'
                 : step > s.num
-                ? 'bg-zinc-100 text-zinc-900'
-                : 'text-zinc-400 bg-zinc-50'
+                ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
+                : 'text-zinc-400 bg-zinc-50 hover:bg-zinc-100'
             }`}
           >
             {s.num}. {s.label}
@@ -547,18 +547,18 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               onClick={() => handleSubmit(false)}
               disabled={loading}
               variant="outline"
-              className="flex-1 text-xs font-extrabold py-3 min-h-[44px]"
+              className="flex-1 text-xs font-extrabold py-3 min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
             >
-              {loading ? 'Saving...' : '💾 Save as Draft'}
+              {loading ? 'Saving Draft...' : '💾 Save as Draft'}
             </Button>
 
             <Button
               type="button"
               onClick={() => handleSubmit(true)}
               disabled={loading || !isLocComplete}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs py-3 min-h-[44px] disabled:opacity-50"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-black font-black text-xs py-3 min-h-[44px] disabled:opacity-50 transition-all cursor-pointer"
             >
-              {loading ? 'Publishing...' : '🚀 Save & Publish Live'}
+              {loading ? 'Publishing Live...' : '🚀 Save & Publish Live'}
             </Button>
           </div>
         </div>

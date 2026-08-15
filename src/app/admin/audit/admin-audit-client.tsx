@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ export function AdminAuditClient({
 }: AdminAuditClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const [actionQuery, setActionQuery] = useState(currentAction);
   const [targetTypeQuery, setTargetTypeQuery] = useState(currentTargetType);
@@ -53,7 +54,9 @@ export function AdminAuditClient({
     if (newPage > 1) params.set('page', String(newPage));
     else params.delete('page');
 
-    router.push(`/admin/audit?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/admin/audit?${params.toString()}`);
+    });
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -70,7 +73,7 @@ export function AdminAuditClient({
           value={actionQuery}
           onChange={(e) => setActionQuery(e.target.value)}
           placeholder="Filter by action (e.g. venue.published, super_admin.granted)..."
-          className="flex-1 min-w-[200px] rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+          className="flex-1 min-w-[200px] rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden transition-all"
         />
 
         <select
@@ -79,7 +82,7 @@ export function AdminAuditClient({
             setTargetTypeQuery(e.target.value);
             applyFilters(actionQuery, e.target.value, 1);
           }}
-          className="rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+          className="rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 cursor-pointer"
         >
           <option value="all">All Target Types</option>
           <option value="venue_public_profile">Venue Public Profile</option>
@@ -91,9 +94,10 @@ export function AdminAuditClient({
 
         <Button
           type="submit"
-          className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs px-6 rounded-2xl min-h-[44px]"
+          disabled={isPending}
+          className="bg-zinc-950 hover:bg-zinc-800 active:scale-[0.97] text-white font-extrabold text-xs px-6 rounded-2xl min-h-[44px] transition-all cursor-pointer"
         >
-          Filter
+          {isPending ? 'Filtering...' : 'Filter'}
         </Button>
       </form>
 

@@ -105,7 +105,7 @@ export function AdminSuperAdminsClient({ admins: initialAdmins, currentUserEmail
           <Button
             type="submit"
             disabled={grantLoading}
-            className="bg-amber-500 hover:bg-amber-600 text-black font-black text-xs px-6 rounded-2xl min-h-[44px]"
+            className="bg-amber-500 hover:bg-amber-600 active:scale-[0.97] text-black font-black text-xs px-6 rounded-2xl min-h-[44px] transition-all cursor-pointer"
           >
             {grantLoading ? 'Granting...' : 'Grant Admin'}
           </Button>
@@ -157,7 +157,7 @@ export function AdminSuperAdminsClient({ admins: initialAdmins, currentUserEmail
                     variant="outline"
                     disabled={isSelf || isSingle || revokingId === a.id}
                     onClick={() => handleRevoke(a)}
-                    className="text-xs font-extrabold text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-40 min-h-[36px]"
+                    className="text-xs font-extrabold text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-40 min-h-[36px] active:scale-[0.97] transition-all cursor-pointer"
                   >
                     {revokingId === a.id ? 'Revoking...' : 'Revoke Admin'}
                   </Button>

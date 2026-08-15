@@ -13,6 +13,8 @@ export interface VerifiedSuperAdminContext {
   };
 }
 
+import { cache } from 'react';
+
 /**
  * Authoritative server-side Super Admin Guard.
  * 
@@ -21,10 +23,13 @@ export interface VerifiedSuperAdminContext {
  * 2. Active account status in `user_profiles` (`account_status === 'active'`).
  * 3. Authoritative platform flag `user_profiles.is_super_admin === true`.
  * 
+ * Request-scoped deduplication via React cache() ensures multiple checks within
+ * the same render pass execute only 1 database lookup.
+ * 
  * Never trusts client headers, role claims, or request payloads.
  * Fails securely by throwing an Error.
  */
-export async function requireSuperAdmin(): Promise<VerifiedSuperAdminContext> {
+export const requireSuperAdmin = cache(async function requireSuperAdmin(): Promise<VerifiedSuperAdminContext> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -65,13 +70,14 @@ export async function requireSuperAdmin(): Promise<VerifiedSuperAdminContext> {
       isSuperAdmin: Boolean(profile.is_super_admin),
     },
   };
-}
+});
 
 /**
  * Safe boolean check for conditionally rendering Super Admin UI elements.
+ * Request-scoped deduplication via React cache().
  * NOT a substitute for server-side authorization guards on mutations or sensitive reads.
  */
-export async function isSuperAdmin(userId: string): Promise<boolean> {
+export const isSuperAdmin = cache(async function isSuperAdmin(userId: string): Promise<boolean> {
   if (!userId) return false;
   try {
     const admin = createAdminClient();
@@ -85,4 +91,4 @@ export async function isSuperAdmin(userId: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
+});

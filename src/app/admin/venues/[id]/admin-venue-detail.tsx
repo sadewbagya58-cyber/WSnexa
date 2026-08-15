@@ -188,15 +188,21 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
                   variant={venue.isPublished ? 'outline' : 'primary'}
                   onClick={handleTogglePublish}
                   disabled={loading}
-                  className="text-xs font-extrabold min-h-[44px]"
+                  className="text-xs font-extrabold min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  {loading ? 'Updating...' : venue.isPublished ? 'Unpublish to Draft' : 'Publish Live'}
+                  {loading
+                    ? venue.isPublished
+                      ? 'Unpublishing...'
+                      : 'Publishing Live...'
+                    : venue.isPublished
+                    ? 'Unpublish to Draft'
+                    : 'Publish Live'}
                 </Button>
 
                 <Button
                   type="button"
                   onClick={() => setShowSuspendModal(true)}
-                  className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 font-extrabold text-xs min-h-[44px]"
+                  className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 font-extrabold text-xs min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
                 >
                   ⛔ Suspend Venue
                 </Button>
@@ -206,7 +212,7 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
                 type="button"
                 onClick={handleReactivate}
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs min-h-[44px]"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
               >
                 {loading ? 'Reactivating...' : '✓ Reactivate Venue'}
               </Button>
@@ -216,7 +222,7 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
               type="button"
               variant="outline"
               onClick={() => setIsEditing(!isEditing)}
-              className="text-xs font-extrabold min-h-[44px]"
+              className="text-xs font-extrabold min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
             >
               {isEditing ? 'Cancel Edit' : '✏️ Edit Details'}
             </Button>
@@ -226,7 +232,7 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
                 href={`/venues/${venue.slug}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-zinc-100 hover:bg-zinc-200 px-4 py-2 text-xs font-extrabold text-zinc-900"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-zinc-100 hover:bg-zinc-200 active:scale-[0.97] px-4 py-2 text-xs font-extrabold text-zinc-900 transition-all cursor-pointer"
               >
                 View Public Profile ↗
               </a>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +52,7 @@ export function AdminVenueList({
 }: AdminVenueListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const [venues, setVenues] = useState<VenueItem[]>(initialVenues);
   const [search, setSearch] = useState(currentQuery);
@@ -70,7 +71,9 @@ export function AdminVenueList({
     if (newPage > 1) params.set('page', String(newPage));
     else params.delete('page');
 
-    router.push(`/admin/venues?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/admin/venues?${params.toString()}`);
+    });
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -111,13 +114,14 @@ export function AdminVenueList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search venue by name, city, or slug..."
-            className="flex-1 rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+            className="flex-1 rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden transition-all"
           />
           <Button
             type="submit"
-            className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs px-6 rounded-2xl min-h-[44px]"
+            disabled={isPending}
+            className="bg-zinc-950 hover:bg-zinc-800 active:scale-[0.97] text-white font-extrabold text-xs px-6 rounded-2xl min-h-[44px] transition-all cursor-pointer"
           >
-            Search
+            {isPending ? 'Searching...' : 'Search'}
           </Button>
         </form>
 
@@ -136,7 +140,7 @@ export function AdminVenueList({
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all min-h-[36px] ${
+              className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all min-h-[36px] active:scale-[0.97] cursor-pointer touch-manipulation ${
                 activeTab === tab.id
                   ? 'bg-zinc-950 text-white shadow-2xs'
                   : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:text-zinc-950'

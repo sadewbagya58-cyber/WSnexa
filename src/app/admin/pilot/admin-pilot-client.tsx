@@ -311,16 +311,16 @@ export function AdminPilotClient({ initialPilots }: AdminPilotClientProps) {
                   type="button"
                   variant="outline"
                   onClick={() => setShowModal(false)}
-                  className="text-xs font-extrabold min-h-[44px]"
+                  className="text-xs font-extrabold min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="text-xs font-extrabold bg-zinc-950 text-white min-h-[44px]"
+                  className="text-xs font-extrabold bg-zinc-950 text-white min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
                 >
-                  {loading ? 'Initializing Pilot...' : 'Initialize Pilot Venue'}
+                  {loading ? 'Initializing Pilot Sandbox...' : 'Initialize Pilot Venue'}
                 </Button>
               </div>
             </form>

@@ -48,7 +48,7 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
           {isSuperAdmin && (
             <Link
               href="/admin"
-              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-50 px-4 text-xs font-black text-amber-900 shadow-2xs hover:bg-amber-100 transition-all"
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-50 px-4 text-xs font-black text-amber-900 shadow-2xs hover:bg-amber-100 active:scale-95 transition-all"
             >
               <span>🛡️</span>
               <span>Platform Admin</span>

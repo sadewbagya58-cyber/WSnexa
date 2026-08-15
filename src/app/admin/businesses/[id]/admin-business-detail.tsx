@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toggleAdminBusinessStatusAction } from '@/server/actions/super-admin';
@@ -55,7 +54,6 @@ interface BusinessDetailProps {
 }
 
 export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
-  const router = useRouter();
   const [status, setStatus] = useState(business.status);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; text: string } | null>(null);
@@ -74,7 +72,6 @@ export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
       setStatus(targetStatus);
       setShowSuspendModal(false);
       setFeedback({ success: true, text: `Business status updated to ${targetStatus}.` });
-      router.refresh();
     } else {
       setFeedback({ success: false, text: res.message || 'Failed to update business status.' });
     }
@@ -127,7 +124,7 @@ export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
               <Button
                 type="button"
                 onClick={() => setShowSuspendModal(true)}
-                className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 font-extrabold text-xs min-h-[44px]"
+                className="bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 font-extrabold text-xs min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
               >
                 ⛔ Suspend Business
               </Button>
@@ -136,7 +133,7 @@ export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
                 type="button"
                 onClick={() => handleToggleStatus('active')}
                 disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs min-h-[44px]"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs min-h-[44px] active:scale-[0.97] transition-all cursor-pointer"
               >
                 {loading ? 'Reactivating...' : '✓ Reactivate Business'}
               </Button>

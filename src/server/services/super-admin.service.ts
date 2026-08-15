@@ -139,6 +139,7 @@ export class SuperAdminService {
 
     const [
       { count: bizCount },
+      { count: suspendedBizCount },
       { count: pilotBizCount },
       { count: allBranchesCount },
       { count: activeBranchesCount },
@@ -153,6 +154,7 @@ export class SuperAdminService {
       { data: qrTokens },
     ] = await Promise.all([
       admin.from('businesses').select('*', { count: 'exact', head: true }),
+      admin.from('businesses').select('*', { count: 'exact', head: true }).eq('status', 'suspended'),
       admin.from('businesses').select('*', { count: 'exact', head: true }).eq('is_pilot_demo', true),
       admin.from('branches').select('*', { count: 'exact', head: true }).is('deleted_at', null),
       admin.from('branches').select('*', { count: 'exact', head: true }).eq('status', 'active').is('deleted_at', null),
@@ -164,16 +166,10 @@ export class SuperAdminService {
       admin.from('business_memberships').select('*', { count: 'exact', head: true }).eq('membership_status', 'active'),
       admin.from('venue_public_profiles').select('*, businesses(name)').order('created_at', { ascending: false }).limit(6),
       admin.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(6),
-      admin.from('table_qr_codes').select('business_id').eq('status', 'active'),
+      admin.from('branch_qr_codes').select('business_id').eq('is_active', true),
     ]);
 
     const activeQrBizIds = new Set((qrTokens || []).map((q) => q.business_id));
-
-    // Count suspended venues / businesses
-    const { count: suspendedBizCount } = await admin
-      .from('businesses')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'suspended');
 
     const recentVenues = (rawVenues || []).map((v) => ({
       id: v.id,

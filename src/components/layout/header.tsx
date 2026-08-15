@@ -10,13 +10,14 @@ export const Header = async () => {
   } = await supabase.auth.getUser();
 
   let workspaceRoute = '/dashboard';
+  let isSuperAdmin = false;
 
   if (user) {
     const admin = createAdminClient();
     const [{ data: profile }, { data: membership }] = await Promise.all([
       admin
         .from('user_profiles')
-        .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at')
+        .select('id, first_name, last_name, onboarding_intent, preferred_workspace, customer_profile_created_at, is_super_admin')
         .eq('id', user.id)
         .single(),
       admin
@@ -28,6 +29,7 @@ export const Header = async () => {
         .single(),
     ]);
 
+    isSuperAdmin = profile?.is_super_admin === true;
     workspaceRoute = await AccountService.resolveAccountRoute(user, profile, membership);
   }
 
@@ -35,6 +37,7 @@ export const Header = async () => {
     <PublicNavbar
       isAuthenticated={!!user}
       workspaceRoute={workspaceRoute}
+      isSuperAdmin={isSuperAdmin}
     />
   );
 };

@@ -187,17 +187,23 @@ export class PilotOnboardingService {
 
           if (newTable) {
             tablesCreated++;
-            // Generate QR Token
-            await admin.from('branch_qr_codes').insert({
-              business_id: business.id,
-              branch_id: branch.id,
-              table_id: newTable.id,
-              token: `PILOT-QR-${branch.id.slice(0, 4)}-${tbl.number}-${timestamp.toString().slice(-4)}`,
-              qr_type: 'table',
-              status: 'active',
-            });
           }
         }
+
+        // Generate active secure branch QR code
+        const { generateSecureQrToken } = await import('@/lib/qr/security');
+        const tokenPair = generateSecureQrToken();
+        await admin.from('branch_qr_codes').insert({
+          business_id: business.id,
+          branch_id: branch.id,
+          token_hash: tokenPair.tokenHash,
+          token_prefix: tokenPair.tokenPrefix,
+          encrypted_token: tokenPair.encryptedToken,
+          version: 1,
+          is_active: true,
+          generated_by: superAdminUserId,
+          generated_at: new Date().toISOString(),
+        });
       }
 
       return {

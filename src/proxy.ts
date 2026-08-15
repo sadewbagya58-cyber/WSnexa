@@ -42,6 +42,7 @@ export async function proxy(request: NextRequest) {
 
   const isDashboardRoute = pathname.startsWith('/dashboard');
   const isOnboardingRoute = pathname.startsWith('/onboarding');
+  const isAdminRoute = pathname.startsWith('/admin');
   const isAuthRoute =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
@@ -49,7 +50,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/reset-password');
 
   // 1. Unauthenticated Route Guards
-  if (!user && (isDashboardRoute || isOnboardingRoute)) {
+  if (!user && (isDashboardRoute || isOnboardingRoute || isAdminRoute)) {
     const redirectUrl = new URL('/login', request.url);
     redirectUrl.searchParams.set('redirectTo', pathname);
     logPerformanceMetric('PROXY_REDIRECT_UNAUTH', pathname, stopTimer(startTime));

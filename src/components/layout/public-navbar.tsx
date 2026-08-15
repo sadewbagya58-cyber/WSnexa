@@ -6,11 +6,13 @@ import Link from 'next/link';
 interface PublicNavbarProps {
   isAuthenticated: boolean;
   workspaceRoute: string;
+  isSuperAdmin?: boolean;
 }
 
 export const PublicNavbar: React.FC<PublicNavbarProps> = ({
   isAuthenticated,
   workspaceRoute,
+  isSuperAdmin = false,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -43,6 +45,16 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
 
         {/* Desktop Auth Actions */}
         <div className="hidden md:flex items-center gap-3">
+          {isSuperAdmin && (
+            <Link
+              href="/admin"
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-50 px-4 text-xs font-black text-amber-900 shadow-2xs hover:bg-amber-100 transition-all"
+            >
+              <span>🛡️</span>
+              <span>Platform Admin</span>
+            </Link>
+          )}
+
           {isAuthenticated ? (
             <Link
               href={workspaceRoute}

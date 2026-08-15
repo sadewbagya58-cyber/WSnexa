@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { createAdminVenueAction } from '@/server/actions/super-admin-venue';
+import { createAdminVenueAction } from '@/server/actions/super-admin';
 import { normalizeVenueSlug, VenueType } from '@/lib/validation/venue';
 
 interface AdminCreateVenueClientProps {
@@ -23,7 +23,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
     newBusinessName: '',
     displayName: '',
     slug: '',
-    venueType: 'hotel' as VenueType,
+    venueType: 'restaurant' as VenueType,
     shortDescription: '',
     description: '',
     logoUrl: '',
@@ -40,6 +40,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
     bookingUrl: '',
     agodaUrl: '',
     externalBookingUrl: '',
+    isPilotDemo: false,
   });
 
   const [isSlugEdited, setIsSlugEdited] = useState(false);
@@ -84,7 +85,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
           latitude: Number(pos.coords.latitude.toFixed(6)),
           longitude: Number(pos.coords.longitude.toFixed(6)),
         }));
-        setMessage({ success: true, text: '📍 Current coordinates captured!' });
+        setMessage({ success: true, text: '📍 Device coordinates captured successfully!' });
       },
       (err) => {
         setGeoLoading(false);
@@ -121,16 +122,15 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
   };
 
   return (
-    <div className="space-y-6 bg-white rounded-3xl border border-zinc-200 p-6 sm:p-8 shadow-xs">
-      {/* Wizard Progress Steps */}
-      <div className="grid grid-cols-6 gap-2 border-b border-zinc-100 pb-4 text-center">
+    <div className="space-y-6 bg-white rounded-3xl border border-zinc-200 p-6 sm:p-8 shadow-xs max-w-3xl">
+      {/* Wizard Steps */}
+      <div className="grid grid-cols-5 gap-2 border-b border-zinc-100 pb-4 text-center">
         {[
           { num: 1, label: 'Business' },
           { num: 2, label: 'Venue Info' },
-          { num: 3, label: 'Branch' },
-          { num: 4, label: 'Location' },
-          { num: 5, label: 'Details' },
-          { num: 6, label: 'Review' },
+          { num: 3, label: 'Location' },
+          { num: 4, label: 'Links' },
+          { num: 5, label: 'Review' },
         ].map((s) => (
           <button
             key={s.num}
@@ -161,8 +161,13 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
 
       {/* STEP 1: BUSINESS */}
       {step === 1 && (
-        <div className="space-y-4 max-w-xl">
-          <h2 className="text-base font-black text-zinc-950">Step 1 — Select or Create Business</h2>
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-black text-zinc-950">Step 1 — Business Identity</h2>
+            <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+              Attach venue to an existing tenant business or initialize a brand new business.
+            </p>
+          </div>
 
           <div className="space-y-1">
             <label className="text-xs font-bold text-zinc-700">Select Existing Business</label>
@@ -182,7 +187,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
 
           <div className="relative flex py-2 items-center">
             <div className="flex-grow border-t border-zinc-200"></div>
-            <span className="shrink mx-4 text-xs font-black text-zinc-400 uppercase">OR CREATE NEW</span>
+            <span className="shrink mx-4 text-[10px] font-black text-zinc-400 uppercase">OR CREATE NEW TENANT</span>
             <div className="flex-grow border-t border-zinc-200"></div>
           </div>
 
@@ -192,9 +197,22 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               type="text"
               value={formData.newBusinessName}
               onChange={(e) => setFormData({ ...formData, newBusinessName: e.target.value, businessId: '' })}
-              placeholder="e.g. Sapphire Horizon Resorts"
+              placeholder="e.g. Sapphire Horizon Hospitality Ltd"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
             />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="pilotToggle"
+              checked={formData.isPilotDemo}
+              onChange={(e) => setFormData({ ...formData, isPilotDemo: e.target.checked })}
+              className="w-4 h-4 rounded border-zinc-300 text-zinc-950 accent-zinc-950 cursor-pointer"
+            />
+            <label htmlFor="pilotToggle" className="text-xs font-bold text-zinc-700 cursor-pointer">
+              Mark as Pilot / Demo Business (isolated testing)
+            </label>
           </div>
 
           <Button
@@ -203,15 +221,20 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             disabled={!formData.businessId && !formData.newBusinessName}
             className="w-full bg-zinc-950 text-white font-extrabold text-xs py-3 rounded-2xl min-h-[44px]"
           >
-            Next: Venue Info →
+            Next: Venue Profile →
           </Button>
         </div>
       )}
 
-      {/* STEP 2: VENUE DETAILS */}
+      {/* STEP 2: VENUE PROFILE */}
       {step === 2 && (
-        <div className="space-y-4 max-w-xl">
-          <h2 className="text-base font-black text-zinc-950">Step 2 — Venue Information</h2>
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-black text-zinc-950">Step 2 — Public Venue Profile</h2>
+            <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+              Public display name, venue category, URL slug, and summary.
+            </p>
+          </div>
 
           <div className="space-y-1">
             <label className="text-xs font-bold text-zinc-700">Venue Display Name *</label>
@@ -219,28 +242,44 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               type="text"
               value={formData.displayName}
               onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="e.g. Grand Ocean Resort & Spa"
+              placeholder="e.g. Ocean Blue Resort & Spa"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
             />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700">Venue Type *</label>
-            <select
-              value={formData.venueType}
-              onChange={(e) => setFormData({ ...formData, venueType: e.target.value as VenueType })}
-              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
-            >
-              <option value="hotel">Hotel</option>
-              <option value="resort">Resort</option>
-              <option value="villa">Villa</option>
-              <option value="guest_house">Guest House</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="cafe">Cafe</option>
-              <option value="food_court">Food Court</option>
-              <option value="cloud_kitchen">Cloud Kitchen</option>
-              <option value="other">Other Hospitality Venue</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700">Venue Type *</label>
+              <select
+                value={formData.venueType}
+                onChange={(e) => setFormData({ ...formData, venueType: e.target.value as VenueType })}
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+              >
+                <option value="hotel">Hotel</option>
+                <option value="resort">Resort</option>
+                <option value="villa">Villa</option>
+                <option value="guest_house">Guest House</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="cafe">Cafe</option>
+                <option value="food_court">Food Court</option>
+                <option value="cloud_kitchen">Cloud Kitchen</option>
+                <option value="other">Other Hospitality</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-zinc-700">Price Tier</label>
+              <select
+                value={formData.priceLevel}
+                onChange={(e) => setFormData({ ...formData, priceLevel: parseInt(e.target.value, 10) || 2 })}
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+              >
+                <option value="1">$ — Budget</option>
+                <option value="2">$$ — Moderate</option>
+                <option value="3">$$$ — Fine Dining / Premium</option>
+                <option value="4">$$$$ — Luxury</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -252,24 +291,24 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
                 setIsSlugEdited(true);
                 setFormData({ ...formData, slug: normalizeVenueSlug(e.target.value) });
               }}
-              placeholder="grand-ocean-resort"
+              placeholder="ocean-blue-resort"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 font-mono"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700">Short Description</label>
+            <label className="text-xs font-bold text-zinc-700">Short Tagline (Discovery Cards)</label>
             <textarea
               rows={2}
               value={formData.shortDescription}
               onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
-              placeholder="Tagline for venue discovery cards..."
+              placeholder="Luxury beachfront sanctuary with digital ordering..."
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
             />
           </div>
 
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 text-xs font-bold">
+            <Button type="button" variant="outline" onClick={() => setStep(1)} className="flex-1 text-xs font-bold min-h-[44px]">
               ← Back
             </Button>
             <Button
@@ -278,59 +317,45 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               disabled={!formData.displayName || !formData.slug}
               className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]"
             >
-              Next: Branch →
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: BRANCH */}
-      {step === 3 && (
-        <div className="space-y-4 max-w-xl">
-          <h2 className="text-base font-black text-zinc-950">Step 3 — Branch Assignment</h2>
-          <p className="text-xs text-zinc-600 font-semibold">
-            When creating a new business, a &quot;Main Branch&quot; is automatically initialized. You can proceed to configure location details.
-          </p>
-
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 text-xs font-bold">
-              ← Back
-            </Button>
-            <Button type="button" onClick={() => setStep(4)} className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]">
               Next: Location →
             </Button>
           </div>
         </div>
       )}
 
-      {/* STEP 4: LOCATION */}
-      {step === 4 && (
-        <div className="space-y-4 max-w-xl">
+      {/* STEP 3: LOCATION & COORDINATES */}
+      {step === 3 && (
+        <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-black text-zinc-950">Step 4 — Location & Map Setup</h2>
+            <div>
+              <h2 className="text-base font-black text-zinc-950">Step 3 — Location & Geolocation</h2>
+              <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+                Physical address and latitude/longitude coordinates required for discovery.
+              </p>
+            </div>
             {isLocComplete ? (
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-[10px]">
-                ✓ Location complete
+              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold text-[10px]">
+                ✓ Valid Coords
               </Badge>
             ) : (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-bold text-[10px]">
-                ⚠ Mandatory for Live Publish
+              <Badge className="bg-amber-100 text-amber-800 border-amber-300 font-extrabold text-[10px]">
+                ⚠ Required for Live
               </Badge>
             )}
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700">Public Address *</label>
+            <label className="text-xs font-bold text-zinc-700">Street Address *</label>
             <input
               type="text"
               value={formData.addressPublic}
               onChange={(e) => setFormData({ ...formData, addressPublic: e.target.value })}
-              placeholder="100 Beach Road"
+              placeholder="120 Galle Road, Kollupitiya"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-bold text-zinc-700">City *</label>
               <input
@@ -343,7 +368,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-700">Country *</label>
+              <label className="text-xs font-bold text-zinc-700">Country Code *</label>
               <select
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
@@ -358,7 +383,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-bold text-zinc-700">Latitude (-90 to 90) *</label>
               <input
@@ -389,30 +414,35 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             variant="outline"
             onClick={handleUseCurrentLocation}
             disabled={geoLoading}
-            className="w-full text-xs font-extrabold border-zinc-200"
+            className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px]"
           >
-            {geoLoading ? 'Detecting Coordinates...' : '📍 Use Current Device Location'}
+            {geoLoading ? 'Detecting Coordinates...' : '📍 Capture Current Device Location'}
           </Button>
 
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(3)} className="flex-1 text-xs font-bold">
+            <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 text-xs font-bold min-h-[44px]">
               ← Back
             </Button>
-            <Button type="button" onClick={() => setStep(5)} className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]">
-              Next: Details →
+            <Button type="button" onClick={() => setStep(4)} className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]">
+              Next: Links & Contact →
             </Button>
           </div>
         </div>
       )}
 
-      {/* STEP 5: PUBLIC DETAILS */}
-      {step === 5 && (
-        <div className="space-y-4 max-w-xl">
-          <h2 className="text-base font-black text-zinc-950">Step 5 — Public Contact & Hotel Booking Links</h2>
+      {/* STEP 4: CONTACT & EXTERNAL LINKS */}
+      {step === 4 && (
+        <div className="space-y-5">
+          <div>
+            <h2 className="text-base font-black text-zinc-950">Step 4 — Contact & Booking Links</h2>
+            <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+              Public contact information and OTA integration booking URLs.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-700">Phone</label>
+              <label className="text-xs font-bold text-zinc-700">Public Phone</label>
               <input
                 type="text"
                 value={formData.phonePublic}
@@ -423,19 +453,19 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-700">Email</label>
+              <label className="text-xs font-bold text-zinc-700">Public Email</label>
               <input
                 type="email"
                 value={formData.emailPublic}
                 onChange={(e) => setFormData({ ...formData, emailPublic: e.target.value })}
-                placeholder="info@venue.com"
+                placeholder="contact@venue.com"
                 className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700">Booking.com URL</label>
+            <label className="text-xs font-bold text-zinc-700">Booking.com Hotel URL</label>
             <input
               type="text"
               value={formData.bookingUrl}
@@ -456,21 +486,37 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             />
           </div>
 
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-zinc-700">Direct Booking Website URL</label>
+            <input
+              type="text"
+              value={formData.externalBookingUrl}
+              onChange={(e) => setFormData({ ...formData, externalBookingUrl: e.target.value })}
+              placeholder="https://book.venue.com"
+              className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+            />
+          </div>
+
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={() => setStep(4)} className="flex-1 text-xs font-bold">
+            <Button type="button" variant="outline" onClick={() => setStep(3)} className="flex-1 text-xs font-bold min-h-[44px]">
               ← Back
             </Button>
-            <Button type="button" onClick={() => setStep(6)} className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]">
+            <Button type="button" onClick={() => setStep(5)} className="flex-1 bg-zinc-950 text-white font-extrabold text-xs min-h-[44px]">
               Next: Review & Save →
             </Button>
           </div>
         </div>
       )}
 
-      {/* STEP 6: REVIEW & SAVE */}
-      {step === 6 && (
-        <div className="space-y-6 max-w-xl">
-          <h2 className="text-base font-black text-zinc-950">Step 6 — Review & Save Venue</h2>
+      {/* STEP 5: REVIEW & SAVE */}
+      {step === 5 && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-base font-black text-zinc-950">Step 5 — Review & Confirmation</h2>
+            <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+              Verify parameters before saving to platform database.
+            </p>
+          </div>
 
           <div className="rounded-2xl border border-zinc-200 p-4 space-y-2 text-xs bg-zinc-50 font-semibold text-zinc-800">
             <div><span className="font-bold text-zinc-500">Name:</span> {formData.displayName}</div>
@@ -484,15 +530,18 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
                 ? `${formData.latitude}, ${formData.longitude}`
                 : '⚠ Missing coordinates'}
             </div>
+            {formData.isPilotDemo && (
+              <div className="text-purple-700 font-extrabold">🧪 Marked as Pilot / Demo Venue</div>
+            )}
           </div>
 
           {!isLocComplete && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
-              ⚠ Location setup is incomplete. You can save as a Draft now, but Live Publishing requires valid address, city, and coordinates.
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
+              ⚠ Location coordinates are incomplete. You can save as a Draft now, but Live Publishing requires valid address, city, and coordinates.
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button
               type="button"
               onClick={() => handleSubmit(false)}
@@ -507,7 +556,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               type="button"
               onClick={() => handleSubmit(true)}
               disabled={loading || !isLocComplete}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs py-3 min-h-[44px] disabled:opacity-50"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs py-3 min-h-[44px] disabled:opacity-50"
             >
               {loading ? 'Publishing...' : '🚀 Save & Publish Live'}
             </Button>

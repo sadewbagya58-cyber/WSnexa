@@ -40,7 +40,8 @@
     "verify:unified-menu": "tsx scripts/verify-unified-menu.ts",
     "verify:permissions-v2": "tsx scripts/verify-permissions-v2.ts",
     "verify:smart-auth-entry": "tsx scripts/verify-smart-auth-entry.ts",
-    "verify:launch-readiness": "tsx scripts/verify-launch-readiness.ts"
+    "verify:launch-readiness": "tsx scripts/verify-launch-readiness.ts",
+    "verify:super-admin": "tsx scripts/verify-super-admin.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

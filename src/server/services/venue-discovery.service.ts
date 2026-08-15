@@ -92,8 +92,9 @@ export class VenueDiscoveryService {
 
     let query = admin
       .from('venue_public_profiles')
-      .select('*', { count: 'exact' })
-      .eq('is_published', true);
+      .select('*, businesses!inner(status)', { count: 'exact' })
+      .eq('is_published', true)
+      .neq('businesses.status', 'suspended');
 
     if (params.query && params.query.trim().length > 0) {
       const q = `%${params.query.trim()}%`;
@@ -288,14 +289,18 @@ export class VenueDiscoveryService {
   static async getVenueBySlug(slug: string, includeUnpublished = false): Promise<VenuePublicProfileRecord | null> {
     const admin = createAdminClient();
 
-    let query = admin.from('venue_public_profiles').select('*').eq('slug', slug);
+    let query = admin.from('venue_public_profiles').select('*, businesses!inner(status)').eq('slug', slug);
 
     if (!includeUnpublished) {
-      query = query.eq('is_published', true);
+      query = query.eq('is_published', true).neq('businesses.status', 'suspended');
     }
 
     const { data: profile, error } = await query.maybeSingle();
     if (error || !profile) return null;
+
+    if (!includeUnpublished && (profile as { is_suspended?: boolean }).is_suspended) {
+      return null;
+    }
 
     // Attach DB aggregate ratings, active branches, menu availability, and QR token
     const [{ data: reviews }, { data: branchesData }, { data: menuItems }, { data: qrData }] = await Promise.all([

@@ -14,6 +14,7 @@ import { VENUE_PROFILE_DISCOVERY_ARTICLES } from './articles/venue-profile-disco
 import { ACCOUNT_SETTINGS_ARTICLES } from './articles/account-settings';
 import { TROUBLESHOOTING_ARTICLES } from './articles/troubleshooting';
 import { COMING_SOON_ARTICLES } from './articles/coming-soon';
+import { inventoryArticles } from './articles/inventory';
 
 // ── Master Article Collection ────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ const ALL_ARTICLES: HelpArticle[] = [
   ...MENU_MANAGEMENT_ARTICLES,
   ...SERVICE_AREAS_TABLES_QR_ARTICLES,
   ...ORDERS_ARTICLES,
+  ...inventoryArticles,
   ...STAFF_ROLES_PERMISSIONS_ARTICLES,
   ...WAITER_OPERATIONS_ARTICLES,
   ...KITCHEN_OPERATIONS_ARTICLES,

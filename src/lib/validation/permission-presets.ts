@@ -27,13 +27,16 @@ export const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'kitchen_staff',
     name: 'Kitchen Staff',
-    description: 'Back-of-house ticket display queue access and kitchen status updates.',
+    description: 'Back-of-house ticket display queue access, kitchen status updates, stock viewing, and waste recording.',
     permissions: [
       'orders.view',
       'kitchen.access',
       'kitchen.orders.view',
       'kitchen.update',
       'menu.view',
+      'inventory.view',
+      'inventory.counts.manage',
+      'inventory.waste.record',
     ],
   },
   {
@@ -54,7 +57,7 @@ export const ROLE_PRESETS: RolePreset[] = [
   {
     key: 'branch_manager',
     name: 'Branch Manager',
-    description: 'Operational manager with full branch-scoped management permissions.',
+    description: 'Operational manager with full branch-scoped management and inventory permissions.',
     permissions: [
       'orders.view',
       'orders.create',
@@ -102,6 +105,17 @@ export const ROLE_PRESETS: RolePreset[] = [
       'reports.view',
       'reports.financial.view',
       'reports.export',
+      'inventory.view',
+      'inventory.items.manage',
+      'inventory.costs.view',
+      'inventory.adjust',
+      'inventory.counts.manage',
+      'inventory.counts.approve',
+      'inventory.waste.record',
+      'inventory.transfers.manage',
+      'inventory.transfers.receive',
+      'inventory.locations.manage',
+      'inventory.reports.view',
     ],
   },
   {

@@ -37,11 +37,18 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     order: 5,
   },
   {
+    id: 'inventory-management',
+    title: 'Inventory & Stock Management',
+    description: 'Track raw ingredients, storage locations, stock counts, waste, and transfers.',
+    icon: '🥦',
+    order: 6,
+  },
+  {
     id: 'staff-roles-permissions',
     title: 'Staff, Roles & Permissions',
     description: 'Inviting staff, role assignments, custom permission overrides, and area routing.',
     icon: '👥',
-    order: 6,
+    order: 7,
   },
   {
     id: 'waiter-operations',

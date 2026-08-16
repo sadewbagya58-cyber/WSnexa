@@ -107,6 +107,19 @@ export const permissionKeyEnum = z.enum([
   'order_security.view',
   'order_security.manage',
 
+  // Inventory Core (Phase 27)
+  'inventory.view',
+  'inventory.items.manage',
+  'inventory.costs.view',
+  'inventory.adjust',
+  'inventory.counts.manage',
+  'inventory.counts.approve',
+  'inventory.waste.record',
+  'inventory.transfers.manage',
+  'inventory.transfers.receive',
+  'inventory.locations.manage',
+  'inventory.reports.view',
+
   // Owner Only
   'invitations.manage', // Preserved for backward compatibility
   'owner.transfer',

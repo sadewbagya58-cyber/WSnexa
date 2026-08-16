@@ -73,6 +73,17 @@ const rawNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'INVENTORY',
+    items: [
+      { label: 'Inventory Hub', href: '/dashboard/inventory' },
+      { label: 'Stock Items', href: '/dashboard/inventory/items' },
+      { label: 'Stock Counts', href: '/dashboard/inventory/counts' },
+      { label: 'Waste Tracking', href: '/dashboard/inventory/waste' },
+      { label: 'Stock Transfers', href: '/dashboard/inventory/transfers' },
+      { label: 'Storage Locations', href: '/dashboard/inventory/locations' },
+    ],
+  },
+  {
     title: 'GROWTH & GUESTS',
     items: [
       { label: 'Customer Reviews', href: '/dashboard/reviews' },

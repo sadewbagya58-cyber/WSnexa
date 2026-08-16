@@ -42,7 +42,8 @@
     "verify:smart-auth-entry": "tsx scripts/verify-smart-auth-entry.ts",
     "verify:launch-readiness": "tsx scripts/verify-launch-readiness.ts",
     "verify:super-admin": "tsx scripts/verify-super-admin.ts",
-    "verify:help-center": "tsx scripts/verify-help-center.ts"
+    "verify:help-center": "tsx scripts/verify-help-center.ts",
+    "verify:inventory": "tsx scripts/verify-inventory.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -63,7 +64,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.5",
     "typescript": "^5"

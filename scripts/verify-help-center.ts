@@ -52,7 +52,7 @@ async function runHelpCenterVerification() {
   // 1. Categories Integrity
   console.log('--- 1. Canonical Categories Integrity ---');
   const categories = getAllCategories();
-  assert(categories.length === 14, `Expected 14 categories, found ${categories.length}`);
+  assert(categories.length === 15, `Expected 15 categories, found ${categories.length}`);
 
   const requiredCatIds = [
     'getting-started',
@@ -60,6 +60,7 @@ async function runHelpCenterVerification() {
     'menu-management',
     'service-areas-tables-qr',
     'orders',
+    'inventory-management',
     'staff-roles-permissions',
     'waiter-operations',
     'kitchen-operations',

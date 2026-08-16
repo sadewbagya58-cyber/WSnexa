@@ -83,35 +83,79 @@ export default async function InventoryHubPage() {
         </Link>
 
         <Link
+          href="/dashboard/inventory/recipes"
+          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+        >
+          <span className="text-xl">🍽️</span>
+          <div className="mt-3">
+            <span className="text-xs font-bold text-zinc-950 block">Recipes & BOM</span>
+            <span className="text-[11px] text-zinc-400">Food cost % & portioning</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/inventory/purchasing"
+          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+        >
+          <span className="text-xl">📦</span>
+          <div className="mt-3">
+            <span className="text-xs font-bold text-zinc-950 block">Purchase Orders</span>
+            <span className="text-[11px] text-zinc-400">Vendor orders & approvals</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/inventory/receiving"
+          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+        >
+          <span className="text-xl">📥</span>
+          <div className="mt-3">
+            <span className="text-xs font-bold text-zinc-950 block">Receive Goods</span>
+            <span className="text-[11px] text-zinc-400">Accept vendor deliveries</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/inventory/suppliers"
+          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+        >
+          <span className="text-xl">🏢</span>
+          <div className="mt-3">
+            <span className="text-xs font-bold text-zinc-950 block">Suppliers</span>
+            <span className="text-[11px] text-zinc-400">Vendor directory & terms</span>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/inventory/production"
+          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+        >
+          <span className="text-xl">🍲</span>
+          <div className="mt-3">
+            <span className="text-xs font-bold text-zinc-950 block">Prep Production</span>
+            <span className="text-[11px] text-zinc-400">Produce sub-recipe batches</span>
+          </div>
+        </Link>
+
+        <Link
           href="/dashboard/inventory/counts"
           className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
         >
           <span className="text-xl">📋</span>
           <div className="mt-3">
             <span className="text-xs font-bold text-zinc-950 block">Stock Counts</span>
-            <span className="text-[11px] text-zinc-400">Audit & reconcile sheets</span>
+            <span className="text-[11px] text-zinc-400">Physical count & audit</span>
           </div>
         </Link>
 
         <Link
-          href="/dashboard/inventory/waste"
+          href="/dashboard/inventory/settings"
           className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
         >
-          <span className="text-xl">🗑️</span>
+          <span className="text-xl">⚙️</span>
           <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Waste Log</span>
-            <span className="text-[11px] text-zinc-400">Track kitchen spoilage</span>
-          </div>
-        </Link>
-
-        <Link
-          href="/dashboard/inventory/transfers"
-          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
-        >
-          <span className="text-xl">🚚</span>
-          <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Stock Transfers</span>
-            <span className="text-[11px] text-zinc-400">Internal & cross-branch</span>
+            <span className="text-xs font-bold text-zinc-950 block">Settings</span>
+            <span className="text-[11px] text-zinc-400">Deduction timing & cost</span>
           </div>
         </Link>
       </div>

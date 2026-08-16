@@ -120,6 +120,21 @@ export const permissionKeyEnum = z.enum([
   'inventory.locations.manage',
   'inventory.reports.view',
 
+  // Recipes, Costing & Intelligence (Phase 28)
+  'recipes.view',
+  'recipes.manage',
+  'recipes.costs.view',
+  'purchasing.view',
+  'purchasing.create',
+  'purchasing.approve',
+  'purchasing.receive',
+  'suppliers.view',
+  'suppliers.manage',
+  'inventory.cogs.view',
+  'inventory.menu_profitability.view',
+  'inventory.settings.manage',
+  'inventory.production.manage',
+
   // Owner Only
   'invitations.manage', // Preserved for backward compatibility
   'owner.transfer',

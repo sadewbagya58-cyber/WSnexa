@@ -1,0 +1,160 @@
+import React from 'react';
+import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { PurchasingService } from '@/server/services/purchasing.service';
+import { formatCurrencyMinor } from '@/lib/utils/currency';
+
+interface PurchaseOrderDetailPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export const metadata: Metadata = {
+  title: 'Purchase Order Details | WSNexa Purchasing',
+  description: 'Detailed purchase order view, receiving status, and line items',
+};
+
+export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderDetailPageProps) {
+  const { id } = await params;
+  const po = await PurchasingService.getPurchaseOrderById(id);
+
+  if (!po) {
+    notFound();
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header Navigation */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/inventory/purchasing"
+            className="px-3 py-1.5 text-sm font-medium border border-zinc-200 rounded-xl hover:bg-zinc-50 transition"
+          >
+            ← Back
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+                {po.poNumber}
+              </h1>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
+                po.status === 'received'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : po.status === 'approved'
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-zinc-100 text-zinc-800'
+              }`}>
+                {po.status}
+              </span>
+            </div>
+            <p className="text-sm text-zinc-500 mt-1">
+              Created on {new Date(po.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+
+        {po.status !== 'received' && (
+          <Link
+            href="/dashboard/inventory/receiving"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition"
+          >
+            Receive Deliveries (GRN)
+          </Link>
+        )}
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+          <div className="text-xs font-semibold uppercase text-zinc-500">
+            Supplier
+          </div>
+          <div className="mt-2 text-lg font-bold text-zinc-900">
+            {po.supplierName}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+          <div className="text-xs font-semibold uppercase text-zinc-500">
+            Delivery Location
+          </div>
+          <div className="mt-2 text-lg font-bold text-zinc-900">
+            {po.destinationLocationName}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+          <div className="text-xs font-semibold uppercase text-zinc-500">
+            Expected Date
+          </div>
+          <div className="mt-2 text-lg font-bold text-zinc-900">
+            {po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString() : 'Immediate'}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs">
+          <div className="text-xs font-semibold uppercase text-zinc-500">
+            Total Order Value
+          </div>
+          <div className="mt-2 text-lg font-bold text-emerald-600">
+            {formatCurrencyMinor(po.totalCents, po.currency)}
+          </div>
+        </div>
+      </div>
+
+      {/* Ordered Items Table */}
+      <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs overflow-hidden">
+        <div className="border-b border-zinc-200 px-6 py-4">
+          <h2 className="text-base font-semibold text-zinc-900">
+            Purchase Order Line Items
+          </h2>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-500 uppercase">
+              <tr>
+                <th className="px-6 py-3">Item</th>
+                <th className="px-6 py-3">Ordered</th>
+                <th className="px-6 py-3">Received Base</th>
+                <th className="px-6 py-3">Unit Price</th>
+                <th className="px-6 py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200">
+              {po.items.map((item) => (
+                <tr key={item.id} className="hover:bg-zinc-50/50">
+                  <td className="px-6 py-4 font-medium text-zinc-900">
+                    {item.itemName}
+                  </td>
+                  <td className="px-6 py-4 text-zinc-700">
+                    {item.quantityOrdered} {item.purchasingUnit}
+                  </td>
+                  <td className="px-6 py-4 text-zinc-500 font-mono text-xs">
+                    {item.quantityReceivedBase} base
+                  </td>
+                  <td className="px-6 py-4 text-zinc-700">
+                    {formatCurrencyMinor(item.unitCostCents, po.currency)}
+                  </td>
+                  <td className="px-6 py-4 text-right font-medium text-zinc-900">
+                    {formatCurrencyMinor(item.totalCostCents, po.currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {po.notes && (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-xs">
+          <h3 className="text-sm font-semibold text-zinc-900 mb-2">
+            Order Notes & Instructions
+          </h3>
+          <p className="text-sm text-zinc-600">{po.notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}

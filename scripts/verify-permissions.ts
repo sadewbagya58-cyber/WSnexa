@@ -366,6 +366,38 @@ async function runPermissionsVerificationSuite() {
     const immediateRevocation = await PermissionService.hasPermission(cashierUserId!, bizId!, branchAId!, 'cashier.access');
     assert(!immediateRevocation, 'Test 27: Immediate permission revocation takes effect on next request without requiring logout');
 
+    // TEST 28: Phase 28 Recipe & Purchasing permission keys integrity
+    const { permissionKeyEnum } = await import('../src/lib/validation/permission');
+    const phase28ExpectedKeys = [
+      'recipes.view',
+      'recipes.manage',
+      'recipes.costs.view',
+      'purchasing.view',
+      'purchasing.create',
+      'purchasing.approve',
+      'purchasing.receive',
+      'suppliers.view',
+      'suppliers.manage',
+      'inventory.cogs.view',
+      'inventory.menu_profitability.view',
+      'inventory.settings.manage',
+      'inventory.production.manage',
+    ];
+    const definedKeys = permissionKeyEnum.options;
+    const allPhase28KeysValid = phase28ExpectedKeys.every((k) => (definedKeys as string[]).includes(k));
+    assert(allPhase28KeysValid, 'Test 28: All Phase 28 permission keys are registered in TypeScript permissionKeyEnum');
+
+    // TEST 29: Phase 28 migration ordering & catalog completeness
+    const migrationSql = fs.readFileSync(
+      path.join(process.cwd(), 'supabase/migrations/20260817000000_phase28_recipe_costing_purchasing.sql'),
+      'utf8'
+    );
+    const permCatalogPos = migrationSql.indexOf('INSERT INTO public.permissions');
+    const rolePermPos = migrationSql.indexOf('INSERT INTO public.role_permissions');
+    const hasCorrectOrder = permCatalogPos > 0 && rolePermPos > 0 && permCatalogPos < rolePermPos;
+    const migrationHasAllPhase28Perms = phase28ExpectedKeys.every((k) => migrationSql.includes(`'${k}'`));
+    assert(hasCorrectOrder && migrationHasAllPhase28Perms, 'Test 29: Phase 28 migration seeds public.permissions FIRST with all 13 keys before public.role_permissions');
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error during permissions verification';
     console.error('❌ Verification Error:', msg);

@@ -16,6 +16,8 @@ import { TableAnalyticsCard } from './table-analytics-card';
 import { ModifierAnalyticsCard } from './modifier-analytics-card';
 import { BranchComparisonCard } from './branch-comparison-card';
 import { ExportCenterModal } from './export-center-modal';
+import { CogsAnalyticsCard } from './cogs-analytics-card';
+import { MenuEngineeringCard } from './menu-engineering-card';
 
 export function ReportsDashboard() {
   const [preset, setPreset] = useState<ReportPreset>('today');
@@ -118,6 +120,12 @@ export function ReportsDashboard() {
             <RevenueTrendChart series={data.timeSeries} currency={data.currency} />
             <OrdersByHourChart hours={data.ordersByHour} />
           </div>
+
+          {/* COGS, Food Cost & Profitability (Phase 28) */}
+          <CogsAnalyticsCard startDate={startDate} endDate={endDate} />
+
+          {/* Menu Engineering & Profitability Matrix (Phase 28) */}
+          <MenuEngineeringCard currency={data.currency} />
 
           {/* Payment & Menu Analytics */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

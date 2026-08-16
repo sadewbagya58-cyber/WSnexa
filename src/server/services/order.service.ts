@@ -587,6 +587,14 @@ export class OrderService {
       notes: notes || `Status updated to ${nextStatus}`,
     });
 
+    // Automated Inventory Consumption Trigger (Phase 28)
+    try {
+      const { ConsumptionService } = await import('@/server/services/consumption.service');
+      await ConsumptionService.processOrderStageConsumption(orderId, nextStatus, context.user.id);
+    } catch (err: unknown) {
+      console.error('Failed to trigger order ingredient consumption:', err);
+    }
+
     if (nextStatus === 'completed') {
       const { LoyaltyService } = await import('@/server/services/loyalty.service');
       await LoyaltyService.processOrderPointsEarning(orderId);

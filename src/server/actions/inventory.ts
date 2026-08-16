@@ -376,6 +376,7 @@ export async function sendStockTransferAction(transferId: string) {
   if (res.success) {
     revalidatePath('/dashboard/inventory/transfers');
     revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard/inventory/items');
   }
   return res;
 }

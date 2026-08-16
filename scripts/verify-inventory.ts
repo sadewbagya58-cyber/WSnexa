@@ -252,21 +252,254 @@ async function runInventoryVerificationSuite() {
   assert(sqlContent.includes('ON CONFLICT (role_key, permission_key) WHERE custom_role_id IS NULL AND business_id IS NULL DO NOTHING'), 'Migration has idempotent built-in role permission conflict target');
   assert(sqlContent.includes('ON CONFLICT (code) WHERE business_id IS NULL DO NOTHING'), 'Migration has idempotent global units conflict target');
 
-  // ── 6. Remote Supabase Table Check (if applied) ───────────────────────
-  console.log('\n--- 6. Remote Supabase Live Probe ---');
-  const { error: catErr } = await admin
-    .from('inventory_categories')
-    .select('id')
-    .limit(1);
+  // ── 7. Cross-Branch Transfer Lifecycle Regression Test ──────────────
+  console.log('\n--- 7. Cross-Branch Transfer Lifecycle Regression Test ---');
+  const ts = Date.now();
+  let regUserId: string | null = null;
+  let regBizId: string | null = null;
+  let regMainBranchId: string | null = null;
+  let regChilawBranchId: string | null = null;
+  let regItemId: string | null = null;
+  let regTransferId: string | null = null;
 
-  if (catErr) {
-    console.log(`  ℹ️ [NOTE] Remote Supabase project requires applying migration:`);
-    console.log(`     supabase/migrations/20260816000000_phase27_inventory_core_schema.sql`);
-    console.log(`     (Run via Supabase SQL Editor or direct DATABASE_URL connection).`);
-    console.log(`  ✅ [PASS] Schema file and RPCs verified offline.`);
-    passed++;
-  } else {
-    assert(!catErr, 'Remote Supabase database has inventory_categories table active and queryable');
+  try {
+    const { data: user, error: uErr } = await admin.auth.admin.createUser({
+      email: `reg_transfer_${ts}@test.com`,
+      password: 'Password123!',
+      email_confirm: true,
+    });
+    if (uErr || !user?.user) throw new Error(uErr?.message || 'User creation failed');
+    regUserId = user.user.id;
+
+    const { data: biz, error: bErr } = await admin
+      .from('businesses')
+      .insert({
+        name: `Transfer Regression Biz ${ts}`,
+        slug: `trf-reg-${ts}`,
+        created_by: regUserId,
+        default_currency: 'EUR',
+        timezone: 'UTC',
+      })
+      .select('id')
+      .single();
+    if (bErr || !biz) throw new Error(bErr?.message || 'Biz creation failed');
+    regBizId = biz.id;
+
+    // Main Branch
+    const { data: mainBranch, error: mbErr } = await admin
+      .from('branches')
+      .insert({
+        business_id: regBizId,
+        name: 'Main Branch',
+        code: `MB-${ts.toString().slice(-4)}`,
+        is_default: true,
+      })
+      .select('id')
+      .single();
+    if (mbErr || !mainBranch) throw new Error(mbErr?.message || 'Main Branch creation failed');
+    regMainBranchId = mainBranch.id;
+
+    // Chilaw Branch
+    const { data: chilawBranch, error: cbErr } = await admin
+      .from('branches')
+      .insert({
+        business_id: regBizId,
+        name: 'Chilaw Branch',
+        code: `CB-${ts.toString().slice(-4)}`,
+        is_default: false,
+      })
+      .select('id')
+      .single();
+    if (cbErr || !chilawBranch) throw new Error(cbErr?.message || 'Chilaw Branch creation failed');
+    regChilawBranchId = chilawBranch.id;
+
+    // Storage Locations
+    const { data: mainLocId } = await admin.rpc('get_or_create_default_storage_location', {
+      p_business_id: regBizId,
+      p_branch_id: regMainBranchId,
+    });
+    const { data: chilawLocId } = await admin.rpc('get_or_create_default_storage_location', {
+      p_business_id: regBizId,
+      p_branch_id: regChilawBranchId,
+    });
+
+    // 1. Create item with 20 kg opening stock at Main Branch
+    const { data: item, error: itmErr } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: regBizId,
+        name: `Fresh Beef ${ts}`,
+        base_unit: 'kg',
+        cost_per_unit_cents: 1200,
+        currency: 'EUR',
+        min_stock_level: 5,
+        item_type: 'raw_ingredient',
+      })
+      .select('id')
+      .single();
+    if (itmErr || !item) throw new Error(itmErr?.message || 'Item creation failed');
+    regItemId = item.id;
+
+    await admin.rpc('record_inventory_adjustment', {
+      p_business_id: regBizId,
+      p_branch_id: regMainBranchId,
+      p_location_id: mainLocId,
+      p_item_id: regItemId,
+      p_direction: 'set',
+      p_quantity: 20,
+      p_unit: 'kg',
+      p_quantity_base: 20,
+      p_reason: 'Opening Stock',
+      p_notes: null,
+      p_actor_id: regUserId,
+      p_idempotency_key: `open-mb-${ts}`,
+      p_movement_type: 'opening_balance',
+    });
+
+    // Initial check: Main = 20kg, Chilaw = 0kg
+    const { data: mbBal0 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', mainLocId)
+      .single();
+    assert(Number(mbBal0?.current_quantity) === 20, 'Initial Main Branch opening stock is 20 kg');
+
+    const { data: cbBal0 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', chilawLocId);
+    const cbQty0 = cbBal0 && cbBal0.length > 0 ? Number(cbBal0[0].current_quantity) : 0;
+    assert(cbQty0 === 0, 'Initial Chilaw Branch stock is 0 kg');
+
+    // 2. Create Stock Transfer 5 kg to Chilaw
+    const { data: transfer, error: trErr } = await admin
+      .from('inventory_stock_transfers')
+      .insert({
+        business_id: regBizId,
+        source_branch_id: regMainBranchId,
+        source_location_id: mainLocId,
+        destination_branch_id: regChilawBranchId,
+        destination_location_id: chilawLocId,
+        transfer_number: `TRF-${ts}`,
+        status: 'draft',
+      })
+      .select('id')
+      .single();
+    if (trErr || !transfer) throw new Error(trErr?.message || 'Transfer creation failed');
+    regTransferId = transfer.id;
+
+    await admin.from('inventory_stock_transfer_items').insert({
+      transfer_id: regTransferId,
+      item_id: regItemId,
+      quantity_sent: 5,
+      unit_sent: 'kg',
+      quantity_sent_base: 5,
+      unit_cost_cents: 1200,
+      currency: 'EUR',
+    });
+
+    // 3. Dispatch Send -> in_transit
+    const { data: sendRes, error: sendErr } = await admin.rpc('execute_stock_transfer_send', {
+      p_transfer_id: regTransferId,
+      p_actor_id: regUserId,
+    });
+    assert(!sendErr && sendRes?.success === true, 'execute_stock_transfer_send succeeds');
+
+    const { data: trfAfterSend } = await admin
+      .from('inventory_stock_transfers')
+      .select('status')
+      .eq('id', regTransferId)
+      .single();
+    assert(trfAfterSend?.status === 'in_transit', 'Transfer status is in_transit after dispatch');
+
+    const { data: mbBal1 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', mainLocId)
+      .single();
+    assert(Number(mbBal1?.current_quantity) === 15, 'Main Branch stock decreases to 15 kg after Send');
+
+    const { data: cbBal1 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', chilawLocId);
+    const cbQty1 = cbBal1 && cbBal1.length > 0 ? Number(cbBal1[0].current_quantity) : 0;
+    assert(cbQty1 === 0, 'Chilaw Branch stock remains 0 kg while transfer is in_transit');
+
+    // 4. Receive Stock at Chilaw -> received
+    const { data: recRes, error: recErr } = await admin.rpc('execute_stock_transfer_receive', {
+      p_transfer_id: regTransferId,
+      p_actor_id: regUserId,
+      p_received_items: null,
+      p_discrepancy_reason: null,
+    });
+    assert(!recErr && recRes?.success === true, 'execute_stock_transfer_receive succeeds');
+
+    const { data: trfAfterRec } = await admin
+      .from('inventory_stock_transfers')
+      .select('status')
+      .eq('id', regTransferId)
+      .single();
+    assert(trfAfterRec?.status === 'received', 'Transfer status becomes received after receipt');
+
+    const { data: mbBal2 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', mainLocId)
+      .single();
+    assert(Number(mbBal2?.current_quantity) === 15, 'Main Branch stock remains 15 kg after Receive');
+
+    const { data: cbBal2 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId)
+      .eq('location_id', chilawLocId)
+      .single();
+    assert(Number(cbBal2?.current_quantity) === 5, 'Chilaw Branch stock immediately reflects 5 kg upon receipt');
+
+    // Total business stock check
+    const { data: allBals } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('item_id', regItemId);
+    const totalBusinessStock = (allBals || []).reduce((s, b) => s + Number(b.current_quantity), 0);
+    assert(totalBusinessStock === 20, 'Total business stock across all branches is conserved at 20 kg (15 kg + 5 kg)');
+
+    // Audit movements verification
+    const { data: movements } = await admin
+      .from('inventory_stock_movements')
+      .select('movement_type, branch_id, quantity_base')
+      .eq('item_id', regItemId);
+    const hasTransferOut = movements?.some((m) => m.movement_type === 'transfer_out' && m.branch_id === regMainBranchId);
+    const hasTransferIn = movements?.some((m) => m.movement_type === 'transfer_in' && m.branch_id === regChilawBranchId);
+    assert(Boolean(hasTransferOut), 'Movement ledger includes transfer_out for Main Branch');
+    assert(Boolean(hasTransferIn), 'Movement ledger includes transfer_in for Chilaw Branch');
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`  ❌ [FAIL] Cross-Branch Regression failed: ${message}`);
+    failed++;
+  } finally {
+    // Cleanup regression records
+    if (regTransferId) {
+      await admin.from('inventory_stock_transfer_items').delete().eq('transfer_id', regTransferId);
+      await admin.from('inventory_stock_transfers').delete().eq('id', regTransferId);
+    }
+    if (regBizId) {
+      await admin.from('inventory_stock_movements').delete().eq('business_id', regBizId);
+      await admin.from('inventory_balances').delete().eq('business_id', regBizId);
+      await admin.from('inventory_items').delete().eq('business_id', regBizId);
+      await admin.from('inventory_storage_locations').delete().eq('business_id', regBizId);
+      await admin.from('branches').delete().eq('business_id', regBizId);
+      await admin.from('businesses').delete().eq('id', regBizId);
+    }
+    if (regUserId) {
+      await admin.auth.admin.deleteUser(regUserId);
+    }
   }
 
   console.log('\n================================================================');

@@ -1237,7 +1237,7 @@ export class InventoryService {
     const { data, error } = await admin.rpc('execute_stock_transfer_receive', {
       p_transfer_id: input.transferId,
       p_actor_id: actorId,
-      p_received_items: input.receivedItems ? JSON.stringify(input.receivedItems) : null,
+      p_received_items: input.receivedItems || null,
       p_discrepancy_reason: input.discrepancyReason || null,
     });
 

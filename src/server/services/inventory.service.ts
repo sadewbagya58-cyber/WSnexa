@@ -433,17 +433,19 @@ export class InventoryService {
 
     itemsQuery = itemsQuery.order('name', { ascending: true });
 
-    const { data: items, error: itemsErr } = await itemsQuery;
-    if (itemsErr || !items) return [];
+    // Fetch items and branch balances in parallel
+    const [{ data: items, error: itemsErr }, { data: balances }] = await Promise.all([
+      itemsQuery,
+      admin
+        .from('inventory_balances')
+        .select(`
+          *,
+          location:inventory_storage_locations(id, name)
+        `)
+        .eq('branch_id', branchId),
+    ]);
 
-    // Fetch branch balances
-    const { data: balances } = await admin
-      .from('inventory_balances')
-      .select(`
-        *,
-        location:inventory_storage_locations(id, name)
-      `)
-      .eq('branch_id', branchId);
+    if (itemsErr || !items) return [];
 
     const balanceMap = new Map<string, { total: number; locations: Array<{ locationId: string; locationName: string; quantity: number }> }>();
     (balances || []).forEach((b) => {
@@ -514,26 +516,27 @@ export class InventoryService {
   ): Promise<FormattedInventoryItem | null> {
     const admin = createAdminClient();
 
-    const { data: item } = await admin
-      .from('inventory_items')
-      .select(`
-        *,
-        category:inventory_categories(id, name)
-      `)
-      .eq('id', itemId)
-      .eq('business_id', businessId)
-      .single();
+    const [{ data: item }, { data: balances }] = await Promise.all([
+      admin
+        .from('inventory_items')
+        .select(`
+          *,
+          category:inventory_categories(id, name)
+        `)
+        .eq('id', itemId)
+        .eq('business_id', businessId)
+        .single(),
+      admin
+        .from('inventory_balances')
+        .select(`
+          *,
+          location:inventory_storage_locations(id, name)
+        `)
+        .eq('branch_id', branchId)
+        .eq('item_id', itemId),
+    ]);
 
     if (!item) return null;
-
-    const { data: balances } = await admin
-      .from('inventory_balances')
-      .select(`
-        *,
-        location:inventory_storage_locations(id, name)
-      `)
-      .eq('branch_id', branchId)
-      .eq('item_id', itemId);
 
     let totalQty = 0;
     const locBals = (balances || []).map((b) => {
@@ -1370,7 +1373,17 @@ export class InventoryService {
     currency: string,
     hasCostPermission = false
   ): Promise<InventoryOverviewPayload> {
-    const items = await this.getInventoryItems(businessId, branchId, { hasCostPermission });
+    const admin = createAdminClient();
+
+    const [items, { data: pendingTransfers }] = await Promise.all([
+      this.getInventoryItems(businessId, branchId, { hasCostPermission }),
+      admin
+        .from('inventory_stock_transfers')
+        .select('id, transfer_number, source_branch_id')
+        .eq('destination_branch_id', branchId)
+        .eq('status', 'in_transit')
+        .limit(3),
+    ]);
 
     const totalCount = items.length;
     let outOfStockCount = 0;
@@ -1413,15 +1426,6 @@ export class InventoryService {
         totalStockVal += it.totalStockValueCents;
       }
     });
-
-    // Check pending inbound transfers
-    const admin = createAdminClient();
-    const { data: pendingTransfers } = await admin
-      .from('inventory_stock_transfers')
-      .select('id, transfer_number, source_branch_id')
-      .eq('destination_branch_id', branchId)
-      .eq('status', 'in_transit')
-      .limit(3);
 
     (pendingTransfers || []).forEach((pt) => {
       needsAttention.push({

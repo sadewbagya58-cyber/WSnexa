@@ -115,6 +115,9 @@ export async function createInventoryItemAction(rawInput: unknown) {
   if (res.success) {
     revalidatePath('/dashboard/inventory');
     revalidatePath('/dashboard/inventory/items');
+    if (res.item?.id) {
+      revalidatePath(`/dashboard/inventory/items/${res.item.id}`);
+    }
   }
   return res;
 }

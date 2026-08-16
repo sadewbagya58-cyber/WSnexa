@@ -27,7 +27,9 @@ export function InventoryItemForm({
   const [costPerUnit, setCostPerUnit] = useState('');
   const [minStockLevel, setMinStockLevel] = useState('');
   const [initialQuantity, setInitialQuantity] = useState('');
-  const [initialLocationId, setInitialLocationId] = useState(locations[0]?.id || '');
+  const [initialLocationId, setInitialLocationId] = useState(
+    locations.find((l) => l.isDefault)?.id || locations[0]?.id || ''
+  );
 
   // Advanced Fields Drawer
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -77,7 +79,11 @@ export function InventoryItemForm({
     setIsSubmitting(false);
 
     if (res.success) {
-      router.push('/dashboard/inventory/items');
+      if ('item' in res && res.item && typeof res.item === 'object' && 'id' in res.item && res.item.id) {
+        router.push(`/dashboard/inventory/items/${res.item.id}`);
+      } else {
+        router.push('/dashboard/inventory/items');
+      }
       router.refresh();
     } else {
       setErrorMsg(res.message || 'Failed to create inventory item.');
@@ -192,35 +198,49 @@ export function InventoryItemForm({
         </div>
 
         {/* Opening Stock (Convenient Setup) */}
-        <div className="pt-2 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="pt-3 border-t border-zinc-100 space-y-3">
           <div>
-            <label className="block text-xs font-bold text-zinc-800 mb-1">
-              Initial Stock Count (Optional)
-            </label>
-            <input
-              type="number"
-              step="any"
-              min="0"
-              placeholder="0.00"
-              value={initialQuantity}
-              onChange={(e) => setInitialQuantity(e.target.value)}
-              className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5 text-zinc-900 focus:bg-white focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
-            />
+            <span className="text-xs font-bold text-zinc-900 block">Opening Stock Balance</span>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              Enter the quantity currently available at this location. This creates the opening stock balance.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-zinc-800 mb-1">Storage Location</label>
-            <select
-              value={initialLocationId}
-              onChange={(e) => setInitialLocationId(e.target.value)}
-              className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5 text-zinc-900 focus:bg-white focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
-            >
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name} {l.isDefault ? '(Main)' : ''}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-zinc-800 mb-1">
+                Initial Stock Count (Optional)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0.00"
+                  value={initialQuantity}
+                  onChange={(e) => setInitialQuantity(e.target.value)}
+                  className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5 text-zinc-900 focus:bg-white focus:ring-2 focus:ring-zinc-950 min-h-[44px] pr-12"
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-zinc-400">
+                  {baseUnit}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-800 mb-1">Storage Location</label>
+              <select
+                value={initialLocationId}
+                onChange={(e) => setInitialLocationId(e.target.value)}
+                className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2.5 text-zinc-900 focus:bg-white focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} {l.isDefault ? '(Main)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>

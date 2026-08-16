@@ -62,11 +62,21 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     }
   };
 
+  const lastMovement = movements[0];
+  const lastUpdated = lastMovement
+    ? new Date(lastMovement.createdAt).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : null;
+
+  const currentStock = item.currentStockQuantity !== undefined ? item.currentStockQuantity : 0;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <PageHeader
         title={item.name}
-        description={`Category: ${item.categoryName || 'General'} • Base Unit: ${item.baseUnit}`}
+        description={`Category: ${item.categoryName || 'General'} • Base Unit: ${item.baseUnit}${item.sku ? ` • SKU: ${item.sku}` : ''}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Inventory Hub', href: '/dashboard/inventory' },
@@ -76,77 +86,108 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
         helpSlug="understanding-stock-levels"
       />
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-5 rounded-2xl border border-zinc-200 shadow-xs">
-        <div>
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Total Available</span>
-          <div className="text-2xl font-black text-zinc-950 mt-0.5">
-            {item.currentStockQuantity} <span className="text-xs font-normal text-zinc-500">{item.baseUnit}</span>
-          </div>
-        </div>
+      {/* Hero Stock Summary Card */}
+      <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-zinc-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Current Stock</span>
+              {item.stockStatus === 'out_of_stock' ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  Out of Stock
+                </span>
+              ) : item.stockStatus === 'low_stock' ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Low Stock
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  In Stock
+                </span>
+              )}
+            </div>
 
-        <div>
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Stock Status</span>
-          <div className="mt-1">
-            {item.stockStatus === 'out_of_stock' ? (
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                Out of Stock
-              </span>
-            ) : item.stockStatus === 'low_stock' ? (
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                Low Stock
-              </span>
-            ) : (
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Healthy
-              </span>
+            <div className="text-3xl sm:text-4xl font-black text-zinc-950 mt-1 flex items-baseline gap-1.5">
+              <span>{currentStock.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+              <span className="text-base font-bold text-zinc-500">{item.baseUnit}</span>
+            </div>
+
+            {lastUpdated && (
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Last movement: <span className="text-zinc-600 font-medium">{lastUpdated}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2 sm:pt-0">
+            <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 min-w-[120px]">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Min Threshold</span>
+              <div className="text-sm font-black text-zinc-900 mt-0.5">
+                {item.minStockLevel > 0 ? `${item.minStockLevel} ${item.baseUnit}` : 'None'}
+              </div>
+            </div>
+
+            {hasCostPermission && (
+              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 min-w-[120px]">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Unit Cost</span>
+                <div className="text-sm font-black text-zinc-900 mt-0.5">
+                  {formatCurrency(item.costPerUnitCents, item.currency)}
+                </div>
+              </div>
+            )}
+
+            {hasCostPermission && (
+              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 min-w-[120px]">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Stock Value</span>
+                <div className="text-sm font-black text-zinc-950 mt-0.5">
+                  {formatCurrency(item.totalStockValueCents || 0, item.currency)}
+                </div>
+              </div>
             )}
           </div>
         </div>
 
-        {hasCostPermission && (
-          <div>
-            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unit Cost</span>
-            <div className="text-sm font-black text-zinc-900 mt-1">
-              {formatCurrency(item.costPerUnitCents, item.currency)}
-              <span className="text-[10px] text-zinc-400">/{item.baseUnit}</span>
-            </div>
+        {/* Storage Locations Breakdown */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700">
+              Storage Locations in {context.activeBranch.name}
+            </h3>
+            <span className="text-[11px] text-zinc-400">
+              Branch Total: <strong className="text-zinc-900 font-bold">{currentStock} {item.baseUnit}</strong>
+            </span>
           </div>
-        )}
 
-        {hasCostPermission && (
-          <div>
-            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Stock Value</span>
-            <div className="text-sm font-black text-zinc-900 mt-1">
-              {formatCurrency(item.totalStockValueCents || 0, item.currency)}
+          {item.locationBalances && item.locationBalances.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {item.locationBalances.map((loc, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-between hover:bg-zinc-100/50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">📍</span>
+                    <span className="text-xs font-bold text-zinc-900">{loc.locationName}</span>
+                  </div>
+                  <span className="text-xs font-black text-zinc-950 bg-white px-2 py-1 rounded-lg border border-zinc-200/60 shadow-2xs">
+                    {loc.quantity} {item.baseUnit}
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 text-center text-xs text-zinc-500">
+              No stock balances recorded in any storage location yet.
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Storage Locations Breakdown */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-xs">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-3">
-          Storage Locations in {context.activeBranch.name}
-        </h3>
-
-        {item.locationBalances && item.locationBalances.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {item.locationBalances.map((loc, idx) => (
-              <div key={idx} className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-900">{loc.locationName}</span>
-                <span className="text-xs font-black text-zinc-950">
-                  {loc.quantity} {item.baseUnit}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-400">No storage location balances recorded yet.</p>
-        )}
-      </div>
-
-      {/* Movement Timeline */}
+      {/* Movement Ledger Timeline */}
       <InventoryMovementTimeline
         movements={movements}
         baseUnit={item.baseUnit}

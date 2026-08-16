@@ -1,0 +1,55 @@
+import React from 'react';
+
+export default function StockItemsLoading() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      {/* Page Header Skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+        <div className="space-y-2">
+          <div className="h-6 w-36 bg-zinc-200 rounded-md" />
+          <div className="h-3.5 w-60 bg-zinc-100 rounded-md" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-28 bg-zinc-200 rounded-xl" />
+          <div className="h-9 w-36 bg-zinc-200 rounded-xl" />
+        </div>
+      </div>
+
+      {/* Search & Filters Skeleton */}
+      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+        <div className="flex-1 flex flex-wrap gap-2">
+          <div className="h-10 min-w-[200px] flex-1 bg-zinc-100 rounded-xl" />
+          <div className="h-10 w-36 bg-zinc-100 rounded-xl" />
+          <div className="h-10 w-32 bg-zinc-100 rounded-xl" />
+        </div>
+        <div className="h-10 w-32 bg-zinc-200 rounded-xl" />
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
+        <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-3 flex justify-between">
+          <div className="h-4 w-28 bg-zinc-200 rounded" />
+          <div className="h-4 w-24 bg-zinc-200 rounded" />
+          <div className="h-4 w-16 bg-zinc-200 rounded" />
+          <div className="h-4 w-20 bg-zinc-200 rounded" />
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="p-4 flex items-center justify-between gap-4">
+              <div className="space-y-1.5 flex-1">
+                <div className="h-4 w-40 bg-zinc-200 rounded" />
+                <div className="h-3 w-24 bg-zinc-100 rounded" />
+              </div>
+              <div className="space-y-1 w-28">
+                <div className="h-4 w-16 bg-zinc-200 rounded" />
+                <div className="h-2.5 w-20 bg-zinc-100 rounded" />
+              </div>
+              <div className="h-5 w-20 bg-zinc-100 rounded-full" />
+              <div className="h-7 w-24 bg-zinc-100 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

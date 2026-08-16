@@ -138,7 +138,7 @@ export function InventoryItemsTable({
               <thead className="bg-zinc-50/80 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
                 <tr>
                   <th className="py-3 px-4">Item & Category</th>
-                  <th className="py-3 px-4">Current Balance</th>
+                  <th className="py-3 px-4">Current Stock</th>
                   <th className="py-3 px-4">Status</th>
                   {hasCostPermission && <th className="py-3 px-4">Unit Cost</th>}
                   {hasCostPermission && <th className="py-3 px-4">Stock Value</th>}
@@ -146,86 +146,112 @@ export function InventoryItemsTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 font-medium">
-                {filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <Link
-                        href={`/dashboard/inventory/items/${item.id}`}
-                        className="font-bold text-zinc-950 hover:underline flex items-center gap-1.5"
-                      >
-                        {item.name}
-                      </Link>
-                      <div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-2">
-                        <span>{item.categoryName || 'Uncategorized'}</span>
-                        {item.sku && <span>• SKU: {item.sku}</span>}
-                      </div>
-                    </td>
+                {filtered.map((item) => {
+                  const stockQty = item.currentStockQuantity !== undefined ? item.currentStockQuantity : 0;
+                  const activeLocations = (item.locationBalances || []).filter((l) => l.quantity > 0);
 
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-zinc-900 text-sm">
-                        {item.currentStockQuantity !== undefined ? item.currentStockQuantity : 0}{' '}
-                        <span className="text-xs font-normal text-zinc-500">{item.baseUnit}</span>
-                      </div>
-                      {item.minStockLevel > 0 && (
-                        <div className="text-[10px] text-zinc-400">
-                          Min par: {item.minStockLevel} {item.baseUnit}
+                  return (
+                    <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <Link
+                          href={`/dashboard/inventory/items/${item.id}`}
+                          className="font-bold text-zinc-950 hover:underline flex items-center gap-1.5"
+                        >
+                          {item.name}
+                        </Link>
+                        <div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-2">
+                          <span>{item.categoryName || 'Uncategorized'}</span>
+                          {item.sku && <span>• SKU: {item.sku}</span>}
                         </div>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      {item.stockStatus === 'out_of_stock' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                          Out of Stock
-                        </span>
-                      ) : item.stockStatus === 'low_stock' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          Low Stock
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          Healthy
-                        </span>
-                      )}
-                    </td>
-
-                    {hasCostPermission && (
-                      <td className="py-3.5 px-4 text-zinc-700">
-                        {formatCurrency(item.costPerUnitCents, item.currency)}
-                        <span className="text-[10px] text-zinc-400">/{item.baseUnit}</span>
                       </td>
-                    )}
 
-                    {hasCostPermission && (
-                      <td className="py-3.5 px-4 font-bold text-zinc-900">
-                        {formatCurrency(item.totalStockValueCents || 0, item.currency)}
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-zinc-900 text-sm flex items-baseline gap-1">
+                          <span>{stockQty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                          <span className="text-xs font-semibold text-zinc-500">{item.baseUnit}</span>
+                        </div>
+
+                        {/* Location breakdown if stock is distributed or single location */}
+                        {activeLocations.length > 1 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {activeLocations.map((loc) => (
+                              <span
+                                key={loc.locationId}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded bg-zinc-100 text-[10px] text-zinc-600 font-medium"
+                              >
+                                {loc.locationName}: {loc.quantity} {item.baseUnit}
+                              </span>
+                            ))}
+                          </div>
+                        ) : activeLocations.length === 1 ? (
+                          <div className="text-[10px] text-zinc-400 mt-0.5">
+                            At {activeLocations[0].locationName}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-zinc-400 mt-0.5">0 {item.baseUnit} available</div>
+                        )}
+
+                        {item.minStockLevel > 0 && (
+                          <div className="text-[10px] text-zinc-400 mt-0.5">
+                            Min threshold: {item.minStockLevel} {item.baseUnit}
+                          </div>
+                        )}
                       </td>
-                    )}
 
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setAdjustItem(item)}
-                          className="h-7 text-xs font-bold px-2.5"
-                        >
-                          Adjust
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => setWasteItem(item)}
-                          className="h-7 text-xs font-semibold text-rose-600 hover:bg-rose-50 px-2.5 rounded-md border border-rose-200 cursor-pointer"
-                        >
-                          Waste
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3.5 px-4">
+                        {item.stockStatus === 'out_of_stock' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                            Out of Stock
+                          </span>
+                        ) : item.stockStatus === 'low_stock' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Low Stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            In Stock
+                          </span>
+                        )}
+                      </td>
+
+                      {hasCostPermission && (
+                        <td className="py-3.5 px-4 text-zinc-700">
+                          {formatCurrency(item.costPerUnitCents, item.currency)}
+                          <span className="text-[10px] text-zinc-400">/{item.baseUnit}</span>
+                        </td>
+                      )}
+
+                      {hasCostPermission && (
+                        <td className="py-3.5 px-4 font-bold text-zinc-900">
+                          {formatCurrency(item.totalStockValueCents || 0, item.currency)}
+                        </td>
+                      )}
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAdjustItem(item)}
+                            className="h-7 text-xs font-bold px-2.5"
+                          >
+                            Adjust
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => setWasteItem(item)}
+                            className="h-7 text-xs font-semibold text-rose-600 hover:bg-rose-50 px-2.5 rounded-md border border-rose-200 cursor-pointer"
+                          >
+                            Waste
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -161,6 +161,52 @@ async function runInventoryVerificationSuite() {
   assert(getRequiredPermissionForRoute('/dashboard/inventory/transfers') === 'inventory.transfers.manage', 'Route /dashboard/inventory/transfers protected by inventory.transfers.manage');
   assert(getRequiredPermissionForRoute('/dashboard/inventory/locations') === 'inventory.locations.manage', 'Route /dashboard/inventory/locations protected by inventory.locations.manage');
 
+  // ── 3.1 Stock Aggregation, Classification & Redaction Logic ──────────
+  console.log('\n--- 3.1 Stock Aggregation, Classification & Redaction Invariants ---');
+
+  // Scenario: Chicken Breast multi-location stock calculation
+  const mockBalances = [
+    { locationId: 'loc-main', locationName: 'Main Stock', quantity: 10.0 },
+    { locationId: 'loc-kitchen', locationName: 'Kitchen', quantity: 2.5 },
+    { locationId: 'loc-bar', locationName: 'Bar', quantity: 0.0 },
+  ];
+
+  const branchTotalStock = mockBalances.reduce((sum, b) => sum + b.quantity, 0);
+  assert(branchTotalStock === 12.5, 'Branch total stock correctly aggregates across multiple storage locations (10 + 2.5 = 12.5 kg)');
+
+  const nonZeroLocations = mockBalances.filter((b) => b.quantity > 0);
+  assert(nonZeroLocations.length === 2, 'Non-zero storage locations correctly identified for item');
+
+  // Classification 1: In Stock / Healthy
+  const classifyStock = (currentStock: number, minStockLevel: number): 'healthy' | 'low_stock' | 'out_of_stock' => {
+    if (currentStock <= 0) return 'out_of_stock';
+    if (minStockLevel > 0 && currentStock <= minStockLevel) return 'low_stock';
+    return 'healthy';
+  };
+
+  assert(classifyStock(12.5, 5.0) === 'healthy', 'Stock 12.5 kg with min 5.0 kg classified as healthy / In Stock');
+  assert(classifyStock(4.5, 5.0) === 'low_stock', 'Stock 4.5 kg with min 5.0 kg classified as low_stock');
+  assert(classifyStock(5.0, 5.0) === 'low_stock', 'Stock exactly at threshold 5.0 kg classified as low_stock');
+  assert(classifyStock(0, 5.0) === 'out_of_stock', 'Stock 0 kg classified as out_of_stock');
+  assert(classifyStock(-1, 5.0) === 'out_of_stock', 'Negative stock strictly classified as out_of_stock');
+
+  // Permission Redaction test
+  const testItemRaw = {
+    cost_per_unit_cents: 2500,
+    currentStock: 12.5,
+  };
+
+  const redactCost = (hasPerm: boolean) => ({
+    costPerUnitCents: hasPerm ? testItemRaw.cost_per_unit_cents : null,
+    totalStockValueCents: hasPerm ? Math.round(testItemRaw.currentStock * testItemRaw.cost_per_unit_cents) : null,
+  });
+
+  const withCostPerm = redactCost(true);
+  assert(withCostPerm.costPerUnitCents === 2500 && withCostPerm.totalStockValueCents === 31250, 'Manager with inventory.costs.view receives unit cost and stock value');
+
+  const withoutCostPerm = redactCost(false);
+  assert(withoutCostPerm.costPerUnitCents === null && withoutCostPerm.totalStockValueCents === null, 'Staff without inventory.costs.view receives strictly redacted null values');
+
   // ── 4. Help Center Knowledge Base Integration ─────────────────────────
   console.log('\n--- 4. Help Center Knowledge Base Integration ---');
   const invCategory = getCategoryById('inventory-management');

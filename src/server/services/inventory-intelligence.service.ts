@@ -71,7 +71,7 @@ export class InventoryIntelligenceService {
         recipes:inventory_recipes(
           id,
           yield_quantity,
-          ingredients:inventory_recipe_ingredients(
+          ingredients:inventory_recipe_ingredients!inventory_recipe_ingredients_recipe_id_fkey(
             quantity_base,
             yield_factor,
             inventory_items:item_id(cost_per_unit_cents)
@@ -84,8 +84,8 @@ export class InventoryIntelligenceService {
     // 2. Fetch total sales per menu item for the branch
     const { data: salesRows } = await admin
       .from('order_items')
-      .select('menu_item_id, quantity, line_subtotal_cents')
-      .eq('order:orders.branch_id', context.activeBranch.id);
+      .select('menu_item_id, quantity, line_subtotal_cents, orders!inner(branch_id)')
+      .eq('orders.branch_id', context.activeBranch.id);
 
     interface SalesRow {
       menu_item_id: string | null;

@@ -140,7 +140,7 @@ export class RecipeService {
         *,
         menu_items ( id, name, price_cents ),
         inventory_items:output_inventory_item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
-        ingredients:inventory_recipe_ingredients (
+        ingredients:inventory_recipe_ingredients!inventory_recipe_ingredients_recipe_id_fkey (
           id,
           recipe_id,
           item_id,
@@ -153,7 +153,7 @@ export class RecipeService {
           display_order,
           notes,
           inventory_items:item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
-          sub_recipe:sub_recipe_id ( id, name )
+          sub_recipe:inventory_recipes!inventory_recipe_ingredients_sub_recipe_id_fkey ( id, name )
         )
       `)
       .eq('business_id', context.business.id)
@@ -164,7 +164,10 @@ export class RecipeService {
     if (filter?.isActive !== undefined) query = query.eq('is_active', filter.isActive);
 
     const { data, error } = await query;
-    if (error || !data) return [];
+    if (error || !data) {
+      if (error) console.error('[RecipeService.getRecipes] Query error:', error);
+      return [];
+    }
 
     const businessCurrency = context.business.defaultCurrency || 'USD';
 
@@ -272,7 +275,7 @@ export class RecipeService {
         *,
         menu_items ( id, name, price_cents ),
         inventory_items:output_inventory_item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
-        ingredients:inventory_recipe_ingredients (
+        ingredients:inventory_recipe_ingredients!inventory_recipe_ingredients_recipe_id_fkey (
           id,
           recipe_id,
           item_id,
@@ -285,14 +288,17 @@ export class RecipeService {
           display_order,
           notes,
           inventory_items:item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
-          sub_recipe:sub_recipe_id ( id, name )
+          sub_recipe:inventory_recipes!inventory_recipe_ingredients_sub_recipe_id_fkey ( id, name )
         )
       `)
       .eq('id', recipeId)
       .eq('business_id', context.business.id)
       .maybeSingle();
 
-    if (error || !r) return null;
+    if (error || !r) {
+      if (error) console.error('[RecipeService.getRecipeById] Query error:', error);
+      return null;
+    }
 
     interface RawIngredientRow {
       id: string;

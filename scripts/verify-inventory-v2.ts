@@ -584,6 +584,37 @@ async function runSuite() {
       },
     ]);
 
+    // Regression Test: Query recipes using exact PostgREST query used by Recipe Catalog page
+    const { data: catalogRecipes, error: catErr } = await admin
+      .from('inventory_recipes')
+      .select(`
+        *,
+        menu_items ( id, name, price_cents ),
+        inventory_items:output_inventory_item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
+        ingredients:inventory_recipe_ingredients!inventory_recipe_ingredients_recipe_id_fkey (
+          id,
+          recipe_id,
+          item_id,
+          sub_recipe_id,
+          quantity,
+          unit,
+          quantity_base,
+          yield_factor,
+          default_location_id,
+          display_order,
+          notes,
+          inventory_items:item_id ( id, name, base_unit, cost_per_unit_cents, currency ),
+          sub_recipe:inventory_recipes!inventory_recipe_ingredients_sub_recipe_id_fkey ( id, name )
+        )
+      `)
+      .eq('business_id', biz.id)
+      .order('name', { ascending: true });
+
+    assert(!catErr && !!catalogRecipes && catalogRecipes.length >= 1, 'Recipe Catalog PostgREST query returns newly created recipes without PGRST201 error');
+    const burgerCat = catalogRecipes?.find((r) => r.id === burgerRecipe!.id);
+    assert(!!burgerCat && burgerCat.menu_items?.name === 'Truffle Wagyu Burger', 'Recipe Catalog query resolves linked menu item name correctly');
+    assert(burgerCat?.ingredients?.length === 3, 'Recipe Catalog query loads all 3 recipe ingredients with unit costs');
+
     // Modifier 1: Add Extra Patty (+150g beef)
     const { data: modGroupPatty } = await admin.from('modifier_groups').insert({
       business_id: biz.id,

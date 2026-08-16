@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { recordGoodsReceiptAction } from '@/server/actions/purchasing';
 import { STANDARD_UNITS } from '@/lib/inventory/unit-converter';
+import { getCurrencySymbol } from '@/lib/utils/currency';
+import { formatMinorUnitsToDecimal, parseDecimalToMinorUnits } from '@/lib/utils/money';
 
 interface SupplierOption {
   id: string;
@@ -73,7 +75,7 @@ export function GoodsReceivingClient({
       poItemId: string | null;
       quantityReceived: number;
       unitReceived: string;
-      unitCostCents: number;
+      unitCost: string;
       batchCode: string;
       expiryDate: string;
       discrepancyReason: string;
@@ -84,7 +86,7 @@ export function GoodsReceivingClient({
       poItemId: null,
       quantityReceived: 10,
       unitReceived: availableItems[0]?.baseUnit || 'kg',
-      unitCostCents: availableItems[0]?.costPerUnitCents || 0,
+      unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
       batchCode: '',
       expiryDate: '',
       discrepancyReason: '',
@@ -105,7 +107,7 @@ export function GoodsReceivingClient({
           poItemId: i.id,
           quantityReceived: Math.max(0, i.quantityOrdered - i.quantityReceivedBase),
           unitReceived: i.purchasingUnit,
-          unitCostCents: i.unitCostCents,
+          unitCost: formatMinorUnitsToDecimal(i.unitCostCents),
           batchCode: '',
           expiryDate: '',
           discrepancyReason: '',
@@ -122,7 +124,7 @@ export function GoodsReceivingClient({
         poItemId: null,
         quantityReceived: 10,
         unitReceived: availableItems[0]?.baseUnit || 'kg',
-        unitCostCents: availableItems[0]?.costPerUnitCents || 0,
+        unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
         batchCode: '',
         expiryDate: '',
         discrepancyReason: '',
@@ -142,6 +144,27 @@ export function GoodsReceivingClient({
       return;
     }
 
+    for (const item of items) {
+      if (!item.itemId) {
+        setErrorMsg('Please select an item for each receiving line.');
+        return;
+      }
+      if (Number(item.quantityReceived) <= 0) {
+        setErrorMsg('Quantity received must be greater than 0.');
+        return;
+      }
+      try {
+        const cents = parseDecimalToMinorUnits(item.unitCost);
+        if (cents < 0) {
+          setErrorMsg('Unit cost cannot be negative.');
+          return;
+        }
+      } catch {
+        setErrorMsg(`Invalid unit cost: "${item.unitCost}". Please enter a valid decimal price (e.g. 7.00).`);
+        return;
+      }
+    }
+
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -158,7 +181,7 @@ export function GoodsReceivingClient({
           poItemId: i.poItemId || null,
           quantityReceived: Number(i.quantityReceived) || 0,
           unitReceived: i.unitReceived,
-          unitCostCents: Number(i.unitCostCents) || 0,
+          unitCostCents: parseDecimalToMinorUnits(i.unitCost),
           batchCode: i.batchCode || null,
           expiryDate: i.expiryDate || null,
           discrepancyReason: i.discrepancyReason || null,
@@ -284,7 +307,7 @@ export function GoodsReceivingClient({
                                 ...it,
                                 itemId: val,
                                 unitReceived: itm?.baseUnit || it.unitReceived,
-                                unitCostCents: itm?.costPerUnitCents || it.unitCostCents,
+                                unitCost: formatMinorUnitsToDecimal(itm?.costPerUnitCents || 0),
                               }
                             : it
                         )
@@ -341,19 +364,23 @@ export function GoodsReceivingClient({
                 </div>
 
                 <div className="sm:col-span-2 space-y-1">
-                  <label className="text-[11px] font-bold text-zinc-600">Unit Cost ({currency} cents)</label>
+                  <label className="text-[11px] font-bold text-zinc-600">
+                    Unit Cost ({getCurrencySymbol(currency)} / {item.unitReceived})
+                  </label>
                   <input
                     type="number"
+                    step="0.01"
                     min="0"
                     required
-                    value={item.unitCostCents}
+                    value={item.unitCost}
                     onChange={(e) =>
                       setItems((prev) =>
                         prev.map((it, i) =>
-                          i === idx ? { ...it, unitCostCents: Number(e.target.value) } : it
+                          i === idx ? { ...it, unitCost: e.target.value } : it
                         )
                       )
                     }
+                    placeholder="0.00"
                     className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
                   />
                 </div>

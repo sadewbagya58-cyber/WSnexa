@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { createPurchaseOrderAction } from '@/server/actions/purchasing';
 import { STANDARD_UNITS } from '@/lib/inventory/unit-converter';
-import { formatCurrencyMinor } from '@/lib/utils/currency';
+import { formatCurrencyMinor, getCurrencySymbol } from '@/lib/utils/currency';
+import { formatMinorUnitsToDecimal, parseDecimalToMinorUnits } from '@/lib/utils/money';
 
 interface SupplierOption {
   id: string;
@@ -53,21 +54,26 @@ export function PurchaseOrderBuilder({
       itemId: string;
       purchasingUnit: string;
       quantityOrdered: number;
-      unitCostCents: number;
+      unitCost: string;
     }>
   >([
     {
       itemId: availableItems[0]?.id || '',
       purchasingUnit: availableItems[0]?.baseUnit || 'kg',
       quantityOrdered: 10,
-      unitCostCents: availableItems[0]?.costPerUnitCents || 0,
+      unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
     },
   ]);
 
-  const subtotalCents = items.reduce(
-    (sum, item) => sum + Math.round(item.quantityOrdered * item.unitCostCents),
-    0
-  );
+  const subtotalCents = items.reduce((sum, item) => {
+    let cents = 0;
+    try {
+      cents = parseDecimalToMinorUnits(item.unitCost);
+    } catch {
+      cents = 0;
+    }
+    return sum + Math.round((Number(item.quantityOrdered) || 0) * cents);
+  }, 0);
 
   function addItem() {
     setItems((prev) => [
@@ -76,7 +82,7 @@ export function PurchaseOrderBuilder({
         itemId: availableItems[0]?.id || '',
         purchasingUnit: availableItems[0]?.baseUnit || 'kg',
         quantityOrdered: 10,
-        unitCostCents: availableItems[0]?.costPerUnitCents || 0,
+        unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
       },
     ]);
   }
@@ -93,6 +99,27 @@ export function PurchaseOrderBuilder({
       return;
     }
 
+    for (const item of items) {
+      if (!item.itemId) {
+        setErrorMsg('Please select an item for each line.');
+        return;
+      }
+      if (Number(item.quantityOrdered) <= 0) {
+        setErrorMsg('Quantity ordered must be greater than 0.');
+        return;
+      }
+      try {
+        const cents = parseDecimalToMinorUnits(item.unitCost);
+        if (cents < 0) {
+          setErrorMsg('Unit cost cannot be negative.');
+          return;
+        }
+      } catch {
+        setErrorMsg(`Invalid unit cost: "${item.unitCost}". Please enter a valid decimal amount (e.g. 7.00).`);
+        return;
+      }
+    }
+
     setErrorMsg(null);
     startTransition(async () => {
       const res = await createPurchaseOrderAction({
@@ -105,7 +132,7 @@ export function PurchaseOrderBuilder({
           itemId: i.itemId,
           purchasingUnit: i.purchasingUnit,
           quantityOrdered: Number(i.quantityOrdered) || 1,
-          unitCostCents: Number(i.unitCostCents) || 0,
+          unitCostCents: parseDecimalToMinorUnits(i.unitCost),
         })),
       });
 
@@ -230,7 +257,7 @@ export function PurchaseOrderBuilder({
                               ...it,
                               itemId: val,
                               purchasingUnit: itm?.baseUnit || it.purchasingUnit,
-                              unitCostCents: itm?.costPerUnitCents || it.unitCostCents,
+                              unitCost: formatMinorUnitsToDecimal(itm?.costPerUnitCents || 0),
                             }
                           : it
                       )
@@ -283,17 +310,21 @@ export function PurchaseOrderBuilder({
               </div>
 
               <div className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600">Unit Cost (minor units)</label>
+                <label className="text-[11px] font-bold text-zinc-600">
+                  Unit Cost ({getCurrencySymbol(currency)} / {item.purchasingUnit})
+                </label>
                 <input
                   type="number"
+                  step="0.01"
                   min="0"
                   required
-                  value={item.unitCostCents}
+                  value={item.unitCost}
                   onChange={(e) =>
                     setItems((prev) =>
-                      prev.map((it, i) => (i === idx ? { ...it, unitCostCents: Number(e.target.value) } : it))
+                      prev.map((it, i) => (i === idx ? { ...it, unitCost: e.target.value } : it))
                     )
                   }
+                  placeholder="0.00"
                   className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
                 />
               </div>

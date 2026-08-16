@@ -37,6 +37,8 @@ function assert(condition: boolean, message: string) {
 
 async function runSuite() {
   const { RecipeService } = await import('../src/server/services/recipe.service');
+  const { parseDecimalToMinorUnits } = await import('../src/lib/utils/money');
+  const { getCurrencySymbol, formatCurrencyMinor } = await import('../src/lib/utils/currency');
   console.log('================================================================');
   console.log('  WSNexa Phase 28 — Comprehensive Production Verification Suite  ');
   console.log('================================================================\n');
@@ -280,7 +282,48 @@ async function runSuite() {
       },
     ]);
 
-    // Supplier & Purchase Order for 10 kg Beef @ 12.00 EUR
+    // ── Money Input Parsing & Label Tests ──
+    const parsedSeven = parseDecimalToMinorUnits('7.00');
+    assert(parsedSeven === 700, 'Human-readable "7.00" converts safely to exactly 700 minor units (cents)');
+    const parsedFiftyCents = parseDecimalToMinorUnits('0.50');
+    assert(parsedFiftyCents === 50, 'Human-readable "0.50" converts safely to exactly 50 minor units (cents)');
+    const parsedTwelveNinetyNine = parseDecimalToMinorUnits('12.99');
+    assert(parsedTwelveNinetyNine === 1299, 'Human-readable "12.99" converts safely to exactly 1299 minor units (cents)');
+
+    // 10 x $7.00 = $70.00 (7000 cents)
+    const lineTotalSeven = Math.round(10 * parsedSeven);
+    assert(lineTotalSeven === 7000, '10 qty * $7.00 unit cost = $70.00 (7000 cents) total purchase value');
+
+    // 10 x $0.50 = $5.00 (500 cents)
+    const lineTotalFiftyCents = Math.round(10 * parsedFiftyCents);
+    assert(lineTotalFiftyCents === 500, '10 qty * $0.50 unit cost = $5.00 (500 cents) total purchase value');
+
+    // 10 x $12.99 = $129.90 (12990 cents)
+    const lineTotalTwelveNinetyNine = Math.round(10 * parsedTwelveNinetyNine);
+    assert(lineTotalTwelveNinetyNine === 12990, '10 qty * $12.99 unit cost = $129.90 (12990 cents) total purchase value');
+
+    // Reject negative and invalid values
+    let negativeRejected = false;
+    try {
+      parseDecimalToMinorUnits('-7.00');
+    } catch {
+      negativeRejected = true;
+    }
+    assert(negativeRejected, 'Negative monetary input "-7.00" is strictly rejected by parser');
+
+    let invalidRejected = false;
+    try {
+      parseDecimalToMinorUnits('invalid_price');
+    } catch {
+      invalidRejected = true;
+    }
+    assert(invalidRejected, 'Invalid non-numeric monetary input is strictly rejected by parser');
+
+    // Currency Symbol Resolution
+    assert(getCurrencySymbol('EUR') === '€', 'EUR currency symbol resolves to € for input labels');
+    assert(getCurrencySymbol('USD') === '$', 'USD currency symbol resolves to $ for input labels');
+
+    // Supplier & Purchase Order for 10 kg Beef @ 12.00 EUR (1200 cents)
     const { data: supplier } = await admin
       .from('inventory_suppliers')
       .insert({
@@ -321,6 +364,10 @@ async function runSuite() {
       })
       .select()
       .single();
+
+    // Verify PO total formatting
+    const formattedPoTotal = formatCurrencyMinor(po!.total_cents, po!.currency);
+    assert(formattedPoTotal.includes('120.00'), 'Purchase order displays formatted total €120.00 correctly');
 
     // Partial Receive: 5 kg of 10 kg
     const grnPartialKey = `GRN_PARTIAL_${testSuffix}`;

@@ -339,7 +339,35 @@ export function SupplierReturnsClient({
 
           {/* ── Return Preflight Summary Card ── */}
           {selectedItemId && (
-            <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/80 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+            <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-xs">
+              {selectedGrnItem ? (
+                <>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 block">GRN Received</span>
+                    <span className="font-bold text-zinc-900">
+                      {selectedGrnItem.quantityReceived} {selectedGrnItem.unitReceived}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 block">Previously Returned</span>
+                    <span className="font-bold text-zinc-900">
+                      {selectedGrnItem.quantityReturnedBase} {selectedGrnItem.baseUnit}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-zinc-500 block">Remaining Returnable</span>
+                    <span className={`font-bold ${exceedsGrn ? 'text-rose-600 font-black' : 'text-zinc-900'}`}>
+                      {selectedGrnItem.remainingReturnableBase} {selectedGrnItem.baseUnit}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="sm:col-span-3">
+                  <span className="text-[10px] uppercase font-bold text-zinc-500 block">Return Mode</span>
+                  <span className="font-bold text-zinc-700">Direct Return (No GRN Link)</span>
+                </div>
+              )}
+
               <div>
                 <span className="text-[10px] uppercase font-bold text-zinc-500 block">Unit Cost Basis</span>
                 <span className="font-bold text-zinc-900">
@@ -348,14 +376,7 @@ export function SupplierReturnsClient({
               </div>
 
               <div>
-                <span className="text-[10px] uppercase font-bold text-zinc-500 block">GRN Returnable Balance</span>
-                <span className={`font-bold ${exceedsGrn ? 'text-rose-600 font-black' : 'text-zinc-900'}`}>
-                  {selectedGrnItem ? `${selectedGrnItem.remainingReturnableBase} ${selectedGrnItem.baseUnit}` : 'N/A (Direct Return)'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-zinc-500 block">Quantity in Base</span>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 block">Return Quantity</span>
                 <span className="font-bold text-zinc-900">
                   {qtyBase.toFixed(2)} {itemBaseUnit}
                 </span>

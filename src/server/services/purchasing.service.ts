@@ -692,12 +692,12 @@ export class PurchasingService {
     const admin = createAdminClient();
 
     // 1. Fetch GRNs with items for active branch
-    const { data: grnRows } = await admin
+    const { data: grnRows, error: grnErr } = await admin
       .from('inventory_goods_receipts')
       .select(`
         id,
         grn_number,
-        created_at,
+        received_at,
         supplier_id,
         location_id,
         supplier:inventory_suppliers(id, name),
@@ -713,9 +713,9 @@ export class PurchasingService {
         )
       `)
       .eq('branch_id', context.activeBranch.id)
-      .order('created_at', { ascending: false });
+      .order('received_at', { ascending: false });
 
-    if (!grnRows || grnRows.length === 0) return [];
+    if (grnErr || !grnRows || grnRows.length === 0) return [];
 
     // 2. Fetch all returns for these GRNs
     const grnIds = grnRows.map((g) => g.id);
@@ -734,7 +734,7 @@ export class PurchasingService {
     interface RawGrnRow {
       id: string;
       grn_number: string;
-      created_at: string;
+      received_at: string;
       supplier_id: string;
       location_id: string;
       supplier?: { id: string; name: string } | null;
@@ -761,7 +761,7 @@ export class PurchasingService {
         results.push({
           grnId: grn.id,
           grnNumber: grn.grn_number,
-          grnDate: grn.created_at,
+          grnDate: grn.received_at,
           supplierId: grn.supplier_id,
           supplierName: grn.supplier?.name || 'Unknown Supplier',
           locationId: grn.location_id,

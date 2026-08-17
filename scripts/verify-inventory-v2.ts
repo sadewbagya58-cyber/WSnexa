@@ -1451,6 +1451,253 @@ async function runSuite() {
     assert(activeOnly.length === 3, 'Active-only query filters out depleted batch (3 remaining)');
     assert(!activeOnly.some((b) => b.id === bExp!.id), 'Depleted batch omitted from active list');
 
+    // ============================================================================
+    // Section 10: Near-Expiry Alerts & Boundary Exclusions
+    // ============================================================================
+    console.log('\n[Section 10] Testing Near-Expiry Alerts & Boundary Exclusions...');
+
+    // Item for Near-Expiry testing
+    const { data: itemSalmon } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Atlantic Salmon Fillet',
+        base_unit: 'kg',
+        cost_per_unit_cents: 2200,
+        currency: 'EUR',
+        track_batches: true,
+        track_expiry: true,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    const makeDateStr = (offsetDays: number) => {
+      const now = new Date();
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offsetDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    // 1. Expired (-2 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-EXP-${testSuffix}`,
+      initial_quantity: 2.0,
+      remaining_quantity: 2.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-10),
+      expiry_date: makeDateStr(-2),
+      status: 'active',
+    });
+
+    // 2. Critical: Expires Today (0 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-TODAY-${testSuffix}`,
+      initial_quantity: 1.5,
+      remaining_quantity: 1.5,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-5),
+      expiry_date: makeDateStr(0),
+      status: 'active',
+    });
+
+    // 3. Critical: 3-day boundary (+3 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-3D-${testSuffix}`,
+      initial_quantity: 3.0,
+      remaining_quantity: 3.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-3),
+      expiry_date: makeDateStr(3),
+      status: 'active',
+    });
+
+    // 4. Expiring Soon: 4-day boundary (+4 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-4D-${testSuffix}`,
+      initial_quantity: 4.0,
+      remaining_quantity: 4.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-2),
+      expiry_date: makeDateStr(4),
+      status: 'active',
+    });
+
+    // 5. Expiring Soon: 7-day boundary (+7 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-7D-${testSuffix}`,
+      initial_quantity: 5.0,
+      remaining_quantity: 5.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-1),
+      expiry_date: makeDateStr(7),
+      status: 'active',
+    });
+
+    // 6. Upcoming: 8-day boundary (+8 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-8D-${testSuffix}`,
+      initial_quantity: 6.0,
+      remaining_quantity: 6.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(0),
+      expiry_date: makeDateStr(8),
+      status: 'active',
+    });
+
+    // 7. Upcoming: 14-day boundary (+14 days)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-14D-${testSuffix}`,
+      initial_quantity: 7.0,
+      remaining_quantity: 7.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(0),
+      expiry_date: makeDateStr(14),
+      status: 'active',
+    });
+
+    // 8. Distant Future: (+25 days) -> Must be EXCLUDED from 14-day window
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-25D-${testSuffix}`,
+      initial_quantity: 10.0,
+      remaining_quantity: 10.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(0),
+      expiry_date: makeDateStr(25),
+      status: 'active',
+    });
+
+    // 9. Null Expiry -> Must be EXCLUDED from expiry alerts
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-NOEXP-${testSuffix}`,
+      initial_quantity: 8.0,
+      remaining_quantity: 8.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(0),
+      expiry_date: null,
+      status: 'active',
+    });
+
+    // 10. Depleted batch expiring soon -> Must be EXCLUDED (remaining = 0)
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemSalmon.id,
+      batch_code: `LOT-SAL-DEPLETED-${testSuffix}`,
+      initial_quantity: 5.0,
+      remaining_quantity: 0.0,
+      unit_cost_cents: 2200,
+      currency: 'EUR',
+      received_date: makeDateStr(-2),
+      expiry_date: makeDateStr(2),
+      status: 'consumed',
+    });
+
+    // Fetch Expiring Batches via InventoryService
+    const alertSummary = await InventoryService.getExpiringBatches(biz.id, branch.id, {
+      hasCostPermission: true,
+      maxDaysAhead: 14,
+    });
+
+    // Count salmon batches in alertSummary
+    const salmonAlerts = alertSummary.batches.filter((b) => b.itemId === itemSalmon.id);
+
+    assert(salmonAlerts.length === 7, 'Exactly 7 salmon batches returned within 14-day window');
+    assert(!salmonAlerts.some((b) => b.batchCode.includes('25D')), '25-day future batch strictly excluded from 14-day alert window');
+    assert(!salmonAlerts.some((b) => b.batchCode.includes('NOEXP')), 'Null expiry batch strictly excluded from expiry alerts');
+    assert(!salmonAlerts.some((b) => b.batchCode.includes('DEPLETED')), 'Depleted batch strictly excluded from expiry alerts');
+
+    const expAlert = salmonAlerts.find((b) => b.batchCode.includes('EXP'));
+    assert(expAlert?.severity === 'expired', 'Past expiry batch classified as expired (<0 days)');
+    assert((expAlert?.daysUntilExpiry || 0) < 0, 'Expired batch has negative daysUntilExpiry');
+
+    const todayAlert = salmonAlerts.find((b) => b.batchCode.includes('TODAY'));
+    assert(todayAlert?.severity === 'critical', '0-day expiry classified as critical');
+    assert(todayAlert?.daysUntilExpiry === 0, '0-day expiry has daysUntilExpiry === 0');
+
+    const threeDayAlert = salmonAlerts.find((b) => b.batchCode.includes('3D'));
+    assert(threeDayAlert?.severity === 'critical', '3-day boundary batch classified as critical (<=3 days)');
+
+    const fourDayAlert = salmonAlerts.find((b) => b.batchCode.includes('4D'));
+    assert(fourDayAlert?.severity === 'expiring_soon', '4-day boundary batch classified as expiring_soon (4..7 days)');
+
+    const sevenDayAlert = salmonAlerts.find((b) => b.batchCode.includes('7D'));
+    assert(sevenDayAlert?.severity === 'expiring_soon', '7-day boundary batch classified as expiring_soon (4..7 days)');
+
+    const eightDayAlert = salmonAlerts.find((b) => b.batchCode.includes('8D'));
+    assert(eightDayAlert?.severity === 'upcoming', '8-day boundary batch classified as upcoming (8..14 days)');
+
+    const fourteenDayAlert = salmonAlerts.find((b) => b.batchCode.includes('14D'));
+    assert(fourteenDayAlert?.severity === 'upcoming', '14-day boundary batch classified as upcoming (8..14 days)');
+
+    // Deterministic Sort Order (Earliest expiry first)
+    const firstAlert = salmonAlerts[0];
+    const lastAlert = salmonAlerts[salmonAlerts.length - 1];
+    assert(firstAlert.severity === 'expired', 'First alert in list is the expired batch');
+    assert(new Date(firstAlert.expiryDate) < new Date(lastAlert.expiryDate), 'Alerts ordered deterministically by nearest expiry date ascending');
+
+    // Cost Redaction in Expiry Alerts
+    const redactedAlerts = await InventoryService.getExpiringBatches(biz.id, branch.id, {
+      hasCostPermission: false,
+    });
+    assert(redactedAlerts.batches[0].unitCostCents === null, 'Expiry alert unit cost strictly redacted without cost permission');
+    assert(redactedAlerts.batches[0].totalStockValueCents === null, 'Expiry alert stock value strictly redacted without cost permission');
+
+    // Tenant & Branch Isolation
+    const otherBizAlerts = await InventoryService.getExpiringBatches('00000000-0000-0000-0000-000000000000', branch.id);
+    assert(otherBizAlerts.totalExpiringCount === 0, 'Cross-tenant query strictly returns 0 expiry alerts');
+
+    const otherBranchAlerts = await InventoryService.getExpiringBatches(biz.id, '00000000-0000-0000-0000-000000000000');
+    assert(otherBranchAlerts.totalExpiringCount === 0, 'Cross-branch query strictly returns 0 expiry alerts');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

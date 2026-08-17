@@ -230,6 +230,39 @@ export interface FormattedItemBatch {
   createdAt: string;
 }
 
+export type ExpiryAlertSeverity = 'expired' | 'critical' | 'expiring_soon' | 'upcoming';
+
+export interface FormattedExpiringBatch {
+  id: string;
+  businessId: string;
+  branchId: string;
+  locationId: string;
+  locationName: string;
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  batchCode: string;
+  remainingQuantity: number;
+  unitCostCents: number | null; // null if cost redacted
+  totalStockValueCents: number | null; // null if cost redacted
+  currency: string;
+  receivedDate: string;
+  expiryDate: string;
+  daysUntilExpiry: number;
+  severity: ExpiryAlertSeverity;
+  createdAt: string;
+}
+
+export interface ExpiryAlertSummary {
+  expiredCount: number;
+  expiredQuantity: number;
+  criticalCount: number; // 0-3 days
+  soonCount: number; // 4-7 days
+  upcomingCount: number; // 8-14 days
+  totalExpiringCount: number;
+  batches: FormattedExpiringBatch[];
+}
+
 export class InventoryService {
   /**
    * Fetch all tenant categories, seeding default hospitality categories if empty.
@@ -1571,8 +1604,9 @@ export class InventoryService {
 
     if (error || !rows) return [];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
 
     interface RawBatchRow {
       id: string;
@@ -1598,10 +1632,9 @@ export class InventoryService {
       let daysUntilExpiry: number | null = null;
 
       if (row.expiry_date) {
-        const expDate = new Date(row.expiry_date);
-        expDate.setHours(0, 0, 0, 0);
-        const diffMs = expDate.getTime() - today.getTime();
-        daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const expDateStr = row.expiry_date.includes('T') ? row.expiry_date.split('T')[0] : row.expiry_date;
+        const expMs = new Date(`${expDateStr}T00:00:00Z`).getTime();
+        daysUntilExpiry = Math.round((expMs - todayMs) / (1000 * 60 * 60 * 24));
 
         if (daysUntilExpiry < 0) {
           expiryStatus = 'expired';
@@ -1640,5 +1673,151 @@ export class InventoryService {
         createdAt: row.created_at,
       };
     });
+  }
+
+  /**
+   * Retrieves all expiring and expired inventory batches within a branch.
+   * Filtered by remaining_quantity > 0 and expiry_date <= today + maxDaysAhead.
+   */
+  static async getExpiringBatches(
+    businessId: string,
+    branchId: string,
+    options?: {
+      hasCostPermission?: boolean;
+      maxDaysAhead?: number;
+    }
+  ): Promise<ExpiryAlertSummary> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const maxDaysAhead = options?.maxDaysAhead ?? 14;
+    const admin = createAdminClient();
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
+
+    const futureDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + maxDaysAhead);
+    const maxDateStr = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
+
+    const { data: rows, error } = await admin
+      .from('inventory_item_batches')
+      .select(`
+        id,
+        business_id,
+        branch_id,
+        location_id,
+        item_id,
+        batch_code,
+        initial_quantity,
+        remaining_quantity,
+        unit_cost_cents,
+        currency,
+        received_date,
+        expiry_date,
+        status,
+        created_at,
+        location:inventory_storage_locations(id, name),
+        item:inventory_items(id, name, base_unit)
+      `)
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .gt('remaining_quantity', 0)
+      .not('expiry_date', 'is', null)
+      .lte('expiry_date', maxDateStr)
+      .order('expiry_date', { ascending: true })
+      .order('created_at', { ascending: false });
+
+    if (error || !rows) {
+      return {
+        expiredCount: 0,
+        expiredQuantity: 0,
+        criticalCount: 0,
+        soonCount: 0,
+        upcomingCount: 0,
+        totalExpiringCount: 0,
+        batches: [],
+      };
+    }
+
+    interface RawExpiringRow {
+      id: string;
+      business_id: string;
+      branch_id: string;
+      location_id: string;
+      item_id: string;
+      batch_code: string;
+      remaining_quantity: number;
+      unit_cost_cents: number;
+      currency: string;
+      received_date: string;
+      expiry_date: string;
+      created_at: string;
+      location?: { id: string; name: string } | null;
+      item?: { id: string; name: string; base_unit: string } | null;
+    }
+
+    let expiredCount = 0;
+    let expiredQuantity = 0;
+    let criticalCount = 0;
+    let soonCount = 0;
+    let upcomingCount = 0;
+
+    const batches: FormattedExpiringBatch[] = (rows as unknown as RawExpiringRow[]).map((row) => {
+      const expDateStr = row.expiry_date.includes('T') ? row.expiry_date.split('T')[0] : row.expiry_date;
+      const expMs = new Date(`${expDateStr}T00:00:00Z`).getTime();
+      const daysUntilExpiry = Math.round((expMs - todayMs) / (1000 * 60 * 60 * 24));
+
+      let severity: ExpiryAlertSeverity = 'upcoming';
+      if (daysUntilExpiry < 0) {
+        severity = 'expired';
+        expiredCount++;
+        expiredQuantity += Number(row.remaining_quantity);
+      } else if (daysUntilExpiry <= 3) {
+        severity = 'critical';
+        criticalCount++;
+      } else if (daysUntilExpiry <= 7) {
+        severity = 'expiring_soon';
+        soonCount++;
+      } else {
+        severity = 'upcoming';
+        upcomingCount++;
+      }
+
+      const remainingQty = Number(row.remaining_quantity);
+      const unitCost = hasCostPermission ? Number(row.unit_cost_cents) : null;
+      const totalValue = hasCostPermission && unitCost !== null
+        ? Math.round(remainingQty * unitCost)
+        : null;
+
+      return {
+        id: row.id,
+        businessId: row.business_id,
+        branchId: row.branch_id,
+        locationId: row.location_id,
+        locationName: row.location?.name || 'Main Stock',
+        itemId: row.item_id,
+        itemName: row.item?.name || 'Unknown Item',
+        baseUnit: row.item?.base_unit || 'units',
+        batchCode: row.batch_code || 'Unnamed Lot',
+        remainingQuantity: remainingQty,
+        unitCostCents: unitCost,
+        totalStockValueCents: totalValue,
+        currency: row.currency || 'USD',
+        receivedDate: row.received_date,
+        expiryDate: row.expiry_date,
+        daysUntilExpiry,
+        severity,
+        createdAt: row.created_at,
+      };
+    });
+
+    return {
+      expiredCount,
+      expiredQuantity,
+      criticalCount,
+      soonCount,
+      upcomingCount,
+      totalExpiringCount: batches.length,
+      batches,
+    };
   }
 }

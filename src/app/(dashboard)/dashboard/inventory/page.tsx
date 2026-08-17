@@ -10,6 +10,7 @@ import { InventoryService } from '@/server/services/inventory.service';
 import { InventoryKpiSummary } from '@/components/inventory/inventory-kpi-summary';
 import { InventoryHealthCard } from '@/components/inventory/inventory-health-card';
 import { InventoryNeedsAttention } from '@/components/inventory/inventory-needs-attention';
+import { InventoryExpiryAlerts } from '@/components/inventory/inventory-expiry-alerts';
 
 export const metadata: Metadata = {
   title: 'Inventory Hub | WSNexa Hospitality',
@@ -33,12 +34,19 @@ export default async function InventoryHubPage() {
     'inventory.costs.view'
   );
 
-  const overview = await InventoryService.getInventoryOverview(
-    context.business.id,
-    context.activeBranch.id,
-    context.business.defaultCurrency || 'USD',
-    hasCostPermission
-  );
+  const [overview, expiringSummary] = await Promise.all([
+    InventoryService.getInventoryOverview(
+      context.business.id,
+      context.activeBranch.id,
+      context.business.defaultCurrency || 'USD',
+      hasCostPermission
+    ),
+    InventoryService.getExpiringBatches(
+      context.business.id,
+      context.activeBranch.id,
+      { hasCostPermission, maxDaysAhead: 14 }
+    ),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -68,6 +76,13 @@ export default async function InventoryHubPage() {
         <InventoryHealthCard overview={overview} />
         <InventoryNeedsAttention items={overview.needsAttention} />
       </div>
+
+      {/* Near-Expiry & Perishable Alerts */}
+      <InventoryExpiryAlerts
+        summary={expiringSummary}
+        currency={context.business.defaultCurrency || 'USD'}
+        hasCostPermission={hasCostPermission}
+      />
 
       {/* Quick Navigation Shortcuts */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">

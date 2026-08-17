@@ -220,6 +220,7 @@ export async function approvePurchaseOrderAction(poId: string) {
   const res = await PurchasingService.approvePurchaseOrder(poId);
   if (res.success) {
     revalidatePath('/dashboard/inventory/purchasing');
+    revalidatePath(`/dashboard/inventory/purchasing/${poId}`);
     revalidatePath('/dashboard/inventory');
   }
   return res;
@@ -256,6 +257,7 @@ export async function cancelPurchaseOrderAction(input: CancelPurchaseOrderInput)
   const res = await PurchasingService.cancelPurchaseOrder(parsed.data.poId, parsed.data.reason || undefined);
   if (res.success) {
     revalidatePath('/dashboard/inventory/purchasing');
+    revalidatePath(`/dashboard/inventory/purchasing/${parsed.data.poId}`);
     revalidatePath('/dashboard/inventory');
   }
   return res;

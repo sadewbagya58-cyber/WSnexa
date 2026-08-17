@@ -941,20 +941,28 @@ export class PurchasingService {
   /**
    * Approves a draft purchase order.
    */
-  static async approvePurchaseOrder(poId: string) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
+  static async approvePurchaseOrder(
+    poId: string,
+    options?: { businessId?: string; branchId?: string; userId?: string }
+  ) {
+    const context = options?.businessId && options?.branchId ? null : await resolveActiveBusinessContext();
+    const branchId = options?.branchId || context?.activeBranch?.id;
+    const userId = options?.userId || context?.user?.id;
+    if (!branchId && !options?.businessId) {
       return { success: false, message: 'Unauthorized.' };
     }
 
     const admin = createAdminClient();
-
-    const { data: po, error: fetchErr } = await admin
+    let query = admin
       .from('inventory_purchase_orders')
-      .select('id, status')
-      .eq('id', poId)
-      .eq('branch_id', context.activeBranch.id)
-      .maybeSingle();
+      .select('id, status, branch_id')
+      .eq('id', poId);
+
+    if (branchId) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    const { data: po, error: fetchErr } = await query.maybeSingle();
 
     if (fetchErr || !po) {
       return { success: false, message: 'Purchase Order not found for active branch.' };
@@ -968,12 +976,11 @@ export class PurchasingService {
       .from('inventory_purchase_orders')
       .update({
         status: 'approved',
-        approved_by: context.user.id,
+        approved_by: userId || null,
         approved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', poId)
-      .eq('branch_id', context.activeBranch.id)
       .eq('status', 'draft');
 
     if (error) {
@@ -986,19 +993,28 @@ export class PurchasingService {
   /**
    * Cancels a draft or approved purchase order.
    */
-  static async cancelPurchaseOrder(poId: string, reason?: string) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
+  static async cancelPurchaseOrder(
+    poId: string,
+    reason?: string,
+    options?: { businessId?: string; branchId?: string; userId?: string }
+  ) {
+    const context = options?.businessId && options?.branchId ? null : await resolveActiveBusinessContext();
+    const branchId = options?.branchId || context?.activeBranch?.id;
+    if (!branchId && !options?.businessId) {
       return { success: false, message: 'Unauthorized.' };
     }
 
     const admin = createAdminClient();
-    const { data: po, error: fetchErr } = await admin
+    let query = admin
       .from('inventory_purchase_orders')
-      .select('id, status')
-      .eq('id', poId)
-      .eq('branch_id', context.activeBranch.id)
-      .maybeSingle();
+      .select('id, status, branch_id')
+      .eq('id', poId);
+
+    if (branchId) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    const { data: po, error: fetchErr } = await query.maybeSingle();
 
     if (fetchErr || !po) {
       return { success: false, message: 'Purchase Order not found for active branch.' };
@@ -1019,8 +1035,7 @@ export class PurchasingService {
         notes: reason ? `Cancelled: ${reason}` : 'Cancelled by user',
         updated_at: new Date().toISOString(),
       })
-      .eq('id', poId)
-      .eq('branch_id', context.activeBranch.id);
+      .eq('id', poId);
 
     if (updateErr) {
       return { success: false, message: updateErr.message };
@@ -1032,13 +1047,19 @@ export class PurchasingService {
   /**
    * Records a Goods Receipt (GRN) atomically updating inventory balances, movements, and weighted cost.
    */
-  static async recordGoodsReceipt(input: RecordGoodsReceiptInput) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business || !context.activeBranch) {
+  static async recordGoodsReceipt(
+    input: RecordGoodsReceiptInput,
+    options?: { businessId?: string; branchId?: string; userId?: string }
+  ) {
+    const context = options?.businessId && options?.branchId ? null : await resolveActiveBusinessContext();
+    const businessId = options?.businessId || context?.business?.id;
+    const branchId = options?.branchId || context?.activeBranch?.id || input.branchId;
+    const userId = options?.userId || context?.user?.id;
+    if (!businessId || !branchId) {
       return { success: false, message: 'Unauthorized.' };
     }
 
-    if (input.branchId !== context.activeBranch.id) {
+    if (context && context.activeBranch && input.branchId !== context.activeBranch.id) {
       return { success: false, message: 'Cross-branch goods receiving is forbidden.' };
     }
 
@@ -1049,7 +1070,7 @@ export class PurchasingService {
       .from('inventory_storage_locations')
       .select('id, name')
       .eq('id', input.locationId)
-      .eq('branch_id', context.activeBranch.id)
+      .eq('branch_id', branchId)
       .maybeSingle();
 
     if (!location) {
@@ -1061,7 +1082,7 @@ export class PurchasingService {
       .from('inventory_suppliers')
       .select('id, name')
       .eq('id', input.supplierId)
-      .eq('business_id', context.business.id)
+      .eq('business_id', businessId)
       .maybeSingle();
 
     if (!supplier) {
@@ -1077,7 +1098,7 @@ export class PurchasingService {
 
     const itemMap = new Map<string, string>();
     (invItems || []).forEach((i) => {
-      if (i.business_id === context.business.id) {
+      if (i.business_id === businessId) {
         itemMap.set(i.id, i.base_unit);
       }
     });
@@ -1111,7 +1132,7 @@ export class PurchasingService {
           )
         `)
         .eq('id', input.poId)
-        .eq('branch_id', context.activeBranch.id)
+        .eq('branch_id', branchId)
         .maybeSingle();
 
       if (poErr || !po) {
@@ -1195,14 +1216,14 @@ export class PurchasingService {
     });
 
     const { data, error } = await admin.rpc('record_goods_receipt_and_update_stock', {
-      p_business_id: context.business.id,
-      p_branch_id: context.activeBranch.id,
+      p_business_id: businessId,
+      p_branch_id: branchId,
       p_supplier_id: input.supplierId,
       p_location_id: input.locationId,
       p_po_id: input.poId || null,
       p_grn_number: input.grnNumber.trim(),
       p_received_items: receivedItemsPayload,
-      p_actor_id: context.user.id,
+      p_actor_id: userId || null,
       p_notes: input.notes || null,
       p_idempotency_key: input.idempotencyKey,
     });
@@ -1227,8 +1248,8 @@ export class PurchasingService {
         const normalizedCents = conv > 0 ? Math.round(item.unitCostCents / conv) : item.unitCostCents;
 
         await admin.from('inventory_price_history').insert({
-          business_id: context.business.id,
-          branch_id: context.activeBranch.id,
+          business_id: businessId,
+          branch_id: branchId,
           item_id: item.itemId,
           supplier_id: input.supplierId,
           source_type: 'goods_receipt',
@@ -1237,10 +1258,10 @@ export class PurchasingService {
           conversion_to_base: conv,
           pack_price_cents: item.unitCostCents,
           normalized_price_per_base_cents: normalizedCents,
-          currency: context.business.defaultCurrency || 'USD',
+          currency: 'USD',
           reference_number: input.grnNumber.trim(),
-          notes: 'Goods Receipt (GRN)',
-          recorded_by: context.user.id,
+          notes: 'Goods Receipt item',
+          recorded_by: userId || null,
           recorded_at: new Date().toISOString(),
         });
       }

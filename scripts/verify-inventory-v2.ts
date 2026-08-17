@@ -3089,7 +3089,7 @@ async function runSuite() {
       .single();
     assert(Number(balAfter3?.current_quantity) === 20.0, 'Total stock on hand accurately reaches 20.0 kg after all 3 receipts');
 
-    // 5. Test Invariant: Cancelled PO Cannot Be Received
+    // 5. Test Invariant: Purchase Order Cancellation State Machine & Receipt Protection
     const { data: poToCancel } = await admin
       .from('inventory_purchase_orders')
       .insert({
@@ -3107,12 +3107,13 @@ async function runSuite() {
       .select()
       .single();
 
-    // Cancel PO
-    const { error: cancelErr } = await admin
-      .from('inventory_purchase_orders')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-      .eq('id', poToCancel.id);
-    assert(!cancelErr, 'PO marked as cancelled');
+    // Cancel PO directly via PurchasingService
+    const cancelRes = await PurchasingService.cancelPurchaseOrder(poToCancel.id, 'Ordered in error', {
+      businessId: biz.id,
+      branchId: branch.id,
+      userId: authUser.user.id,
+    });
+    assert(cancelRes.success === true, 'PO cancelled via PurchasingService');
 
     const { data: poCancelledCheck } = await admin
       .from('inventory_purchase_orders')
@@ -3120,6 +3121,42 @@ async function runSuite() {
       .eq('id', poToCancel.id)
       .single();
     assert(poCancelledCheck?.status === 'cancelled', 'PO status confirmed cancelled');
+
+    // Attempt to re-cancel already cancelled PO
+    const reCancelRes = await PurchasingService.cancelPurchaseOrder(poToCancel.id, undefined, {
+      businessId: biz.id,
+      branchId: branch.id,
+    });
+    assert(reCancelRes.success === false, 'Cancelling an already cancelled PO is rejected');
+
+    // Attempt to cancel already received PO
+    const cancelReceivedRes = await PurchasingService.cancelPurchaseOrder(poHardened.id, undefined, {
+      businessId: biz.id,
+      branchId: branch.id,
+    });
+    assert(cancelReceivedRes.success === false, 'Cancelling an already received PO is rejected');
+
+    // Attempt to receive goods against cancelled PO via service (Must be rejected)
+    const cancelledGRNRes = await PurchasingService.recordGoodsReceipt(
+      {
+        branchId: branch.id,
+        supplierId: supGamma.id,
+        locationId: locMain.id,
+        poId: poToCancel.id,
+        grnNumber: 'GRN-TEST-FAIL-01',
+        idempotencyKey: 'idemp-fail-grn-01',
+        items: [
+          {
+            itemId: itemCod.id,
+            quantityReceived: 5.0,
+            unitReceived: 'kg',
+            unitCostCents: 1000,
+          },
+        ],
+      },
+      { businessId: biz.id, branchId: branch.id, userId: authUser.user.id }
+    );
+    assert(cancelledGRNRes.success === false, 'Goods receipt against cancelled PO is strictly rejected');
 
     // 6. Test Invariant: Supplier Return Stock Effect & Demand Exclusion
     const retRes = await admin.rpc('record_supplier_return', {

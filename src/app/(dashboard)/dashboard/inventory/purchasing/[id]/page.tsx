@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
+import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
 
 interface PurchaseOrderDetailPageProps {
   params: Promise<{ id: string }>;
@@ -40,12 +41,16 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
               </h1>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
                 po.status === 'received'
-                  ? 'bg-emerald-100 text-emerald-800'
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  : po.status === 'partially_received'
+                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
                   : po.status === 'approved'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-zinc-100 text-zinc-800'
+                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                  : po.status === 'cancelled'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                  : 'bg-zinc-100 text-zinc-800 border border-zinc-200'
               }`}>
-                {po.status}
+                {po.status.replace('_', ' ')}
               </span>
             </div>
             <p className="text-sm text-zinc-500 mt-1">
@@ -54,14 +59,12 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
           </div>
         </div>
 
-        {po.status !== 'received' && (
-          <Link
-            href="/dashboard/inventory/receiving"
-            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition"
-          >
-            Receive Deliveries (GRN)
-          </Link>
-        )}
+        <PurchaseOrderActions
+          poId={po.id}
+          poNumber={po.poNumber}
+          status={po.status}
+          variant="detail"
+        />
       </div>
 
       {/* Summary Cards */}

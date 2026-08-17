@@ -7,8 +7,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
-import { approvePurchaseOrderAction } from '@/server/actions/purchasing';
-import { Button } from '@/components/ui/button';
+import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
 
 export const metadata: Metadata = {
   title: 'Purchase Orders & Deliveries | WSNexa Inventory',
@@ -84,7 +83,12 @@ export default async function PurchasingPage() {
                 {purchaseOrders.map((po) => (
                   <tr key={po.id} className="hover:bg-zinc-50/50 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-zinc-950">
-                      {po.poNumber}
+                      <Link
+                        href={`/dashboard/inventory/purchasing/${po.id}`}
+                        className="hover:underline hover:text-zinc-700"
+                      >
+                        {po.poNumber}
+                      </Link>
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -101,6 +105,8 @@ export default async function PurchasingPage() {
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : po.status === 'approved'
                             ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                            : po.status === 'cancelled'
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
                             : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
                         }`}
                       >
@@ -121,28 +127,12 @@ export default async function PurchasingPage() {
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
-                      {po.status === 'draft' ? (
-                        <form
-                          action={async () => {
-                            'use server';
-                            await approvePurchaseOrderAction(po.id);
-                          }}
-                          className="inline-block"
-                        >
-                          <Button size="sm" type="submit" className="text-xs font-bold bg-zinc-950 text-white h-7">
-                            Approve ✓
-                          </Button>
-                        </form>
-                      ) : po.status === 'approved' || po.status === 'partially_received' ? (
-                        <Link
-                          href="/dashboard/inventory/receiving"
-                          className="inline-flex items-center px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
-                        >
-                          Receive Stock 📥
-                        </Link>
-                      ) : (
-                        <span className="text-zinc-400 text-[11px] italic">Completed</span>
-                      )}
+                      <PurchaseOrderActions
+                        poId={po.id}
+                        poNumber={po.poNumber}
+                        status={po.status}
+                        variant="row"
+                      />
                     </td>
                   </tr>
                 ))}

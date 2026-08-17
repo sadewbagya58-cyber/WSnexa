@@ -104,6 +104,8 @@ export const supplierReturnSchema = z.object({
   quantity: z.number().positive('Return quantity must be positive'),
   unit: z.string().min(1, 'Unit is required'),
   reason: z.string().min(3, 'Return reason is required').max(250),
+  notes: z.string().max(500).optional().nullable(),
+  idempotencyKey: z.string().min(8, 'Valid idempotency key is required'),
 });
 
 export type SupplierReturnInput = z.infer<typeof supplierReturnSchema>;

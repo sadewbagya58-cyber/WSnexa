@@ -5,14 +5,20 @@ import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { createAdminClient } from '@/lib/supabase/server';
+import { PurchasingService } from '@/server/services/purchasing.service';
 import { GoodsReceivingClient } from '@/components/inventory/goods-receiving-client';
+import { SupplierReturnsClient } from '@/components/inventory/supplier-returns-client';
 
 export const metadata: Metadata = {
-  title: 'Receive Goods & Stock Delivery | WSNexa Inventory',
-  description: 'Fast mobile & tablet goods receiving, update inventory balances, log batch expiry, and calculate weighted average cost',
+  title: 'Receive Goods & Supplier Returns | WSNexa Inventory',
+  description: 'Fast mobile & tablet goods receiving, supplier returns, batch expiry, and weighted average cost tracking',
 };
 
-export default async function GoodsReceivingPage() {
+interface GoodsReceivingPageProps {
+  searchParams: Promise<{ tab?: string }>;
+}
+
+export default async function GoodsReceivingPage({ searchParams }: GoodsReceivingPageProps) {
   const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
   if (!allowed) {
     return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
@@ -21,6 +27,9 @@ export default async function GoodsReceivingPage() {
   if (!context || !context.user || !context.business || !context.activeBranch) {
     redirect('/login');
   }
+
+  const { tab } = await searchParams;
+  const isReturnsTab = tab === 'returns';
 
   const admin = createAdminClient();
 
@@ -77,6 +86,10 @@ export default async function GoodsReceivingPage() {
         inventory_items(name)
       )
     `)
+    .eq('branch_id', context.activeBranch.id)
+    .in('status', ['approved', 'partially_received'])
+    .order('created_at', { ascending: false });
+
   interface RawPoRow {
     id: string;
     po_number: string;
@@ -109,29 +122,82 @@ export default async function GoodsReceivingPage() {
     })),
   }));
 
+  // 5. Fetch returnable GRN lines & supplier return history
+  const [returnableGrnItems, supplierReturns] = await Promise.all([
+    PurchasingService.getReturnableGrnItems(),
+    PurchasingService.getSupplierReturns(),
+  ]);
+
   const currency = context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Receive Goods (GRN)"
-        description="Verify and accept vendor deliveries into active storage locations, log batch expiry, and update weighted average cost"
+        title="Receiving & Vendor Returns"
+        description="Verify vendor deliveries into active storage locations or return damaged and substandard goods for credit notes."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Inventory', href: '/dashboard/inventory' },
-          { label: 'Receive Goods' },
+          { label: isReturnsTab ? 'Supplier Returns' : 'Receive Goods' },
         ]}
         helpSlug="receiving-goods-and-grn"
       />
 
-      <GoodsReceivingClient
-        branchId={context.activeBranch.id}
-        suppliers={suppliers}
-        locations={locations}
-        availableItems={availableItems}
-        openPurchaseOrders={openPurchaseOrders}
-        currency={currency}
-      />
+      {/* Navigation Subtabs */}
+      <div className="flex border-b border-zinc-200 gap-6 text-xs font-bold">
+        <a
+          href="/dashboard/inventory/receiving"
+          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+            !isReturnsTab
+              ? 'border-zinc-950 text-zinc-950 font-extrabold'
+              : 'border-transparent text-zinc-500 hover:text-zinc-800'
+          }`}
+        >
+          📥 Receive Goods (GRN)
+          {openPurchaseOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-zinc-100 text-zinc-700 font-mono">
+              {openPurchaseOrders.length}
+            </span>
+          )}
+        </a>
+
+        <a
+          href="/dashboard/inventory/receiving?tab=returns"
+          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+            isReturnsTab
+              ? 'border-zinc-950 text-zinc-950 font-extrabold'
+              : 'border-transparent text-zinc-500 hover:text-zinc-800'
+          }`}
+        >
+          ↩️ Supplier Returns & Credit Notes
+          {supplierReturns.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-zinc-100 text-zinc-700 font-mono">
+              {supplierReturns.length}
+            </span>
+          )}
+        </a>
+      </div>
+
+      {isReturnsTab ? (
+        <SupplierReturnsClient
+          branchId={context.activeBranch.id}
+          suppliers={suppliers}
+          locations={locations}
+          availableItems={availableItems}
+          returnableGrnItems={returnableGrnItems}
+          supplierReturns={supplierReturns}
+          currency={currency}
+        />
+      ) : (
+        <GoodsReceivingClient
+          branchId={context.activeBranch.id}
+          suppliers={suppliers}
+          locations={locations}
+          availableItems={availableItems}
+          openPurchaseOrders={openPurchaseOrders}
+          currency={currency}
+        />
+      )}
     </div>
   );
 }

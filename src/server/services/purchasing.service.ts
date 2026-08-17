@@ -5,7 +5,51 @@ import {
   CreateSupplierInput,
   CreatePurchaseOrderInput,
   RecordGoodsReceiptInput,
+  SupplierReturnInput,
 } from '@/lib/validation/purchasing';
+
+export interface SupplierReturnRecord {
+  id: string;
+  businessId: string;
+  branchId: string;
+  supplierId: string;
+  supplierName: string;
+  grnId: string | null;
+  grnNumber: string | null;
+  locationId: string;
+  locationName: string;
+  itemId: string;
+  itemName: string;
+  itemBaseUnit: string;
+  returnNumber: string;
+  quantity: number;
+  unit: string;
+  quantityBase: number;
+  unitCostCents: number;
+  totalCostCents: number;
+  reason: string;
+  returnedBy: string | null;
+  createdAt: string;
+}
+
+export interface ReturnableGrnItem {
+  grnId: string;
+  grnNumber: string;
+  grnDate: string;
+  supplierId: string;
+  supplierName: string;
+  locationId: string;
+  locationName: string;
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  unitReceived: string;
+  quantityReceived: number;
+  quantityReceivedBase: number;
+  quantityReturnedBase: number;
+  remainingReturnableBase: number;
+  unitCostCents: number;
+}
 
 export interface SupplierRecord {
   id: string;
@@ -508,5 +552,233 @@ export class PurchasingService {
       lastPriceCents: d.last_price_cents,
       currency: d.currency || 'USD',
     }));
+  }
+
+  /**
+   * Records an authoritative supplier return atomically via database RPC.
+   */
+  static async recordSupplierReturn(input: SupplierReturnInput) {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.business || !context.activeBranch) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('record_supplier_return', {
+      p_business_id: context.business.id,
+      p_branch_id: input.branchId,
+      p_supplier_id: input.supplierId,
+      p_location_id: input.locationId,
+      p_item_id: input.itemId,
+      p_quantity: input.quantity,
+      p_unit: input.unit,
+      p_reason: input.reason,
+      p_grn_id: input.grnId || null,
+      p_actor_id: context.user.id,
+      p_notes: input.notes || null,
+      p_idempotency_key: input.idempotencyKey,
+    });
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    const res = data as {
+      success: boolean;
+      error?: string;
+      message?: string;
+      return_id?: string;
+      return_number?: string;
+      idempotent_replay?: boolean;
+    };
+
+    if (!res.success) {
+      return { success: false, message: res.message || res.error || 'Supplier return failed.' };
+    }
+
+    return {
+      success: true,
+      returnId: res.return_id,
+      returnNumber: res.return_number,
+      idempotentReplay: res.idempotent_replay,
+      message: res.message || 'Supplier return recorded successfully.',
+    };
+  }
+
+  /**
+   * Retrieves immutable supplier returns history for active branch.
+   */
+  static async getSupplierReturns(filter?: {
+    supplierId?: string;
+    itemId?: string;
+  }): Promise<SupplierReturnRecord[]> {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.activeBranch) return [];
+
+    const admin = createAdminClient();
+    let query = admin
+      .from('inventory_supplier_returns')
+      .select(`
+        *,
+        supplier:inventory_suppliers(id, name),
+        location:inventory_storage_locations(id, name),
+        item:inventory_items(id, name, base_unit),
+        grn:inventory_goods_receipts(id, grn_number)
+      `)
+      .eq('branch_id', context.activeBranch.id)
+      .order('created_at', { ascending: false });
+
+    if (filter?.supplierId) query = query.eq('supplier_id', filter.supplierId);
+    if (filter?.itemId) query = query.eq('item_id', filter.itemId);
+
+    const { data, error } = await query;
+    if (error || !data) return [];
+
+    interface RawSupplierReturnRow {
+      id: string;
+      business_id: string;
+      branch_id: string;
+      supplier_id: string;
+      grn_id: string | null;
+      location_id: string;
+      item_id: string;
+      return_number: string;
+      quantity: number;
+      unit: string;
+      quantity_base: number;
+      unit_cost_cents: number;
+      total_cost_cents: number;
+      reason: string;
+      returned_by: string | null;
+      created_at: string;
+      supplier?: { id: string; name: string } | null;
+      location?: { id: string; name: string } | null;
+      item?: { id: string; name: string; base_unit: string } | null;
+      grn?: { id: string; grn_number: string } | null;
+    }
+
+    return (data as unknown as RawSupplierReturnRow[]).map((r) => ({
+      id: r.id,
+      businessId: r.business_id,
+      branchId: r.branch_id,
+      supplierId: r.supplier_id,
+      supplierName: r.supplier?.name || 'Unknown Supplier',
+      grnId: r.grn_id,
+      grnNumber: r.grn?.grn_number || null,
+      locationId: r.location_id,
+      locationName: r.location?.name || 'Storage Location',
+      itemId: r.item_id,
+      itemName: r.item?.name || 'Inventory Item',
+      itemBaseUnit: r.item?.base_unit || r.unit,
+      returnNumber: r.return_number,
+      quantity: Number(r.quantity),
+      unit: r.unit,
+      quantityBase: Number(r.quantity_base),
+      unitCostCents: r.unit_cost_cents,
+      totalCostCents: r.total_cost_cents,
+      reason: r.reason,
+      returnedBy: r.returned_by,
+      createdAt: r.created_at,
+    }));
+  }
+
+  /**
+   * Retrieves all GRN items with calculated returnable balances for active branch.
+   */
+  static async getReturnableGrnItems(): Promise<ReturnableGrnItem[]> {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.activeBranch) return [];
+
+    const admin = createAdminClient();
+
+    // 1. Fetch GRNs with items for active branch
+    const { data: grnRows } = await admin
+      .from('inventory_goods_receipts')
+      .select(`
+        id,
+        grn_number,
+        created_at,
+        supplier_id,
+        location_id,
+        supplier:inventory_suppliers(id, name),
+        location:inventory_storage_locations(id, name),
+        items:inventory_goods_receipt_items(
+          id,
+          item_id,
+          unit_received,
+          quantity_received,
+          quantity_received_base,
+          unit_cost_cents,
+          inventory_items(id, name, base_unit)
+        )
+      `)
+      .eq('branch_id', context.activeBranch.id)
+      .order('created_at', { ascending: false });
+
+    if (!grnRows || grnRows.length === 0) return [];
+
+    // 2. Fetch all returns for these GRNs
+    const grnIds = grnRows.map((g) => g.id);
+    const { data: returnsData } = await admin
+      .from('inventory_supplier_returns')
+      .select('grn_id, item_id, quantity_base')
+      .in('grn_id', grnIds);
+
+    const returnedMap = new Map<string, number>(); // key: `${grnId}_${itemId}` -> total returned base
+    (returnsData || []).forEach((r) => {
+      const key = `${r.grn_id}_${r.item_id}`;
+      const curr = returnedMap.get(key) || 0;
+      returnedMap.set(key, curr + Number(r.quantity_base));
+    });
+
+    interface RawGrnRow {
+      id: string;
+      grn_number: string;
+      created_at: string;
+      supplier_id: string;
+      location_id: string;
+      supplier?: { id: string; name: string } | null;
+      location?: { id: string; name: string } | null;
+      items?: Array<{
+        id: string;
+        item_id: string;
+        unit_received: string;
+        quantity_received: number;
+        quantity_received_base: number;
+        unit_cost_cents: number;
+        inventory_items?: { id: string; name: string; base_unit: string } | null;
+      }>;
+    }
+
+    const results: ReturnableGrnItem[] = [];
+
+    (grnRows as unknown as RawGrnRow[]).forEach((grn) => {
+      (grn.items || []).forEach((item) => {
+        const key = `${grn.id}_${item.item_id}`;
+        const returnedBase = returnedMap.get(key) || 0;
+        const remainingBase = Math.max(0, Number(item.quantity_received_base) - returnedBase);
+
+        results.push({
+          grnId: grn.id,
+          grnNumber: grn.grn_number,
+          grnDate: grn.created_at,
+          supplierId: grn.supplier_id,
+          supplierName: grn.supplier?.name || 'Unknown Supplier',
+          locationId: grn.location_id,
+          locationName: grn.location?.name || 'Main Stock',
+          itemId: item.item_id,
+          itemName: item.inventory_items?.name || 'Item',
+          baseUnit: item.inventory_items?.base_unit || item.unit_received,
+          unitReceived: item.unit_received,
+          quantityReceived: Number(item.quantity_received),
+          quantityReceivedBase: Number(item.quantity_received_base),
+          quantityReturnedBase: returnedBase,
+          remainingReturnableBase: remainingBase,
+          unitCostCents: item.unit_cost_cents,
+        });
+      });
+    });
+
+    return results;
   }
 }

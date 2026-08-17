@@ -185,11 +185,21 @@ export function InventoryAdjustmentModal({
               <option value="count_correction">Physical Count Correction</option>
               <option value="delivery_receipt">Direct Purchase / Delivery Receipt</option>
               <option value="opening_balance">Opening Stock Setup</option>
-              <option value="damaged">Damaged / Broken</option>
+              <option value="damaged">Damaged / Broken / Spoiled</option>
               <option value="staff_meal">Staff Meal Consumption</option>
-              <option value="return_to_supplier">Return to Supplier</option>
-              <option value="other">Other / Custom</option>
+              <option value="other">Other / Custom Adjustment</option>
             </select>
+          </div>
+
+          {/* Supplier Returns Guidance */}
+          <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between text-xs">
+            <span className="text-zinc-600">Returning stock to a vendor?</span>
+            <a
+              href="/dashboard/inventory/receiving?tab=returns"
+              className="font-bold text-zinc-950 underline hover:text-zinc-800"
+            >
+              Supplier Returns →
+            </a>
           </div>
 
           {/* Notes */}

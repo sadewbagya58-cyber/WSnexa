@@ -151,6 +151,29 @@ async function runSuite() {
 
     if (brErr || !branch) throw new Error('Failed to create test branch: ' + brErr?.message);
 
+    // Kitchen Staff User (for RBAC unauthorized tests)
+    const { data: kitchenUser, error: kuErr } = await admin.auth.admin.createUser({
+      email: `live_test_kitchen_${testSuffix}@wsnexa.test`,
+      password: `KitchenTest_${testSuffix}!@#`,
+      email_confirm: true,
+    });
+    if (!kuErr && kitchenUser?.user) {
+      cleanupUserIds.push(kitchenUser.user.id);
+      const { data: kitchenMem } = await admin.from('business_memberships').insert({
+        business_id: biz.id,
+        user_id: kitchenUser.user.id,
+        role: 'kitchen_staff',
+        membership_status: 'active',
+      }).select().single();
+
+      if (kitchenMem) {
+        await admin.from('branch_assignments').insert({
+          business_membership_id: kitchenMem.id,
+          branch_id: branch.id,
+        });
+      }
+    }
+
     const { data: locMain } = await admin
       .from('inventory_storage_locations')
       .insert({
@@ -469,25 +492,66 @@ async function runSuite() {
 
     assert(grnReplay.data?.idempotent_replay === true, 'Duplicate GRN submission protected by idempotency key');
 
-    // Supplier Return: Return 2 kg damaged beef
-    const returnRes = await admin.rpc('record_inventory_adjustment', {
+    // ── Real Authoritative Supplier Return via record_supplier_return RPC ──
+    const { data: grnFinalRecord } = await admin
+      .from('inventory_goods_receipts')
+      .select('id')
+      .eq('grn_number', `GRN-P2-${testSuffix}`)
+      .single();
+
+    assert(Boolean(grnFinalRecord?.id), 'Final Goods Receipt (GRN-P2) found for return linkage');
+
+    const supplierReturnKey = `RET_${testSuffix}`;
+    const returnRes = await admin.rpc('record_supplier_return', {
       p_business_id: biz.id,
       p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
       p_location_id: locMain!.id,
       p_item_id: itemBeef!.id,
-      p_direction: 'out',
       p_quantity: 2.0,
       p_unit: 'kg',
-      p_quantity_base: 2.0,
-      p_reason: 'supplier_return',
-      p_notes: `Returned to Bavarian Meats Wholesale: packaging seal broken`,
+      p_reason: 'Damaged packaging / seal broken',
+      p_grn_id: grnFinalRecord!.id,
       p_actor_id: authUser.user.id,
-      p_idempotency_key: `RET_${testSuffix}`,
-      p_movement_type: 'supplier_return',
+      p_notes: `Returned to Bavarian Meats Wholesale: packaging seal broken`,
+      p_idempotency_key: supplierReturnKey,
     });
 
-    assert(returnRes.data?.success === true, 'Supplier return executed atomically via audit movement');
+    assert(returnRes.data?.success === true, 'Real Authoritative Supplier Return executed via record_supplier_return RPC');
+    assert(typeof returnRes.data?.return_number === 'string' && returnRes.data.return_number.startsWith('SR-'), 'Unique human-readable Return # (SR-XXXXXX) generated');
+    assert(returnRes.data?.total_cost_cents === 2400, 'Supplier return total value calculated authoritatively (2 kg @ €12.00 = €24.00 / 2400 cents)');
 
+    // Verify Immutable inventory_supplier_returns row
+    const { data: returnRow } = await admin
+      .from('inventory_supplier_returns')
+      .select('*')
+      .eq('id', returnRes.data.return_id)
+      .single();
+
+    assert(returnRow?.business_id === biz.id, 'Supplier return belongs to isolated test business');
+    assert(returnRow?.branch_id === branch.id, 'Supplier return belongs to isolated test branch');
+    assert(returnRow?.supplier_id === supplier!.id, 'Supplier return correctly linked to supplier');
+    assert(returnRow?.grn_id === grnFinalRecord!.id, 'Supplier return correctly linked to source GRN');
+    assert(returnRow?.item_id === itemBeef!.id, 'Supplier return correctly linked to inventory item');
+    assert(Number(returnRow?.quantity) === 2.0, 'Supplier return quantity is 2.0 kg');
+    assert(Number(returnRow?.quantity_base) === 2.0, 'Supplier return base quantity is 2.0 kg');
+    assert(returnRow?.unit_cost_cents === 1200, 'Supplier return snapshot unit cost is €12.00 (1200 cents)');
+    assert(returnRow?.total_cost_cents === 2400, 'Supplier return total cost is €24.00 (2400 cents)');
+
+    // Verify Immutable Stock Movement Audit
+    const { data: movementRow } = await admin
+      .from('inventory_stock_movements')
+      .select('*')
+      .eq('reference_id', returnRes.data.return_id)
+      .single();
+
+    assert(movementRow?.movement_type === 'supplier_return', 'Stock movement audit type is "supplier_return"');
+    assert(movementRow?.direction === 'out', 'Stock movement direction is "out"');
+    assert(Number(movementRow?.previous_balance_base) === 20.0, 'Stock movement previous balance is 20.0 kg (before return)');
+    assert(Number(movementRow?.new_balance_base) === 18.0, 'Stock movement new balance is 18.0 kg (after return)');
+    assert(movementRow?.actor_id === authUser.user.id, 'Stock movement actor_id matches authorized user');
+
+    // Verify Stock Balance Deduction
     const { data: beefAfterReturn } = await admin
       .from('inventory_balances')
       .select('current_quantity')
@@ -496,6 +560,145 @@ async function runSuite() {
       .single();
 
     assert(Number(beefAfterReturn?.current_quantity) === 18.0, 'Beef stock deducted to 18.0 kg after return (20.0 -> 18.0 kg)');
+
+    // Idempotency Replay Protection
+    const replayReturnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 2.0,
+      p_unit: 'kg',
+      p_reason: 'Damaged packaging / seal broken',
+      p_grn_id: grnFinalRecord!.id,
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: supplierReturnKey,
+    });
+
+    assert(replayReturnRes.data?.idempotent_replay === true, 'Supplier return idempotency replay returns success with 0 double deductions');
+
+    const { data: beefAfterReplay } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('location_id', locMain!.id)
+      .eq('item_id', itemBeef!.id)
+      .single();
+
+    assert(Number(beefAfterReplay?.current_quantity) === 18.0, 'Stock balance conserved at 18.0 kg after idempotent replay');
+
+    // Conflicting Idempotency Key Rejection
+    const conflictingReturnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 5.0, // conflicting quantity
+      p_unit: 'kg',
+      p_reason: 'Different reason',
+      p_grn_id: grnFinalRecord!.id,
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: supplierReturnKey,
+    });
+
+    assert(conflictingReturnRes.data?.success === false && conflictingReturnRes.data?.error === 'CONFLICTING_IDEMPOTENCY_KEY', 'Conflicting return submission with same idempotency key strictly rejected');
+
+    // GRN Returnable Limit Preflight Rejection (5kg received on GRN-P2, 2kg returned -> 3kg remaining. Attempting to return 4kg must fail)
+    const excessGrnReturnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 4.0,
+      p_unit: 'kg',
+      p_reason: 'Exceeding remaining returnable quantity',
+      p_grn_id: grnFinalRecord!.id,
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: `EXCESS_${testSuffix}`,
+    });
+
+    assert(excessGrnReturnRes.data?.success === false && excessGrnReturnRes.data?.error === 'EXCEEDS_GRN_RETURNABLE_QUANTITY', 'Returning more than GRN remaining returnable quantity strictly rejected');
+
+    // Cross-Business Isolation Rejection
+    const fakeBizId = '00000000-0000-0000-0000-000000000001';
+    const crossBizRes = await admin.rpc('record_supplier_return', {
+      p_business_id: fakeBizId,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 1.0,
+      p_unit: 'kg',
+      p_reason: 'Cross business exploit attempt',
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: `CROSS_BIZ_${testSuffix}`,
+    });
+    assert(crossBizRes.data?.success === false, 'Cross-business supplier return attempt strictly rejected');
+
+    // Cross-Branch Isolation Rejection
+    const fakeBranchId = '00000000-0000-0000-0000-000000000002';
+    const crossBranchRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: fakeBranchId,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 1.0,
+      p_unit: 'kg',
+      p_reason: 'Cross branch exploit attempt',
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: `CROSS_BRANCH_${testSuffix}`,
+    });
+    assert(crossBranchRes.data?.success === false, 'Cross-branch supplier return attempt strictly rejected');
+
+    // Wrong Supplier / GRN Relationship Rejection
+    const fakeSupplierId = '00000000-0000-0000-0000-000000000003';
+    const wrongSupplierGrnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: fakeSupplierId,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 1.0,
+      p_unit: 'kg',
+      p_reason: 'Wrong supplier for GRN',
+      p_grn_id: grnFinalRecord!.id,
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: `WRONG_SUPPLIER_${testSuffix}`,
+    });
+    assert(wrongSupplierGrnRes.data?.success === false, 'Wrong supplier to GRN relationship strictly rejected');
+
+    // Unauthorized Role Rejection (Kitchen staff user without purchasing.receive authority)
+    const unauthorizedReturnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 1.0,
+      p_unit: 'kg',
+      p_reason: 'Unauthorized return attempt',
+      p_actor_id: kitchenUser!.user!.id,
+      p_idempotency_key: `UNAUTH_${testSuffix}`,
+    });
+    assert(unauthorizedReturnRes.data?.success === false && unauthorizedReturnRes.data?.error === 'UNAUTHORIZED', 'Unauthorized kitchen staff attempting supplier return strictly rejected with UNAUTHORIZED');
+
+    // Insufficient Stock Preflight Rejection
+    const excessStockReturnRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier!.id,
+      p_location_id: locMain!.id,
+      p_item_id: itemBeef!.id,
+      p_quantity: 100.0,
+      p_unit: 'kg',
+      p_reason: 'Massive excess quantity',
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: `NO_STOCK_${testSuffix}`,
+    });
+    assert(excessStockReturnRes.data?.success === false && excessStockReturnRes.data?.error === 'INSUFFICIENT_STOCK', 'Returning more than available warehouse stock strictly rejected');
 
     // ── 5. Sub-Recipe Direct & Indirect Cycle Detection ──────────────────────
     console.log('\n[Section 5] Testing Direct & Multi-Step Indirect Cycle Rejection...');

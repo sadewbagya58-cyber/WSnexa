@@ -600,5 +600,54 @@ export const inventoryArticles: HelpArticle[] = [
     ],
     relatedArticles: ['calculating-cogs-and-profitability'],
   },
+  {
+    slug: 'returning-goods-to-suppliers',
+    title: 'Returning Goods to Suppliers & Vendor Credit Notes',
+    description: 'How to return damaged, expired, or substandard items against Goods Receipts (GRN) and track vendor credit values.',
+    category: 'inventory-management',
+    keywords: ['supplier returns', 'vendor return', 'goods return', 'credit note', 'damaged goods', 'grn return', 'rma'],
+    allowedRoles: ['business_owner', 'branch_manager'],
+    requiredPermissions: ['purchasing.receive'],
+    contextRoutes: ['/dashboard/inventory/receiving'],
+    estimatedReadMinutes: 4,
+    steps: [
+      {
+        number: 1,
+        title: 'Open Supplier Returns Tab',
+        instruction: 'Navigate to "Inventory" → "Receive Goods" and switch to the "Supplier Returns & Credit Notes" sub-tab.',
+      },
+      {
+        number: 2,
+        title: 'Select Supplier & Goods Receipt (GRN)',
+        instruction: 'Select the vendor and link the return to the specific Goods Receipt (GRN) under which the delivery was accepted.',
+      },
+      {
+        number: 3,
+        title: 'Inspect Returnable Balance & Unit Cost',
+        instruction: 'WSNexa automatically computes the remaining returnable quantity from that delivery (Received Qty minus previous returns) and applies the original purchase unit cost.',
+      },
+      {
+        number: 4,
+        title: 'Specify Return Quantity & Reason',
+        instruction: 'Enter the return quantity and choose the reason (e.g. Damaged in Transit, Expired, Wrong Item, Quality Substandard, Over-delivered).',
+      },
+      {
+        number: 5,
+        title: 'Confirm Return & Ledger Entry',
+        instruction: 'Submit the return to atomically deduct physical inventory from your storage location and append an immutable entry to the Supplier Returns Ledger.',
+      },
+    ],
+    notes: [
+      'GRN Return Limit: You cannot return more goods on a GRN than were originally received.',
+      'Immutable Audit Trail: Once confirmed, supplier return entries cannot be edited or deleted.',
+      'Difference from Stock Adjustments: Ordinary stock adjustments log internal counts and waste, whereas Supplier Returns track vendor debit values and link directly to delivery receipts.',
+    ],
+    relatedArticles: ['receiving-goods-and-grn', 'recording-stock-adjustments-and-waste'],
+    directAction: {
+      label: 'Open Supplier Returns',
+      href: '/dashboard/inventory/receiving?tab=returns',
+    },
+  },
 ];
+
 

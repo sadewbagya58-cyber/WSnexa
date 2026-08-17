@@ -6,9 +6,11 @@ import {
   createSupplierSchema,
   createPurchaseOrderSchema,
   recordGoodsReceiptSchema,
+  supplierReturnSchema,
   CreateSupplierInput,
   CreatePurchaseOrderInput,
   RecordGoodsReceiptInput,
+  SupplierReturnInput,
 } from '@/lib/validation/purchasing';
 
 export async function createSupplierAction(input: CreateSupplierInput) {
@@ -55,6 +57,22 @@ export async function recordGoodsReceiptAction(input: RecordGoodsReceiptInput) {
   }
 
   const res = await PurchasingService.recordGoodsReceipt(parsed.data);
+  if (res.success) {
+    revalidatePath('/dashboard/inventory/receiving');
+    revalidatePath('/dashboard/inventory/purchasing');
+    revalidatePath('/dashboard/inventory/items');
+    revalidatePath('/dashboard/inventory');
+  }
+  return res;
+}
+
+export async function recordSupplierReturnAction(input: SupplierReturnInput) {
+  const parsed = supplierReturnSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message || 'Invalid supplier return data.' };
+  }
+
+  const res = await PurchasingService.recordSupplierReturn(parsed.data);
   if (res.success) {
     revalidatePath('/dashboard/inventory/receiving');
     revalidatePath('/dashboard/inventory/purchasing');

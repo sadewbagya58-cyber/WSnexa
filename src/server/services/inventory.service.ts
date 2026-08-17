@@ -206,6 +206,30 @@ export interface InventoryOverviewPayload {
   }>;
 }
 
+export type BatchExpiryStatus = 'expired' | 'expiring_soon' | 'healthy' | 'no_expiry';
+
+export interface FormattedItemBatch {
+  id: string;
+  businessId: string;
+  branchId: string;
+  locationId: string;
+  locationName: string;
+  itemId: string;
+  itemName?: string;
+  batchCode: string;
+  initialQuantity: number;
+  remainingQuantity: number;
+  unitCostCents: number | null; // null if cost redacted
+  totalStockValueCents: number | null; // null if cost redacted
+  currency: string;
+  receivedDate: string;
+  expiryDate: string | null;
+  expiryStatus: BatchExpiryStatus;
+  daysUntilExpiry: number | null;
+  status: 'active' | 'consumed' | 'expired' | 'discarded';
+  createdAt: string;
+}
+
 export class InventoryService {
   /**
    * Fetch all tenant categories, seeding default hospitality categories if empty.
@@ -1495,5 +1519,126 @@ export class InventoryService {
       currency,
       needsAttention: needsAttention.slice(0, 8),
     };
+  }
+
+  /**
+   * Retrieves all batches for a specific item within a branch, strictly scoped by business, branch, and item.
+   */
+  static async getBatchesByItem(
+    businessId: string,
+    branchId: string,
+    itemId: string,
+    options?: {
+      hasCostPermission?: boolean;
+      includeDepleted?: boolean;
+    }
+  ): Promise<FormattedItemBatch[]> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const includeDepleted = options?.includeDepleted ?? false;
+    const admin = createAdminClient();
+
+    let query = admin
+      .from('inventory_item_batches')
+      .select(`
+        id,
+        business_id,
+        branch_id,
+        location_id,
+        item_id,
+        batch_code,
+        initial_quantity,
+        remaining_quantity,
+        unit_cost_cents,
+        currency,
+        received_date,
+        expiry_date,
+        status,
+        created_at,
+        location:inventory_storage_locations(id, name),
+        item:inventory_items(id, name)
+      `)
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .eq('item_id', itemId);
+
+    if (!includeDepleted) {
+      query = query.gt('remaining_quantity', 0);
+    }
+
+    const { data: rows, error } = await query
+      .order('expiry_date', { ascending: true, nullsFirst: false })
+      .order('received_date', { ascending: false });
+
+    if (error || !rows) return [];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    interface RawBatchRow {
+      id: string;
+      business_id: string;
+      branch_id: string;
+      location_id: string;
+      item_id: string;
+      batch_code: string;
+      initial_quantity: number;
+      remaining_quantity: number;
+      unit_cost_cents: number;
+      currency: string;
+      received_date: string;
+      expiry_date: string | null;
+      status: 'active' | 'consumed' | 'expired' | 'discarded';
+      created_at: string;
+      location?: { id: string; name: string } | null;
+      item?: { id: string; name: string } | null;
+    }
+
+    return (rows as unknown as RawBatchRow[]).map((row) => {
+      let expiryStatus: BatchExpiryStatus = 'no_expiry';
+      let daysUntilExpiry: number | null = null;
+
+      if (row.expiry_date) {
+        const expDate = new Date(row.expiry_date);
+        expDate.setHours(0, 0, 0, 0);
+        const diffMs = expDate.getTime() - today.getTime();
+        daysUntilExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (daysUntilExpiry < 0) {
+          expiryStatus = 'expired';
+        } else if (daysUntilExpiry <= 7) {
+          expiryStatus = 'expiring_soon';
+        } else {
+          expiryStatus = 'healthy';
+        }
+      }
+
+      const remainingQty = Number(row.remaining_quantity);
+      const unitCost = hasCostPermission ? Number(row.unit_cost_cents) : null;
+      const totalValue = hasCostPermission && unitCost !== null
+        ? Math.round(remainingQty * unitCost)
+        : null;
+
+      return {
+        id: row.id,
+        businessId: row.business_id,
+        branchId: row.branch_id,
+        locationId: row.location_id,
+        locationName: row.location?.name || 'Main Stock',
+        itemId: row.item_id,
+        itemName: row.item?.name,
+        batchCode: row.batch_code,
+        initialQuantity: Number(row.initial_quantity),
+        remainingQuantity: remainingQty,
+        unitCostCents: unitCost,
+        totalStockValueCents: totalValue,
+        currency: row.currency || 'USD',
+        receivedDate: row.received_date,
+        expiryDate: row.expiry_date,
+        expiryStatus,
+        daysUntilExpiry,
+        status: row.status,
+        createdAt: row.created_at,
+      };
+    });
   }
 }

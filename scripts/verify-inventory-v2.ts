@@ -1256,6 +1256,201 @@ async function runSuite() {
       'Zero consumption records created when order has insufficient stock'
     );
 
+    // ============================================================================
+    // Section 9: Batch / Lot Tracking, Expiry Derivation, & Scoping
+    // ============================================================================
+    console.log('\n[Section 9] Testing Batch / Lot Tracking, Expiry Derivation, & Scoping...');
+
+    const { InventoryService } = await import('../src/server/services/inventory.service');
+
+    const todayDate = new Date();
+    const healthyDate = new Date(todayDate);
+    healthyDate.setDate(todayDate.getDate() + 30);
+    const healthyExpStr = healthyDate.toISOString().split('T')[0];
+
+    const expiringSoonDate = new Date(todayDate);
+    expiringSoonDate.setDate(todayDate.getDate() + 4);
+    const expiringSoonExpStr = expiringSoonDate.toISOString().split('T')[0];
+
+    const expiredDate = new Date(todayDate);
+    expiredDate.setDate(todayDate.getDate() - 3);
+    const expiredExpStr = expiredDate.toISOString().split('T')[0];
+
+    // Create item with batch tracking
+    const { data: itemTruffle } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Fresh Black Truffle',
+        base_unit: 'kg',
+        cost_per_unit_cents: 15000,
+        currency: 'EUR',
+        track_batches: true,
+        track_expiry: true,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    // 1. Receive Healthy Lot
+    const lotHealthyCode = `LOT-TRUF-HLTH-${testSuffix}`;
+    await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier.id,
+      p_location_id: locMain.id,
+      p_po_id: null,
+      p_grn_number: `GRN-TRUF-1-${testSuffix}`,
+      p_received_items: [
+        {
+          item_id: itemTruffle.id,
+          quantity_received: 2.5,
+          unit_received: 'kg',
+          quantity_received_base: 2.5,
+          unit_cost_cents: 15000,
+          batch_code: lotHealthyCode,
+          expiry_date: healthyExpStr,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_notes: 'Healthy truffle delivery',
+      p_idempotency_key: `GRN_TRUF_1_${testSuffix}`,
+    });
+
+    // 2. Receive Expiring Soon Lot
+    const lotSoonCode = `LOT-TRUF-SOON-${testSuffix}`;
+    await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier.id,
+      p_location_id: locMain.id,
+      p_po_id: null,
+      p_grn_number: `GRN-TRUF-2-${testSuffix}`,
+      p_received_items: [
+        {
+          item_id: itemTruffle.id,
+          quantity_received: 1.0,
+          unit_received: 'kg',
+          quantity_received_base: 1.0,
+          unit_cost_cents: 14000,
+          batch_code: lotSoonCode,
+          expiry_date: expiringSoonExpStr,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_notes: 'Expiring soon truffle delivery',
+      p_idempotency_key: `GRN_TRUF_2_${testSuffix}`,
+    });
+
+    // 3. Receive Expired Lot
+    const lotExpiredCode = `LOT-TRUF-EXP-${testSuffix}`;
+    await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier.id,
+      p_location_id: locMain.id,
+      p_po_id: null,
+      p_grn_number: `GRN-TRUF-3-${testSuffix}`,
+      p_received_items: [
+        {
+          item_id: itemTruffle.id,
+          quantity_received: 0.5,
+          unit_received: 'kg',
+          quantity_received_base: 0.5,
+          unit_cost_cents: 13000,
+          batch_code: lotExpiredCode,
+          expiry_date: expiredExpStr,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_notes: 'Expired truffle delivery',
+      p_idempotency_key: `GRN_TRUF_3_${testSuffix}`,
+    });
+
+    // 4. Receive No Expiry Lot
+    const lotNoExpCode = `LOT-TRUF-NOEXP-${testSuffix}`;
+    await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supplier.id,
+      p_location_id: locMain.id,
+      p_po_id: null,
+      p_grn_number: `GRN-TRUF-4-${testSuffix}`,
+      p_received_items: [
+        {
+          item_id: itemTruffle.id,
+          quantity_received: 3.0,
+          unit_received: 'kg',
+          quantity_received_base: 3.0,
+          unit_cost_cents: 15000,
+          batch_code: lotNoExpCode,
+          expiry_date: null,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_notes: 'No expiry truffle delivery',
+      p_idempotency_key: `GRN_TRUF_4_${testSuffix}`,
+    });
+
+    // Query Batches with InventoryService
+    const truffleBatches = await InventoryService.getBatchesByItem(biz.id, branch.id, itemTruffle.id, {
+      hasCostPermission: true,
+      includeDepleted: true,
+    });
+
+    assert(truffleBatches.length === 4, 'All 4 truffle batches retrieved by InventoryService.getBatchesByItem');
+
+    const bHealthy = truffleBatches.find((b) => b.batchCode === lotHealthyCode);
+    assert(bHealthy?.initialQuantity === 2.5, 'Healthy batch initial quantity is 2.5 kg');
+    assert(bHealthy?.remainingQuantity === 2.5, 'Healthy batch remaining quantity is 2.5 kg');
+    assert(bHealthy?.unitCostCents === 15000, 'Healthy batch authoritative GRN unit cost is 15000 cents (€150.00)');
+    assert(bHealthy?.totalStockValueCents === Math.round(2.5 * 15000), 'Healthy batch stock value calculated correctly (€375.00)');
+    assert(bHealthy?.expiryStatus === 'healthy', 'Healthy batch status derived as healthy (>7 days)');
+    assert((bHealthy?.daysUntilExpiry || 0) >= 28, 'Healthy batch days until expiry >= 28 days');
+
+    const bSoon = truffleBatches.find((b) => b.batchCode === lotSoonCode);
+    assert(bSoon?.expiryStatus === 'expiring_soon', 'Expiring soon batch status derived as expiring_soon (<=7 days)');
+    assert((bSoon?.daysUntilExpiry || 0) <= 7 && (bSoon?.daysUntilExpiry || 0) >= 0, 'Expiring soon days in 0..7 window');
+
+    const bExp = truffleBatches.find((b) => b.batchCode === lotExpiredCode);
+    assert(bExp?.expiryStatus === 'expired', 'Expired batch status derived as expired (<0 days)');
+    assert((bExp?.daysUntilExpiry || 0) < 0, 'Expired batch days until expiry is negative');
+
+    const bNoExp = truffleBatches.find((b) => b.batchCode === lotNoExpCode);
+    assert(bNoExp?.expiryStatus === 'no_expiry', 'Missing expiry batch status derived as no_expiry');
+    assert(bNoExp?.daysUntilExpiry === null, 'Missing expiry batch daysUntilExpiry is null');
+
+    // Cost Redaction
+    const redactedTruffleBatches = await InventoryService.getBatchesByItem(biz.id, branch.id, itemTruffle.id, {
+      hasCostPermission: false,
+      includeDepleted: true,
+    });
+    assert(redactedTruffleBatches[0].unitCostCents === null, 'Batch unit cost strictly redacted to null without permission');
+    assert(redactedTruffleBatches[0].totalStockValueCents === null, 'Batch stock value strictly redacted to null without permission');
+
+    // Tenant & Branch Isolation
+    const crossBizBatches = await InventoryService.getBatchesByItem('00000000-0000-0000-0000-000000000000', branch.id, itemTruffle.id, {
+      hasCostPermission: true,
+    });
+    assert(crossBizBatches.length === 0, 'Cross-business batch query strictly returns 0 records');
+
+    const crossBranchBatches = await InventoryService.getBatchesByItem(biz.id, '00000000-0000-0000-0000-000000000000', itemTruffle.id, {
+      hasCostPermission: true,
+    });
+    assert(crossBranchBatches.length === 0, 'Cross-branch batch query strictly returns 0 records');
+
+    // Depleted Filter
+    await admin
+      .from('inventory_item_batches')
+      .update({ remaining_quantity: 0, status: 'consumed' })
+      .eq('id', bExp!.id);
+
+    const activeOnly = await InventoryService.getBatchesByItem(biz.id, branch.id, itemTruffle.id, {
+      includeDepleted: false,
+    });
+    assert(activeOnly.length === 3, 'Active-only query filters out depleted batch (3 remaining)');
+    assert(!activeOnly.some((b) => b.id === bExp!.id), 'Depleted batch omitted from active list');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

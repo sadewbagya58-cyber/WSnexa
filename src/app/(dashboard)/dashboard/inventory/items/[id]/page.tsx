@@ -6,8 +6,10 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { PermissionService } from '@/server/services/permission.service';
 import { InventoryService } from '@/server/services/inventory.service';
+import { PurchasingService } from '@/server/services/purchasing.service';
 import { InventoryMovementTimeline } from '@/components/inventory/inventory-movement-timeline';
 import { ItemBatchesCard } from '@/components/inventory/item-batches-card';
+import { ItemSupplierPricingCard } from '@/components/inventory/item-supplier-pricing-card';
 
 interface ItemDetailPageProps {
   params: Promise<{ id: string }>;
@@ -36,7 +38,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     'inventory.costs.view'
   );
 
-  const [item, movements, batches] = await Promise.all([
+  const [item, movements, batches, supplierComparison] = await Promise.all([
     InventoryService.getInventoryItemById(context.business.id, context.activeBranch.id, id, hasCostPermission),
     InventoryService.getMovements(context.business.id, context.activeBranch.id, {
       itemId: id,
@@ -46,6 +48,9 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     InventoryService.getBatchesByItem(context.business.id, context.activeBranch.id, id, {
       hasCostPermission,
       includeDepleted: true,
+    }),
+    PurchasingService.getSupplierPriceComparison(context.business.id, id, {
+      hasCostPermission,
     }),
   ]);
 
@@ -197,6 +202,12 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
         batches={batches}
         baseUnit={item.baseUnit}
         currency={item.currency || context.business.defaultCurrency || 'USD'}
+        hasCostPermission={hasCostPermission}
+      />
+
+      {/* Supplier Price Comparison */}
+      <ItemSupplierPricingCard
+        comparison={supplierComparison}
         hasCostPermission={hasCostPermission}
       />
 

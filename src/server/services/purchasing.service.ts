@@ -106,6 +106,45 @@ export interface PurchaseOrderItemDetail {
   totalCostCents: number;
 }
 
+export interface FormattedSupplierPriceComparisonItem {
+  supplierId: string;
+  supplierName: string;
+  supplierSku: string | null;
+  purchasingUnit: string;
+  conversionToBase: number;
+  baseUnit: string;
+  lastPriceCents: number | null; // null if cost redacted
+  normalizedPricePerBaseCents: number | null; // null if cost redacted
+  currency: string;
+  isPreferred: boolean;
+  paymentTerms: string | null;
+  isActive: boolean;
+  updatedAt: string;
+  isCheapest?: boolean;
+  priceDifferenceCents?: number | null;
+  percentagePremium?: number | null;
+}
+
+export interface SupplierPriceComparisonGroup {
+  currency: string;
+  cheapestNormalizedCents: number | null;
+  cheapestSupplierName?: string;
+  preferredSupplierName?: string;
+  potentialSavingsCents?: number | null;
+  suppliers: FormattedSupplierPriceComparisonItem[];
+}
+
+export interface ItemSupplierPriceComparisonPayload {
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  currentCostPerUnitCents: number | null;
+  currency: string;
+  totalSuppliersCount: number;
+  groups: SupplierPriceComparisonGroup[];
+  allSuppliers: FormattedSupplierPriceComparisonItem[];
+}
+
 export class PurchasingService {
   /**
    * Retrieves all suppliers for the active business.
@@ -517,41 +556,198 @@ export class PurchasingService {
 
   /**
    * Deterministic Price Comparison for an Inventory Item across Suppliers.
+   * Scoped authoritatively by business_id and item_id with unit normalization and multi-currency grouping.
    */
-  static async getSupplierPriceComparison(itemId: string) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business) return [];
-
+  static async getSupplierPriceComparison(
+    businessId: string,
+    itemId: string,
+    options?: { hasCostPermission?: boolean }
+  ): Promise<ItemSupplierPriceComparisonPayload | null> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
     const admin = createAdminClient();
-    const { data } = await admin
+
+    // 1. Verify item belongs to business
+    const { data: itemRow } = await admin
+      .from('inventory_items')
+      .select('id, name, base_unit, cost_per_unit_cents, currency')
+      .eq('id', itemId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!itemRow) return null;
+
+    // 2. Query supplier items
+    const { data: rows, error } = await admin
       .from('inventory_supplier_items')
       .select(`
-        *,
-        supplier:inventory_suppliers(id, name, is_preferred, currency)
+        id,
+        supplier_id,
+        item_id,
+        supplier_sku,
+        purchasing_unit,
+        conversion_to_base,
+        last_price_cents,
+        currency,
+        is_preferred,
+        updated_at,
+        supplier:inventory_suppliers!inner(
+          id,
+          business_id,
+          name,
+          payment_terms,
+          is_preferred,
+          is_active,
+          currency
+        )
       `)
       .eq('item_id', itemId)
-      .order('last_price_cents', { ascending: true });
+      .eq('supplier.business_id', businessId)
+      .eq('supplier.is_active', true);
 
-    if (!data) return [];
+    if (error || !rows) {
+      return {
+        itemId: itemRow.id,
+        itemName: itemRow.name,
+        baseUnit: itemRow.base_unit,
+        currentCostPerUnitCents: hasCostPermission ? itemRow.cost_per_unit_cents : null,
+        currency: itemRow.currency || 'USD',
+        totalSuppliersCount: 0,
+        groups: [],
+        allSuppliers: [],
+      };
+    }
 
-    interface SupplierPriceRow {
-      supplier?: { id: string; name: string; is_preferred: boolean; currency: string } | null;
-      is_preferred?: boolean;
+    interface RawSupplierItemRow {
+      id: string;
+      supplier_id: string;
+      item_id: string;
+      supplier_sku: string | null;
       purchasing_unit: string;
       conversion_to_base: number;
       last_price_cents: number;
-      currency?: string;
+      currency: string;
+      is_preferred: boolean;
+      updated_at: string;
+      supplier: {
+        id: string;
+        business_id: string;
+        name: string;
+        payment_terms: string | null;
+        is_preferred: boolean;
+        is_active: boolean;
+        currency: string;
+      };
     }
 
-    return (data as unknown as SupplierPriceRow[]).map((d) => ({
-      supplierId: d.supplier?.id,
-      supplierName: d.supplier?.name || 'Unknown',
-      isPreferred: d.is_preferred || d.supplier?.is_preferred || false,
-      purchasingUnit: d.purchasing_unit,
-      conversionToBase: Number(d.conversion_to_base),
-      lastPriceCents: d.last_price_cents,
-      currency: d.currency || 'USD',
-    }));
+    const mappedSuppliers = (rows as unknown as RawSupplierItemRow[]).map((r) => {
+      const conv = Number(r.conversion_to_base) || 1.0;
+      const rawPrice = Number(r.last_price_cents);
+      const normalizedCents = conv > 0 && rawPrice >= 0 ? Math.round(rawPrice / conv) : null;
+      const isPref = r.is_preferred || r.supplier.is_preferred || false;
+
+      return {
+        supplierId: r.supplier.id,
+        supplierName: r.supplier.name,
+        supplierSku: r.supplier_sku,
+        purchasingUnit: r.purchasing_unit,
+        conversionToBase: conv,
+        baseUnit: itemRow.base_unit,
+        lastPriceCents: hasCostPermission ? rawPrice : null,
+        normalizedPricePerBaseCents: hasCostPermission ? normalizedCents : null,
+        currency: r.currency || r.supplier.currency || 'USD',
+        isPreferred: isPref,
+        paymentTerms: r.supplier.payment_terms,
+        isActive: r.supplier.is_active,
+        updatedAt: r.updated_at,
+      };
+    });
+
+    // Group by currency
+    const currencyMap = new Map<string, FormattedSupplierPriceComparisonItem[]>();
+    mappedSuppliers.forEach((s) => {
+      const cur = s.currency;
+      if (!currencyMap.has(cur)) currencyMap.set(cur, []);
+      currencyMap.get(cur)!.push(s);
+    });
+
+    const groups: SupplierPriceComparisonGroup[] = [];
+    const enrichedAllSuppliers: FormattedSupplierPriceComparisonItem[] = [];
+
+    currencyMap.forEach((suppliersInCurrency, cur) => {
+      const validNormalized = suppliersInCurrency
+        .filter((s) => s.normalizedPricePerBaseCents !== null)
+        .map((s) => s.normalizedPricePerBaseCents as number);
+
+      const cheapestNorm = validNormalized.length > 0 ? Math.min(...validNormalized) : null;
+      let cheapestName: string | undefined;
+      let preferredName: string | undefined;
+      let potentialSavings: number | null = null;
+
+      const enrichedInCurrency = suppliersInCurrency.map((s) => {
+        const isCheapest = cheapestNorm !== null && s.normalizedPricePerBaseCents === cheapestNorm;
+        if (isCheapest && !cheapestName) cheapestName = s.supplierName;
+        if (s.isPreferred) preferredName = s.supplierName;
+
+        let diffCents: number | null = null;
+        let pctPremium: number | null = null;
+
+        if (hasCostPermission && cheapestNorm !== null && s.normalizedPricePerBaseCents !== null) {
+          diffCents = s.normalizedPricePerBaseCents - cheapestNorm;
+          pctPremium = cheapestNorm > 0
+            ? Number((((s.normalizedPricePerBaseCents - cheapestNorm) / cheapestNorm) * 100).toFixed(2))
+            : 0;
+        }
+
+        return {
+          ...s,
+          isCheapest,
+          priceDifferenceCents: diffCents,
+          percentagePremium: pctPremium,
+        };
+      });
+
+      // Sort: cheapest normalized price first, then preferred, then name
+      enrichedInCurrency.sort((a, b) => {
+        if (a.normalizedPricePerBaseCents !== null && b.normalizedPricePerBaseCents !== null) {
+          if (a.normalizedPricePerBaseCents !== b.normalizedPricePerBaseCents) {
+            return a.normalizedPricePerBaseCents - b.normalizedPricePerBaseCents;
+          }
+        }
+        if (a.isPreferred !== b.isPreferred) {
+          return a.isPreferred ? -1 : 1;
+        }
+        return a.supplierName.localeCompare(b.supplierName);
+      });
+
+      if (hasCostPermission && cheapestNorm !== null) {
+        const prefItem = enrichedInCurrency.find((s) => s.isPreferred);
+        if (prefItem && prefItem.normalizedPricePerBaseCents !== null && prefItem.normalizedPricePerBaseCents > cheapestNorm) {
+          potentialSavings = prefItem.normalizedPricePerBaseCents - cheapestNorm;
+        }
+      }
+
+      groups.push({
+        currency: cur,
+        cheapestNormalizedCents: cheapestNorm,
+        cheapestSupplierName: cheapestName,
+        preferredSupplierName: preferredName,
+        potentialSavingsCents: potentialSavings,
+        suppliers: enrichedInCurrency,
+      });
+
+      enrichedAllSuppliers.push(...enrichedInCurrency);
+    });
+
+    return {
+      itemId: itemRow.id,
+      itemName: itemRow.name,
+      baseUnit: itemRow.base_unit,
+      currentCostPerUnitCents: hasCostPermission ? itemRow.cost_per_unit_cents : null,
+      currency: itemRow.currency || 'USD',
+      totalSuppliersCount: mappedSuppliers.length,
+      groups,
+      allSuppliers: enrichedAllSuppliers,
+    };
   }
 
   /**

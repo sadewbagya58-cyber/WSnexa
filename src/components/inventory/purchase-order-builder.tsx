@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { createPurchaseOrderAction } from '@/server/actions/purchasing';
 import { STANDARD_UNITS } from '@/lib/inventory/unit-converter';
@@ -25,12 +26,27 @@ interface InventoryItemOption {
   costPerUnitCents: number;
 }
 
+export interface SupplierItemMapping {
+  supplierId: string;
+  itemId: string;
+  supplierSku: string | null;
+  purchasingUnit: string;
+  conversionToBase: number;
+  lastPriceCents: number;
+  currency: string;
+  isPreferred: boolean;
+}
+
 interface PurchaseOrderBuilderProps {
   branchId: string;
   suppliers: SupplierOption[];
   locations: LocationOption[];
   availableItems: InventoryItemOption[];
+  supplierMappings?: SupplierItemMapping[];
   currency: string;
+  hasCostPermission?: boolean;
+  initialSupplierId?: string;
+  initialItemId?: string;
 }
 
 export function PurchaseOrderBuilder({
@@ -38,16 +54,29 @@ export function PurchaseOrderBuilder({
   suppliers,
   locations,
   availableItems,
+  supplierMappings = [],
   currency,
+  hasCostPermission = false,
+  initialSupplierId,
+  initialItemId,
 }: PurchaseOrderBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [supplierId, setSupplierId] = useState<string>(suppliers[0]?.id || '');
+  const defaultSupplierId =
+    suppliers.find((s) => s.id === initialSupplierId)?.id || suppliers[0]?.id || '';
+  const [supplierId, setSupplierId] = useState<string>(defaultSupplierId);
   const [destinationLocationId, setDestinationLocationId] = useState<string>(locations[0]?.id || '');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  // Initial Item determination
+  const startItem =
+    availableItems.find((i) => i.id === initialItemId) || availableItems[0];
+  const startMapping = startItem
+    ? supplierMappings.find((m) => m.supplierId === defaultSupplierId && m.itemId === startItem.id)
+    : null;
 
   const [items, setItems] = useState<
     Array<{
@@ -58,10 +87,14 @@ export function PurchaseOrderBuilder({
     }>
   >([
     {
-      itemId: availableItems[0]?.id || '',
-      purchasingUnit: availableItems[0]?.baseUnit || 'kg',
+      itemId: startItem?.id || '',
+      purchasingUnit: startMapping?.purchasingUnit || startItem?.baseUnit || 'kg',
       quantityOrdered: 10,
-      unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
+      unitCost: formatMinorUnitsToDecimal(
+        startMapping && hasCostPermission
+          ? startMapping.lastPriceCents
+          : startItem?.costPerUnitCents || 0
+      ),
     },
   ]);
 
@@ -76,13 +109,22 @@ export function PurchaseOrderBuilder({
   }, 0);
 
   function addItem() {
+    const firstItem = availableItems[0];
+    const mapping = firstItem
+      ? supplierMappings.find((m) => m.supplierId === supplierId && m.itemId === firstItem.id)
+      : null;
+
     setItems((prev) => [
       ...prev,
       {
-        itemId: availableItems[0]?.id || '',
-        purchasingUnit: availableItems[0]?.baseUnit || 'kg',
+        itemId: firstItem?.id || '',
+        purchasingUnit: mapping?.purchasingUnit || firstItem?.baseUnit || 'kg',
         quantityOrdered: 10,
-        unitCost: formatMinorUnitsToDecimal(availableItems[0]?.costPerUnitCents || 0),
+        unitCost: formatMinorUnitsToDecimal(
+          mapping && hasCostPermission
+            ? mapping.lastPriceCents
+            : firstItem?.costPerUnitCents || 0
+        ),
       },
     ]);
   }
@@ -90,6 +132,26 @@ export function PurchaseOrderBuilder({
   function removeItem(index: number) {
     if (items.length <= 1) return;
     setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleSupplierChange(newSupplierId: string) {
+    setSupplierId(newSupplierId);
+    // Optionally update line items unit costs and units if mapped to new supplier
+    setItems((prev) =>
+      prev.map((it) => {
+        const mapping = supplierMappings.find(
+          (m) => m.supplierId === newSupplierId && m.itemId === it.itemId
+        );
+        if (mapping) {
+          return {
+            ...it,
+            purchasingUnit: mapping.purchasingUnit,
+            unitCost: hasCostPermission ? formatMinorUnitsToDecimal(mapping.lastPriceCents) : it.unitCost,
+          };
+        }
+        return it;
+      })
+    );
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -144,45 +206,25 @@ export function PurchaseOrderBuilder({
     });
   }
 
-  if (suppliers.length === 0) {
-    return (
-      <div className="bg-white rounded-2xl border border-zinc-200 p-8 text-center space-y-3">
-        <div className="text-3xl">🏢</div>
-        <h3 className="text-sm font-bold text-zinc-900">No Suppliers Registered</h3>
-        <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-          Please register at least one vendor before creating a purchase order.
-        </p>
-        <Button
-          size="sm"
-          onClick={() => router.push('/dashboard/inventory/suppliers')}
-          className="text-xs font-bold bg-zinc-950 text-white"
-        >
-          + Add Supplier
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-5xl">
       {errorMsg && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl">
-          ⚠️ {errorMsg}
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold">
+          {errorMsg}
         </div>
       )}
 
-      {/* Header Info */}
+      {/* Supplier & Destination Location */}
       <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-xs space-y-4">
         <h3 className="text-sm font-bold text-zinc-950 uppercase tracking-wider">
-          1. Vendor & Receiving Details
+          1. Vendor & Destination Details
         </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-zinc-700">Vendor / Supplier *</label>
+            <label className="text-xs font-bold text-zinc-700">Vendor / Supplier</label>
             <select
               value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
+              onChange={(e) => handleSupplierChange(e.target.value)}
               className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-zinc-950 bg-white"
             >
               {suppliers.map((s) => (
@@ -194,7 +236,7 @@ export function PurchaseOrderBuilder({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-zinc-700">Receiving Storage Location *</label>
+            <label className="text-xs font-bold text-zinc-700">Receiving Storage Location</label>
             <select
               value={destinationLocationId}
               onChange={(e) => setDestinationLocationId(e.target.value)}
@@ -238,110 +280,166 @@ export function PurchaseOrderBuilder({
         </div>
 
         <div className="space-y-3">
-          {items.map((item, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
-            >
-              <div className="sm:col-span-5 space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600">Stock Item</label>
-                <select
-                  value={item.itemId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const itm = availableItems.find((i) => i.id === val);
-                    setItems((prev) =>
-                      prev.map((it, i) =>
-                        i === idx
-                          ? {
-                              ...it,
-                              itemId: val,
-                              purchasingUnit: itm?.baseUnit || it.purchasingUnit,
-                              unitCost: formatMinorUnitsToDecimal(itm?.costPerUnitCents || 0),
-                            }
-                          : it
-                      )
-                    );
-                  }}
-                  className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-medium bg-white"
-                >
-                  {availableItems.map((ai) => (
-                    <option key={ai.id} value={ai.id}>
-                      {ai.name} ({formatCurrencyMinor(ai.costPerUnitCents, currency)} / {ai.baseUnit})
-                    </option>
-                  ))}
-                </select>
-              </div>
+          {items.map((item, idx) => {
+            const mappedCatalog = supplierMappings.find(
+              (m) => m.supplierId === supplierId && m.itemId === item.itemId
+            );
+            const currentItemInfo = availableItems.find((i) => i.id === item.itemId);
 
-              <div className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600">Quantity</label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  required
-                  value={item.quantityOrdered}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((it, i) => (i === idx ? { ...it, quantityOrdered: Number(e.target.value) } : it))
-                    )
-                  }
-                  className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
-                />
-              </div>
+            return (
+              <div
+                key={idx}
+                className="p-4 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div className="sm:col-span-5 space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-600">Stock Item</label>
+                    <select
+                      value={item.itemId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const itm = availableItems.find((i) => i.id === val);
+                        const map = supplierMappings.find(
+                          (m) => m.supplierId === supplierId && m.itemId === val
+                        );
+                        setItems((prev) =>
+                          prev.map((it, i) =>
+                            i === idx
+                              ? {
+                                  ...it,
+                                  itemId: val,
+                                  purchasingUnit: map?.purchasingUnit || itm?.baseUnit || it.purchasingUnit,
+                                  unitCost: formatMinorUnitsToDecimal(
+                                    map && hasCostPermission
+                                      ? map.lastPriceCents
+                                      : itm?.costPerUnitCents || 0
+                                  ),
+                                }
+                              : it
+                          )
+                        );
+                      }}
+                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-medium bg-white"
+                    >
+                      {availableItems.map((ai) => (
+                        <option key={ai.id} value={ai.id}>
+                          {ai.name} ({formatCurrencyMinor(ai.costPerUnitCents, currency)} / {ai.baseUnit})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600">Purchasing Unit</label>
-                <select
-                  value={item.purchasingUnit}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((it, i) => (i === idx ? { ...it, purchasingUnit: e.target.value } : it))
-                    )
-                  }
-                  className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-medium bg-white"
-                >
-                  {Object.keys(STANDARD_UNITS).map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-600">Quantity</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      required
+                      value={item.quantityOrdered}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((it, i) => (i === idx ? { ...it, quantityOrdered: Number(e.target.value) } : it))
+                        )
+                      }
+                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
+                    />
+                  </div>
 
-              <div className="sm:col-span-2 space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600">
-                  Unit Cost ({getCurrencySymbol(currency)} / {item.purchasingUnit})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={item.unitCost}
-                  onChange={(e) =>
-                    setItems((prev) =>
-                      prev.map((it, i) => (i === idx ? { ...it, unitCost: e.target.value } : it))
-                    )
-                  }
-                  placeholder="0.00"
-                  className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
-                />
-              </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-600">Purchasing Unit</label>
+                    <select
+                      value={item.purchasingUnit}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((it, i) => (i === idx ? { ...it, purchasingUnit: e.target.value } : it))
+                        )
+                      }
+                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-medium bg-white"
+                    >
+                      {Object.keys(STANDARD_UNITS).map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="sm:col-span-1 flex justify-end pt-4 sm:pt-0">
-                {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(idx)}
-                    className="p-1.5 text-zinc-400 hover:text-rose-600 transition-colors"
-                  >
-                    ✕
-                  </button>
-                )}
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-600">
+                      Unit Cost ({getCurrencySymbol(currency)} / {item.purchasingUnit})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={item.unitCost}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((it, i) => (i === idx ? { ...it, unitCost: e.target.value } : it))
+                        )
+                      }
+                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-zinc-300 rounded-lg text-xs font-mono bg-white"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-1 flex justify-end pt-4 sm:pt-0">
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        className="p-1.5 text-zinc-400 hover:text-rose-600 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Supplier Catalog Pricing Context & Comparison Link */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-200/60 text-[11px]">
+                  {mappedCatalog ? (
+                    <div className="flex items-center gap-2 text-zinc-600 font-medium">
+                      <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        🏷️ Mapped Catalog
+                      </span>
+                      {hasCostPermission && (
+                        <span>
+                          {formatCurrencyMinor(mappedCatalog.lastPriceCents, mappedCatalog.currency)} / {mappedCatalog.purchasingUnit}
+                          {mappedCatalog.conversionToBase !== 1 && currentItemInfo && (
+                            <span className="text-zinc-400 ml-1">
+                              ({formatCurrencyMinor(Math.round(mappedCatalog.lastPriceCents / mappedCatalog.conversionToBase), mappedCatalog.currency)} / {currentItemInfo.baseUnit} base)
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {mappedCatalog.supplierSku && (
+                        <span className="text-zinc-400 font-mono text-[10px]">
+                          SKU: {mappedCatalog.supplierSku}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-zinc-400 italic">
+                      No direct catalog mapping for this supplier. Standard unit cost applied.
+                    </span>
+                  )}
+
+                  {item.itemId && (
+                    <Link
+                      href={`/dashboard/inventory/items/${item.itemId}`}
+                      target="_blank"
+                      className="text-zinc-600 hover:text-zinc-950 font-bold hover:underline ml-auto flex items-center gap-1"
+                    >
+                      <span>🔍</span> Compare All Suppliers ↗
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Total Summary */}
@@ -378,9 +476,9 @@ export function PurchaseOrderBuilder({
         <Button
           type="submit"
           disabled={isPending}
-          className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-36"
+          className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold px-6"
         >
-          {isPending ? 'Creating PO…' : 'Save Purchase Order ✓'}
+          {isPending ? 'Creating Purchase Order...' : 'Create Purchase Order'}
         </Button>
       </div>
     </form>

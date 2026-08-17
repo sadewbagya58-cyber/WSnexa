@@ -37,6 +37,8 @@ function assert(condition: boolean, message: string) {
 
 async function runSuite() {
   const { RecipeService } = await import('../src/server/services/recipe.service');
+  const { InventoryService } = await import('../src/server/services/inventory.service');
+  const { PurchasingService } = await import('../src/server/services/purchasing.service');
   const { parseDecimalToMinorUnits } = await import('../src/lib/utils/money');
   const { getCurrencySymbol, formatCurrencyMinor } = await import('../src/lib/utils/currency');
   console.log('================================================================');
@@ -1261,8 +1263,6 @@ async function runSuite() {
     // ============================================================================
     console.log('\n[Section 9] Testing Batch / Lot Tracking, Expiry Derivation, & Scoping...');
 
-    const { InventoryService } = await import('../src/server/services/inventory.service');
-
     const todayDate = new Date();
     const healthyDate = new Date(todayDate);
     healthyDate.setDate(todayDate.getDate() + 30);
@@ -1697,6 +1697,171 @@ async function runSuite() {
 
     const otherBranchAlerts = await InventoryService.getExpiringBatches(biz.id, '00000000-0000-0000-0000-000000000000');
     assert(otherBranchAlerts.totalExpiringCount === 0, 'Cross-branch query strictly returns 0 expiry alerts');
+
+    // ============================================================================
+    // Section 11: Supplier Price Comparison, Normalization, & Multi-Currency Safety
+    // ============================================================================
+    console.log('\n[Section 11] Testing Supplier Price Comparison & Unit Normalization...');
+
+    // 1. Create Test Suppliers
+    const { data: supAlpha } = await admin
+      .from('inventory_suppliers')
+      .insert({
+        business_id: biz.id,
+        name: 'Alpha Foods Premium Ltd',
+        currency: 'EUR',
+        is_preferred: true,
+        is_active: true,
+        payment_terms: 'Net 30',
+      })
+      .select()
+      .single();
+
+    const { data: supBeta } = await admin
+      .from('inventory_suppliers')
+      .insert({
+        business_id: biz.id,
+        name: 'Beta Seafood Wholesale',
+        currency: 'EUR',
+        is_preferred: false,
+        is_active: true,
+        payment_terms: 'COD',
+      })
+      .select()
+      .single();
+
+    const { data: supGamma } = await admin
+      .from('inventory_suppliers')
+      .insert({
+        business_id: biz.id,
+        name: 'Gamma Global US Imports',
+        currency: 'USD',
+        is_preferred: false,
+        is_active: true,
+        payment_terms: 'Net 14',
+      })
+      .select()
+      .single();
+
+    // 2. Link Suppliers to itemSalmon
+    // Supplier Alpha: 10 kg case = €70.00 (7000 cents) -> €7.00/kg (700 cents)
+    await admin.from('inventory_supplier_items').insert({
+      supplier_id: supAlpha.id,
+      item_id: itemSalmon.id,
+      supplier_sku: `ALPHA-SAL-${testSuffix}`,
+      purchasing_unit: 'case',
+      conversion_to_base: 10.0,
+      last_price_cents: 7000,
+      currency: 'EUR',
+      is_preferred: true,
+    });
+
+    // Supplier Beta: 5 kg box = €32.50 (3250 cents) -> €6.50/kg (650 cents) [CHEAPER]
+    await admin.from('inventory_supplier_items').insert({
+      supplier_id: supBeta.id,
+      item_id: itemSalmon.id,
+      supplier_sku: `BETA-SAL-${testSuffix}`,
+      purchasing_unit: 'box',
+      conversion_to_base: 5.0,
+      last_price_cents: 3250,
+      currency: 'EUR',
+      is_preferred: false,
+    });
+
+    // Supplier Gamma: 1 kg pack = $8.00 (800 cents) [USD CURRENCY]
+    await admin.from('inventory_supplier_items').insert({
+      supplier_id: supGamma.id,
+      item_id: itemSalmon.id,
+      supplier_sku: `GAMMA-SAL-${testSuffix}`,
+      purchasing_unit: 'kg',
+      conversion_to_base: 1.0,
+      last_price_cents: 800,
+      currency: 'USD',
+      is_preferred: false,
+    });
+
+    // 3. Query Authoritative Price Comparison
+    const comparison = await PurchasingService.getSupplierPriceComparison(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+    });
+
+    assert(comparison !== null, 'Supplier price comparison payload resolved for valid item');
+    assert(comparison?.totalSuppliersCount === 3, 'Total 3 linked suppliers returned');
+    assert(comparison?.groups.length === 2, 'Suppliers segmented into 2 separate currency groups (EUR and USD)');
+
+    // 4. Validate EUR Currency Group & Pack Normalization
+    const eurGroup = comparison?.groups.find((g) => g.currency === 'EUR');
+    assert(eurGroup !== undefined, 'EUR currency group found');
+    assert(eurGroup?.cheapestNormalizedCents === 650, 'Cheapest normalized price in EUR is exactly 650 cents (€6.50/kg)');
+    assert(eurGroup?.cheapestSupplierName === 'Beta Seafood Wholesale', 'Cheapest supplier identified as Beta Seafood Wholesale');
+    assert(eurGroup?.preferredSupplierName === 'Alpha Foods Premium Ltd', 'Preferred supplier identified as Alpha Foods Premium Ltd');
+    assert(eurGroup?.potentialSavingsCents === 50, 'Potential unit savings vs preferred calculated as 50 cents (€0.50/kg)');
+
+    // 5. Validate Supplier Beta (Cheapest)
+    const betaItem = eurGroup?.suppliers.find((s) => s.supplierId === supBeta.id);
+    assert(betaItem !== undefined, 'Beta Seafood item found in EUR group');
+    assert(betaItem?.purchasingUnit === 'box', 'Beta purchasing unit is box');
+    assert(betaItem?.conversionToBase === 5.0, 'Beta conversion factor is 5.0 kg/box');
+    assert(betaItem?.lastPriceCents === 3250, 'Beta raw pack price is 3250 cents (€32.50)');
+    assert(betaItem?.normalizedPricePerBaseCents === 650, 'Beta normalized price is 650 cents (€6.50/kg)');
+    assert(betaItem?.isCheapest === true, 'Beta marked as cheapest (isCheapest: true)');
+    assert(betaItem?.priceDifferenceCents === 0, 'Beta variance vs cheapest is 0 cents');
+    assert(betaItem?.percentagePremium === 0, 'Beta percentage premium is 0%');
+
+    // 6. Validate Supplier Alpha (Preferred, but higher normalized cost)
+    const alphaItem = eurGroup?.suppliers.find((s) => s.supplierId === supAlpha.id);
+    assert(alphaItem !== undefined, 'Alpha Foods item found in EUR group');
+    assert(alphaItem?.purchasingUnit === 'case', 'Alpha purchasing unit is case');
+    assert(alphaItem?.conversionToBase === 10.0, 'Alpha conversion factor is 10.0 kg/case');
+    assert(alphaItem?.lastPriceCents === 7000, 'Alpha raw pack price is 7000 cents (€70.00)');
+    assert(alphaItem?.normalizedPricePerBaseCents === 7000 / 10, 'Alpha normalized price is 700 cents (€7.00/kg)');
+    assert(alphaItem?.isPreferred === true, 'Alpha preserved as preferred vendor');
+    assert(alphaItem?.isCheapest === false, 'Alpha correctly not marked as cheapest');
+    assert(alphaItem?.priceDifferenceCents === 50, 'Alpha price difference vs cheapest is +50 cents (+€0.50/kg)');
+    assert(alphaItem?.percentagePremium === 7.69, 'Alpha percentage premium vs cheapest is +7.69%');
+
+    // 7. Deterministic Sorting within Currency Group (Cheapest First)
+    assert(eurGroup?.suppliers[0].supplierId === supBeta.id, 'Beta (cheaper normalized price) is sorted first in EUR group');
+    assert(eurGroup?.suppliers[1].supplierId === supAlpha.id, 'Alpha (higher normalized price) is sorted second in EUR group');
+
+    // 8. Validate USD Currency Group Isolation (No direct cross-currency ranking)
+    const usdGroup = comparison?.groups.find((g) => g.currency === 'USD');
+    assert(usdGroup !== undefined, 'USD currency group found');
+    assert(usdGroup?.cheapestNormalizedCents === 800, 'USD cheapest price is 800 cents ($8.00/kg)');
+    assert(usdGroup?.suppliers.length === 1, 'USD group strictly contains only USD supplier');
+    const gammaItem = usdGroup?.suppliers[0];
+    assert(gammaItem?.supplierId === supGamma.id, 'Gamma supplier isolated in USD group');
+    assert(gammaItem?.currency === 'USD', 'Gamma currency is USD');
+
+    // 9. Cost Redaction for Unauthorized Roles
+    const redactedComp = await PurchasingService.getSupplierPriceComparison(biz.id, itemSalmon.id, {
+      hasCostPermission: false,
+    });
+    assert(redactedComp !== null, 'Redacted comparison payload returned');
+    assert(redactedComp?.currentCostPerUnitCents === null, 'Item current cost redacted to null');
+    assert(redactedComp?.allSuppliers[0].lastPriceCents === null, 'Supplier pack price strictly redacted to null');
+    assert(redactedComp?.allSuppliers[0].normalizedPricePerBaseCents === null, 'Normalized price strictly redacted to null');
+    assert(redactedComp?.allSuppliers[0].priceDifferenceCents === null, 'Price difference strictly redacted to null');
+    assert(redactedComp?.allSuppliers[0].percentagePremium === null, 'Percentage premium strictly redacted to null');
+    assert(redactedComp?.groups[0].cheapestNormalizedCents === null, 'Group cheapest price strictly redacted to null');
+    assert(redactedComp?.groups[0].potentialSavingsCents === null, 'Group potential savings strictly redacted to null');
+    assert(redactedComp?.allSuppliers[0].supplierName !== undefined, 'Supplier name remains visible under redaction');
+    assert(redactedComp?.allSuppliers[0].purchasingUnit !== undefined, 'Purchasing unit remains visible under redaction');
+
+    // 10. Multi-Tenant and Business Isolation
+    const crossBizComp = await PurchasingService.getSupplierPriceComparison(
+      '00000000-0000-0000-0000-000000000000',
+      itemSalmon.id,
+      { hasCostPermission: true }
+    );
+    assert(crossBizComp === null, 'Cross-tenant query with unowned business strictly returns null');
+
+    const invalidItemComp = await PurchasingService.getSupplierPriceComparison(
+      biz.id,
+      '00000000-0000-0000-0000-000000000000',
+      { hasCostPermission: true }
+    );
+    assert(invalidItemComp === null, 'Query with non-existent item UUID strictly returns null');
 
   } finally {
     // Teardown Test Data

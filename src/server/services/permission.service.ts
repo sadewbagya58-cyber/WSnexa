@@ -177,13 +177,15 @@ export class PermissionService {
   ): Promise<PermissionKey[]> {
     const catalog = await this.listPermissionCatalog();
     const allKeys = catalog.map((c) => c.key);
-    const result: PermissionKey[] = [];
 
-    for (const key of allKeys) {
-      const allowed = await this.hasPermission(userId, businessId, branchId, key);
-      if (allowed) result.push(key);
-    }
-    return result;
+    const checks = await Promise.all(
+      allKeys.map(async (key) => {
+        const allowed = await this.hasPermission(userId, businessId, branchId, key);
+        return allowed ? key : null;
+      })
+    );
+
+    return checks.filter((k): k is PermissionKey => k !== null);
   }
 
   /**

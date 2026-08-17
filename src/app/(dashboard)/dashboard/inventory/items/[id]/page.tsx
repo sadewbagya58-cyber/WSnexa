@@ -11,6 +11,7 @@ import { InventoryMovementTimeline } from '@/components/inventory/inventory-move
 import { ItemBatchesCard } from '@/components/inventory/item-batches-card';
 import { ItemSupplierPricingCard } from '@/components/inventory/item-supplier-pricing-card';
 import { ItemPriceHistoryCard } from '@/components/inventory/item-price-history-card';
+import { ItemForecastCard } from '@/components/inventory/item-forecast-card';
 
 interface ItemDetailPageProps {
   params: Promise<{ id: string }>;
@@ -39,7 +40,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     'inventory.costs.view'
   );
 
-  const [item, movements, batches, supplierComparison, priceHistoryPayload] = await Promise.all([
+  const [item, movements, batches, supplierComparison, priceHistoryPayload, forecast] = await Promise.all([
     InventoryService.getInventoryItemById(context.business.id, context.activeBranch.id, id, hasCostPermission),
     InventoryService.getMovements(context.business.id, context.activeBranch.id, {
       itemId: id,
@@ -54,6 +55,9 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
       hasCostPermission,
     }),
     PurchasingService.getItemPriceHistory(context.business.id, id, {
+      hasCostPermission,
+    }),
+    InventoryService.getItemReorderForecast(context.business.id, context.activeBranch.id, id, {
       hasCostPermission,
     }),
   ]);
@@ -200,6 +204,13 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
           )}
         </div>
       </div>
+
+      {/* Demand Forecasting & Smart Reorder */}
+      <ItemForecastCard
+        forecast={forecast}
+        currency={item.currency || context.business.defaultCurrency || 'USD'}
+        hasCostPermission={hasCostPermission}
+      />
 
       {/* Batches & Lots Breakdown */}
       <ItemBatchesCard

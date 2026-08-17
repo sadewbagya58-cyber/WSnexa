@@ -2415,6 +2415,353 @@ async function runSuite() {
       'Single-supplier history strictly contains only Gamma (Fresh Foods) records'
     );
 
+    // ========================================================================
+    // --- Section 15: Inventory Forecasting & Smart Reorder Suggestions ---
+    // ========================================================================
+    console.log('\n--- Section 15: Inventory Forecasting & Smart Reorder Suggestions ---');
+
+    // 1. Setup Test Item: Chicken Breast Fillet
+    const { data: itemChicken } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Organic Chicken Breast Fillet',
+        sku: `CHK-${testSuffix}`,
+        base_unit: 'kg',
+        cost_per_unit_cents: 700,
+        currency: 'USD',
+        min_stock_level: 0,
+        target_stock_level: 0,
+      })
+      .select()
+      .single();
+    assert(itemChicken !== null, 'Test item Organic Chicken Breast created');
+
+    // Set initial balance of 8.0 kg at Main Branch location
+    await admin.from('inventory_balances').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemChicken.id,
+      current_quantity: 8.0,
+      reserved_quantity: 0.0,
+    });
+
+    // 2. Setup Suppliers:
+    // Supplier Gamma (Fresh Foods): 10 kg case = $75.00 ($7.50/kg, 7500 cents), Preferred = true
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemChicken.id,
+        purchasingUnit: 'case',
+        conversionToBase: 10.0,
+        lastPriceCents: 7500, // $75.00
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+
+    // Supplier Delta (Budget Foods): 5 kg box = $32.50 ($6.50/kg, 3250 cents), Preferred = false
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supDelta.id,
+        itemId: itemChicken.id,
+        purchasingUnit: 'box',
+        conversionToBase: 5.0,
+        lastPriceCents: 3250, // $32.50
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
+
+    // 3. Seed 14-day Authoritative Operational Demand (14 events totaling 56.0 kg -> 4.0 kg/day)
+    const nowTime = Date.now();
+    for (let d = 0; d < 14; d++) {
+      const pastDate = new Date(nowTime - (d + 0.2) * 24 * 60 * 60 * 1000).toISOString();
+      await admin.from('inventory_stock_movements').insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        location_id: locMain.id,
+        item_id: itemChicken.id,
+        movement_type: 'recipe_consumption',
+        direction: 'out',
+        quantity: 4.0,
+        unit: 'kg',
+        quantity_base: 4.0,
+        previous_balance_base: 64.0 - d * 4.0,
+        new_balance_base: 64.0 - (d + 1) * 4.0,
+        unit_cost_cents: 700,
+        total_cost_cents: 2800,
+        currency: 'USD',
+        created_at: pastDate,
+      });
+    }
+
+    // 4. Seed Non-Demand Inventory Reductions (Must NOT contaminate demand calculation)
+    const pastWasteDate = new Date(nowTime - 2 * 24 * 60 * 60 * 1000).toISOString();
+    await admin.from('inventory_stock_movements').insert([
+      {
+        business_id: biz.id,
+        branch_id: branch.id,
+        location_id: locMain.id,
+        item_id: itemChicken.id,
+        movement_type: 'waste',
+        direction: 'out',
+        quantity: 5.0,
+        unit: 'kg',
+        quantity_base: 5.0,
+        previous_balance_base: 8.0,
+        new_balance_base: 3.0,
+        unit_cost_cents: 700,
+        total_cost_cents: 3500,
+        currency: 'USD',
+        created_at: pastWasteDate,
+      },
+      {
+        business_id: biz.id,
+        branch_id: branch.id,
+        location_id: locMain.id,
+        item_id: itemChicken.id,
+        movement_type: 'supplier_return',
+        direction: 'out',
+        quantity: 3.0,
+        unit: 'kg',
+        quantity_base: 3.0,
+        previous_balance_base: 3.0,
+        new_balance_base: 0.0,
+        unit_cost_cents: 700,
+        total_cost_cents: 2100,
+        currency: 'USD',
+        created_at: pastWasteDate,
+      },
+      {
+        business_id: biz.id,
+        branch_id: branch.id,
+        location_id: locMain.id,
+        item_id: itemChicken.id,
+        movement_type: 'transfer_out',
+        direction: 'out',
+        quantity: 4.0,
+        unit: 'kg',
+        quantity_base: 4.0,
+        previous_balance_base: 8.0,
+        new_balance_base: 4.0,
+        unit_cost_cents: 700,
+        total_cost_cents: 2800,
+        currency: 'USD',
+        created_at: pastWasteDate,
+      },
+      {
+        business_id: biz.id,
+        branch_id: branch.id,
+        location_id: locMain.id,
+        item_id: itemChicken.id,
+        movement_type: 'adjustment_add',
+        direction: 'in',
+        quantity: 2.0,
+        unit: 'kg',
+        quantity_base: 2.0,
+        previous_balance_base: 8.0,
+        new_balance_base: 10.0,
+        unit_cost_cents: 700,
+        total_cost_cents: 1400,
+        currency: 'USD',
+        created_at: pastWasteDate,
+      },
+    ]);
+
+    // 5. Test Demand Forecast Derivation
+    const demandForecast = await InventoryService.getDemandForecast(biz.id, branch.id, itemChicken.id, {
+      windowDays: 14,
+    });
+    assert(demandForecast.daysAnalyzed === 14, 'Forecast analyzed 14-day window');
+    assert(demandForecast.totalDemandBase === 56.0, 'Total operational demand is exactly 56.0 kg (waste/returns/transfers excluded)');
+    assert(demandForecast.averageDailyDemandBase === 4.0, 'Average daily demand is exactly 4.00 kg/day (56kg / 14d)');
+    assert(demandForecast.weightedDailyDemandBase === 4.0, 'Weighted daily demand is exactly 4.00 kg/day');
+    assert(demandForecast.observationsCount === 14, 'Recorded 14 authoritative demand observations');
+    assert(demandForecast.historyQuality === 'high', 'Demand history quality classified as high (>=8 observations)');
+
+    // 6. Test Smart Reorder Suggestions for Chicken Breast
+    const reorderSuggestions = await InventoryService.getReorderSuggestions(biz.id, branch.id, {
+      hasCostPermission: true,
+      windowDays: 14,
+      targetCoverageDays: 7,
+    });
+
+    const chickenSuggestion = reorderSuggestions.suggestions.find((s) => s.itemId === itemChicken.id);
+    assert(chickenSuggestion !== undefined, 'Chicken Breast suggestion found in overview');
+    assert(chickenSuggestion?.currentStock === 8.0, 'Current stock on hand is 8.0 kg');
+    assert(chickenSuggestion?.openIncomingStock === 0, 'No open incoming POs initially');
+    assert(chickenSuggestion?.daysOfStockRemaining === 2.0, 'Days of stock remaining is exactly 2.0 days (8kg / 4kg/day)');
+    assert(chickenSuggestion?.riskStatus === 'critical' || chickenSuggestion?.riskStatus === 'reorder_soon', 'Chicken Breast identified as stockout risk');
+
+    // Replenishment Math:
+    // Target coverage = 4.0 kg/day * 7 days = 28.0 kg (target stock)
+    // Recommended Base Qty = 28.0 kg - 8.0 kg = 20.0 kg
+    assert(chickenSuggestion?.targetStockLevelBase === 28.0, 'Target stock level is 28.0 kg (4kg/day * 7d)');
+    assert(chickenSuggestion?.recommendedBaseQty === 20.0, 'Recommended reorder base quantity is exactly 20.0 kg');
+
+    // Supplier Pack & Pricing:
+    // Best Price: Budget Foods ($6.50/kg, 5kg box) -> 4 boxes (20 kg) = $130.00 (13000 cents)
+    assert(chickenSuggestion?.suggestedSupplier !== null, 'Suggested supplier exists');
+    assert(chickenSuggestion?.suggestedSupplier?.supplierName === 'Delta Budget Foods USD', 'Cheapest supplier Budget Foods suggested');
+    assert(chickenSuggestion?.suggestedSupplier?.purchasingUnit === 'box', 'Purchasing unit is box');
+    assert(chickenSuggestion?.suggestedSupplier?.conversionToBase === 5.0, 'Conversion factor is 5.0 kg/box');
+    assert(chickenSuggestion?.suggestedSupplier?.packsToOrder === 4, 'Packs to order rounded up to 4 boxes (20 kg / 5 kg)');
+    assert(chickenSuggestion?.suggestedSupplier?.orderQuantityBase === 20.0, 'Supplier order quantity is 20.0 kg');
+    assert(chickenSuggestion?.suggestedSupplier?.totalEstimatedCents === 13000, 'Estimated PO cost for Budget Foods is $130.00 (13000 cents)');
+
+    // Preferred Supplier Alternative:
+    // Fresh Foods ($7.50/kg, 10kg case) -> 2 cases (20 kg) = $150.00 (15000 cents)
+    assert(chickenSuggestion?.preferredSupplierAlternative !== null, 'Preferred supplier alternative exists');
+    assert(chickenSuggestion?.preferredSupplierAlternative?.supplierName === 'Gamma Global US Imports', 'Preferred supplier Gamma identified');
+    assert(chickenSuggestion?.preferredSupplierAlternative?.packsToOrder === 2, 'Preferred supplier packs to order is 2 cases (20 kg / 10 kg)');
+    assert(chickenSuggestion?.preferredSupplierAlternative?.totalEstimatedCents === 15000, 'Preferred supplier estimated total is $150.00 (15000 cents)');
+    assert(chickenSuggestion?.potentialSavingsCents === 2000, 'Potential saving is exactly $20.00 (2000 cents, $150 vs $130)');
+
+    // 7. Open Purchase Order Awareness (Incoming Stock Reduction)
+    // Create an approved PO for 10 kg Chicken Breast (1 case from Gamma)
+    const { data: poApproved } = await admin
+      .from('inventory_purchase_orders')
+      .insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        supplier_id: supGamma.id,
+        destination_location_id: locMain.id,
+        po_number: `PO-TEST-INCOMING-${testSuffix}`,
+        status: 'approved',
+        currency: 'USD',
+        total_cents: 7500,
+      })
+      .select()
+      .single();
+
+    await admin.from('inventory_purchase_order_items').insert({
+      po_id: poApproved.id,
+      item_id: itemChicken.id,
+      purchasing_unit: 'case',
+      quantity_ordered: 1.0,
+      quantity_ordered_base: 10.0,
+      quantity_received_base: 0.0,
+      unit_cost_cents: 7500,
+      total_cost_cents: 7500,
+    });
+
+    // Create a draft PO for 20 kg (must NOT count as incoming)
+    const { data: poDraft } = await admin
+      .from('inventory_purchase_orders')
+      .insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        supplier_id: supGamma.id,
+        destination_location_id: locMain.id,
+        po_number: `PO-TEST-DRAFT-${testSuffix}`,
+        status: 'draft',
+        currency: 'USD',
+        total_cents: 15000,
+      })
+      .select()
+      .single();
+
+    await admin.from('inventory_purchase_order_items').insert({
+      po_id: poDraft.id,
+      item_id: itemChicken.id,
+      purchasing_unit: 'case',
+      quantity_ordered: 2.0,
+      quantity_ordered_base: 20.0,
+      quantity_received_base: 0.0,
+      unit_cost_cents: 7500,
+      total_cost_cents: 15000,
+    });
+
+    // Re-query suggestions with open approved PO
+    const reorderWithIncoming = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemChicken.id, {
+      hasCostPermission: true,
+      windowDays: 14,
+    });
+    assert(reorderWithIncoming !== null, 'Item reorder forecast retrieved with incoming PO');
+    assert(reorderWithIncoming?.openIncomingStock === 10.0, 'Open incoming stock is exactly 10.0 kg (approved PO only, draft excluded)');
+    assert(reorderWithIncoming?.projectedAvailableStock === 18.0, 'Projected available stock is 18.0 kg (8kg on-hand + 10kg incoming)');
+    assert(reorderWithIncoming?.recommendedBaseQty === 10.0, 'Recommended reorder base quantity reduced to 10.0 kg (28kg target - 18kg projected)');
+    assert(reorderWithIncoming?.suggestedSupplier?.packsToOrder === 2, 'Budget Foods packs to order reduced to 2 boxes (10 kg / 5 kg)');
+    assert(reorderWithIncoming?.suggestedSupplier?.totalEstimatedCents === 6500, 'Estimated PO cost updated to $65.00 (6500 cents)');
+
+    // 8. Near-Expiry Risk Context Integration
+    const batchExpiryDate = new Date(nowTime + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    await admin.from('inventory_item_batches').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemChicken.id,
+      batch_code: `BATCH-EXP-CHK-${testSuffix}`,
+      initial_quantity: 3.0,
+      remaining_quantity: 3.0,
+      unit_cost_cents: 700,
+      currency: 'USD',
+      expiry_date: batchExpiryDate,
+    });
+
+    const forecastWithExpiry = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemChicken.id, {
+      hasCostPermission: true,
+      windowDays: 14,
+    });
+    assert(forecastWithExpiry?.nearExpiryStockBase === 3.0, 'Near-expiry context captured 3.0 kg expiring');
+    assert(forecastWithExpiry?.nearExpiryDaysThreshold !== undefined && forecastWithExpiry.nearExpiryDaysThreshold <= 3, 'Near-expiry threshold is <= 3 days');
+    assert(forecastWithExpiry?.explanation.includes('expires in') === true, 'Forecast explanation includes near-expiry alert warning');
+
+    // 9. Zero-Demand / Insufficient History Handling
+    const { data: itemOliveOil } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Extra Virgin Olive Oil',
+        sku: `OIL-${testSuffix}`,
+        base_unit: 'L',
+        cost_per_unit_cents: 1200,
+        currency: 'USD',
+        min_stock_level: 2.0,
+      })
+      .select()
+      .single();
+
+    const oilForecast = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemOliveOil.id, {
+      hasCostPermission: true,
+    });
+    assert(oilForecast !== null, 'Olive Oil forecast retrieved');
+    assert(oilForecast?.averageDailyDemandBase === 0, 'Zero demand rate returned for item with no movements');
+    assert(oilForecast?.daysOfStockRemaining === null, 'Days of stock remaining is null (no divide by zero)');
+    assert(oilForecast?.demandHistoryQuality === 'insufficient', 'Demand history quality is insufficient');
+    assert(oilForecast?.riskStatus === 'critical', 'Zero stock with min_stock_level classified as critical');
+
+    // 10. Cost Redaction Invariants
+    const redactedSuggestions = await InventoryService.getReorderSuggestions(biz.id, branch.id, {
+      hasCostPermission: false,
+      windowDays: 14,
+      targetCoverageDays: 7,
+    });
+    assert(redactedSuggestions.totalEstimatedReorderCostCents === null, 'Total estimated reorder cost strictly redacted to null');
+    const redactedChicken = redactedSuggestions.suggestions.find((s) => s.itemId === itemChicken.id);
+    assert(redactedChicken?.suggestedSupplier?.packPriceCents === null, 'Supplier pack price strictly redacted to null');
+    assert(redactedChicken?.suggestedSupplier?.totalEstimatedCents === null, 'Supplier total estimated cents strictly redacted to null');
+    assert(redactedChicken?.potentialSavingsCents === null, 'Potential savings strictly redacted to null');
+    assert(redactedChicken?.suggestedSupplier !== null && !!redactedChicken?.suggestedSupplier?.supplierName, 'Supplier name remains visible under redaction');
+    assert(redactedChicken?.recommendedBaseQty === 10.0, 'Operational recommended quantity remains visible under redaction');
+
+    // 11. Multi-Branch & Business Isolation
+    const crossBranchSuggestions = await InventoryService.getReorderSuggestions(biz.id, '11111111-1111-1111-1111-111111111111', {
+      hasCostPermission: true,
+    });
+    const crossBranchChicken = crossBranchSuggestions.suggestions.find((s) => s.itemId === itemChicken.id);
+    assert(crossBranchChicken?.currentStock === 0, 'Cross branch query has 0 kg Chicken stock (Branch isolation)');
+    assert(crossBranchChicken?.totalDemandBase === 0, 'Cross branch query has 0 demand for Chicken (Branch isolation)');
+
+    const crossBusinessSuggestions = await InventoryService.getReorderSuggestions('00000000-0000-0000-0000-000000000000', branch.id, {
+      hasCostPermission: true,
+    });
+    assert(crossBusinessSuggestions.suggestions.length === 0, 'Cross-tenant query strictly returns 0 suggestions (Tenant isolation)');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

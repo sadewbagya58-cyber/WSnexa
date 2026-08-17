@@ -9,7 +9,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { PurchaseOrderBuilder } from '@/components/inventory/purchase-order-builder';
 
 interface NewPurchaseOrderPageProps {
-  searchParams: Promise<{ supplierId?: string; itemId?: string }>;
+  searchParams: Promise<{ supplierId?: string; itemId?: string; quantity?: string }>;
 }
 
 export const metadata: Metadata = {
@@ -27,7 +27,8 @@ export default async function NewPurchaseOrderPage({ searchParams }: NewPurchase
     redirect('/login');
   }
 
-  const { supplierId: querySupplierId, itemId: queryItemId } = await searchParams;
+  const { supplierId: querySupplierId, itemId: queryItemId, quantity: queryQuantity } = await searchParams;
+  const initialQuantity = queryQuantity && !isNaN(Number(queryQuantity)) ? Number(queryQuantity) : undefined;
 
   const hasCostPermission = await PermissionService.hasPermission(
     context.user.id,
@@ -132,6 +133,7 @@ export default async function NewPurchaseOrderPage({ searchParams }: NewPurchase
         hasCostPermission={hasCostPermission}
         initialSupplierId={querySupplierId}
         initialItemId={queryItemId}
+        initialQuantity={initialQuantity}
       />
     </div>
   );

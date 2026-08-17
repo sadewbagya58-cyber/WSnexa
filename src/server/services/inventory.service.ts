@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { UnitConverter } from '@/lib/inventory/unit-converter';
+import { PurchasingService } from '@/server/services/purchasing.service';
 import {
   CreateInventoryCategoryInput,
   CreateStorageLocationInput,
@@ -14,6 +15,80 @@ import {
   StockCountStatus,
   StockTransferStatus,
 } from '@/lib/validation/inventory';
+
+export type DemandConfidence = 'high' | 'medium' | 'low' | 'insufficient';
+export type ReorderRiskStatus = 'critical' | 'reorder_soon' | 'healthy' | 'no_demand';
+
+export interface SuggestedSupplierPurchase {
+  supplierId: string;
+  supplierName: string;
+  supplierSku: string | null;
+  purchasingUnit: string;
+  conversionToBase: number;
+  packsToOrder: number;
+  orderQuantityBase: number;
+  packPriceCents: number | null; // null if redacted
+  totalEstimatedCents: number | null; // null if redacted
+  currency: string;
+  isPreferred: boolean;
+}
+
+export interface ItemForecastMetric {
+  itemId: string;
+  itemName: string;
+  categoryName?: string | null;
+  baseUnit: string;
+  currentStock: number;
+  openIncomingStock: number;
+  projectedAvailableStock: number;
+
+  // Demand metrics
+  daysAnalyzed: number;
+  totalDemandBase: number;
+  averageDailyDemandBase: number;
+  weightedDailyDemandBase: number;
+  demandHistoryQuality: DemandConfidence;
+  demandObservationsCount: number;
+
+  // Days of Stock & Coverage
+  daysOfStockRemaining: number | null;
+  daysOfCoverageWithIncoming: number | null;
+
+  // Reorder point & lead time
+  leadTimeDays: number | null;
+  hasLeadTimeIntelligence: boolean;
+  safetyStockBase: number;
+  reorderPointBase: number;
+  targetCoverageDays: number;
+  targetStockLevelBase: number;
+
+  // Replenishment & Risk
+  recommendedBaseQty: number;
+  riskStatus: ReorderRiskStatus;
+  explanation: string;
+
+  // Near-expiry alert context (if any)
+  nearExpiryStockBase?: number;
+  nearExpiryDaysThreshold?: number;
+  nearExpiryBatchCount?: number;
+
+  // Supplier purchasing options
+  suggestedSupplier?: SuggestedSupplierPurchase | null;
+  preferredSupplierAlternative?: SuggestedSupplierPurchase | null;
+  potentialSavingsCents?: number | null;
+}
+
+export interface ReorderSuggestionsOverview {
+  branchId: string;
+  currency: string;
+  totalItemsTracked: number;
+  criticalCount: number;
+  reorderSoonCount: number;
+  healthyCount: number;
+  noDemandCount: number;
+  totalEstimatedReorderCostCents: number | null;
+  suggestions: ItemForecastMetric[];
+}
 
 export interface FormattedInventoryCategory {
   id: string;
@@ -1820,4 +1895,572 @@ export class InventoryService {
       batches,
     };
   }
+
+  /**
+   * Derives authoritative demand metrics for an item over a given historical window (default 14 days).
+   * Distinguishes true operational demand (order consumption, prep production) from non-demand reductions (waste, returns, transfers).
+   */
+  static async getDemandForecast(
+    businessId: string,
+    branchId: string,
+    itemId: string,
+    options?: { windowDays?: number }
+  ): Promise<{
+    daysAnalyzed: number;
+    totalDemandBase: number;
+    averageDailyDemandBase: number;
+    weightedDailyDemandBase: number;
+    observationsCount: number;
+    historyQuality: DemandConfidence;
+    recentDemandBase: number;
+    priorDemandBase: number;
+  }> {
+    const windowDays = Math.max(1, options?.windowDays || 14);
+    const admin = createAdminClient();
+
+    const now = new Date();
+    const windowStartDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000).toISOString();
+    const halfWindowDays = Math.max(1, Math.floor(windowDays / 2));
+    const recentSplitDate = new Date(now.getTime() - halfWindowDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: movements, error } = await admin
+      .from('inventory_stock_movements')
+      .select('movement_type, quantity_base, created_at')
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .eq('item_id', itemId)
+      .gte('created_at', windowStartDate)
+      .in('movement_type', ['recipe_consumption', 'production_out', 'consumption_reversal']);
+
+    if (error || !movements || movements.length === 0) {
+      return {
+        daysAnalyzed: windowDays,
+        totalDemandBase: 0,
+        averageDailyDemandBase: 0,
+        weightedDailyDemandBase: 0,
+        observationsCount: 0,
+        historyQuality: 'insufficient',
+        recentDemandBase: 0,
+        priorDemandBase: 0,
+      };
+    }
+
+    let recentDemand = 0;
+    let priorDemand = 0;
+    let validObservations = 0;
+
+    movements.forEach((m) => {
+      const qty = Number(m.quantity_base) || 0;
+      const isRecent = m.created_at >= recentSplitDate;
+
+      if (m.movement_type === 'recipe_consumption' || m.movement_type === 'production_out') {
+        if (isRecent) {
+          recentDemand += qty;
+        } else {
+          priorDemand += qty;
+        }
+        validObservations++;
+      } else if (m.movement_type === 'consumption_reversal') {
+        // Offset reversed consumption
+        if (isRecent) {
+          recentDemand = Math.max(0, recentDemand - qty);
+        } else {
+          priorDemand = Math.max(0, priorDemand - qty);
+        }
+      }
+    });
+
+    const totalDemand = Math.max(0, recentDemand + priorDemand);
+    const avgDailyDemand = Math.round((totalDemand / windowDays) * 10000) / 10000;
+
+    // Weighted daily demand: recent half weighted 60%, older half weighted 40%
+    const recentDaily = recentDemand / halfWindowDays;
+    const priorDays = Math.max(1, windowDays - halfWindowDays);
+    const priorDaily = priorDemand / priorDays;
+    const weightedDaily = Math.round((0.6 * recentDaily + 0.4 * priorDaily) * 10000) / 10000;
+
+    let quality: DemandConfidence = 'insufficient';
+    if (totalDemand === 0 || validObservations === 0) {
+      quality = 'insufficient';
+    } else if (validObservations >= 8) {
+      quality = 'high';
+    } else if (validObservations >= 3) {
+      quality = 'medium';
+    } else {
+      quality = 'low';
+    }
+
+    return {
+      daysAnalyzed: windowDays,
+      totalDemandBase: Math.round(totalDemand * 10000) / 10000,
+      averageDailyDemandBase: avgDailyDemand,
+      weightedDailyDemandBase: weightedDaily,
+      observationsCount: validObservations,
+      historyQuality: quality,
+      recentDemandBase: Math.round(recentDemand * 10000) / 10000,
+      priorDemandBase: Math.round(priorDemand * 10000) / 10000,
+    };
+  }
+
+  /**
+   * Computes comprehensive inventory forecasting, days of stock remaining, and smart reorder suggestions for a branch.
+   */
+  static async getReorderSuggestions(
+    businessId: string,
+    branchId: string,
+    options?: {
+      hasCostPermission?: boolean;
+      windowDays?: number;
+      targetCoverageDays?: number;
+      itemId?: string;
+    }
+  ): Promise<ReorderSuggestionsOverview> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const windowDays = Math.max(1, options?.windowDays || 14);
+    const targetCoverageDays = Math.max(1, options?.targetCoverageDays || 7);
+    const admin = createAdminClient();
+
+    // 1. Fetch business currency
+    const { data: biz } = await admin
+      .from('businesses')
+      .select('default_currency')
+      .eq('id', businessId)
+      .maybeSingle();
+    const currency = biz?.default_currency || 'USD';
+
+    // 2. Fetch inventory items
+    let itemsQuery = admin
+      .from('inventory_items')
+      .select(`
+        id,
+        business_id,
+        name,
+        category_id,
+        base_unit,
+        cost_per_unit_cents,
+        currency,
+        min_stock_level,
+        target_stock_level,
+        is_active,
+        category:inventory_categories(name)
+      `)
+      .eq('business_id', businessId)
+      .eq('is_active', true);
+
+    if (options?.itemId) {
+      itemsQuery = itemsQuery.eq('id', options.itemId);
+    }
+
+    const { data: rawItems, error: itemsError } = await itemsQuery;
+    if (itemsError || !rawItems || rawItems.length === 0) {
+      return {
+        branchId,
+        currency,
+        totalItemsTracked: 0,
+        criticalCount: 0,
+        reorderSoonCount: 0,
+        healthyCount: 0,
+        noDemandCount: 0,
+        totalEstimatedReorderCostCents: hasCostPermission ? 0 : null,
+        suggestions: [],
+      };
+    }
+
+    const itemIds = rawItems.map((i) => i.id);
+
+    // 3. Fetch branch balances per item
+    const { data: rawBalances } = await admin
+      .from('inventory_balances')
+      .select('item_id, current_quantity')
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .in('item_id', itemIds);
+
+    const balancesMap = new Map<string, number>();
+    (rawBalances || []).forEach((b) => {
+      const prev = balancesMap.get(b.item_id) || 0;
+      balancesMap.set(b.item_id, prev + (Number(b.current_quantity) || 0));
+    });
+
+    // 4. Fetch open incoming PO quantities for this branch (statuses: approved, sent, partially_received)
+    const { data: rawPoItems } = await admin
+      .from('inventory_purchase_order_items')
+      .select(`
+        item_id,
+        quantity_ordered_base,
+        quantity_received_base,
+        po:inventory_purchase_orders!inner(
+          id,
+          business_id,
+          branch_id,
+          status
+        )
+      `)
+      .eq('po.business_id', businessId)
+      .eq('po.branch_id', branchId)
+      .in('po.status', ['approved', 'sent', 'partially_received'])
+      .in('item_id', itemIds);
+
+    interface RawPoItemRow {
+      item_id: string;
+      quantity_ordered_base: number;
+      quantity_received_base: number;
+    }
+
+    const openIncomingMap = new Map<string, number>();
+    (rawPoItems as unknown as RawPoItemRow[] || []).forEach((p) => {
+      const ordered = Number(p.quantity_ordered_base) || 0;
+      const received = Number(p.quantity_received_base) || 0;
+      const remaining = Math.max(0, ordered - received);
+      if (remaining > 0) {
+        const prev = openIncomingMap.get(p.item_id) || 0;
+        openIncomingMap.set(p.item_id, prev + remaining);
+      }
+    });
+
+    // 5. Fetch demand movements in window
+    const now = new Date();
+    const windowStartDate = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000).toISOString();
+    const halfWindowDays = Math.max(1, Math.floor(windowDays / 2));
+    const recentSplitDate = new Date(now.getTime() - halfWindowDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: movements } = await admin
+      .from('inventory_stock_movements')
+      .select('item_id, movement_type, quantity_base, created_at')
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .in('item_id', itemIds)
+      .gte('created_at', windowStartDate)
+      .in('movement_type', ['recipe_consumption', 'production_out', 'consumption_reversal']);
+
+    const demandAggMap = new Map<string, { recent: number; prior: number; count: number }>();
+    (movements || []).forEach((m) => {
+      const qty = Number(m.quantity_base) || 0;
+      const isRecent = m.created_at >= recentSplitDate;
+      const agg = demandAggMap.get(m.item_id) || { recent: 0, prior: 0, count: 0 };
+
+      if (m.movement_type === 'recipe_consumption' || m.movement_type === 'production_out') {
+        if (isRecent) agg.recent += qty;
+        else agg.prior += qty;
+        agg.count++;
+      } else if (m.movement_type === 'consumption_reversal') {
+        if (isRecent) agg.recent = Math.max(0, agg.recent - qty);
+        else agg.prior = Math.max(0, agg.prior - qty);
+      }
+      demandAggMap.set(m.item_id, agg);
+    });
+
+    // 6. Fetch near-expiry batch context (expiring within 7 days)
+    const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const { data: nearExpiryBatches } = await admin
+      .from('inventory_item_batches')
+      .select('item_id, remaining_quantity, expiry_date')
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .gt('remaining_quantity', 0)
+      .not('expiry_date', 'is', null)
+      .lte('expiry_date', sevenDaysAhead);
+
+    const nearExpiryMap = new Map<string, { totalQty: number; count: number; minDays: number }>();
+    (nearExpiryBatches || []).forEach((b) => {
+      const qty = Number(b.remaining_quantity) || 0;
+      if (qty > 0 && b.expiry_date) {
+        const expTime = new Date(b.expiry_date).getTime();
+        const diffDays = Math.ceil((expTime - now.getTime()) / (1000 * 60 * 60 * 24));
+        const prev = nearExpiryMap.get(b.item_id) || { totalQty: 0, count: 0, minDays: diffDays };
+        nearExpiryMap.set(b.item_id, {
+          totalQty: prev.totalQty + qty,
+          count: prev.count + 1,
+          minDays: Math.min(prev.minDays, diffDays),
+        });
+      }
+    });
+
+    // 7. Parallel fetch supplier price comparisons for items
+    const comparisonsList = await Promise.all(
+      itemIds.map((id) =>
+        PurchasingService.getSupplierPriceComparison(businessId, id, { hasCostPermission })
+      )
+    );
+    const comparisonMap = new Map<string, Awaited<ReturnType<typeof PurchasingService.getSupplierPriceComparison>>>();
+    comparisonsList.forEach((comp) => {
+      if (comp) comparisonMap.set(comp.itemId, comp);
+    });
+
+    // 8. Build item forecast metrics
+    const suggestions: ItemForecastMetric[] = [];
+    let criticalCount = 0;
+    let reorderSoonCount = 0;
+    let healthyCount = 0;
+    let noDemandCount = 0;
+    let totalEstimatedReorderCostCents = 0;
+
+    for (const item of rawItems) {
+      const currentStock = balancesMap.get(item.id) || 0;
+      const openIncoming = openIncomingMap.get(item.id) || 0;
+      const projectedAvailable = Math.round((currentStock + openIncoming) * 10000) / 10000;
+
+      const demandAgg = demandAggMap.get(item.id) || { recent: 0, prior: 0, count: 0 };
+      const totalDemand = Math.max(0, demandAgg.recent + demandAgg.prior);
+      const avgDailyDemand = Math.round((totalDemand / windowDays) * 10000) / 10000;
+
+      const recentDaily = demandAgg.recent / halfWindowDays;
+      const priorDays = Math.max(1, windowDays - halfWindowDays);
+      const priorDaily = demandAgg.prior / priorDays;
+      const weightedDaily = Math.round((0.6 * recentDaily + 0.4 * priorDaily) * 10000) / 10000;
+
+      const effectiveDaily = weightedDaily > 0 ? weightedDaily : avgDailyDemand;
+
+      let historyQuality: DemandConfidence = 'insufficient';
+      if (totalDemand === 0 || demandAgg.count === 0) {
+        historyQuality = 'insufficient';
+      } else if (demandAgg.count >= 8) {
+        historyQuality = 'high';
+      } else if (demandAgg.count >= 3) {
+        historyQuality = 'medium';
+      } else {
+        historyQuality = 'low';
+      }
+
+      const daysOfStockRemaining =
+        avgDailyDemand > 0 ? Math.round((currentStock / avgDailyDemand) * 10) / 10 : null;
+      const daysOfCoverageWithIncoming =
+        avgDailyDemand > 0 ? Math.round((projectedAvailable / avgDailyDemand) * 10) / 10 : null;
+
+      // Reorder Point & Safety Stock
+      const minStockLevel = Number(item.min_stock_level) || 0;
+      const safetyStockBase = minStockLevel > 0 ? minStockLevel : 0;
+
+      const comp = comparisonMap.get(item.id);
+      const allSuppliers = comp?.allSuppliers || [];
+      const leadTimeDays: number | null = null; // No arbitrary assumption if unconfigured
+
+      const hasLeadTimeIntelligence = leadTimeDays !== null;
+      const reorderPointBase =
+        leadTimeDays !== null
+          ? Math.round(((avgDailyDemand * leadTimeDays) + safetyStockBase) * 10000) / 10000
+          : safetyStockBase;
+
+      const targetStockLevelBase =
+        Math.round(((effectiveDaily * targetCoverageDays) + safetyStockBase) * 10000) / 10000;
+      const configuredTarget = Number(item.target_stock_level) || 0;
+      const finalTargetStock =
+        configuredTarget > targetStockLevelBase ? configuredTarget : targetStockLevelBase;
+
+      const recommendedBaseQty = Math.max(
+        0,
+        Math.round((finalTargetStock - projectedAvailable) * 10000) / 10000
+      );
+
+      // Risk status determination
+      let riskStatus: ReorderRiskStatus = 'healthy';
+      if (currentStock <= 0) {
+        riskStatus = recommendedBaseQty > 0 || minStockLevel > 0 || totalDemand > 0 ? 'critical' : 'no_demand';
+      } else if (leadTimeDays !== null && daysOfStockRemaining !== null && daysOfStockRemaining <= leadTimeDays) {
+        riskStatus = 'critical';
+      } else if (currentStock <= reorderPointBase && avgDailyDemand > 0) {
+        riskStatus = 'critical';
+      } else if (
+        currentStock <= reorderPointBase * 1.25 ||
+        (daysOfStockRemaining !== null && daysOfStockRemaining <= (leadTimeDays || 2) + 3)
+      ) {
+        riskStatus = 'reorder_soon';
+      } else if (avgDailyDemand > 0) {
+        riskStatus = 'healthy';
+      } else {
+        riskStatus = 'no_demand';
+      }
+
+      if (riskStatus === 'critical') criticalCount++;
+      else if (riskStatus === 'reorder_soon') reorderSoonCount++;
+      else if (riskStatus === 'healthy') healthyCount++;
+      else noDemandCount++;
+
+      // Near-expiry alert context
+      const nearExpInfo = nearExpiryMap.get(item.id);
+
+      // Explanation sentence
+      let explanation = '';
+      if (avgDailyDemand > 0) {
+        explanation = `Based on ${windowDays} days of ${avgDailyDemand.toFixed(2)} ${item.base_unit}/day consumption.`;
+        if (daysOfStockRemaining !== null) {
+          explanation += ` Stock coverage: ${daysOfStockRemaining.toFixed(1)} days.`;
+        }
+        if (openIncoming > 0) {
+          explanation += ` Includes ${openIncoming.toFixed(2)} ${item.base_unit} incoming from open PO.`;
+        }
+      } else {
+        explanation = `No recent consumption recorded in the last ${windowDays} days.`;
+        if (currentStock <= 0) {
+          explanation += ` Item is currently out of stock.`;
+        }
+      }
+      if (nearExpInfo) {
+        explanation += ` ⚠️ ${nearExpInfo.totalQty.toFixed(1)} ${item.base_unit} expires in ${nearExpInfo.minDays} day(s).`;
+      }
+
+      // Supplier purchasing intelligence
+      let suggestedSupplier: SuggestedSupplierPurchase | null = null;
+      let preferredSupplierAlternative: SuggestedSupplierPurchase | null = null;
+      let potentialSavingsCents: number | null = null;
+
+      if (recommendedBaseQty > 0 && allSuppliers.length > 0) {
+        // Cheapest supplier in primary currency group (or first group)
+        const primaryGroup = comp?.groups[0];
+        const cheapest = primaryGroup?.suppliers.find((s) => s.isCheapest) || allSuppliers[0];
+
+        if (cheapest) {
+          const conv = Number(cheapest.conversionToBase) || 1.0;
+          const packsToOrder = Math.max(1, Math.ceil(recommendedBaseQty / conv));
+          const orderQtyBase = Math.round(packsToOrder * conv * 10000) / 10000;
+          const packPrice = hasCostPermission ? cheapest.lastPriceCents : null;
+          const estTotal = hasCostPermission && packPrice !== null ? packsToOrder * packPrice : null;
+
+          suggestedSupplier = {
+            supplierId: cheapest.supplierId,
+            supplierName: cheapest.supplierName,
+            supplierSku: cheapest.supplierSku,
+            purchasingUnit: cheapest.purchasingUnit,
+            conversionToBase: conv,
+            packsToOrder,
+            orderQuantityBase: orderQtyBase,
+            packPriceCents: packPrice,
+            totalEstimatedCents: estTotal,
+            currency: cheapest.currency,
+            isPreferred: cheapest.isPreferred,
+          };
+
+          if (estTotal !== null) {
+            totalEstimatedReorderCostCents += estTotal;
+          }
+        }
+
+        // Preferred supplier if different
+        const preferred = allSuppliers.find((s) => s.isPreferred && s.supplierId !== cheapest?.supplierId);
+        if (preferred) {
+          const prefConv = Number(preferred.conversionToBase) || 1.0;
+          const prefPacks = Math.max(1, Math.ceil(recommendedBaseQty / prefConv));
+          const prefOrderQty = Math.round(prefPacks * prefConv * 10000) / 10000;
+          const prefPackPrice = hasCostPermission ? preferred.lastPriceCents : null;
+          const prefEstTotal = hasCostPermission && prefPackPrice !== null ? prefPacks * prefPackPrice : null;
+
+          preferredSupplierAlternative = {
+            supplierId: preferred.supplierId,
+            supplierName: preferred.supplierName,
+            supplierSku: preferred.supplierSku,
+            purchasingUnit: preferred.purchasingUnit,
+            conversionToBase: prefConv,
+            packsToOrder: prefPacks,
+            orderQuantityBase: prefOrderQty,
+            packPriceCents: prefPackPrice,
+            totalEstimatedCents: prefEstTotal,
+            currency: preferred.currency,
+            isPreferred: true,
+          };
+
+          if (
+            hasCostPermission &&
+            suggestedSupplier?.totalEstimatedCents !== null &&
+            suggestedSupplier?.totalEstimatedCents !== undefined &&
+            prefEstTotal !== null &&
+            suggestedSupplier.currency === preferred.currency
+          ) {
+            if (prefEstTotal > suggestedSupplier.totalEstimatedCents) {
+              potentialSavingsCents = prefEstTotal - suggestedSupplier.totalEstimatedCents;
+            }
+          }
+        }
+      }
+
+      suggestions.push({
+        itemId: item.id,
+        itemName: item.name,
+        categoryName: (item.category as { name?: string } | null)?.name || null,
+        baseUnit: item.base_unit,
+        currentStock,
+        openIncomingStock: openIncoming,
+        projectedAvailableStock: projectedAvailable,
+        daysAnalyzed: windowDays,
+        totalDemandBase: totalDemand,
+        averageDailyDemandBase: avgDailyDemand,
+        weightedDailyDemandBase: weightedDaily,
+        demandHistoryQuality: historyQuality,
+        demandObservationsCount: demandAgg.count,
+        daysOfStockRemaining,
+        daysOfCoverageWithIncoming,
+        leadTimeDays,
+        hasLeadTimeIntelligence,
+        safetyStockBase,
+        reorderPointBase,
+        targetCoverageDays,
+        targetStockLevelBase: finalTargetStock,
+        recommendedBaseQty,
+        riskStatus,
+        explanation,
+        nearExpiryStockBase: nearExpInfo?.totalQty,
+        nearExpiryDaysThreshold: nearExpInfo?.minDays,
+        nearExpiryBatchCount: nearExpInfo?.count,
+        suggestedSupplier,
+        preferredSupplierAlternative,
+        potentialSavingsCents,
+      });
+    }
+
+    // Deterministic sort: Critical (0) -> Reorder Soon (1) -> Healthy (2) -> No Demand (3)
+    const riskRank: Record<ReorderRiskStatus, number> = {
+      critical: 0,
+      reorder_soon: 1,
+      healthy: 2,
+      no_demand: 3,
+    };
+
+    suggestions.sort((a, b) => {
+      if (riskRank[a.riskStatus] !== riskRank[b.riskStatus]) {
+        return riskRank[a.riskStatus] - riskRank[b.riskStatus];
+      }
+      if (a.daysOfStockRemaining !== null && b.daysOfStockRemaining !== null) {
+        if (a.daysOfStockRemaining !== b.daysOfStockRemaining) {
+          return a.daysOfStockRemaining - b.daysOfStockRemaining;
+        }
+      } else if (a.daysOfStockRemaining !== null && b.daysOfStockRemaining === null) {
+        return -1;
+      } else if (a.daysOfStockRemaining === null && b.daysOfStockRemaining !== null) {
+        return 1;
+      }
+      return a.itemName.localeCompare(b.itemName);
+    });
+
+    return {
+      branchId,
+      currency,
+      totalItemsTracked: suggestions.length,
+      criticalCount,
+      reorderSoonCount,
+      healthyCount,
+      noDemandCount,
+      totalEstimatedReorderCostCents: hasCostPermission ? totalEstimatedReorderCostCents : null,
+      suggestions,
+    };
+  }
+
+  /**
+   * Retrieves single-item reorder forecast and intelligence metrics.
+   */
+  static async getItemReorderForecast(
+    businessId: string,
+    branchId: string,
+    itemId: string,
+    options?: {
+      hasCostPermission?: boolean;
+      windowDays?: number;
+      targetCoverageDays?: number;
+    }
+  ): Promise<ItemForecastMetric | null> {
+    const res = await this.getReorderSuggestions(businessId, branchId, {
+      ...options,
+      itemId,
+    });
+    return res.suggestions[0] || null;
+  }
 }
+

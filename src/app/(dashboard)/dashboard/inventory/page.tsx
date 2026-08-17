@@ -11,6 +11,7 @@ import { InventoryKpiSummary } from '@/components/inventory/inventory-kpi-summar
 import { InventoryHealthCard } from '@/components/inventory/inventory-health-card';
 import { InventoryNeedsAttention } from '@/components/inventory/inventory-needs-attention';
 import { InventoryExpiryAlerts } from '@/components/inventory/inventory-expiry-alerts';
+import { InventoryReorderSuggestions } from '@/components/inventory/inventory-reorder-suggestions';
 
 export const metadata: Metadata = {
   title: 'Inventory Hub | WSNexa Hospitality',
@@ -34,7 +35,7 @@ export default async function InventoryHubPage() {
     'inventory.costs.view'
   );
 
-  const [overview, expiringSummary] = await Promise.all([
+  const [overview, expiringSummary, reorderOverview] = await Promise.all([
     InventoryService.getInventoryOverview(
       context.business.id,
       context.activeBranch.id,
@@ -45,6 +46,11 @@ export default async function InventoryHubPage() {
       context.business.id,
       context.activeBranch.id,
       { hasCostPermission, maxDaysAhead: 14 }
+    ),
+    InventoryService.getReorderSuggestions(
+      context.business.id,
+      context.activeBranch.id,
+      { hasCostPermission }
     ),
   ]);
 
@@ -81,6 +87,12 @@ export default async function InventoryHubPage() {
       <InventoryExpiryAlerts
         summary={expiringSummary}
         currency={context.business.defaultCurrency || 'USD'}
+        hasCostPermission={hasCostPermission}
+      />
+
+      {/* Smart Reorder & Stockout Forecast */}
+      <InventoryReorderSuggestions
+        overview={reorderOverview}
         hasCostPermission={hasCostPermission}
       />
 

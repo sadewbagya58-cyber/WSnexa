@@ -47,6 +47,7 @@ interface PurchaseOrderBuilderProps {
   hasCostPermission?: boolean;
   initialSupplierId?: string;
   initialItemId?: string;
+  initialQuantity?: number;
 }
 
 export function PurchaseOrderBuilder({
@@ -59,6 +60,7 @@ export function PurchaseOrderBuilder({
   hasCostPermission = false,
   initialSupplierId,
   initialItemId,
+  initialQuantity,
 }: PurchaseOrderBuilderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -89,7 +91,7 @@ export function PurchaseOrderBuilder({
     {
       itemId: startItem?.id || '',
       purchasingUnit: startMapping?.purchasingUnit || startItem?.baseUnit || 'kg',
-      quantityOrdered: 10,
+      quantityOrdered: initialQuantity && initialQuantity > 0 ? initialQuantity : 10,
       unitCost: formatMinorUnitsToDecimal(
         startMapping && hasCostPermission
           ? startMapping.lastPriceCents

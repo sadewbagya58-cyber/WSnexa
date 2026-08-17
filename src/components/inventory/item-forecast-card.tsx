@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ItemForecastMetric, ReorderRiskStatus } from '@/server/services/inventory.service';
+import { ItemForecastMetric } from '@/server/services/inventory.service';
 
 interface ItemForecastCardProps {
   forecast: ItemForecastMetric | null;
@@ -42,20 +42,22 @@ export function ItemForecastCard({
     }
   };
 
-  const getRiskBadge = (status: ReorderRiskStatus) => {
-    switch (status) {
+  const getRiskBadge = (item: ItemForecastMetric) => {
+    switch (item.riskStatus) {
       case 'critical':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
             <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
-            Critical Stockout Risk
+            {item.currentStock <= 0 ? 'Out of Stock' : 'Critical Stockout (≤ 3d)'}
           </span>
         );
       case 'reorder_soon':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-            Reorder Soon
+            {item.daysOfStockRemaining !== null && item.daysOfStockRemaining <= 7
+              ? 'Reorder Soon (≤ 7d)'
+              : 'Reorder Needed (Below Min)'}
           </span>
         );
       case 'healthy':
@@ -108,7 +110,7 @@ export function ItemForecastCard({
         </div>
 
         <div className="flex items-center gap-2">
-          {getRiskBadge(forecast.riskStatus)}
+          {getRiskBadge(forecast)}
           {getQualityBadge(forecast.demandHistoryQuality)}
         </div>
       </div>

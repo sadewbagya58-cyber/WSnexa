@@ -2,10 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import {
-  ReorderSuggestionsOverview,
-  ReorderRiskStatus,
-} from '@/server/services/inventory.service';
+import { ReorderSuggestionsOverview } from '@/server/services/inventory.service';
 
 interface InventoryReorderSuggestionsProps {
   overview: ReorderSuggestionsOverview;
@@ -59,27 +56,29 @@ export function InventoryReorderSuggestions({
     });
   }, [overview.suggestions, filterStatus, searchQuery]);
 
-  const getRiskBadge = (status: ReorderRiskStatus) => {
-    switch (status) {
+  const getRiskBadge = (item: ReorderSuggestionsOverview['suggestions'][0]) => {
+    switch (item.riskStatus) {
       case 'critical':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
             <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-pulse" />
-            Critical Stockout
+            {item.currentStock <= 0 ? 'Out of Stock' : 'Critical Stockout'}
           </span>
         );
       case 'reorder_soon':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-            Reorder Soon
+            {item.daysOfStockRemaining !== null && item.daysOfStockRemaining <= 7
+              ? 'Reorder Soon (≤ 7d)'
+              : 'Reorder Needed (Below Min)'}
           </span>
         );
       case 'healthy':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Healthy
+            Healthy Coverage
           </span>
         );
       case 'no_demand':
@@ -253,7 +252,7 @@ export function InventoryReorderSuggestions({
                   <div className="flex items-center gap-2 flex-wrap">
                     <Link
                       href={`/dashboard/inventory/items/${item.itemId}`}
-                      className="text-sm font-bold text-zinc-950 hover:underline"
+                      className="font-bold text-zinc-950 hover:text-emerald-700 transition-colors text-sm"
                     >
                       {item.itemName}
                     </Link>
@@ -262,7 +261,7 @@ export function InventoryReorderSuggestions({
                         {item.categoryName}
                       </span>
                     )}
-                    {getRiskBadge(item.riskStatus)}
+                    {getRiskBadge(item)}
                   </div>
 
                   <div className="flex items-center gap-4 text-xs text-zinc-600 flex-wrap">

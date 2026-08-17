@@ -2256,13 +2256,14 @@ export class InventoryService {
       let riskStatus: ReorderRiskStatus = 'healthy';
       if (currentStock <= 0) {
         riskStatus = recommendedBaseQty > 0 || minStockLevel > 0 || totalDemand > 0 ? 'critical' : 'no_demand';
+      } else if (daysOfStockRemaining !== null && daysOfStockRemaining <= 3) {
+        riskStatus = 'critical';
       } else if (leadTimeDays !== null && daysOfStockRemaining !== null && daysOfStockRemaining <= leadTimeDays) {
         riskStatus = 'critical';
-      } else if (currentStock <= reorderPointBase && avgDailyDemand > 0) {
-        riskStatus = 'critical';
       } else if (
-        currentStock <= reorderPointBase * 1.25 ||
-        (daysOfStockRemaining !== null && daysOfStockRemaining <= (leadTimeDays || 2) + 3)
+        currentStock <= reorderPointBase ||
+        projectedAvailable <= reorderPointBase ||
+        (daysOfStockRemaining !== null && daysOfStockRemaining <= 7)
       ) {
         riskStatus = 'reorder_soon';
       } else if (avgDailyDemand > 0) {
@@ -2286,6 +2287,15 @@ export class InventoryService {
         if (daysOfStockRemaining !== null) {
           explanation += ` Stock coverage: ${daysOfStockRemaining.toFixed(1)} days.`;
         }
+        if (currentStock <= 0) {
+          explanation += ` Item is currently out of stock.`;
+        } else if (daysOfStockRemaining !== null && daysOfStockRemaining <= 3) {
+          explanation += ` ⚠️ Critical runout risk (≤ 3 days coverage remaining).`;
+        } else if (currentStock <= reorderPointBase && minStockLevel > 0) {
+          explanation += ` On-hand stock (${currentStock.toFixed(2)} ${item.base_unit}) is below minimum threshold (${minStockLevel.toFixed(2)} ${item.base_unit}) — reorder recommended to restore safety buffer.`;
+        } else if (currentStock <= reorderPointBase) {
+          explanation += ` On-hand stock has reached the reorder threshold (${reorderPointBase.toFixed(2)} ${item.base_unit}).`;
+        }
         if (openIncoming > 0) {
           explanation += ` Includes ${openIncoming.toFixed(2)} ${item.base_unit} incoming from open PO.`;
         }
@@ -2293,6 +2303,8 @@ export class InventoryService {
         explanation = `No recent consumption recorded in the last ${windowDays} days.`;
         if (currentStock <= 0) {
           explanation += ` Item is currently out of stock.`;
+        } else if (minStockLevel > 0 && currentStock <= minStockLevel) {
+          explanation += ` On-hand stock (${currentStock.toFixed(2)} ${item.base_unit}) is below minimum threshold (${minStockLevel.toFixed(2)} ${item.base_unit}).`;
         }
       }
       if (nearExpInfo) {

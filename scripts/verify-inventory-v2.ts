@@ -2762,6 +2762,64 @@ async function runSuite() {
     });
     assert(crossBusinessSuggestions.suggestions.length === 0, 'Cross-tenant query strictly returns 0 suggestions (Tenant isolation)');
 
+    // 12. Regression Test: Low Absolute Stock + Low Demand + High Days Coverage + Min Safety Stock
+    const { data: itemLowDemandHighDays } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: `Truffle Butter Low Demand ${testSuffix}`,
+        sku: `TRUF-LD-${testSuffix}`,
+        base_unit: 'kg',
+        cost_per_unit_cents: 4500,
+        currency: 'USD',
+        min_stock_level: 20.0,
+      })
+      .select()
+      .single();
+
+    // 0.80 kg on-hand balance
+    await admin.from('inventory_balances').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemLowDemandHighDays.id,
+      current_quantity: 0.8,
+    });
+
+    // 0.20 kg consumption over 14 days (~0.0143 kg/day)
+    const pastTruffleDate = new Date(Date.now() - 3 * 86400000).toISOString();
+    const { error: moveErr } = await admin.from('inventory_stock_movements').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemLowDemandHighDays.id,
+      movement_type: 'recipe_consumption',
+      direction: 'out',
+      quantity: 0.2,
+      unit: 'kg',
+      quantity_base: 0.2,
+      previous_balance_base: 1.0,
+      new_balance_base: 0.8,
+      unit_cost_cents: 4500,
+      total_cost_cents: 900,
+      currency: 'USD',
+      created_at: pastTruffleDate,
+    });
+    assert(!moveErr, 'Low demand movement inserted without error');
+
+    const lowDemandForecast = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemLowDemandHighDays.id, {
+      hasCostPermission: true,
+      windowDays: 14,
+      targetCoverageDays: 7,
+    });
+
+    assert(lowDemandForecast !== null, 'Low Demand item forecast retrieved');
+    assert(lowDemandForecast?.currentStock === 0.8, 'Low Demand item current stock is 0.80 kg');
+    assert(lowDemandForecast?.daysOfStockRemaining !== null && (lowDemandForecast?.daysOfStockRemaining ?? 0) > 30, 'Days of stock remaining is > 30 days (high coverage)');
+    assert(lowDemandForecast?.riskStatus === 'reorder_soon', 'Low stock with high days coverage classified as reorder_soon, NOT critical');
+    assert(lowDemandForecast?.recommendedBaseQty !== undefined && lowDemandForecast.recommendedBaseQty > 19.0, 'Recommended reorder is ~19.3 kg to restore 20 kg safety buffer');
+    assert(lowDemandForecast?.explanation.includes('below minimum threshold') === true, 'Explanation explicitly identifies below minimum threshold as trigger');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

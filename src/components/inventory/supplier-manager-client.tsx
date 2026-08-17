@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { createSupplierAction } from '@/server/actions/purchasing';
 import { SupplierRecord } from '@/server/services/purchasing.service';
 
+import Link from 'next/link';
+
 interface SupplierManagerClientProps {
   initialSuppliers: SupplierRecord[];
   currency: string;
@@ -200,14 +202,18 @@ export function SupplierManagerClient({ initialSuppliers, currency }: SupplierMa
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {initialSuppliers.map((s) => (
-            <div
+            <Link
               key={s.id}
-              className="bg-white rounded-2xl border border-zinc-200 p-5 space-y-3 shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between"
+              href={`/dashboard/inventory/suppliers/${s.id}`}
+              className="bg-white rounded-2xl border border-zinc-200 p-5 space-y-3 shadow-xs hover:border-zinc-950 hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer"
             >
               <div className="space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-sm font-bold text-zinc-950">{s.name}</h3>
+                    <h3 className="text-sm font-bold text-zinc-950 group-hover:text-zinc-800 flex items-center gap-1.5">
+                      <span>{s.name}</span>
+                      <span className="text-zinc-400 group-hover:translate-x-0.5 transition-transform">→</span>
+                    </h3>
                     {s.contactPerson && (
                       <div className="text-[11px] text-zinc-500">Contact: {s.contactPerson}</div>
                     )}
@@ -228,9 +234,11 @@ export function SupplierManagerClient({ initialSuppliers, currency }: SupplierMa
 
               <div className="pt-3 border-t border-zinc-100 flex justify-between items-center text-xs text-zinc-500">
                 <span>Terms: {s.paymentTerms || 'Standard'}</span>
-                <span className="font-semibold text-zinc-800">{s.itemCount} linked items</span>
+                <span className="font-bold text-zinc-900 bg-zinc-100 group-hover:bg-zinc-200 px-2 py-0.5 rounded-md transition-colors">
+                  {s.itemCount} linked {s.itemCount === 1 ? 'item' : 'items'}
+                </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

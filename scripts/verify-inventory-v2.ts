@@ -1863,6 +1863,184 @@ async function runSuite() {
     );
     assert(invalidItemComp === null, 'Query with non-existent item UUID strictly returns null');
 
+    // ============================================================================
+    // Section 12: Supplier Details & Catalog Management Workflow
+    // ============================================================================
+    console.log('\n[Section 12] Testing Supplier Details & Catalog Management Workflow...');
+
+    // 1. Retrieve Supplier With Catalog
+    const supDetails = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
+      hasCostPermission: true,
+    });
+    assert(supDetails !== null, 'Supplier details retrieved by ID');
+    assert(supDetails?.id === supAlpha.id, 'Supplier ID matches query');
+    assert(supDetails?.name === 'Alpha Foods Premium Ltd', 'Supplier name matches');
+    assert(supDetails?.currency === 'EUR', 'Supplier currency is EUR');
+    assert(supDetails?.catalog.length === 1, 'Supplier catalog contains exactly 1 linked item initially');
+    assert(supDetails?.catalog[0].itemId === itemSalmon.id, 'Linked catalog item is Atlantic Salmon Fillet');
+    assert(supDetails?.catalog[0].purchasingUnit === 'case', 'Purchasing unit is case');
+    assert(supDetails?.catalog[0].conversionToBase === 10.0, 'Pack conversion factor is 10.0 kg/case');
+    assert(supDetails?.catalog[0].lastPriceCents === 7000, 'Pack price is 7000 cents (€70.00)');
+    assert(supDetails?.catalog[0].normalizedPricePerBaseCents === 700, 'Normalized price is 700 cents (€7.00/kg)');
+    assert(supDetails?.catalog[0].isPreferred === true, 'Item-specific preferred flag is true');
+
+    // 2. Update Supplier Profile
+    const updateRes = await PurchasingService.updateSupplier(
+      {
+        id: supAlpha.id,
+        contactPerson: 'Alice Chief Buyer',
+        email: 'alice@alphafoods.com',
+        phone: '+44 20 7946 0991',
+        paymentTerms: 'Net 45',
+        notes: 'Priority vendor for fresh seafood deliveries',
+      },
+      { businessId: biz.id }
+    );
+    assert(updateRes.success === true, 'Supplier update succeeded');
+
+    const updatedSup = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
+      hasCostPermission: true,
+    });
+    assert(updatedSup?.contactPerson === 'Alice Chief Buyer', 'Updated contact person persisted');
+    assert(updatedSup?.email === 'alice@alphafoods.com', 'Updated email persisted');
+    assert(updatedSup?.phone === '+44 20 7946 0991', 'Updated phone persisted');
+    assert(updatedSup?.paymentTerms === 'Net 45', 'Updated payment terms persisted');
+    assert(updatedSup?.notes === 'Priority vendor for fresh seafood deliveries', 'Updated notes persisted');
+
+    // 3. Create New Inventory Item for Dynamic Catalog Mapping
+    const { data: itemTruffleButter } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Artisan Truffle Butter',
+        base_unit: 'kg',
+        cost_per_unit_cents: 2500,
+        currency: 'EUR',
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    // 4. Map New Item to Supplier Catalog via upsertSupplierItem
+    const mapRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemTruffleButter.id,
+        supplierSku: `ALPHA-TB-2KG-${testSuffix}`,
+        purchasingUnit: 'tub',
+        conversionToBase: 2.0, // 1 tub = 2 kg
+        lastPriceCents: 4000, // €40.00 / tub -> €20.00/kg (2000 cents)
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(mapRes.success === true, 'New item mapped to supplier catalog successfully');
+
+    const supWithNewItem = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
+      hasCostPermission: true,
+    });
+    assert(supWithNewItem?.catalog.length === 2, 'Supplier catalog now has 2 linked items');
+    const tbMapping = supWithNewItem?.catalog.find((c) => c.itemId === itemTruffleButter.id);
+    assert(tbMapping !== undefined, 'Truffle Butter mapping found in supplier catalog');
+    assert(tbMapping?.purchasingUnit === 'tub', 'Purchasing unit is tub');
+    assert(tbMapping?.conversionToBase === 2.0, 'Conversion factor is 2.0 kg/tub');
+    assert(tbMapping?.lastPriceCents === 4000, 'Pack price is 4000 cents (€40.00)');
+    assert(tbMapping?.normalizedPricePerBaseCents === 2000, 'Normalized price is 2000 cents (€20.00/kg)');
+
+    // 5. Verify Supplier Price Comparison Immediately Sees the New Mapping
+    const tbComp = await PurchasingService.getSupplierPriceComparison(biz.id, itemTruffleButter.id, {
+      hasCostPermission: true,
+    });
+    assert(tbComp !== null, 'Price comparison payload generated for Truffle Butter');
+    assert(tbComp?.totalSuppliersCount === 1, 'Price comparison shows 1 linked supplier');
+    assert(tbComp?.groups[0].cheapestNormalizedCents === 2000, 'Best normalized price for Truffle Butter is €20.00/kg (2000 cents)');
+    assert(tbComp?.allSuppliers[0].supplierId === supAlpha.id, 'Alpha Foods mapped as supplier in price comparison');
+
+    // 6. Update Existing Mapping (Renegotiated Price & Conversion)
+    const updateMapRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemTruffleButter.id,
+        supplierSku: `ALPHA-TB-RENEG-${testSuffix}`,
+        purchasingUnit: 'tub',
+        conversionToBase: 2.0,
+        lastPriceCents: 3600, // Reduced to €36.00 / tub -> €18.00/kg (1800 cents)
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(updateMapRes.success === true, 'Existing item mapping updated without duplicate key violation');
+
+    const updatedTbComp = await PurchasingService.getSupplierPriceComparison(biz.id, itemTruffleButter.id, {
+      hasCostPermission: true,
+    });
+    assert(updatedTbComp?.groups[0].cheapestNormalizedCents === 1800, 'Updated price immediately reflected as €18.00/kg (1800 cents) in comparison');
+    assert(updatedTbComp?.allSuppliers[0].supplierSku === `ALPHA-TB-RENEG-${testSuffix}`, 'Updated SKU reflected in comparison');
+
+    // 7. Remove Item from Catalog via removeSupplierItem
+    const removeRes = await PurchasingService.removeSupplierItem(supAlpha.id, itemTruffleButter.id, {
+      businessId: biz.id,
+    });
+    assert(removeRes.success === true, 'Item removed from supplier catalog successfully');
+
+    const supAfterRemove = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
+      hasCostPermission: true,
+    });
+    assert(supAfterRemove?.catalog.length === 1, 'Catalog item count decreased back to 1');
+    assert(!supAfterRemove?.catalog.some((c) => c.itemId === itemTruffleButter.id), 'Removed item no longer in supplier catalog');
+
+    const emptyComp = await PurchasingService.getSupplierPriceComparison(biz.id, itemTruffleButter.id, {
+      hasCostPermission: true,
+    });
+    assert(emptyComp?.totalSuppliersCount === 0, 'Price comparison returns 0 suppliers after removal');
+
+    // 8. Multi-Tenant & Cross-Business Security Protections
+    const crossTenantGet = await PurchasingService.getSupplierById(
+      '00000000-0000-0000-0000-000000000000',
+      supAlpha.id
+    );
+    assert(crossTenantGet === null, 'getSupplierById with invalid business strictly returns null');
+
+    const crossTenantUpdate = await PurchasingService.updateSupplier(
+      { id: supAlpha.id, name: 'Hacked' },
+      { businessId: '00000000-0000-0000-0000-000000000000' }
+    );
+    assert(crossTenantUpdate.success === false, 'updateSupplier across business boundaries strictly rejected');
+
+    const crossTenantUpsert = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemSalmon.id,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 100,
+        currency: 'EUR',
+        isPreferred: false,
+      },
+      { businessId: '00000000-0000-0000-0000-000000000000' }
+    );
+    assert(crossTenantUpsert.success === false, 'upsertSupplierItem across business boundaries strictly rejected');
+
+    const crossTenantRemove = await PurchasingService.removeSupplierItem(
+      supAlpha.id,
+      itemSalmon.id,
+      { businessId: '00000000-0000-0000-0000-000000000000' }
+    );
+    assert(crossTenantRemove.success === false, 'removeSupplierItem across business boundaries strictly rejected');
+
+    // 9. Cost Redaction in Supplier Detail & Catalog
+    const redactedSupDetails = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
+      hasCostPermission: false,
+    });
+    assert(redactedSupDetails !== null, 'Redacted supplier details retrieved');
+    assert(redactedSupDetails?.catalog[0].lastPriceCents === null, 'Supplier catalog pack price strictly redacted to null');
+    assert(redactedSupDetails?.catalog[0].normalizedPricePerBaseCents === null, 'Supplier catalog normalized price strictly redacted to null');
+    assert(redactedSupDetails?.catalog[0].itemName !== undefined, 'Ingredient name remains visible under redaction');
+    assert(redactedSupDetails?.catalog[0].purchasingUnit !== undefined, 'Purchasing unit remains visible under redaction');
+    assert(redactedSupDetails?.catalog[0].conversionToBase !== undefined, 'Conversion factor remains visible under redaction');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

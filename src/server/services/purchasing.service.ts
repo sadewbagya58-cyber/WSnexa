@@ -3,6 +3,8 @@ import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { UnitConverter } from '@/lib/inventory/unit-converter';
 import {
   CreateSupplierInput,
+  UpdateSupplierInput,
+  SupplierItemInput,
   CreatePurchaseOrderInput,
   RecordGoodsReceiptInput,
   SupplierReturnInput,
@@ -70,6 +72,28 @@ export interface SupplierRecord {
   itemCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupplierCatalogItemRecord {
+  id: string;
+  supplierId: string;
+  itemId: string;
+  itemName: string;
+  itemBaseUnit: string;
+  supplierSku: string | null;
+  purchasingUnit: string;
+  conversionToBase: number;
+  lastPriceCents: number | null;
+  normalizedPricePerBaseCents: number | null;
+  currency: string;
+  isPreferred: boolean;
+  itemActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplierWithCatalogRecord extends SupplierRecord {
+  catalog: SupplierCatalogItemRecord[];
 }
 
 export interface PurchaseOrderRecord {
@@ -221,6 +245,288 @@ export class PurchasingService {
     }
 
     return { success: true, supplierId: data.id, message: 'Supplier created successfully.' };
+  }
+
+  /**
+   * Retrieves a supplier by ID with full catalog mappings, unit conversions, and normalized prices.
+   */
+  static async getSupplierById(
+    businessId: string,
+    supplierId: string,
+    options?: { hasCostPermission?: boolean }
+  ): Promise<SupplierWithCatalogRecord | null> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const admin = createAdminClient();
+
+    const { data: supplier, error: supError } = await admin
+      .from('inventory_suppliers')
+      .select('*')
+      .eq('id', supplierId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (supError || !supplier) return null;
+
+    const { data: rawItems } = await admin
+      .from('inventory_supplier_items')
+      .select(`
+        id,
+        supplier_id,
+        item_id,
+        supplier_sku,
+        purchasing_unit,
+        conversion_to_base,
+        last_price_cents,
+        currency,
+        is_preferred,
+        created_at,
+        updated_at,
+        item:inventory_items!inner(
+          id,
+          business_id,
+          name,
+          base_unit,
+          cost_per_unit_cents,
+          is_active
+        )
+      `)
+      .eq('supplier_id', supplierId)
+      .eq('item.business_id', businessId)
+      .order('updated_at', { ascending: false });
+
+    interface RawCatalogItemRow {
+      id: string;
+      supplier_id: string;
+      item_id: string;
+      supplier_sku: string | null;
+      purchasing_unit: string;
+      conversion_to_base: number;
+      last_price_cents: number;
+      currency: string;
+      is_preferred: boolean;
+      created_at: string;
+      updated_at: string;
+      item: {
+        id: string;
+        business_id: string;
+        name: string;
+        base_unit: string;
+        cost_per_unit_cents: number;
+        is_active: boolean;
+      };
+    }
+
+    const catalog: SupplierCatalogItemRecord[] = (rawItems || []).map((row) => {
+      const r = row as unknown as RawCatalogItemRow;
+      const conv = Number(r.conversion_to_base) || 1.0;
+      const rawPrice = Number(r.last_price_cents);
+      const normalizedCents = conv > 0 && rawPrice >= 0 ? Math.round(rawPrice / conv) : null;
+
+      return {
+        id: r.id,
+        supplierId: r.supplier_id,
+        itemId: r.item_id,
+        itemName: r.item.name,
+        itemBaseUnit: r.item.base_unit,
+        supplierSku: r.supplier_sku,
+        purchasingUnit: r.purchasing_unit,
+        conversionToBase: conv,
+        lastPriceCents: hasCostPermission ? rawPrice : null,
+        normalizedPricePerBaseCents: hasCostPermission ? normalizedCents : null,
+        currency: r.currency || supplier.currency || 'USD',
+        isPreferred: r.is_preferred,
+        itemActive: r.item.is_active,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
+
+    return {
+      id: supplier.id,
+      businessId: supplier.business_id,
+      name: supplier.name,
+      contactPerson: supplier.contact_person,
+      email: supplier.email,
+      phone: supplier.phone,
+      addressLine1: supplier.address_line1,
+      city: supplier.city,
+      country: supplier.country,
+      currency: supplier.currency,
+      paymentTerms: supplier.payment_terms,
+      taxId: supplier.tax_id,
+      isPreferred: supplier.is_preferred,
+      isActive: supplier.is_active,
+      notes: supplier.notes,
+      itemCount: catalog.length,
+      createdAt: supplier.created_at,
+      updatedAt: supplier.updated_at,
+      catalog,
+    };
+  }
+
+  /**
+   * Updates an existing supplier.
+   */
+  static async updateSupplier(
+    input: UpdateSupplierInput,
+    options?: { businessId?: string }
+  ) {
+    let bizId = options?.businessId;
+    if (!bizId) {
+      const context = await resolveActiveBusinessContext();
+      if (!context || !context.business) return { success: false, message: 'Unauthorized.' };
+      bizId = context.business.id;
+    }
+
+    const admin = createAdminClient();
+
+    const { data: existing } = await admin
+      .from('inventory_suppliers')
+      .select('id')
+      .eq('id', input.id)
+      .eq('business_id', bizId)
+      .maybeSingle();
+
+    if (!existing) {
+      return { success: false, message: 'Supplier not found or unauthorized.' };
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (input.name !== undefined) updatePayload.name = input.name.trim();
+    if (input.contactPerson !== undefined) updatePayload.contact_person = input.contactPerson || null;
+    if (input.email !== undefined) updatePayload.email = input.email || null;
+    if (input.phone !== undefined) updatePayload.phone = input.phone || null;
+    if (input.addressLine1 !== undefined) updatePayload.address_line1 = input.addressLine1 || null;
+    if (input.addressLine2 !== undefined) updatePayload.address_line2 = input.addressLine2 || null;
+    if (input.city !== undefined) updatePayload.city = input.city || null;
+    if (input.country !== undefined) updatePayload.country = input.country || null;
+    if (input.currency !== undefined) updatePayload.currency = input.currency;
+    if (input.paymentTerms !== undefined) updatePayload.payment_terms = input.paymentTerms || null;
+    if (input.taxId !== undefined) updatePayload.tax_id = input.taxId || null;
+    if (input.isPreferred !== undefined) updatePayload.is_preferred = input.isPreferred;
+    if (input.isActive !== undefined) updatePayload.is_active = input.isActive;
+    if (input.notes !== undefined) updatePayload.notes = input.notes || null;
+
+    const { error } = await admin
+      .from('inventory_suppliers')
+      .update(updatePayload)
+      .eq('id', input.id)
+      .eq('business_id', bizId);
+
+    if (error) {
+      return { success: false, message: error.message || 'Failed to update supplier.' };
+    }
+
+    return { success: true, message: 'Supplier updated successfully.' };
+  }
+
+  /**
+   * Adds or updates a supplier item catalog mapping.
+   */
+  static async upsertSupplierItem(
+    input: SupplierItemInput,
+    options?: { businessId?: string }
+  ) {
+    let bizId = options?.businessId;
+    if (!bizId) {
+      const context = await resolveActiveBusinessContext();
+      if (!context || !context.business) return { success: false, message: 'Unauthorized.' };
+      bizId = context.business.id;
+    }
+
+    const admin = createAdminClient();
+
+    // 1. Verify supplier belongs to business
+    const { data: supplier } = await admin
+      .from('inventory_suppliers')
+      .select('id, currency')
+      .eq('id', input.supplierId)
+      .eq('business_id', bizId)
+      .maybeSingle();
+
+    if (!supplier) {
+      return { success: false, message: 'Supplier not found or unauthorized.' };
+    }
+
+    // 2. Verify item belongs to business
+    const { data: item } = await admin
+      .from('inventory_items')
+      .select('id, name, base_unit')
+      .eq('id', input.itemId)
+      .eq('business_id', bizId)
+      .maybeSingle();
+
+    if (!item) {
+      return { success: false, message: 'Inventory item not found or unauthorized.' };
+    }
+
+    // 3. Upsert into inventory_supplier_items
+    const { error } = await admin
+      .from('inventory_supplier_items')
+      .upsert(
+        {
+          supplier_id: input.supplierId,
+          item_id: input.itemId,
+          supplier_sku: input.supplierSku ? input.supplierSku.trim() : null,
+          purchasing_unit: input.purchasingUnit.trim(),
+          conversion_to_base: input.conversionToBase,
+          last_price_cents: input.lastPriceCents,
+          currency: input.currency || supplier.currency || 'USD',
+          is_preferred: input.isPreferred,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'supplier_id,item_id' }
+      );
+
+    if (error) {
+      return { success: false, message: error.message || 'Failed to save supplier catalog item.' };
+    }
+
+    return { success: true, message: 'Supplier catalog item saved successfully.' };
+  }
+
+  /**
+   * Removes an item from a supplier's catalog.
+   */
+  static async removeSupplierItem(
+    supplierId: string,
+    itemId: string,
+    options?: { businessId?: string }
+  ) {
+    let bizId = options?.businessId;
+    if (!bizId) {
+      const context = await resolveActiveBusinessContext();
+      if (!context || !context.business) return { success: false, message: 'Unauthorized.' };
+      bizId = context.business.id;
+    }
+
+    const admin = createAdminClient();
+
+    // Verify supplier belongs to business
+    const { data: supplier } = await admin
+      .from('inventory_suppliers')
+      .select('id')
+      .eq('id', supplierId)
+      .eq('business_id', bizId)
+      .maybeSingle();
+
+    if (!supplier) {
+      return { success: false, message: 'Supplier not found or unauthorized.' };
+    }
+
+    const { error } = await admin
+      .from('inventory_supplier_items')
+      .delete()
+      .eq('supplier_id', supplierId)
+      .eq('item_id', itemId);
+
+    if (error) {
+      return { success: false, message: error.message || 'Failed to remove supplier catalog item.' };
+    }
+
+    return { success: true, message: 'Item removed from supplier catalog.' };
   }
 
   /**

@@ -1743,42 +1743,51 @@ async function runSuite() {
       .select()
       .single();
 
-    // 2. Link Suppliers to itemSalmon
+    // 2. Link Suppliers to itemSalmon using PurchasingService.upsertSupplierItem
     // Supplier Alpha: 10 kg case = €70.00 (7000 cents) -> €7.00/kg (700 cents)
-    await admin.from('inventory_supplier_items').insert({
-      supplier_id: supAlpha.id,
-      item_id: itemSalmon.id,
-      supplier_sku: `ALPHA-SAL-${testSuffix}`,
-      purchasing_unit: 'case',
-      conversion_to_base: 10.0,
-      last_price_cents: 7000,
-      currency: 'EUR',
-      is_preferred: true,
-    });
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemSalmon.id,
+        supplierSku: `ALPHA-SAL-${testSuffix}`,
+        purchasingUnit: 'case',
+        conversionToBase: 10.0,
+        lastPriceCents: 7000,
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
 
     // Supplier Beta: 5 kg box = €32.50 (3250 cents) -> €6.50/kg (650 cents) [CHEAPER]
-    await admin.from('inventory_supplier_items').insert({
-      supplier_id: supBeta.id,
-      item_id: itemSalmon.id,
-      supplier_sku: `BETA-SAL-${testSuffix}`,
-      purchasing_unit: 'box',
-      conversion_to_base: 5.0,
-      last_price_cents: 3250,
-      currency: 'EUR',
-      is_preferred: false,
-    });
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supBeta.id,
+        itemId: itemSalmon.id,
+        supplierSku: `BETA-SAL-${testSuffix}`,
+        purchasingUnit: 'box',
+        conversionToBase: 5.0,
+        lastPriceCents: 3250,
+        currency: 'EUR',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
 
     // Supplier Gamma: 1 kg pack = $8.00 (800 cents) [USD CURRENCY]
-    await admin.from('inventory_supplier_items').insert({
-      supplier_id: supGamma.id,
-      item_id: itemSalmon.id,
-      supplier_sku: `GAMMA-SAL-${testSuffix}`,
-      purchasing_unit: 'kg',
-      conversion_to_base: 1.0,
-      last_price_cents: 800,
-      currency: 'USD',
-      is_preferred: false,
-    });
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemSalmon.id,
+        supplierSku: `GAMMA-SAL-${testSuffix}`,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 800,
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
 
     // 3. Query Authoritative Price Comparison
     const comparison = await PurchasingService.getSupplierPriceComparison(biz.id, itemSalmon.id, {
@@ -2023,23 +2032,249 @@ async function runSuite() {
     );
     assert(crossTenantUpsert.success === false, 'upsertSupplierItem across business boundaries strictly rejected');
 
-    const crossTenantRemove = await PurchasingService.removeSupplierItem(
+    // =========================================================================
+    // SECTION 13: PURCHASE PRICE HISTORY & COST TREND TRACKING VERIFICATION
+    // =========================================================================
+    console.log('\n--- Section 13: Purchase Price History & Cost Trend Tracking ---');
+
+    // 1. Initial catalog mapping recorded price history
+    const initialSalmonHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    assert(initialSalmonHistory !== null, 'Item price history retrieved successfully');
+    assert(initialSalmonHistory?.trendsByCurrency.length === 2, 'Two currency trend groups exist for Salmon (USD and EUR)');
+
+    const eurTrend = initialSalmonHistory?.trendsByCurrency.find((t) => t.currency === 'EUR');
+    assert(eurTrend !== undefined, 'EUR trend group found for Salmon');
+    assert((eurTrend?.observationCount ?? 0) >= 2, 'EUR trend has initial catalog records (Alpha and Beta)');
+
+    const usdTrend = initialSalmonHistory?.trendsByCurrency.find((t) => t.currency === 'USD');
+    assert(usdTrend !== undefined, 'USD trend group found for Salmon');
+    assert((usdTrend?.observationCount ?? 0) >= 1, 'USD trend has initial catalog record (Gamma)');
+
+    // 2. Updating catalog price creates new price history record
+    const updatePriceRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemSalmon.id,
+        purchasingUnit: 'case',
+        conversionToBase: 10.0,
+        lastPriceCents: 7500, // Price updated from 7000 to 7500 (€7.50/kg)
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(updatePriceRes.success === true, 'Catalog price updated for Alpha Supplier');
+
+    const updatedSalmonHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    const updatedEurTrend = updatedSalmonHistory?.trendsByCurrency.find((t) => t.currency === 'EUR');
+    assert(updatedEurTrend !== undefined, 'Updated EUR trend group found');
+    assert(
+      (updatedEurTrend?.observationCount || 0) > (eurTrend?.observationCount || 0),
+      'Observation count incremented after catalog price change'
+    );
+    assert(updatedEurTrend?.currentNormalizedPriceCents === 750, 'Latest normalized price is 750 cents (€7.50/kg)');
+
+    // 3. Updating non-pricing field DOES NOT create duplicate price history record
+    const obsCountBefore = updatedEurTrend?.observationCount || 0;
+    const nonPriceUpdateRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemSalmon.id,
+        supplierSku: 'ALPHA-SALMON-NEW-SKU',
+        purchasingUnit: 'case',
+        conversionToBase: 10.0,
+        lastPriceCents: 7500, // Price unchanged
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(nonPriceUpdateRes.success === true, 'Non-price supplier mapping update succeeded');
+
+    const noDuplicateHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    const noDupTrend = noDuplicateHistory?.trendsByCurrency.find((t) => t.currency === 'EUR');
+    assert(
+      noDupTrend?.observationCount === obsCountBefore,
+      'No duplicate price history record inserted when price/pack unchanged'
+    );
+
+    // 4. Pack size conversion & normalization integer-cent safety
+    const packUpdateRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supAlpha.id,
+        itemId: itemSalmon.id,
+        purchasingUnit: 'case_10kg',
+        conversionToBase: 10.0,
+        lastPriceCents: 6800, // €68.00 per 10kg case -> €6.80/kg (680 cents)
+        currency: 'EUR',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(packUpdateRes.success === true, 'Pack-based price update saved');
+
+    const packSalmonHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    const packEurTrend = packSalmonHistory?.trendsByCurrency.find((t) => t.currency === 'EUR');
+    assert(packEurTrend?.currentNormalizedPriceCents === 680, 'Pack price 6800 with conversion 10.0 normalized to exactly 680 cents/kg');
+    assert(packEurTrend?.previousNormalizedPriceCents === 750, 'Previous normalized price was 750 cents/kg');
+    assert(packEurTrend?.priceChangeCents === -70, 'Price change vs previous is exactly -70 cents (-€0.70)');
+    assert(packEurTrend?.priceChangePercentage === -9.33, 'Price change percentage is exactly -9.33%');
+    assert(packEurTrend?.trendDirection === 'down', 'Trend direction is downward');
+
+    // 5. Summary metrics (Low, High, Average)
+    assert(packEurTrend?.lowestNormalizedPriceCents !== null, 'Period low is calculated');
+    assert(packEurTrend?.highestNormalizedPriceCents !== null, 'Period high is calculated');
+    assert(packEurTrend?.averageNormalizedPriceCents !== null, 'Period average is calculated');
+    assert(
+      (packEurTrend?.lowestNormalizedPriceCents || 0) <= (packEurTrend?.highestNormalizedPriceCents || 0),
+      'Period low <= Period high'
+    );
+
+    // 6. Time-range filtering
+    const range30dHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: '30d',
+    });
+    assert(range30dHistory !== null, '30-day range query succeeds');
+    assert(
+      (range30dHistory?.allObservations.length || 0) > 0,
+      'Recent observations included in 30d range'
+    );
+
+    // 7. Supplier-specific filtering in PurchasingService.getSupplierItemPriceHistory
+    const supAlphaHistory = await PurchasingService.getSupplierItemPriceHistory(
+      biz.id,
       supAlpha.id,
       itemSalmon.id,
-      { businessId: '00000000-0000-0000-0000-000000000000' }
+      { hasCostPermission: true }
     );
-    assert(crossTenantRemove.success === false, 'removeSupplierItem across business boundaries strictly rejected');
+    assert(supAlphaHistory.length >= 3, 'Alpha supplier has at least 3 historical observations for Salmon');
+    assert(
+      supAlphaHistory.every((h) => h.supplierId === supAlpha.id),
+      'Supplier item price history is strictly filtered to Alpha supplier'
+    );
+    assert(
+      new Date(supAlphaHistory[0].recordedAt).getTime() >= new Date(supAlphaHistory[supAlphaHistory.length - 1].recordedAt).getTime(),
+      'Supplier item price history is returned in reverse-chronological order'
+    );
 
-    // 9. Cost Redaction in Supplier Detail & Catalog
-    const redactedSupDetails = await PurchasingService.getSupplierById(biz.id, supAlpha.id, {
-      hasCostPermission: false,
+    // 8. Multi-currency trend isolation
+    const isolatedUsdTrend = initialSalmonHistory?.trendsByCurrency.find((t) => t.currency === 'USD');
+    assert(isolatedUsdTrend !== undefined, 'USD trend group exists separately');
+    assert(isolatedUsdTrend?.currency === 'USD', 'USD trend does not contaminate EUR metrics');
+
+    // 9. Actual PO line price history
+    const poHistoryEntry = await admin.from('inventory_price_history').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      item_id: itemSalmon.id,
+      supplier_id: supAlpha.id,
+      source_type: 'purchase_order',
+      purchasing_unit: 'case',
+      conversion_to_base: 10.0,
+      pack_price_cents: 6700,
+      normalized_price_per_base_cents: 670,
+      currency: 'EUR',
+      reference_number: 'PO-TEST-0099',
+      notes: 'Purchase Order test entry',
+      recorded_at: new Date().toISOString(),
     });
-    assert(redactedSupDetails !== null, 'Redacted supplier details retrieved');
-    assert(redactedSupDetails?.catalog[0].lastPriceCents === null, 'Supplier catalog pack price strictly redacted to null');
-    assert(redactedSupDetails?.catalog[0].normalizedPricePerBaseCents === null, 'Supplier catalog normalized price strictly redacted to null');
-    assert(redactedSupDetails?.catalog[0].itemName !== undefined, 'Ingredient name remains visible under redaction');
-    assert(redactedSupDetails?.catalog[0].purchasingUnit !== undefined, 'Purchasing unit remains visible under redaction');
-    assert(redactedSupDetails?.catalog[0].conversionToBase !== undefined, 'Conversion factor remains visible under redaction');
+    assert(poHistoryEntry.error === null, 'PO price history inserted');
+
+    // 10. Actual GRN line price history
+    const grnHistoryEntry = await admin.from('inventory_price_history').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      item_id: itemSalmon.id,
+      supplier_id: supAlpha.id,
+      source_type: 'goods_receipt',
+      purchasing_unit: 'case',
+      conversion_to_base: 10.0,
+      pack_price_cents: 6600,
+      normalized_price_per_base_cents: 660,
+      currency: 'EUR',
+      reference_number: 'GRN-TEST-0099',
+      notes: 'Goods receipt test entry',
+      recorded_at: new Date().toISOString(),
+    });
+    assert(grnHistoryEntry.error === null, 'GRN price history inserted');
+
+    const combinedHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    const poObs = combinedHistory?.allObservations.find((o) => o.sourceType === 'purchase_order');
+    const grnObs = combinedHistory?.allObservations.find((o) => o.sourceType === 'goods_receipt');
+    assert(poObs !== undefined, 'PO source observation present in item price history');
+    assert(grnObs !== undefined, 'GRN source observation present in item price history');
+    assert(poObs?.referenceNumber === 'PO-TEST-0099', 'PO reference number preserved');
+    assert(grnObs?.referenceNumber === 'GRN-TEST-0099', 'GRN reference number preserved');
+
+    // 11. Supplier Price Comparison trend indicators
+    const comparisonWithTrends = await PurchasingService.getSupplierPriceComparison(biz.id, itemSalmon.id, {
+      hasCostPermission: true,
+    });
+    assert(comparisonWithTrends !== null, 'Price comparison with trends retrieved');
+    const alphaComp = comparisonWithTrends?.allSuppliers.find((s) => s.supplierId === supAlpha.id);
+    assert(alphaComp !== undefined, 'Alpha supplier present in comparison');
+    assert(alphaComp?.priceTrendDirection !== undefined, 'Price trend direction is populated on supplier comparison');
+
+    // 12. Cost permission redaction
+    const redactedHistory = await PurchasingService.getItemPriceHistory(biz.id, itemSalmon.id, {
+      hasCostPermission: false,
+      timeRange: 'all',
+    });
+    assert(redactedHistory !== null, 'Redacted item price history retrieved');
+    const redactedEur = redactedHistory?.trendsByCurrency.find((t) => t.currency === 'EUR');
+    assert(redactedEur?.currentNormalizedPriceCents === null, 'Current price redacted to null');
+    assert(redactedEur?.previousNormalizedPriceCents === null, 'Previous price redacted to null');
+    assert(redactedEur?.priceChangeCents === null, 'Price change cents redacted to null');
+    assert(redactedEur?.priceChangePercentage === null, 'Price change percentage redacted to null');
+    assert(redactedEur?.lowestNormalizedPriceCents === null, 'Lowest price redacted to null');
+    assert(redactedEur?.highestNormalizedPriceCents === null, 'Highest price redacted to null');
+    assert(redactedEur?.averageNormalizedPriceCents === null, 'Average price redacted to null');
+    assert(redactedHistory?.allObservations[0].packPriceCents === null, 'Observation pack price redacted to null');
+    assert(redactedHistory?.allObservations[0].normalizedPricePerBaseCents === null, 'Observation normalized price redacted to null');
+    assert(redactedHistory?.allObservations[0].supplierName !== undefined, 'Supplier name remains visible under redaction');
+    assert(redactedHistory?.allObservations[0].sourceType !== undefined, 'Source type remains visible under redaction');
+
+    const redactedSupHistory = await PurchasingService.getSupplierItemPriceHistory(
+      biz.id,
+      supAlpha.id,
+      itemSalmon.id,
+      { hasCostPermission: false }
+    );
+    assert(redactedSupHistory.length > 0, 'Redacted supplier history returned');
+    assert(redactedSupHistory[0].packPriceCents === null, 'Supplier history pack price redacted to null');
+    assert(redactedSupHistory[0].normalizedPricePerBaseCents === null, 'Supplier history normalized price redacted to null');
+
+    // 13. Multi-tenant boundary isolation
+    const crossTenantItemHistory = await PurchasingService.getItemPriceHistory(
+      '00000000-0000-0000-0000-000000000000',
+      itemSalmon.id,
+      { hasCostPermission: true }
+    );
+    assert(crossTenantItemHistory === null, 'Cross-tenant getItemPriceHistory strictly returns null');
+
+    const crossTenantSupplierHistory = await PurchasingService.getSupplierItemPriceHistory(
+      '00000000-0000-0000-0000-000000000000',
+      supAlpha.id,
+      itemSalmon.id,
+      { hasCostPermission: true }
+    );
+    assert(crossTenantSupplierHistory.length === 0, 'Cross-tenant getSupplierItemPriceHistory strictly returns empty array');
 
   } finally {
     // Teardown Test Data

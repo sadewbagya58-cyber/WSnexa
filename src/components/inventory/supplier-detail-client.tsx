@@ -8,10 +8,12 @@ import {
   updateSupplierAction,
   upsertSupplierItemAction,
   removeSupplierItemAction,
+  getSupplierItemPriceHistoryAction,
 } from '@/server/actions/purchasing';
 import {
   SupplierWithCatalogRecord,
   SupplierCatalogItemRecord,
+  PriceHistoryRecord,
 } from '@/server/services/purchasing.service';
 import { formatCurrencyMinor, getCurrencySymbol } from '@/lib/utils/currency';
 import { formatMinorUnitsToDecimal, parseDecimalToMinorUnits } from '@/lib/utils/money';
@@ -68,6 +70,23 @@ export function SupplierDetailClient({
   const [mapConversion, setMapConversion] = useState('1.0');
   const [mapPrice, setMapPrice] = useState('0.00');
   const [mapItemPreferred, setMapItemPreferred] = useState(true);
+
+  // Price History Modal State
+  const [historyItem, setHistoryItem] = useState<SupplierCatalogItemRecord | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<PriceHistoryRecord[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  function handleOpenHistory(item: SupplierCatalogItemRecord) {
+    setHistoryItem(item);
+    setIsLoadingHistory(true);
+    startTransition(async () => {
+      const res = await getSupplierItemPriceHistoryAction(supplier.id, item.itemId);
+      if (res.success) {
+        setHistoryRecords(res.history);
+      }
+      setIsLoadingHistory(false);
+    });
+  }
 
   // Filter Catalog
   const filteredCatalog = supplier.catalog.filter(
@@ -582,6 +601,13 @@ export function SupplierDetailClient({
                     <td className="py-3 px-3 text-right space-x-1">
                       <button
                         type="button"
+                        onClick={() => handleOpenHistory(item)}
+                        className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors"
+                      >
+                        📊 History
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEditMappingModal(item)}
                         className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors"
                       >
@@ -757,6 +783,156 @@ export function SupplierDetailClient({
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Price History Inspection Modal */}
+      {historyItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-2xs">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl max-w-2xl w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-950 flex items-center gap-2">
+                  <span>📈</span> Price History: {historyItem.itemName}
+                </h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Historical contract prices and received costs with {supplier.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryItem(null)}
+                className="text-zinc-400 hover:text-zinc-800 text-sm font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {isLoadingHistory ? (
+                <div className="p-8 text-center text-xs text-zinc-500 font-medium">
+                  Loading price history…
+                </div>
+              ) : historyRecords.length === 0 ? (
+                <div className="p-8 text-center bg-zinc-50 border border-dashed border-zinc-200 rounded-xl space-y-1">
+                  <span className="text-2xl">📊</span>
+                  <h4 className="text-xs font-bold text-zinc-800">No Historical Records Found</h4>
+                  <p className="text-[11px] text-zinc-500">
+                    No historical price updates recorded yet for this item with this supplier.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-200">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-50 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-200">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">Source</th>
+                        <th className="py-2.5 px-3">Pack / Unit</th>
+                        {hasCostPermission && <th className="py-2.5 px-3 text-right">Pack Price</th>}
+                        {hasCostPermission && <th className="py-2.5 px-3 text-right">Normalized</th>}
+                        {hasCostPermission && <th className="py-2.5 px-3 text-right">Change</th>}
+                        <th className="py-2.5 px-3">Reference / Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 font-medium">
+                      {historyRecords.map((rec) => (
+                        <tr key={rec.id} className="hover:bg-zinc-50/50">
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-zinc-600 whitespace-nowrap">
+                            {new Date(rec.recordedAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                                rec.sourceType === 'catalog'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : rec.sourceType === 'goods_receipt'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : rec.sourceType === 'purchase_order'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                              }`}
+                            >
+                              {rec.sourceType === 'catalog'
+                                ? '🏷️ Catalog'
+                                : rec.sourceType === 'goods_receipt'
+                                ? '🚚 GRN'
+                                : rec.sourceType === 'purchase_order'
+                                ? '📦 PO'
+                                : 'Manual'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="font-bold text-zinc-900 capitalize">{rec.purchasingUnit}</span>
+                            {rec.conversionToBase !== 1 && (
+                              <span className="text-[10px] text-zinc-400 block font-mono">
+                                (1 {rec.purchasingUnit} = {rec.conversionToBase} {rec.baseUnit})
+                              </span>
+                            )}
+                          </td>
+                          {hasCostPermission && (
+                            <td className="py-2.5 px-3 text-right font-mono text-zinc-700 whitespace-nowrap">
+                              {rec.packPriceCents !== null
+                                ? `${formatCurrencyMinor(rec.packPriceCents, rec.currency)} / ${rec.purchasingUnit}`
+                                : '—'}
+                            </td>
+                          )}
+                          {hasCostPermission && (
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-zinc-950 whitespace-nowrap">
+                              {rec.normalizedPricePerBaseCents !== null
+                                ? `${formatCurrencyMinor(rec.normalizedPricePerBaseCents, rec.currency)} / ${rec.baseUnit}`
+                                : '—'}
+                            </td>
+                          )}
+                          {hasCostPermission && (
+                            <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
+                              {rec.changeVsPreviousCents !== null &&
+                              rec.changeVsPreviousCents !== undefined &&
+                              rec.changeVsPreviousCents !== 0 ? (
+                                <span
+                                  className={`text-[11px] font-bold ${
+                                    rec.changeVsPreviousCents < 0 ? 'text-emerald-700' : 'text-rose-700'
+                                  }`}
+                                >
+                                  {rec.changeVsPreviousCents < 0 ? '↓ ' : '↑ +'}
+                                  {formatCurrencyMinor(Math.abs(rec.changeVsPreviousCents), rec.currency)}
+                                  {rec.changeVsPreviousPercentage !== null &&
+                                    rec.changeVsPreviousPercentage !== undefined &&
+                                    ` (${rec.changeVsPreviousPercentage > 0 ? '+' : ''}${rec.changeVsPreviousPercentage}%)`}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-400 text-[11px]">First Record</span>
+                              )}
+                            </td>
+                          )}
+                          <td className="py-2.5 px-3 text-[11px] text-zinc-500 max-w-xs truncate">
+                            {rec.referenceNumber ? (
+                              <span className="font-mono font-bold text-zinc-700 mr-1.5">
+                                {rec.referenceNumber}
+                              </span>
+                            ) : null}
+                            {rec.notes || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-zinc-100">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryItem(null)}
+                className="text-xs font-bold"
+              >
+                Close
+              </Button>
+            </div>
           </div>
         </div>
       )}

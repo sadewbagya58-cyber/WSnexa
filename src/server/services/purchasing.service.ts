@@ -147,6 +147,8 @@ export interface FormattedSupplierPriceComparisonItem {
   isCheapest?: boolean;
   priceDifferenceCents?: number | null;
   percentagePremium?: number | null;
+  priceTrendDirection?: 'up' | 'down' | 'flat' | 'new';
+  priceTrendPercentage?: number | null;
 }
 
 export interface SupplierPriceComparisonGroup {
@@ -167,6 +169,52 @@ export interface ItemSupplierPriceComparisonPayload {
   totalSuppliersCount: number;
   groups: SupplierPriceComparisonGroup[];
   allSuppliers: FormattedSupplierPriceComparisonItem[];
+}
+
+export interface PriceHistoryRecord {
+  id: string;
+  businessId: string;
+  branchId: string | null;
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  supplierId: string | null;
+  supplierName: string;
+  sourceType: 'catalog' | 'purchase_order' | 'goods_receipt' | 'manual_adjustment';
+  sourceId: string | null;
+  purchasingUnit: string;
+  conversionToBase: number;
+  packPriceCents: number | null; // null if cost redacted
+  normalizedPricePerBaseCents: number | null; // null if cost redacted
+  currency: string;
+  referenceNumber: string | null;
+  notes: string | null;
+  recordedAt: string;
+  changeVsPreviousCents?: number | null;
+  changeVsPreviousPercentage?: number | null;
+}
+
+export interface ItemCostTrendSummary {
+  currency: string;
+  currentNormalizedPriceCents: number | null;
+  previousNormalizedPriceCents: number | null;
+  priceChangeCents: number | null;
+  priceChangePercentage: number | null;
+  lowestNormalizedPriceCents: number | null;
+  highestNormalizedPriceCents: number | null;
+  averageNormalizedPriceCents: number | null;
+  observationCount: number;
+  timeRange: '30d' | '90d' | '6m' | '12m' | 'all';
+  history: PriceHistoryRecord[];
+  trendDirection: 'up' | 'down' | 'flat' | 'insufficient_data';
+}
+
+export interface ItemPriceHistoryPayload {
+  itemId: string;
+  itemName: string;
+  baseUnit: string;
+  trendsByCurrency: ItemCostTrendSummary[];
+  allObservations: PriceHistoryRecord[];
 }
 
 export class PurchasingService {
@@ -462,8 +510,23 @@ export class PurchasingService {
       return { success: false, message: 'Inventory item not found or unauthorized.' };
     }
 
-    // 3. Upsert into inventory_supplier_items
-    const { error } = await admin
+    // 3. Check existing mapping to detect price/pack changes
+    const { data: existingMapping } = await admin
+      .from('inventory_supplier_items')
+      .select('id, last_price_cents, conversion_to_base, purchasing_unit, currency')
+      .eq('supplier_id', input.supplierId)
+      .eq('item_id', input.itemId)
+      .maybeSingle();
+
+    const priceOrPackChanged =
+      !existingMapping ||
+      existingMapping.last_price_cents !== input.lastPriceCents ||
+      Number(existingMapping.conversion_to_base) !== Number(input.conversionToBase) ||
+      existingMapping.purchasing_unit !== input.purchasingUnit.trim() ||
+      (input.currency && existingMapping.currency !== input.currency);
+
+    // 4. Upsert into inventory_supplier_items
+    const { data: savedItem, error } = await admin
       .from('inventory_supplier_items')
       .upsert(
         {
@@ -478,10 +541,35 @@ export class PurchasingService {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'supplier_id,item_id' }
-      );
+      )
+      .select('id')
+      .single();
 
     if (error) {
       return { success: false, message: error.message || 'Failed to save supplier catalog item.' };
+    }
+
+    // 5. If price or pack changed, log immutable price history
+    if (priceOrPackChanged) {
+      const normalizedCents =
+        input.conversionToBase > 0
+          ? Math.round(input.lastPriceCents / input.conversionToBase)
+          : input.lastPriceCents;
+
+      await admin.from('inventory_price_history').insert({
+        business_id: bizId,
+        item_id: input.itemId,
+        supplier_id: input.supplierId,
+        source_type: 'catalog',
+        source_id: savedItem?.id || existingMapping?.id || null,
+        purchasing_unit: input.purchasingUnit.trim(),
+        conversion_to_base: input.conversionToBase,
+        pack_price_cents: input.lastPriceCents,
+        normalized_price_per_base_cents: normalizedCents,
+        currency: input.currency || supplier.currency || 'USD',
+        notes: existingMapping ? 'Catalog price update' : 'Initial catalog mapping',
+        recorded_at: new Date().toISOString(),
+      });
     }
 
     return { success: true, message: 'Supplier catalog item saved successfully.' };
@@ -760,6 +848,37 @@ export class PurchasingService {
       return { success: false, message: `Failed to create PO items: ${itemsErr.message}` };
     }
 
+    // Log purchase order price history for each ordered line item
+    for (const item of input.items) {
+      const baseUnit = itemMap.get(item.itemId) || item.purchasingUnit;
+      let qtyBase = item.quantityOrdered;
+      try {
+        qtyBase = UnitConverter.normalizeToBase(item.quantityOrdered, item.purchasingUnit, baseUnit);
+      } catch {
+        qtyBase = item.quantityOrdered;
+      }
+      const conv = item.quantityOrdered > 0 ? qtyBase / item.quantityOrdered : 1.0;
+      const normalizedCents = conv > 0 ? Math.round(item.unitCostCents / conv) : item.unitCostCents;
+
+      await admin.from('inventory_price_history').insert({
+        business_id: context.business.id,
+        branch_id: input.branchId,
+        item_id: item.itemId,
+        supplier_id: input.supplierId,
+        source_type: 'purchase_order',
+        source_id: po.id,
+        purchasing_unit: item.purchasingUnit,
+        conversion_to_base: conv,
+        pack_price_cents: item.unitCostCents,
+        normalized_price_per_base_cents: normalizedCents,
+        currency: context.business.defaultCurrency || 'USD',
+        reference_number: poNumber,
+        notes: 'Purchase Order line item',
+        recorded_by: context.user.id,
+        recorded_at: new Date().toISOString(),
+      });
+    }
+
     return { success: true, poId: po.id, message: 'Purchase Order created.' };
   }
 
@@ -853,6 +972,40 @@ export class PurchasingService {
     }
 
     const res = data as { success: boolean; grn_id?: string; grn_number?: string; idempotent_replay?: boolean };
+
+    // Log actual received price history for received items if not idempotent replay
+    if (res.grn_id && !res.idempotent_replay) {
+      for (const item of input.items) {
+        const baseUnit = itemMap.get(item.itemId) || item.unitReceived;
+        let qtyBase = item.quantityReceived;
+        try {
+          qtyBase = UnitConverter.normalizeToBase(item.quantityReceived, item.unitReceived, baseUnit);
+        } catch {
+          qtyBase = item.quantityReceived;
+        }
+        const conv = item.quantityReceived > 0 ? qtyBase / item.quantityReceived : 1.0;
+        const normalizedCents = conv > 0 ? Math.round(item.unitCostCents / conv) : item.unitCostCents;
+
+        await admin.from('inventory_price_history').insert({
+          business_id: context.business.id,
+          branch_id: input.branchId,
+          item_id: item.itemId,
+          supplier_id: input.supplierId,
+          source_type: 'goods_receipt',
+          source_id: res.grn_id,
+          purchasing_unit: item.unitReceived,
+          conversion_to_base: conv,
+          pack_price_cents: item.unitCostCents,
+          normalized_price_per_base_cents: normalizedCents,
+          currency: context.business.defaultCurrency || 'USD',
+          reference_number: input.grnNumber.trim(),
+          notes: 'Goods Receipt (GRN)',
+          recorded_by: context.user.id,
+          recorded_at: new Date().toISOString(),
+        });
+      }
+    }
+
     return {
       success: true,
       grnId: res.grn_id,
@@ -945,11 +1098,53 @@ export class PurchasingService {
       };
     }
 
+    // Query recent price history to derive trend per supplier
+    const { data: priceHistRows } = await admin
+      .from('inventory_price_history')
+      .select('supplier_id, normalized_price_per_base_cents, recorded_at')
+      .eq('business_id', businessId)
+      .eq('item_id', itemId)
+      .order('recorded_at', { ascending: false });
+
+    const supplierHistMap = new Map<string, number[]>();
+    (priceHistRows || []).forEach((h) => {
+      if (h.supplier_id) {
+        if (!supplierHistMap.has(h.supplier_id)) {
+          supplierHistMap.set(h.supplier_id, []);
+        }
+        supplierHistMap.get(h.supplier_id)!.push(Number(h.normalized_price_per_base_cents));
+      }
+    });
+
     const mappedSuppliers = (rows as unknown as RawSupplierItemRow[]).map((r) => {
       const conv = Number(r.conversion_to_base) || 1.0;
       const rawPrice = Number(r.last_price_cents);
       const normalizedCents = conv > 0 && rawPrice >= 0 ? Math.round(rawPrice / conv) : null;
       const isPref = r.is_preferred || r.supplier.is_preferred || false;
+
+      let trendDir: 'up' | 'down' | 'flat' | 'new' | undefined = undefined;
+      let trendPct: number | null = null;
+
+      if (hasCostPermission) {
+        const hist = supplierHistMap.get(r.supplier.id) || [];
+        if (hist.length >= 2) {
+          const current = hist[0];
+          const prev = hist[1];
+          const diff = current - prev;
+          if (diff > 0) {
+            trendDir = 'up';
+            trendPct = prev > 0 ? Number(((diff / prev) * 100).toFixed(2)) : 0;
+          } else if (diff < 0) {
+            trendDir = 'down';
+            trendPct = prev > 0 ? Number(((diff / prev) * 100).toFixed(2)) : 0;
+          } else {
+            trendDir = 'flat';
+            trendPct = 0;
+          }
+        } else {
+          trendDir = 'new';
+        }
+      }
 
       return {
         supplierId: r.supplier.id,
@@ -965,6 +1160,8 @@ export class PurchasingService {
         paymentTerms: r.supplier.payment_terms,
         isActive: r.supplier.is_active,
         updatedAt: r.updated_at,
+        priceTrendDirection: trendDir,
+        priceTrendPercentage: trendPct,
       };
     });
 
@@ -1054,6 +1251,328 @@ export class PurchasingService {
       groups,
       allSuppliers: enrichedAllSuppliers,
     };
+  }
+
+  /**
+   * Retrieves comprehensive purchase price history and cost trend analysis for an item.
+   */
+  static async getItemPriceHistory(
+    businessId: string,
+    itemId: string,
+    options?: {
+      timeRange?: '30d' | '90d' | '6m' | '12m' | 'all';
+      supplierId?: string;
+      branchId?: string;
+      hasCostPermission?: boolean;
+    }
+  ): Promise<ItemPriceHistoryPayload | null> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const timeRange = options?.timeRange ?? 'all';
+    const admin = createAdminClient();
+
+    // 1. Verify item belongs to business
+    const { data: item, error: itemError } = await admin
+      .from('inventory_items')
+      .select('id, name, base_unit, currency')
+      .eq('id', itemId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (itemError || !item) return null;
+
+    // 2. Build date threshold for time filter
+    let dateFilter: string | null = null;
+    const now = new Date();
+    if (timeRange === '30d') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
+      dateFilter = d.toISOString();
+    } else if (timeRange === '90d') {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 90);
+      dateFilter = d.toISOString();
+    } else if (timeRange === '6m') {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 6);
+      dateFilter = d.toISOString();
+    } else if (timeRange === '12m') {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      dateFilter = d.toISOString();
+    }
+
+    // 3. Query price history
+    let query = admin
+      .from('inventory_price_history')
+      .select(`
+        id,
+        business_id,
+        branch_id,
+        item_id,
+        supplier_id,
+        source_type,
+        source_id,
+        purchasing_unit,
+        conversion_to_base,
+        pack_price_cents,
+        normalized_price_per_base_cents,
+        currency,
+        reference_number,
+        notes,
+        recorded_at,
+        supplier:inventory_suppliers(id, name)
+      `)
+      .eq('business_id', businessId)
+      .eq('item_id', itemId)
+      .order('recorded_at', { ascending: true });
+
+    if (dateFilter) {
+      query = query.gte('recorded_at', dateFilter);
+    }
+    if (options?.supplierId) {
+      query = query.eq('supplier_id', options.supplierId);
+    }
+    if (options?.branchId) {
+      query = query.eq('branch_id', options.branchId);
+    }
+
+    const { data: rows } = await query;
+
+    interface RawPriceHistoryRow {
+      id: string;
+      business_id: string;
+      branch_id: string | null;
+      item_id: string;
+      supplier_id: string | null;
+      source_type: 'catalog' | 'purchase_order' | 'goods_receipt' | 'manual_adjustment';
+      source_id: string | null;
+      purchasing_unit: string;
+      conversion_to_base: number;
+      pack_price_cents: number;
+      normalized_price_per_base_cents: number;
+      currency: string;
+      reference_number: string | null;
+      notes: string | null;
+      recorded_at: string;
+      supplier?: { id: string; name: string } | null;
+    }
+
+    const rawHistory = (rows as unknown as RawPriceHistoryRow[]) || [];
+
+    // Group observations by currency
+    const byCurrency = new Map<string, PriceHistoryRecord[]>();
+
+    rawHistory.forEach((r) => {
+      const curr = r.currency || 'USD';
+      if (!byCurrency.has(curr)) {
+        byCurrency.set(curr, []);
+      }
+      const arr = byCurrency.get(curr)!;
+      const prev = arr.length > 0 ? arr[arr.length - 1] : null;
+
+      const normCents = Number(r.normalized_price_per_base_cents);
+      const rawPackCents = Number(r.pack_price_cents);
+
+      let changeVsPrevCents: number | null = 0;
+      let changeVsPrevPct: number | null = 0;
+
+      if (prev) {
+        const prevNorm = prev.normalizedPricePerBaseCents ?? 0;
+        changeVsPrevCents = normCents - prevNorm;
+        changeVsPrevPct =
+          prevNorm > 0 ? Number((((normCents - prevNorm) / prevNorm) * 100).toFixed(2)) : 0;
+      }
+
+      arr.push({
+        id: r.id,
+        businessId: r.business_id,
+        branchId: r.branch_id,
+        itemId: r.item_id,
+        itemName: item.name,
+        baseUnit: item.base_unit,
+        supplierId: r.supplier_id,
+        supplierName: r.supplier?.name || (r.supplier_id ? 'Supplier' : 'Direct / Internal'),
+        sourceType: r.source_type,
+        sourceId: r.source_id,
+        purchasingUnit: r.purchasing_unit,
+        conversionToBase: Number(r.conversion_to_base) || 1.0,
+        packPriceCents: hasCostPermission ? rawPackCents : null,
+        normalizedPricePerBaseCents: hasCostPermission ? normCents : null,
+        currency: curr,
+        referenceNumber: r.reference_number,
+        notes: r.notes,
+        recordedAt: r.recorded_at,
+        changeVsPreviousCents: hasCostPermission ? changeVsPrevCents : null,
+        changeVsPreviousPercentage: hasCostPermission ? changeVsPrevPct : null,
+      });
+    });
+
+    const trendsByCurrency: ItemCostTrendSummary[] = [];
+    const allEnrichedObservations: PriceHistoryRecord[] = [];
+
+    for (const [curr, records] of byCurrency.entries()) {
+      const count = records.length;
+      allEnrichedObservations.push(...records);
+
+      if (count === 0) continue;
+
+      const latestRecord = records[records.length - 1];
+      const previousRecord = count >= 2 ? records[records.length - 2] : null;
+
+      const normPrices = records
+        .map((r) => r.normalizedPricePerBaseCents)
+        .filter((n): n is number => n !== null);
+
+      let lowest: number | null = null;
+      let highest: number | null = null;
+      let average: number | null = null;
+
+      if (hasCostPermission && normPrices.length > 0) {
+        lowest = Math.min(...normPrices);
+        highest = Math.max(...normPrices);
+        average = Math.round(normPrices.reduce((a, b) => a + b, 0) / normPrices.length);
+      }
+
+      let priceChangeCents: number | null = null;
+      let priceChangePct: number | null = null;
+      let trendDirection: 'up' | 'down' | 'flat' | 'insufficient_data' = 'insufficient_data';
+
+      if (
+        hasCostPermission &&
+        previousRecord &&
+        latestRecord.normalizedPricePerBaseCents !== null &&
+        previousRecord.normalizedPricePerBaseCents !== null
+      ) {
+        priceChangeCents =
+          latestRecord.normalizedPricePerBaseCents - previousRecord.normalizedPricePerBaseCents;
+        priceChangePct =
+          previousRecord.normalizedPricePerBaseCents > 0
+            ? Number(
+                (
+                  (priceChangeCents / previousRecord.normalizedPricePerBaseCents) *
+                  100
+                ).toFixed(2)
+              )
+            : 0;
+
+        if (priceChangeCents > 0) trendDirection = 'up';
+        else if (priceChangeCents < 0) trendDirection = 'down';
+        else trendDirection = 'flat';
+      }
+
+      trendsByCurrency.push({
+        currency: curr,
+        currentNormalizedPriceCents: hasCostPermission ? latestRecord.normalizedPricePerBaseCents : null,
+        previousNormalizedPriceCents:
+          hasCostPermission && previousRecord ? previousRecord.normalizedPricePerBaseCents : null,
+        priceChangeCents: hasCostPermission ? priceChangeCents : null,
+        priceChangePercentage: hasCostPermission ? priceChangePct : null,
+        lowestNormalizedPriceCents: lowest,
+        highestNormalizedPriceCents: highest,
+        averageNormalizedPriceCents: average,
+        observationCount: count,
+        timeRange,
+        history: records,
+        trendDirection,
+      });
+    }
+
+    // Sort all observations reverse-chronologically for table ledger display
+    const sortedAll = [...allEnrichedObservations].sort(
+      (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+    );
+
+    return {
+      itemId: item.id,
+      itemName: item.name,
+      baseUnit: item.base_unit,
+      trendsByCurrency,
+      allObservations: sortedAll,
+    };
+  }
+
+  /**
+   * Retrieves historical prices specifically for a given (supplier, item) relationship.
+   */
+  static async getSupplierItemPriceHistory(
+    businessId: string,
+    supplierId: string,
+    itemId: string,
+    options?: { hasCostPermission?: boolean }
+  ): Promise<PriceHistoryRecord[]> {
+    const hasCostPermission = options?.hasCostPermission ?? false;
+    const admin = createAdminClient();
+
+    // Verify supplier and item belong to business
+    const { data: sup } = await admin
+      .from('inventory_suppliers')
+      .select('id, name')
+      .eq('id', supplierId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    const { data: item } = await admin
+      .from('inventory_items')
+      .select('id, name, base_unit')
+      .eq('id', itemId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!sup || !item) return [];
+
+    const { data: rows } = await admin
+      .from('inventory_price_history')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('supplier_id', supplierId)
+      .eq('item_id', itemId)
+      .order('recorded_at', { ascending: true });
+
+    let previousNorm: number | null = null;
+    const history: PriceHistoryRecord[] = [];
+
+    (rows || []).forEach((r) => {
+      const normCents = Number(r.normalized_price_per_base_cents);
+      const packCents = Number(r.pack_price_cents);
+
+      let changeCents: number | null = 0;
+      let changePct: number | null = 0;
+
+      if (previousNorm !== null) {
+        changeCents = normCents - previousNorm;
+        changePct =
+          previousNorm > 0
+            ? Number((((normCents - previousNorm) / previousNorm) * 100).toFixed(2))
+            : 0;
+      }
+      previousNorm = normCents;
+
+      history.push({
+        id: r.id,
+        businessId: r.business_id,
+        branchId: r.branch_id,
+        itemId: r.item_id,
+        itemName: item.name,
+        baseUnit: item.base_unit,
+        supplierId: r.supplier_id,
+        supplierName: sup.name,
+        sourceType: r.source_type,
+        sourceId: r.source_id,
+        purchasingUnit: r.purchasing_unit,
+        conversionToBase: Number(r.conversion_to_base) || 1.0,
+        packPriceCents: hasCostPermission ? packCents : null,
+        normalizedPricePerBaseCents: hasCostPermission ? normCents : null,
+        currency: r.currency || 'USD',
+        referenceNumber: r.reference_number,
+        notes: r.notes,
+        recordedAt: r.recorded_at,
+        changeVsPreviousCents: hasCostPermission ? changeCents : null,
+        changeVsPreviousPercentage: hasCostPermission ? changePct : null,
+      });
+    });
+
+    // Return reverse-chronological
+    return history.reverse();
   }
 
   /**

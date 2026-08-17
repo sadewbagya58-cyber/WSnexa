@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { PurchasingService } from '@/server/services/purchasing.service';
+import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PermissionService } from '@/server/services/permission.service';
 import {
   createSupplierSchema,
   updateSupplierSchema,
@@ -79,6 +81,33 @@ export async function removeSupplierItemAction(supplierId: string, itemId: strin
     revalidatePath('/dashboard/inventory');
   }
   return res;
+}
+
+export async function getSupplierItemPriceHistoryAction(supplierId: string, itemId: string) {
+  if (!supplierId || !itemId) {
+    return { success: false, history: [] };
+  }
+
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.business || !context.activeBranch) {
+    return { success: false, history: [] };
+  }
+
+  const hasCostPermission = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'inventory.costs.view'
+  );
+
+  const history = await PurchasingService.getSupplierItemPriceHistory(
+    context.business.id,
+    supplierId,
+    itemId,
+    { hasCostPermission }
+  );
+
+  return { success: true, history };
 }
 
 export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput) {

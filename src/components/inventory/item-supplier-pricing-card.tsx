@@ -180,9 +180,22 @@ export function ItemSupplierPricingCard({
 
                     {hasCostPermission && (
                       <td className="py-3 px-3 text-right font-mono font-black text-zinc-950">
-                        {s.normalizedPricePerBaseCents !== null
-                          ? `${formatCurrencyMinor(s.normalizedPricePerBaseCents, s.currency)} / ${comparison.baseUnit}`
-                          : '—'}
+                        <div>
+                          {s.normalizedPricePerBaseCents !== null
+                            ? `${formatCurrencyMinor(s.normalizedPricePerBaseCents, s.currency)} / ${comparison.baseUnit}`
+                            : '—'}
+                        </div>
+                        {s.priceTrendDirection && s.priceTrendDirection !== 'new' && (
+                          <div className="text-[10px] font-sans font-bold mt-0.5">
+                            {s.priceTrendDirection === 'down' ? (
+                              <span className="text-emerald-700">↓ {s.priceTrendPercentage}% vs prior</span>
+                            ) : s.priceTrendDirection === 'up' ? (
+                              <span className="text-rose-600">↑ +{s.priceTrendPercentage}% vs prior</span>
+                            ) : (
+                              <span className="text-zinc-400">● Stable</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                     )}
 

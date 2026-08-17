@@ -10,6 +10,7 @@ import { PurchasingService } from '@/server/services/purchasing.service';
 import { InventoryMovementTimeline } from '@/components/inventory/inventory-movement-timeline';
 import { ItemBatchesCard } from '@/components/inventory/item-batches-card';
 import { ItemSupplierPricingCard } from '@/components/inventory/item-supplier-pricing-card';
+import { ItemPriceHistoryCard } from '@/components/inventory/item-price-history-card';
 
 interface ItemDetailPageProps {
   params: Promise<{ id: string }>;
@@ -38,7 +39,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     'inventory.costs.view'
   );
 
-  const [item, movements, batches, supplierComparison] = await Promise.all([
+  const [item, movements, batches, supplierComparison, priceHistoryPayload] = await Promise.all([
     InventoryService.getInventoryItemById(context.business.id, context.activeBranch.id, id, hasCostPermission),
     InventoryService.getMovements(context.business.id, context.activeBranch.id, {
       itemId: id,
@@ -50,6 +51,9 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
       includeDepleted: true,
     }),
     PurchasingService.getSupplierPriceComparison(context.business.id, id, {
+      hasCostPermission,
+    }),
+    PurchasingService.getItemPriceHistory(context.business.id, id, {
       hasCostPermission,
     }),
   ]);
@@ -208,6 +212,12 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
       {/* Supplier Price Comparison */}
       <ItemSupplierPricingCard
         comparison={supplierComparison}
+        hasCostPermission={hasCostPermission}
+      />
+
+      {/* Purchase Price History & Cost Trend */}
+      <ItemPriceHistoryCard
+        payload={priceHistoryPayload}
         hasCostPermission={hasCostPermission}
       />
 

@@ -2820,6 +2820,443 @@ async function runSuite() {
     assert(lowDemandForecast?.recommendedBaseQty !== undefined && lowDemandForecast.recommendedBaseQty > 19.0, 'Recommended reorder is ~19.3 kg to restore 20 kg safety buffer');
     assert(lowDemandForecast?.explanation.includes('below minimum threshold') === true, 'Explanation explicitly identifies below minimum threshold as trigger');
 
+    // =========================================================================
+    // SECTION 16: Phase 28 Production Hardening & E2E Invariant Verification
+    // =========================================================================
+    console.log('\n--- Section 16: Phase 28 Production Hardening & E2E Invariants ---');
+
+    // 1. Create Test Item: Hardened Atlantic Cod
+    const { data: itemCod } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Hardened Atlantic Cod',
+        sku: 'COD-HARD-001',
+        base_unit: 'kg',
+        cost_per_unit_cents: 1000, // $10.00/kg
+        currency: 'USD',
+        min_stock_level: 10.0,
+        target_stock_level: 25.0,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    assert(itemCod !== null, 'Test item Hardened Atlantic Cod created');
+
+    // Set initial balance 0.0 kg
+    await admin.from('inventory_balances').insert({
+      business_id: biz.id,
+      branch_id: branch.id,
+      location_id: locMain.id,
+      item_id: itemCod.id,
+      current_quantity: 0.0,
+      reserved_quantity: 0.0,
+    });
+
+    // 2. Setup Supplier Catalog Mapping: 1 box = 5.0 kg @ $50.00 ($10.00/kg)
+    const codMapRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemCod.id,
+        purchasingUnit: 'box',
+        conversionToBase: 5.0,
+        lastPriceCents: 5000,
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+    assert(codMapRes.success === true, 'Cod mapped to Gamma supplier catalog (1 box = 5 kg)');
+
+    // 3. Test Invariant: Malformed / Zero / Negative Conversion Factor Rejection
+    const zeroConvRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemCod.id,
+        purchasingUnit: 'box',
+        conversionToBase: 0,
+        lastPriceCents: 5000,
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
+    assert(zeroConvRes.success === false, 'Zero conversionToBase is strictly rejected');
+
+    const negConvRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemCod.id,
+        purchasingUnit: 'box',
+        conversionToBase: -2.5,
+        lastPriceCents: 5000,
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
+    assert(negConvRes.success === false, 'Negative conversionToBase is strictly rejected');
+
+    const negPriceRes = await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemCod.id,
+        purchasingUnit: 'box',
+        conversionToBase: 5.0,
+        lastPriceCents: -500,
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
+    assert(negPriceRes.success === false, 'Negative lastPriceCents is strictly rejected');
+
+    // 4. Test Invariant: Purchase Order Lifecycle & Multi-Receipt Progression (20 kg -> 8 kg -> 7 kg -> 5 kg)
+    const { data: poHardened } = await admin
+      .from('inventory_purchase_orders')
+      .insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        supplier_id: supGamma.id,
+        destination_location_id: locMain.id,
+        po_number: 'PO-HARD-001',
+        status: 'approved',
+        currency: 'USD',
+        subtotal_cents: 20000,
+        total_cents: 20000,
+        created_by: authUser.user.id,
+      })
+      .select()
+      .single();
+
+    const { data: poItemHardened } = await admin
+      .from('inventory_purchase_order_items')
+      .insert({
+        po_id: poHardened.id,
+        item_id: itemCod.id,
+        purchasing_unit: 'kg',
+        quantity_ordered: 20.0,
+        quantity_ordered_base: 20.0,
+        quantity_received_base: 0.0,
+        unit_cost_cents: 1000,
+        total_cost_cents: 20000,
+      })
+      .select()
+      .single();
+
+    assert(poHardened !== null && poItemHardened !== null, 'Approved Purchase Order created for 20.0 kg Cod');
+
+    // Partial Receipt 1: 8.0 kg
+    const grn1Res = await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_po_id: poHardened.id,
+      p_grn_number: 'GRN-HARD-01',
+      p_received_items: [
+        {
+          item_id: itemCod.id,
+          po_item_id: poItemHardened.id,
+          quantity_received: 8.0,
+          unit_received: 'kg',
+          quantity_received_base: 8.0,
+          unit_cost_cents: 1000,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-grn-01',
+    });
+    assert(grn1Res.data?.success === true, 'GRN 1 (8.0 kg) recorded successfully');
+
+    // Check PO status is partially_received
+    const { data: poAfter1 } = await admin
+      .from('inventory_purchase_orders')
+      .select('status')
+      .eq('id', poHardened.id)
+      .single();
+    assert(poAfter1?.status === 'partially_received', 'PO status is partially_received after Receipt 1 (8/20 kg)');
+
+    // Check on-hand stock is 8.0 kg
+    const { data: balAfter1 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('branch_id', branch.id)
+      .eq('location_id', locMain.id)
+      .eq('item_id', itemCod.id)
+      .single();
+    assert(Number(balAfter1?.current_quantity) === 8.0, 'Stock on hand increased to 8.0 kg after GRN 1');
+
+    // Test Invariant: Idempotent GRN Replay (Must not double stock)
+    const grn1Replay = await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_po_id: poHardened.id,
+      p_grn_number: 'GRN-HARD-01',
+      p_received_items: [
+        {
+          item_id: itemCod.id,
+          po_item_id: poItemHardened.id,
+          quantity_received: 8.0,
+          unit_received: 'kg',
+          quantity_received_base: 8.0,
+          unit_cost_cents: 1000,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-grn-01',
+    });
+    assert(grn1Replay.data?.idempotent_replay === true, 'GRN 1 replay detected idempotency key');
+
+    const { data: balAfterReplay } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('branch_id', branch.id)
+      .eq('location_id', locMain.id)
+      .eq('item_id', itemCod.id)
+      .single();
+    assert(Number(balAfterReplay?.current_quantity) === 8.0, 'Stock balance preserved at 8.0 kg after idempotent GRN replay');
+
+    // Partial Receipt 2: 7.0 kg (Total: 15/20 kg)
+    const grn2Res = await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_po_id: poHardened.id,
+      p_grn_number: 'GRN-HARD-02',
+      p_received_items: [
+        {
+          item_id: itemCod.id,
+          po_item_id: poItemHardened.id,
+          quantity_received: 7.0,
+          unit_received: 'kg',
+          quantity_received_base: 7.0,
+          unit_cost_cents: 1000,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-grn-02',
+    });
+    assert(grn2Res.data?.success === true, 'GRN 2 (7.0 kg) recorded successfully');
+
+    const { data: poAfter2 } = await admin
+      .from('inventory_purchase_orders')
+      .select('status')
+      .eq('id', poHardened.id)
+      .single();
+    assert(poAfter2?.status === 'partially_received', 'PO status remains partially_received after Receipt 2 (15/20 kg)');
+
+    // Partial Receipt 3: Final 5.0 kg (Total: 20/20 kg)
+    const grn3Res = await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_po_id: poHardened.id,
+      p_grn_number: 'GRN-HARD-03',
+      p_received_items: [
+        {
+          item_id: itemCod.id,
+          po_item_id: poItemHardened.id,
+          quantity_received: 5.0,
+          unit_received: 'kg',
+          quantity_received_base: 5.0,
+          unit_cost_cents: 1000,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-grn-03',
+    });
+    assert(grn3Res.data?.success === true, 'GRN 3 (5.0 kg) recorded successfully');
+
+    const { data: poAfter3 } = await admin
+      .from('inventory_purchase_orders')
+      .select('status')
+      .eq('id', poHardened.id)
+      .single();
+    assert(poAfter3?.status === 'received', 'PO transitioned to received exactly once upon 100% completion (20/20 kg)');
+
+    const { data: balAfter3 } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('branch_id', branch.id)
+      .eq('location_id', locMain.id)
+      .eq('item_id', itemCod.id)
+      .single();
+    assert(Number(balAfter3?.current_quantity) === 20.0, 'Total stock on hand accurately reaches 20.0 kg after all 3 receipts');
+
+    // 5. Test Invariant: Cancelled PO Cannot Be Received
+    const { data: poToCancel } = await admin
+      .from('inventory_purchase_orders')
+      .insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        supplier_id: supGamma.id,
+        destination_location_id: locMain.id,
+        po_number: 'PO-HARD-CANCEL',
+        status: 'draft',
+        currency: 'USD',
+        subtotal_cents: 5000,
+        total_cents: 5000,
+        created_by: authUser.user.id,
+      })
+      .select()
+      .single();
+
+    // Cancel PO
+    const { error: cancelErr } = await admin
+      .from('inventory_purchase_orders')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', poToCancel.id);
+    assert(!cancelErr, 'PO marked as cancelled');
+
+    const { data: poCancelledCheck } = await admin
+      .from('inventory_purchase_orders')
+      .select('status')
+      .eq('id', poToCancel.id)
+      .single();
+    assert(poCancelledCheck?.status === 'cancelled', 'PO status confirmed cancelled');
+
+    // 6. Test Invariant: Supplier Return Stock Effect & Demand Exclusion
+    const retRes = await admin.rpc('record_supplier_return', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_item_id: itemCod.id,
+      p_quantity: 4.0,
+      p_unit: 'kg',
+      p_reason: 'Quality defect in batch',
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-return-01',
+    });
+    assert(retRes.data?.success === true, 'Supplier return of 4.0 kg Cod executed');
+
+    const { data: balAfterReturn } = await admin
+      .from('inventory_balances')
+      .select('current_quantity')
+      .eq('branch_id', branch.id)
+      .eq('location_id', locMain.id)
+      .eq('item_id', itemCod.id)
+      .single();
+    assert(Number(balAfterReturn?.current_quantity) === 16.0, 'Stock on hand accurately decremented to 16.0 kg (20 - 4 kg)');
+
+    // Verify Cod forecast excludes supplier_return from demand
+    const codForecast = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemCod.id, {
+      hasCostPermission: true,
+      windowDays: 14,
+    });
+    assert(codForecast !== null, 'Cod forecast retrieved');
+    assert(codForecast?.totalDemandBase === 0, 'Supplier return movement is strictly excluded from operational demand (0 kg total)');
+    assert(codForecast?.averageDailyDemandBase === 0, 'Average daily demand is 0.0 kg/day');
+    assert(codForecast?.daysOfStockRemaining === null, 'Days remaining is null (no divide by zero)');
+
+    // 7. Test Invariant: Historical PO Price Immutability
+    // Update supplier catalog price to $18.00 (1800 cents)
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemCod.id,
+        purchasingUnit: 'box',
+        conversionToBase: 5.0,
+        lastPriceCents: 9000, // $90 / box ($18/kg)
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+
+    // Verify original PO items still reflect historical $10.00 / $200.00
+    const { data: poItemImmutable } = await admin
+      .from('inventory_purchase_order_items')
+      .select('unit_cost_cents, total_cost_cents')
+      .eq('id', poItemHardened.id)
+      .single();
+    assert(poItemImmutable?.unit_cost_cents === 1000, 'Historical PO item unit cost remains 1000 cents ($10.00)');
+    assert(poItemImmutable?.total_cost_cents === 20000, 'Historical PO item total cost remains 20000 cents ($200.00)');
+
+    // 8. Test Invariant: Price History Trend Isolation & Multi-Currency Independence
+    const codPriceHistory = await PurchasingService.getItemPriceHistory(biz.id, itemCod.id, {
+      hasCostPermission: true,
+    });
+    assert(codPriceHistory !== null, 'Cod price history retrieved');
+    assert(codPriceHistory?.trendsByCurrency.length === 1, 'Only USD currency trend group exists for Cod');
+    const codUsdTrend = codPriceHistory?.trendsByCurrency[0];
+    assert(codUsdTrend?.currency === 'USD', 'Currency is USD');
+    assert(codUsdTrend?.currentNormalizedPriceCents === 1800, 'Latest normalized price is 1800 cents ($18.00/kg)');
+
+    // 9. Test Invariant: Open PO Incoming Stock in Forecasting
+    const { data: openPO } = await admin
+      .from('inventory_purchase_orders')
+      .insert({
+        business_id: biz.id,
+        branch_id: branch.id,
+        supplier_id: supGamma.id,
+        destination_location_id: locMain.id,
+        po_number: 'PO-HARD-OPEN',
+        status: 'approved',
+        currency: 'USD',
+        subtotal_cents: 9000,
+        total_cents: 9000,
+        created_by: authUser.user.id,
+      })
+      .select()
+      .single();
+
+    const { data: openPOItem } = await admin
+      .from('inventory_purchase_order_items')
+      .insert({
+        po_id: openPO.id,
+        item_id: itemCod.id,
+        purchasing_unit: 'kg',
+        quantity_ordered: 5.0,
+        quantity_ordered_base: 5.0,
+        quantity_received_base: 0.0,
+        unit_cost_cents: 1800,
+        total_cost_cents: 9000,
+      })
+      .select()
+      .single();
+
+    const codForecastWithOpenPO = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemCod.id, {
+      hasCostPermission: true,
+    });
+    assert(codForecastWithOpenPO?.openIncomingStock === 5.0, 'Forecast captures exactly 5.0 kg open incoming PO stock');
+    assert(codForecastWithOpenPO?.projectedAvailableStock === 21.0, 'Projected available stock is 21.0 kg (16 on-hand + 5 incoming)');
+
+    // 10. Test Invariant: No Double Counting After Partial Receipt of Open PO
+    await admin.rpc('record_goods_receipt_and_update_stock', {
+      p_business_id: biz.id,
+      p_branch_id: branch.id,
+      p_supplier_id: supGamma.id,
+      p_location_id: locMain.id,
+      p_po_id: openPO.id,
+      p_grn_number: 'GRN-HARD-OPEN-01',
+      p_received_items: [
+        {
+          item_id: itemCod.id,
+          po_item_id: openPOItem.id,
+          quantity_received: 5.0,
+          unit_received: 'kg',
+          quantity_received_base: 5.0,
+          unit_cost_cents: 1800,
+        },
+      ],
+      p_actor_id: authUser.user.id,
+      p_idempotency_key: 'idemp-hard-open-01',
+    });
+
+    const codForecastAfterOpenPOGRN = await InventoryService.getItemReorderForecast(biz.id, branch.id, itemCod.id, {
+      hasCostPermission: true,
+    });
+    assert(codForecastAfterOpenPOGRN?.currentStock === 21.0, 'On-hand stock increased to 21.0 kg after receipt');
+    assert(codForecastAfterOpenPOGRN?.openIncomingStock === 0.0, 'Open incoming dropped to 0.0 kg after receipt');
+    assert(codForecastAfterOpenPOGRN?.projectedAvailableStock === 21.0, 'Projected available stock conserved at 21.0 kg without double counting');
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

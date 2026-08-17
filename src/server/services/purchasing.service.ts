@@ -477,6 +477,13 @@ export class PurchasingService {
     input: SupplierItemInput,
     options?: { businessId?: string }
   ) {
+    if (isNaN(input.conversionToBase) || !isFinite(input.conversionToBase) || input.conversionToBase <= 0) {
+      return { success: false, message: 'Conversion factor to base unit must be a positive number greater than 0.' };
+    }
+    if (isNaN(input.lastPriceCents) || !isFinite(input.lastPriceCents) || input.lastPriceCents < 0) {
+      return { success: false, message: 'Pack price cents cannot be negative or invalid.' };
+    }
+
     let bizId = options?.businessId;
     if (!bizId) {
       const context = await resolveActiveBusinessContext();
@@ -779,18 +786,67 @@ export class PurchasingService {
       return { success: false, message: 'Unauthorized.' };
     }
 
+    if (input.branchId !== context.activeBranch.id) {
+      return { success: false, message: 'Cross-branch purchase orders are forbidden.' };
+    }
+
+    if (!input.items || input.items.length === 0) {
+      return { success: false, message: 'Purchase order must have at least one line item.' };
+    }
+
     const admin = createAdminClient();
+
+    // Verify supplier belongs to business
+    const { data: supplier } = await admin
+      .from('inventory_suppliers')
+      .select('id, name, is_active')
+      .eq('id', input.supplierId)
+      .eq('business_id', context.business.id)
+      .maybeSingle();
+
+    if (!supplier) {
+      return { success: false, message: 'Supplier not found or unauthorized.' };
+    }
+
+    // Verify destination location belongs to active branch
+    const { data: location } = await admin
+      .from('inventory_storage_locations')
+      .select('id, name')
+      .eq('id', input.destinationLocationId)
+      .eq('branch_id', context.activeBranch.id)
+      .maybeSingle();
+
+    if (!location) {
+      return { success: false, message: 'Destination storage location not found for this branch.' };
+    }
+
     const poNumber = `PO-${Date.now().toString().slice(-6)}`;
 
-    // Fetch items to normalize base units
+    // Fetch items to normalize base units and ensure tenant ownership
     const itemIds = input.items.map((i) => i.itemId);
     const { data: invItems } = await admin
       .from('inventory_items')
-      .select('id, base_unit')
+      .select('id, base_unit, business_id')
       .in('id', itemIds);
 
     const itemMap = new Map<string, string>();
-    (invItems || []).forEach((i) => itemMap.set(i.id, i.base_unit));
+    (invItems || []).forEach((i) => {
+      if (i.business_id === context.business.id) {
+        itemMap.set(i.id, i.base_unit);
+      }
+    });
+
+    for (const item of input.items) {
+      if (!itemMap.has(item.itemId)) {
+        return { success: false, message: `Inventory item ${item.itemId} not found in this business.` };
+      }
+      if (isNaN(item.quantityOrdered) || !isFinite(item.quantityOrdered) || item.quantityOrdered <= 0) {
+        return { success: false, message: 'Quantity ordered must be a valid positive number.' };
+      }
+      if (isNaN(item.unitCostCents) || !isFinite(item.unitCostCents) || item.unitCostCents < 0) {
+        return { success: false, message: 'Unit cost cents cannot be negative or invalid.' };
+      }
+    }
 
     let subtotalCents = 0;
     const poItemRows = input.items.map((item) => {
@@ -819,7 +875,7 @@ export class PurchasingService {
       .from('inventory_purchase_orders')
       .insert({
         business_id: context.business.id,
-        branch_id: input.branchId,
+        branch_id: context.activeBranch.id,
         supplier_id: input.supplierId,
         destination_location_id: input.destinationLocationId,
         po_number: poNumber,
@@ -862,7 +918,7 @@ export class PurchasingService {
 
       await admin.from('inventory_price_history').insert({
         business_id: context.business.id,
-        branch_id: input.branchId,
+        branch_id: context.activeBranch.id,
         item_id: item.itemId,
         supplier_id: input.supplierId,
         source_type: 'purchase_order',
@@ -892,6 +948,22 @@ export class PurchasingService {
     }
 
     const admin = createAdminClient();
+
+    const { data: po, error: fetchErr } = await admin
+      .from('inventory_purchase_orders')
+      .select('id, status')
+      .eq('id', poId)
+      .eq('branch_id', context.activeBranch.id)
+      .maybeSingle();
+
+    if (fetchErr || !po) {
+      return { success: false, message: 'Purchase Order not found for active branch.' };
+    }
+
+    if (po.status !== 'draft') {
+      return { success: false, message: `Cannot approve Purchase Order in '${po.status}' status. Only draft orders can be approved.` };
+    }
+
     const { error } = await admin
       .from('inventory_purchase_orders')
       .update({
@@ -912,6 +984,52 @@ export class PurchasingService {
   }
 
   /**
+   * Cancels a draft or approved purchase order.
+   */
+  static async cancelPurchaseOrder(poId: string, reason?: string) {
+    const context = await resolveActiveBusinessContext();
+    if (!context || !context.activeBranch) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const admin = createAdminClient();
+    const { data: po, error: fetchErr } = await admin
+      .from('inventory_purchase_orders')
+      .select('id, status')
+      .eq('id', poId)
+      .eq('branch_id', context.activeBranch.id)
+      .maybeSingle();
+
+    if (fetchErr || !po) {
+      return { success: false, message: 'Purchase Order not found for active branch.' };
+    }
+
+    if (po.status === 'cancelled') {
+      return { success: false, message: 'Purchase Order is already cancelled.' };
+    }
+
+    if (po.status === 'received' || po.status === 'partially_received') {
+      return { success: false, message: 'Cannot cancel a purchase order that has already been received.' };
+    }
+
+    const { error: updateErr } = await admin
+      .from('inventory_purchase_orders')
+      .update({
+        status: 'cancelled',
+        notes: reason ? `Cancelled: ${reason}` : 'Cancelled by user',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', poId)
+      .eq('branch_id', context.activeBranch.id);
+
+    if (updateErr) {
+      return { success: false, message: updateErr.message };
+    }
+
+    return { success: true, message: 'Purchase Order cancelled.' };
+  }
+
+  /**
    * Records a Goods Receipt (GRN) atomically updating inventory balances, movements, and weighted cost.
    */
   static async recordGoodsReceipt(input: RecordGoodsReceiptInput) {
@@ -920,17 +1038,139 @@ export class PurchasingService {
       return { success: false, message: 'Unauthorized.' };
     }
 
+    if (input.branchId !== context.activeBranch.id) {
+      return { success: false, message: 'Cross-branch goods receiving is forbidden.' };
+    }
+
     const admin = createAdminClient();
 
-    // Fetch items for unit conversion
+    // Verify storage location belongs to active branch
+    const { data: location } = await admin
+      .from('inventory_storage_locations')
+      .select('id, name')
+      .eq('id', input.locationId)
+      .eq('branch_id', context.activeBranch.id)
+      .maybeSingle();
+
+    if (!location) {
+      return { success: false, message: 'Receiving storage location not found for this branch.' };
+    }
+
+    // Verify supplier belongs to business
+    const { data: supplier } = await admin
+      .from('inventory_suppliers')
+      .select('id, name')
+      .eq('id', input.supplierId)
+      .eq('business_id', context.business.id)
+      .maybeSingle();
+
+    if (!supplier) {
+      return { success: false, message: 'Supplier not found or unauthorized.' };
+    }
+
+    // Fetch items for unit conversion & business ownership
     const itemIds = input.items.map((i) => i.itemId);
     const { data: invItems } = await admin
       .from('inventory_items')
-      .select('id, base_unit')
+      .select('id, base_unit, business_id')
       .in('id', itemIds);
 
     const itemMap = new Map<string, string>();
-    (invItems || []).forEach((i) => itemMap.set(i.id, i.base_unit));
+    (invItems || []).forEach((i) => {
+      if (i.business_id === context.business.id) {
+        itemMap.set(i.id, i.base_unit);
+      }
+    });
+
+    for (const item of input.items) {
+      if (!itemMap.has(item.itemId)) {
+        return { success: false, message: `Inventory item ${item.itemId} not found in this business.` };
+      }
+      if (isNaN(item.quantityReceived) || !isFinite(item.quantityReceived) || item.quantityReceived <= 0) {
+        return { success: false, message: 'Quantity received must be a valid positive number.' };
+      }
+      if (isNaN(item.unitCostCents) || !isFinite(item.unitCostCents) || item.unitCostCents < 0) {
+        return { success: false, message: 'Unit cost cents cannot be negative or invalid.' };
+      }
+    }
+
+    // If linked to a PO, validate PO status and prevent over-receipt
+    if (input.poId) {
+      const { data: po, error: poErr } = await admin
+        .from('inventory_purchase_orders')
+        .select(`
+          id,
+          status,
+          branch_id,
+          supplier_id,
+          items:inventory_purchase_order_items(
+            id,
+            item_id,
+            quantity_ordered_base,
+            quantity_received_base
+          )
+        `)
+        .eq('id', input.poId)
+        .eq('branch_id', context.activeBranch.id)
+        .maybeSingle();
+
+      if (poErr || !po) {
+        return { success: false, message: 'Linked Purchase Order not found for active branch.' };
+      }
+
+      if (po.status === 'cancelled') {
+        return { success: false, message: 'Cannot receive goods against a cancelled Purchase Order.' };
+      }
+
+      if (po.status === 'draft') {
+        return { success: false, message: 'Purchase Order must be approved before receiving goods.' };
+      }
+
+      if (po.status === 'received') {
+        return { success: false, message: 'Purchase Order is already fully received.' };
+      }
+
+      if (po.supplier_id !== input.supplierId) {
+        return { success: false, message: 'Goods receipt supplier does not match linked Purchase Order supplier.' };
+      }
+
+      // Check remaining unreceived quantity per line item
+      interface RawPoItemCheck {
+        id: string;
+        item_id: string;
+        quantity_ordered_base: number;
+        quantity_received_base: number;
+      }
+      const poItemMap = new Map<string, RawPoItemCheck>();
+      ((po.items as unknown as RawPoItemCheck[]) || []).forEach((pi) => poItemMap.set(pi.id, pi));
+
+      for (const item of input.items) {
+        if (item.poItemId) {
+          const poItem = poItemMap.get(item.poItemId);
+          if (!poItem) {
+            return { success: false, message: `PO line item ${item.poItemId} not found on this Purchase Order.` };
+          }
+          const baseUnit = itemMap.get(item.itemId) || item.unitReceived;
+          let qtyRecBase = item.quantityReceived;
+          try {
+            qtyRecBase = UnitConverter.normalizeToBase(item.quantityReceived, item.unitReceived, baseUnit);
+          } catch {
+            qtyRecBase = item.quantityReceived;
+          }
+
+          const orderedBase = Number(poItem.quantity_ordered_base) || 0;
+          const alreadyReceivedBase = Number(poItem.quantity_received_base) || 0;
+          const remainingBase = Math.max(0, orderedBase - alreadyReceivedBase);
+
+          if (qtyRecBase > remainingBase + 0.0001) {
+            return {
+              success: false,
+              message: `Cannot receive ${qtyRecBase.toFixed(2)} ${baseUnit}. Remaining unreceived quantity on PO is only ${remainingBase.toFixed(2)} ${baseUnit}.`,
+            };
+          }
+        }
+      }
+    }
 
     const receivedItemsPayload = input.items.map((item) => {
       const baseUnit = itemMap.get(item.itemId) || item.unitReceived;
@@ -956,7 +1196,7 @@ export class PurchasingService {
 
     const { data, error } = await admin.rpc('record_goods_receipt_and_update_stock', {
       p_business_id: context.business.id,
-      p_branch_id: input.branchId,
+      p_branch_id: context.activeBranch.id,
       p_supplier_id: input.supplierId,
       p_location_id: input.locationId,
       p_po_id: input.poId || null,
@@ -988,7 +1228,7 @@ export class PurchasingService {
 
         await admin.from('inventory_price_history').insert({
           business_id: context.business.id,
-          branch_id: input.branchId,
+          branch_id: context.activeBranch.id,
           item_id: item.itemId,
           supplier_id: input.supplierId,
           source_type: 'goods_receipt',
@@ -1578,10 +1818,18 @@ export class PurchasingService {
       return { success: false, message: 'Unauthorized.' };
     }
 
+    if (input.branchId !== context.activeBranch.id) {
+      return { success: false, message: 'Cross-branch supplier returns are forbidden.' };
+    }
+
+    if (isNaN(input.quantity) || !isFinite(input.quantity) || input.quantity <= 0) {
+      return { success: false, message: 'Return quantity must be a valid positive number.' };
+    }
+
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('record_supplier_return', {
       p_business_id: context.business.id,
-      p_branch_id: input.branchId,
+      p_branch_id: context.activeBranch.id,
       p_supplier_id: input.supplierId,
       p_location_id: input.locationId,
       p_item_id: input.itemId,

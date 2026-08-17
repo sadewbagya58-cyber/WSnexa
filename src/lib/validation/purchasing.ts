@@ -120,3 +120,11 @@ export const updateInventorySettingsSchema = z.object({
 });
 
 export type UpdateInventorySettingsInput = z.infer<typeof updateInventorySettingsSchema>;
+
+export const cancelPurchaseOrderSchema = z.object({
+  poId: z.string().uuid('Invalid purchase order ID'),
+  reason: z.string().max(250).optional().nullable(),
+});
+
+export type CancelPurchaseOrderInput = z.infer<typeof cancelPurchaseOrderSchema>;
+

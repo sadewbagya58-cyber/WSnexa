@@ -11,15 +11,32 @@ import {
   createPurchaseOrderSchema,
   recordGoodsReceiptSchema,
   supplierReturnSchema,
+  cancelPurchaseOrderSchema,
   CreateSupplierInput,
   UpdateSupplierInput,
   SupplierItemInput,
   CreatePurchaseOrderInput,
   RecordGoodsReceiptInput,
   SupplierReturnInput,
+  CancelPurchaseOrderInput,
 } from '@/lib/validation/purchasing';
 
 export async function createSupplierAction(input: CreateSupplierInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'suppliers.manage'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Supplier management permission required.' };
+  }
+
   const parsed = createSupplierSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid supplier data.' };
@@ -34,6 +51,21 @@ export async function createSupplierAction(input: CreateSupplierInput) {
 }
 
 export async function updateSupplierAction(input: UpdateSupplierInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'suppliers.manage'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Supplier management permission required.' };
+  }
+
   const parsed = updateSupplierSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid supplier update data.' };
@@ -49,6 +81,21 @@ export async function updateSupplierAction(input: UpdateSupplierInput) {
 }
 
 export async function upsertSupplierItemAction(input: SupplierItemInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'suppliers.manage'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Supplier management permission required.' };
+  }
+
   const parsed = supplierItemSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid supplier item catalog data.' };
@@ -69,6 +116,21 @@ export async function upsertSupplierItemAction(input: SupplierItemInput) {
 export async function removeSupplierItemAction(supplierId: string, itemId: string) {
   if (!supplierId || !itemId) {
     return { success: false, message: 'Invalid supplier or item identifier.' };
+  }
+
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'suppliers.manage'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Supplier management permission required.' };
   }
 
   const res = await PurchasingService.removeSupplierItem(supplierId, itemId);
@@ -111,6 +173,21 @@ export async function getSupplierItemPriceHistoryAction(supplierId: string, item
 }
 
 export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.create'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Purchasing creation permission required.' };
+  }
+
   const parsed = createPurchaseOrderSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid purchase order data.' };
@@ -125,6 +202,21 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
 }
 
 export async function approvePurchaseOrderAction(poId: string) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.approve'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Purchasing approval permission required.' };
+  }
+
   const res = await PurchasingService.approvePurchaseOrder(poId);
   if (res.success) {
     revalidatePath('/dashboard/inventory/purchasing');
@@ -133,7 +225,58 @@ export async function approvePurchaseOrderAction(poId: string) {
   return res;
 }
 
+export async function cancelPurchaseOrderAction(input: CancelPurchaseOrderInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasApprovePerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.approve'
+  );
+  const hasCreatePerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.create'
+  );
+
+  if (!hasApprovePerm && !hasCreatePerm) {
+    return { success: false, message: 'Forbidden. Purchasing cancellation permission required.' };
+  }
+
+  const parsed = cancelPurchaseOrderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message || 'Invalid cancel request.' };
+  }
+
+  const res = await PurchasingService.cancelPurchaseOrder(parsed.data.poId, parsed.data.reason || undefined);
+  if (res.success) {
+    revalidatePath('/dashboard/inventory/purchasing');
+    revalidatePath('/dashboard/inventory');
+  }
+  return res;
+}
+
 export async function recordGoodsReceiptAction(input: RecordGoodsReceiptInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasPerm = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.receive'
+  );
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Goods receipt permission required.' };
+  }
+
   const parsed = recordGoodsReceiptSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid goods receipt data.' };
@@ -150,6 +293,34 @@ export async function recordGoodsReceiptAction(input: RecordGoodsReceiptInput) {
 }
 
 export async function recordSupplierReturnAction(input: SupplierReturnInput) {
+  const context = await resolveActiveBusinessContext();
+  if (!context || !context.activeBranch) {
+    return { success: false, message: 'Unauthorized or active context not found.' };
+  }
+
+  const hasSuppliersManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'suppliers.manage'
+  );
+  const hasWasteRecord = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'inventory.waste.record'
+  );
+  const hasReceiving = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    context.activeBranch.id,
+    'purchasing.receive'
+  );
+
+  if (!hasSuppliersManage && !hasWasteRecord && !hasReceiving) {
+    return { success: false, message: 'Forbidden. Supplier return permission required.' };
+  }
+
   const parsed = supplierReturnSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid supplier return data.' };

@@ -92,7 +92,6 @@ export function ItemPriceHistoryCard({
     }
 
     const latest = filteredHistory[count - 1];
-    const prev = count >= 2 ? filteredHistory[count - 2] : null;
 
     const validNormPrices = filteredHistory
       .map((r) => r.normalizedPricePerBaseCents)
@@ -107,18 +106,17 @@ export function ItemPriceHistoryCard({
 
     let changeCents: number | null = null;
     let changePct: number | null = null;
+    let previous: number | null = null;
     let trendDirection: 'up' | 'down' | 'flat' | 'insufficient_data' = 'insufficient_data';
 
     if (
-      prev &&
       latest.normalizedPricePerBaseCents !== null &&
-      prev.normalizedPricePerBaseCents !== null
+      latest.changeVsPreviousCents !== null &&
+      latest.changeVsPreviousCents !== undefined
     ) {
-      changeCents = latest.normalizedPricePerBaseCents - prev.normalizedPricePerBaseCents;
-      changePct =
-        prev.normalizedPricePerBaseCents > 0
-          ? Number(((changeCents / prev.normalizedPricePerBaseCents) * 100).toFixed(2))
-          : 0;
+      changeCents = latest.changeVsPreviousCents;
+      changePct = latest.changeVsPreviousPercentage ?? null;
+      previous = latest.normalizedPricePerBaseCents - changeCents;
 
       if (changeCents > 0) trendDirection = 'up';
       else if (changeCents < 0) trendDirection = 'down';
@@ -127,7 +125,7 @@ export function ItemPriceHistoryCard({
 
     return {
       current: latest.normalizedPricePerBaseCents,
-      previous: prev ? prev.normalizedPricePerBaseCents : null,
+      previous,
       changeCents,
       changePct,
       lowest,
@@ -135,6 +133,7 @@ export function ItemPriceHistoryCard({
       average,
       count,
       trendDirection,
+      latestSupplierName: latest.supplierName,
     };
   }, [filteredHistory, hasCostPermission]);
 
@@ -299,7 +298,7 @@ export function ItemPriceHistoryCard({
             Change vs Prior
           </span>
           <div className="flex items-center gap-1.5">
-            {hasCostPermission && summaryMetrics.changeCents !== null ? (
+            {hasCostPermission && summaryMetrics.changeCents !== null && summaryMetrics.changeCents !== undefined ? (
               <span
                 className={`text-xs font-black font-mono px-2 py-0.5 rounded-md ${
                   summaryMetrics.changeCents < 0
@@ -315,18 +314,18 @@ export function ItemPriceHistoryCard({
               </span>
             ) : (
               <span className="text-xs font-mono text-zinc-400 font-bold">
-                {summaryMetrics.count <= 1 ? 'Baseline record' : '—'}
+                First Record
               </span>
             )}
           </div>
-          <span className="text-[10px] text-zinc-500 block">
-            {summaryMetrics.trendDirection === 'down'
-              ? 'Cost decreased'
-              : summaryMetrics.trendDirection === 'up'
-              ? 'Cost increased'
-              : summaryMetrics.trendDirection === 'flat'
-              ? 'Stable cost'
-              : 'Initial baseline'}
+          <span className="text-[10px] text-zinc-500 block truncate">
+            {summaryMetrics.changeCents !== null && summaryMetrics.changeCents !== undefined
+              ? summaryMetrics.trendDirection === 'down'
+                ? `Decreased for ${summaryMetrics.latestSupplierName}`
+                : summaryMetrics.trendDirection === 'up'
+                ? `Increased for ${summaryMetrics.latestSupplierName}`
+                : `Stable for ${summaryMetrics.latestSupplierName}`
+              : `Initial baseline for ${summaryMetrics.latestSupplierName || 'vendor'}`}
           </span>
         </div>
 
@@ -335,51 +334,76 @@ export function ItemPriceHistoryCard({
           <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
             Period Low / High
           </span>
-          <div className="text-xs font-bold text-zinc-800 font-mono">
-            {hasCostPermission && summaryMetrics.lowest !== null && summaryMetrics.highest !== null ? (
-              <span>
-                {formatCurrencyMinor(summaryMetrics.lowest, activeTrendGroup.currency)} -{' '}
-                {formatCurrencyMinor(summaryMetrics.highest, activeTrendGroup.currency)}
-              </span>
-            ) : (
-              '—'
-            )}
+          <div className="text-sm font-black text-zinc-950 font-mono">
+            {hasCostPermission && summaryMetrics.lowest !== null && summaryMetrics.highest !== null
+              ? summaryMetrics.lowest === summaryMetrics.highest
+                ? formatCurrencyMinor(summaryMetrics.lowest, activeTrendGroup.currency)
+                : `${formatCurrencyMinor(summaryMetrics.lowest, activeTrendGroup.currency)} – ${formatCurrencyMinor(summaryMetrics.highest, activeTrendGroup.currency)}`
+              : '—'}
           </div>
           <span className="text-[10px] text-zinc-500 block">
-            {summaryMetrics.count} historical {summaryMetrics.count === 1 ? 'point' : 'points'}
+            {summaryMetrics.count} recorded updates
           </span>
         </div>
 
-        {/* Average Price */}
+        {/* Average Cost */}
         <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-xl p-3.5 space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-            Weighted Average
+            Period Average
           </span>
-          <div className="text-xs font-bold text-zinc-800 font-mono">
+          <div className="text-sm font-black text-zinc-950 font-mono">
             {hasCostPermission && summaryMetrics.average !== null
               ? `${formatCurrencyMinor(summaryMetrics.average, activeTrendGroup.currency)} / ${payload.baseUnit}`
               : '—'}
           </div>
           <span className="text-[10px] text-zinc-500 block">
-            {selectedTimeRange === 'all' ? 'All recorded history' : `Past ${selectedTimeRange}`}
+            Weighted across {selectedTimeRange}
           </span>
         </div>
       </div>
 
-      {/* Responsive SVG Cost Trend Visualizer */}
-      {hasCostPermission && chartPoints.length > 0 && (
+      {/* SVG Cost Trend Visualization */}
+      {chartPoints.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-zinc-500">
-            <span className="font-bold text-zinc-700">Cost Trend Evolution ({payload.baseUnit})</span>
-            {hoveredPoint && hoveredPoint.normalizedPricePerBaseCents !== null && (
-              <span className="font-mono text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded-md font-bold">
-                {new Date(hoveredPoint.recordedAt).toLocaleDateString()} • {hoveredPoint.supplierName}:{' '}
-                {formatCurrencyMinor(hoveredPoint.normalizedPricePerBaseCents, hoveredPoint.currency)}/{payload.baseUnit}
-              </span>
-            )}
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
+              Cost Trend Evolution ({activeTrendGroup.currency})
+            </h4>
+            <span className="text-[11px] text-zinc-400 font-mono">
+              {filteredHistory.length} data point{filteredHistory.length !== 1 ? 's' : ''}
+            </span>
           </div>
 
-          <div className="relative w-full overflow-hidden bg-zinc-950 rounded-xl p-4 text-white">
+          <div className="relative bg-zinc-950 rounded-2xl p-4 border border-zinc-800 shadow-inner overflow-hidden">
+            {/* Active hover info overlay */}
+            {hoveredPoint && (
+              <div className="absolute top-3 right-4 bg-zinc-900/90 backdrop-blur-xs border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-white flex items-center gap-3 z-10 shadow-lg pointer-events-none">
+                <div>
+                  <span className="text-zinc-400 text-[10px] block">
+                    {new Date(hoveredPoint.recordedAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                  <span className="font-bold text-white text-xs">{hoveredPoint.supplierName}</span>
+                </div>
+                {hasCostPermission && hoveredPoint.normalizedPricePerBaseCents !== null && (
+                  <div className="text-right pl-3 border-l border-zinc-700">
+                    <span className="text-emerald-400 font-mono font-bold block">
+                      {formatCurrencyMinor(hoveredPoint.normalizedPricePerBaseCents, hoveredPoint.currency)} / {hoveredPoint.baseUnit}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      {hoveredPoint.purchasingUnit !== hoveredPoint.baseUnit
+                        ? `${formatCurrencyMinor(hoveredPoint.packPriceCents || 0, hoveredPoint.currency)} / ${hoveredPoint.purchasingUnit}`
+                        : 'Base price'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SVG Trend Line */}
             <svg
               viewBox="0 0 600 140"
               className="w-full h-36 overflow-visible"
@@ -415,18 +439,35 @@ export function ItemPriceHistoryCard({
               )}
 
               {/* Data Points */}
-              {chartPoints.map((pt, i) => (
-                <g key={pt.item.id || i}>
-                  <circle
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={hoveredPoint?.id === pt.item.id ? 6 : 4}
-                    className="fill-emerald-400 stroke-zinc-950 stroke-2 cursor-pointer transition-all hover:scale-125"
-                    onMouseEnter={() => setHoveredPoint(pt.item)}
-                    onMouseLeave={() => setHoveredPoint(null)}
-                  />
-                </g>
-              ))}
+              {chartPoints.map((pt, i) => {
+                const isHovered = hoveredPoint?.id === pt.item.id;
+                return (
+                  <g key={pt.item.id || i} className="cursor-pointer">
+                    {/* Invisible hit target for smooth hover without visual distortion */}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={14}
+                      fill="transparent"
+                      onMouseEnter={() => setHoveredPoint(pt.item)}
+                      onMouseLeave={() => setHoveredPoint(null)}
+                      onFocus={() => setHoveredPoint(pt.item)}
+                      onBlur={() => setHoveredPoint(null)}
+                      tabIndex={0}
+                      aria-label={`${pt.item.supplierName}: ${new Date(pt.item.recordedAt).toLocaleDateString()}`}
+                    />
+                    {/* Visible steady circle at fixed radius */}
+                    <circle
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={4}
+                      className={`pointer-events-none transition-colors stroke-zinc-950 stroke-2 ${
+                        isHovered ? 'fill-emerald-300 stroke-white' : 'fill-emerald-400'
+                      }`}
+                    />
+                  </g>
+                );
+              })}
             </svg>
 
             {/* Date timeline labels */}
@@ -523,14 +564,17 @@ export function ItemPriceHistoryCard({
                   {hasCostPermission && (
                     <td className="py-3 px-3 text-right font-mono whitespace-nowrap">
                       {row.changeVsPreviousCents !== null &&
-                      row.changeVsPreviousCents !== undefined &&
-                      row.changeVsPreviousCents !== 0 ? (
+                      row.changeVsPreviousCents !== undefined ? (
                         <span
                           className={`text-[11px] font-bold ${
-                            row.changeVsPreviousCents < 0 ? 'text-emerald-700' : 'text-rose-700'
+                            row.changeVsPreviousCents < 0
+                              ? 'text-emerald-700'
+                              : row.changeVsPreviousCents > 0
+                              ? 'text-rose-700'
+                              : 'text-zinc-500'
                           }`}
                         >
-                          {row.changeVsPreviousCents < 0 ? '↓ ' : '↑ +'}
+                          {row.changeVsPreviousCents < 0 ? '↓ ' : row.changeVsPreviousCents > 0 ? '↑ +' : '● '}
                           {formatCurrencyMinor(Math.abs(row.changeVsPreviousCents), row.currency)}
                           {row.changeVsPreviousPercentage !== null &&
                             row.changeVsPreviousPercentage !== undefined &&

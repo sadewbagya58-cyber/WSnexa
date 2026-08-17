@@ -1354,34 +1354,37 @@ export class PurchasingService {
       reference_number: string | null;
       notes: string | null;
       recorded_at: string;
-      supplier?: { id: string; name: string } | null;
+        supplier?: { id: string; name: string } | null;
     }
 
     const rawHistory = (rows as unknown as RawPriceHistoryRow[]) || [];
 
-    // Group observations by currency
+    // Group observations by currency, maintaining supplier-specific previous price tracking
     const byCurrency = new Map<string, PriceHistoryRecord[]>();
+    const supplierPreviousInCurrency = new Map<string, number>();
 
     rawHistory.forEach((r) => {
       const curr = r.currency || 'USD';
+      const supplierKey = `${curr}:${r.supplier_id || '__direct__'}`;
+
       if (!byCurrency.has(curr)) {
         byCurrency.set(curr, []);
       }
       const arr = byCurrency.get(curr)!;
-      const prev = arr.length > 0 ? arr[arr.length - 1] : null;
 
       const normCents = Number(r.normalized_price_per_base_cents);
       const rawPackCents = Number(r.pack_price_cents);
 
-      let changeVsPrevCents: number | null = 0;
-      let changeVsPrevPct: number | null = 0;
+      let changeVsPrevCents: number | null = null;
+      let changeVsPrevPct: number | null = null;
 
-      if (prev) {
-        const prevNorm = prev.normalizedPricePerBaseCents ?? 0;
+      if (supplierPreviousInCurrency.has(supplierKey)) {
+        const prevNorm = supplierPreviousInCurrency.get(supplierKey)!;
         changeVsPrevCents = normCents - prevNorm;
         changeVsPrevPct =
           prevNorm > 0 ? Number((((normCents - prevNorm) / prevNorm) * 100).toFixed(2)) : 0;
       }
+      supplierPreviousInCurrency.set(supplierKey, normCents);
 
       arr.push({
         id: r.id,
@@ -1417,7 +1420,6 @@ export class PurchasingService {
       if (count === 0) continue;
 
       const latestRecord = records[records.length - 1];
-      const previousRecord = count >= 2 ? records[records.length - 2] : null;
 
       const normPrices = records
         .map((r) => r.normalizedPricePerBaseCents)
@@ -1435,25 +1437,18 @@ export class PurchasingService {
 
       let priceChangeCents: number | null = null;
       let priceChangePct: number | null = null;
+      let previousNormalizedPriceCents: number | null = null;
       let trendDirection: 'up' | 'down' | 'flat' | 'insufficient_data' = 'insufficient_data';
 
       if (
         hasCostPermission &&
-        previousRecord &&
         latestRecord.normalizedPricePerBaseCents !== null &&
-        previousRecord.normalizedPricePerBaseCents !== null
+        latestRecord.changeVsPreviousCents !== null &&
+        latestRecord.changeVsPreviousCents !== undefined
       ) {
-        priceChangeCents =
-          latestRecord.normalizedPricePerBaseCents - previousRecord.normalizedPricePerBaseCents;
-        priceChangePct =
-          previousRecord.normalizedPricePerBaseCents > 0
-            ? Number(
-                (
-                  (priceChangeCents / previousRecord.normalizedPricePerBaseCents) *
-                  100
-                ).toFixed(2)
-              )
-            : 0;
+        priceChangeCents = latestRecord.changeVsPreviousCents;
+        priceChangePct = latestRecord.changeVsPreviousPercentage ?? null;
+        previousNormalizedPriceCents = latestRecord.normalizedPricePerBaseCents - priceChangeCents;
 
         if (priceChangeCents > 0) trendDirection = 'up';
         else if (priceChangeCents < 0) trendDirection = 'down';
@@ -1463,8 +1458,7 @@ export class PurchasingService {
       trendsByCurrency.push({
         currency: curr,
         currentNormalizedPriceCents: hasCostPermission ? latestRecord.normalizedPricePerBaseCents : null,
-        previousNormalizedPriceCents:
-          hasCostPermission && previousRecord ? previousRecord.normalizedPricePerBaseCents : null,
+        previousNormalizedPriceCents: hasCostPermission ? previousNormalizedPriceCents : null,
         priceChangeCents: hasCostPermission ? priceChangeCents : null,
         priceChangePercentage: hasCostPermission ? priceChangePct : null,
         lowestNormalizedPriceCents: lowest,
@@ -1535,8 +1529,8 @@ export class PurchasingService {
       const normCents = Number(r.normalized_price_per_base_cents);
       const packCents = Number(r.pack_price_cents);
 
-      let changeCents: number | null = 0;
-      let changePct: number | null = 0;
+      let changeCents: number | null = null;
+      let changePct: number | null = null;
 
       if (previousNorm !== null) {
         changeCents = normCents - previousNorm;

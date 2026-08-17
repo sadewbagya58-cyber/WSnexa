@@ -2276,6 +2276,145 @@ async function runSuite() {
     );
     assert(crossTenantSupplierHistory.length === 0, 'Cross-tenant getSupplierItemPriceHistory strictly returns empty array');
 
+    // 14. Interleaved Multi-Supplier Change vs Prior Semantics Isolation
+    // Create dedicated USD suppliers for testing: Gamma (Fresh Foods) & Delta (Budget Foods)
+    const { data: supDelta } = await admin
+      .from('inventory_suppliers')
+      .insert({
+        business_id: biz.id,
+        name: 'Delta Budget Foods USD',
+        currency: 'USD',
+        is_preferred: false,
+        is_active: true,
+      })
+      .select()
+      .single();
+    assert(supDelta !== null, 'Test USD supplier Delta created');
+
+    // Setup dedicated test item: Yellowfin Tuna
+    const { data: itemTuna } = await admin
+      .from('inventory_items')
+      .insert({
+        business_id: biz.id,
+        name: 'Yellowfin Tuna Steak',
+        sku: `TUNA-${testSuffix}`,
+        base_unit: 'kg',
+        cost_per_unit_cents: 700,
+        currency: 'USD',
+      })
+      .select()
+      .single();
+    assert(itemTuna !== null, 'Test item Yellowfin Tuna created');
+
+    // Step A: Fresh Foods posts $7.00/kg
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id, // USD Supplier: Gamma Fresh Foods
+        itemId: itemTuna.id,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 700, // $7.00
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+
+    // Step B: Budget Foods posts $6.50/kg (interleaved)
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supDelta.id, // USD Supplier: Delta Budget Foods
+        itemId: itemTuna.id,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 650, // $6.50
+        currency: 'USD',
+        isPreferred: false,
+      },
+      { businessId: biz.id }
+    );
+
+    // Step C: Fresh Foods updates price to $7.50/kg
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemTuna.id,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 750, // $7.50
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+
+    // Verify Tuna history
+    const tunaAllVendorsHistory = await PurchasingService.getItemPriceHistory(biz.id, itemTuna.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    assert(tunaAllVendorsHistory !== null, 'Tuna All-Vendors price history retrieved');
+    const tunaUsdTrend = tunaAllVendorsHistory?.trendsByCurrency.find((t) => t.currency === 'USD');
+    assert(tunaUsdTrend !== undefined, 'Tuna USD trend group exists');
+    assert(tunaUsdTrend?.observationCount === 3, 'Tuna has exactly 3 historical observations');
+
+    const gammaObs = tunaAllVendorsHistory?.allObservations.filter((o) => o.supplierId === supGamma.id);
+    const deltaObs = tunaAllVendorsHistory?.allObservations.filter((o) => o.supplierId === supDelta.id);
+    assert(gammaObs?.length === 2, 'Gamma (Fresh Foods) has 2 observations');
+    assert(deltaObs?.length === 1, 'Delta (Budget Foods) has 1 observation');
+
+    // Chronological order for Gamma: first is $7.00 (First Record), second is $7.50
+    // Note: allObservations is sorted reverse-chronological, so gammaObs[0] is latest ($7.50), gammaObs[1] is initial ($7.00)
+    const latestGamma = gammaObs![0];
+    const initialGamma = gammaObs![1];
+    const firstBudget = deltaObs![0];
+
+    // Initial observations MUST be First Record (null change)
+    assert(initialGamma.changeVsPreviousCents === null, 'Fresh Foods initial $7.00 observation is First Record (null change)');
+    assert(firstBudget.changeVsPreviousCents === null, 'Budget Foods $6.50 observation is First Record (null change)');
+
+    // Latest Fresh Foods observation MUST compare to Fresh Foods $7.00 ($7.50 - $7.00 = +$0.50 / +7.14%), NEVER Budget Foods ($6.50)
+    assert(latestGamma.normalizedPricePerBaseCents === 750, 'Latest Fresh Foods price is $7.50 (750 cents)');
+    assert(latestGamma.changeVsPreviousCents === 50, 'Fresh Foods price change is exactly +50 cents (+7.14%) vs its own prior price');
+    assert(latestGamma.changeVsPreviousPercentage === 7.14, 'Fresh Foods percentage change is exactly +7.14%');
+    assert(latestGamma.changeVsPreviousCents !== 100, 'Fresh Foods strictly DOES NOT report +$1.00 (+15.38%) against Budget Foods');
+
+    // Step D: Fresh Foods price decrease to $6.80/kg
+    await PurchasingService.upsertSupplierItem(
+      {
+        supplierId: supGamma.id,
+        itemId: itemTuna.id,
+        purchasingUnit: 'kg',
+        conversionToBase: 1.0,
+        lastPriceCents: 680, // $6.80
+        currency: 'USD',
+        isPreferred: true,
+      },
+      { businessId: biz.id }
+    );
+
+    const tunaUpdatedHistory = await PurchasingService.getItemPriceHistory(biz.id, itemTuna.id, {
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    const latestDecreasedGamma = tunaUpdatedHistory?.allObservations.find((o) => o.supplierId === supGamma.id);
+    assert(latestDecreasedGamma !== undefined, 'Fresh Foods decreased observation found');
+    assert(latestDecreasedGamma?.normalizedPricePerBaseCents === 680, 'Fresh Foods updated to $6.80 (680 cents)');
+    assert(latestDecreasedGamma?.changeVsPreviousCents === -70, 'Fresh Foods price decrease is exactly -70 cents (-$0.70)');
+    assert(latestDecreasedGamma?.changeVsPreviousPercentage === -9.33, 'Fresh Foods price decrease percentage is exactly -9.33%');
+
+    // Step E: Filtered single-supplier view
+    const tunaSingleSupplierHistory = await PurchasingService.getItemPriceHistory(biz.id, itemTuna.id, {
+      supplierId: supGamma.id,
+      hasCostPermission: true,
+      timeRange: 'all',
+    });
+    assert(tunaSingleSupplierHistory !== null, 'Single-supplier filtered history retrieved');
+    assert(
+      tunaSingleSupplierHistory?.allObservations.every((o) => o.supplierId === supGamma.id) === true,
+      'Single-supplier history strictly contains only Gamma (Fresh Foods) records'
+    );
+
   } finally {
     // Teardown Test Data
     console.log('\n[Teardown] Cleaning up isolated test tenants and users...');

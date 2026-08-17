@@ -888,14 +888,17 @@ export function SupplierDetailClient({
                           {hasCostPermission && (
                             <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
                               {rec.changeVsPreviousCents !== null &&
-                              rec.changeVsPreviousCents !== undefined &&
-                              rec.changeVsPreviousCents !== 0 ? (
+                              rec.changeVsPreviousCents !== undefined ? (
                                 <span
                                   className={`text-[11px] font-bold ${
-                                    rec.changeVsPreviousCents < 0 ? 'text-emerald-700' : 'text-rose-700'
+                                    rec.changeVsPreviousCents < 0
+                                      ? 'text-emerald-700'
+                                      : rec.changeVsPreviousCents > 0
+                                      ? 'text-rose-700'
+                                      : 'text-zinc-500'
                                   }`}
                                 >
-                                  {rec.changeVsPreviousCents < 0 ? '↓ ' : '↑ +'}
+                                  {rec.changeVsPreviousCents < 0 ? '↓ ' : rec.changeVsPreviousCents > 0 ? '↑ +' : '● '}
                                   {formatCurrencyMinor(Math.abs(rec.changeVsPreviousCents), rec.currency)}
                                   {rec.changeVsPreviousPercentage !== null &&
                                     rec.changeVsPreviousPercentage !== undefined &&

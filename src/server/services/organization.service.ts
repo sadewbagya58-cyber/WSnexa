@@ -16,6 +16,15 @@ import {
   EndStaffAssignmentInput,
   TransitionPrimaryAssignmentInput,
   SetReportingManagerInput,
+  CreateAssignmentAbsenceInput,
+  EndAssignmentAbsenceInput,
+  CreateActingAssignmentInput,
+  ExtendActingAssignmentInput,
+  EndActingAssignmentInput,
+  CreateSecondmentInput,
+  EndSecondmentInput,
+  CreateTemporaryAssignmentInput,
+  EndTemporaryAssignmentInput,
   createHierarchyLevelSchema,
   updateHierarchyLevelSchema,
   createDepartmentSchema,
@@ -32,6 +41,15 @@ import {
   endStaffAssignmentSchema,
   transitionPrimaryAssignmentSchema,
   setReportingManagerSchema,
+  createAssignmentAbsenceSchema,
+  endAssignmentAbsenceSchema,
+  createActingAssignmentSchema,
+  extendActingAssignmentSchema,
+  endActingAssignmentSchema,
+  createSecondmentSchema,
+  endSecondmentSchema,
+  createTemporaryAssignmentSchema,
+  endTemporaryAssignmentSchema,
 } from '@/lib/validation/organization';
 
 // Default standard hierarchy levels
@@ -51,6 +69,13 @@ export interface ReportingTreeNode {
   directReports: ReportingTreeNode[];
 }
 
+export interface EffectiveReportingTreeNode {
+  assignment: Record<string, unknown>;
+  isActingCoverage?: boolean;
+  substantiveManagerId?: string | null;
+  directReports: EffectiveReportingTreeNode[];
+}
+
 export class OrganizationService {
   // ==========================================
   // 1. Internal Validation Helpers
@@ -58,171 +83,98 @@ export class OrganizationService {
 
   static async validateBranchBelongsToBusiness(branchId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data } = await admin
       .from('branches')
-      .select('id, business_id')
+      .select('business_id')
       .eq('id', branchId)
       .maybeSingle();
 
-    if (error || !data || data.business_id !== businessId) {
-      return false;
-    }
-    return true;
+    return !!data && data.business_id === businessId;
   }
 
   static async validateDepartmentBelongsToBusiness(departmentId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data } = await admin
       .from('organization_departments')
-      .select('id, business_id, branch_id')
+      .select('business_id')
       .eq('id', departmentId)
       .maybeSingle();
 
-    if (error || !data || data.business_id !== businessId) {
-      return false;
-    }
-    return true;
+    return !!data && data.business_id === businessId;
   }
 
-  static async validateUnitBelongsToDepartment(unitId: string, departmentId: string, businessId: string): Promise<boolean> {
+  static async validateUnitBelongsToBusiness(unitId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data } = await admin
       .from('organization_units')
-      .select('id, business_id, department_id')
+      .select('business_id')
       .eq('id', unitId)
       .maybeSingle();
 
-    if (error || !data || data.business_id !== businessId || data.department_id !== departmentId) {
-      return false;
-    }
-    return true;
+    return !!data && data.business_id === businessId;
   }
 
   static async validateJobTitleBelongsToBusiness(jobTitleId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data } = await admin
       .from('organization_job_titles')
-      .select('id, business_id')
+      .select('business_id')
       .eq('id', jobTitleId)
       .maybeSingle();
 
-    if (error || !data || data.business_id !== businessId) {
-      return false;
-    }
-    return true;
+    return !!data && data.business_id === businessId;
   }
 
-  static async validatePositionHierarchy(
-    positionId: string,
-    businessId: string,
-    expectedBranchId?: string | null,
-    expectedDepartmentId?: string | null,
-    expectedUnitId?: string | null
-  ): Promise<boolean> {
+  static async validatePositionBelongsToBusiness(positionId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data } = await admin
       .from('organization_positions')
-      .select('id, business_id, branch_id, department_id, unit_id')
+      .select('business_id')
       .eq('id', positionId)
       .maybeSingle();
 
-    if (error || !data || data.business_id !== businessId) {
-      return false;
-    }
-
-    if (expectedBranchId !== undefined && data.branch_id !== expectedBranchId) {
-      return false;
-    }
-    if (expectedDepartmentId !== undefined && data.department_id !== expectedDepartmentId) {
-      return false;
-    }
-    if (expectedUnitId !== undefined && data.unit_id !== expectedUnitId) {
-      return false;
-    }
-
-    return true;
+    return !!data && data.business_id === businessId;
   }
 
-  static async validateAssignmentEntities(
-    businessId: string,
-    membershipId: string,
-    jobTitleId: string,
-    branchId?: string | null,
-    departmentId?: string | null,
-    unitId?: string | null,
-    positionId?: string | null
-  ): Promise<{ valid: boolean; error?: string }> {
+  static async validateMembershipBelongsToBusiness(membershipId: string, businessId: string): Promise<boolean> {
     const admin = createAdminClient();
-
-    // Check membership
-    const { data: member } = await admin
+    const { data } = await admin
       .from('business_memberships')
-      .select('id, business_id')
+      .select('business_id')
       .eq('id', membershipId)
       .maybeSingle();
 
-    if (!member || member.business_id !== businessId) {
-      return { valid: false, error: 'Business membership does not belong to the given business' };
-    }
-
-    // Check job title
-    const validJt = await this.validateJobTitleBelongsToBusiness(jobTitleId, businessId);
-    if (!validJt) {
-      return { valid: false, error: 'Job title does not belong to the given business' };
-    }
-
-    // Check branch if provided
-    if (branchId) {
-      const validBranch = await this.validateBranchBelongsToBusiness(branchId, businessId);
-      if (!validBranch) {
-        return { valid: false, error: 'Branch does not belong to the given business' };
-      }
-    }
-
-    // Check department if provided
-    if (departmentId) {
-      const validDept = await this.validateDepartmentBelongsToBusiness(departmentId, businessId);
-      if (!validDept) {
-        return { valid: false, error: 'Department does not belong to the given business' };
-      }
-    }
-
-    // Check unit if provided
-    if (unitId) {
-      if (!departmentId) {
-        return { valid: false, error: 'Department is required when specifying an organization unit' };
-      }
-      const validUnit = await this.validateUnitBelongsToDepartment(unitId, departmentId, businessId);
-      if (!validUnit) {
-        return { valid: false, error: 'Organization unit does not belong to the given department or business' };
-      }
-    }
-
-    // Check position if provided
-    if (positionId) {
-      const validPos = await this.validatePositionHierarchy(positionId, businessId, branchId, departmentId, unitId);
-      if (!validPos) {
-        return { valid: false, error: 'Position does not match the provided organizational hierarchy context' };
-      }
-
-      // Check job title matches position job title
-      const { data: pos } = await admin
-        .from('organization_positions')
-        .select('job_title_id')
-        .eq('id', positionId)
-        .maybeSingle();
-
-      if (pos && pos.job_title_id !== jobTitleId) {
-        return { valid: false, error: 'Assignment job title must match position job title' };
-      }
-    }
-
-    return { valid: true };
+    return !!data && data.business_id === businessId;
   }
 
   // ==========================================
   // 2. Hierarchy Levels
   // ==========================================
+
+  static async seedDefaultHierarchyLevels(businessId: string) {
+    const admin = createAdminClient();
+    const levelsToInsert = DEFAULT_ORGANIZATION_HIERARCHY_LEVELS.map((lvl) => ({
+      business_id: businessId,
+      name: lvl.name,
+      rank: lvl.rank,
+      is_management: lvl.isManagement,
+      is_active: true,
+    }));
+
+    const { data, error } = await admin
+      .from('organization_hierarchy_levels')
+      .upsert(levelsToInsert, { onConflict: 'business_id,rank' })
+      .select();
+
+    if (error) {
+      throw new Error(`Failed to seed hierarchy levels: ${error.message}`);
+    }
+    return data;
+  }
+
+  static async ensureDefaultHierarchyLevels(businessId: string) {
+    return this.seedDefaultHierarchyLevels(businessId);
+  }
 
   static async getHierarchyLevels(businessId: string) {
     const admin = createAdminClient();
@@ -232,7 +184,9 @@ export class OrganizationService {
       .eq('business_id', businessId)
       .order('rank', { ascending: true });
 
-    if (error) throw new Error(`Failed to fetch hierarchy levels: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to fetch hierarchy levels: ${error.message}`);
+    }
     return data || [];
   }
 
@@ -252,7 +206,9 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to create hierarchy level: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to create hierarchy level: ${error.message}`);
+    }
     return data;
   }
 
@@ -275,71 +231,15 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to update hierarchy level: ${error.message}`);
-    return data;
-  }
-
-  static async ensureDefaultHierarchyLevels(businessId: string) {
-    const admin = createAdminClient();
-    const { data: existing } = await admin
-      .from('organization_hierarchy_levels')
-      .select('id')
-      .eq('business_id', businessId)
-      .limit(1);
-
-    if (!existing || existing.length === 0) {
-      const inserts = DEFAULT_ORGANIZATION_HIERARCHY_LEVELS.map((lvl) => ({
-        business_id: businessId,
-        rank: lvl.rank,
-        name: lvl.name,
-        is_management: lvl.isManagement,
-        is_active: true,
-      }));
-
-      await admin.from('organization_hierarchy_levels').insert(inserts);
+    if (error) {
+      throw new Error(`Failed to update hierarchy level: ${error.message}`);
     }
+    return data;
   }
 
   // ==========================================
   // 3. Departments
   // ==========================================
-
-  static async getDepartments(businessId: string, options?: { branchId?: string | null; activeOnly?: boolean }) {
-    const admin = createAdminClient();
-    let query = admin
-      .from('organization_departments')
-      .select('*, branch:branches(id, name, code), parent_department:organization_departments!parent_department_id(id, name, code)')
-      .eq('business_id', businessId)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true });
-
-    if (options?.branchId !== undefined) {
-      if (options.branchId === null) {
-        query = query.is('branch_id', null);
-      } else {
-        query = query.eq('branch_id', options.branchId);
-      }
-    }
-    if (options?.activeOnly) {
-      query = query.eq('is_active', true).is('archived_at', null);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch departments: ${error.message}`);
-    return data || [];
-  }
-
-  static async getDepartmentById(id: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_departments')
-      .select('*, branch:branches(id, name, code), parent_department:organization_departments!parent_department_id(id, name, code)')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to fetch department: ${error.message}`);
-    return data;
-  }
 
   static async createDepartment(input: CreateDepartmentInput) {
     const parsed = createDepartmentSchema.parse(input);
@@ -347,11 +247,12 @@ export class OrganizationService {
 
     if (parsed.branchId) {
       const valid = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!valid) throw new Error('Branch does not belong to the given business');
+      if (!valid) throw new Error('Branch does not belong to the specified business');
     }
+
     if (parsed.parentDepartmentId) {
       const valid = await this.validateDepartmentBelongsToBusiness(parsed.parentDepartmentId, parsed.businessId);
-      if (!valid) throw new Error('Parent department does not belong to the given business');
+      if (!valid) throw new Error('Parent department does not belong to the specified business');
     }
 
     const { data, error } = await admin
@@ -399,43 +300,19 @@ export class OrganizationService {
     return data;
   }
 
-  static async archiveDepartment(id: string, businessId: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_departments')
-      .update({
-        is_active: false,
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('business_id', businessId)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Failed to archive department: ${error.message}`);
-    return data;
-  }
-
-  // ==========================================
-  // 4. Organization Units
-  // ==========================================
-
-  static async getUnits(
-    businessId: string,
-    options?: { departmentId?: string; branchId?: string | null; activeOnly?: boolean }
-  ) {
+  static async getDepartments(businessId: string, options?: { branchId?: string | null; activeOnly?: boolean }) {
     const admin = createAdminClient();
     let query = admin
-      .from('organization_units')
-      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code), parent_unit:organization_units!parent_unit_id(id, name, code)')
+      .from('organization_departments')
+      .select(`
+        *,
+        parent_department:organization_departments!parent_department_id(id, name, code),
+        branch:branches(id, name, code)
+      `)
       .eq('business_id', businessId)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
 
-    if (options?.departmentId) {
-      query = query.eq('department_id', options.departmentId);
-    }
     if (options?.branchId !== undefined) {
       if (options.branchId === null) {
         query = query.is('branch_id', null);
@@ -448,32 +325,45 @@ export class OrganizationService {
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch units: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch departments: ${error.message}`);
     return data || [];
   }
 
-  static async getUnitById(id: string) {
+  static async getDepartmentById(id: string) {
     const admin = createAdminClient();
     const { data, error } = await admin
-      .from('organization_units')
-      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code), parent_unit:organization_units!parent_unit_id(id, name, code)')
+      .from('organization_departments')
+      .select(`
+        *,
+        parent_department:organization_departments!parent_department_id(id, name, code),
+        branch:branches(id, name, code)
+      `)
       .eq('id', id)
       .maybeSingle();
 
-    if (error) throw new Error(`Failed to fetch unit: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch department: ${error.message}`);
     return data;
   }
 
-  static async createUnit(input: CreateOrganizationUnitInput) {
+  // ==========================================
+  // 4. Organization Units
+  // ==========================================
+
+  static async createOrganizationUnit(input: CreateOrganizationUnitInput) {
     const parsed = createOrganizationUnitSchema.parse(input);
     const admin = createAdminClient();
 
     const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
-    if (!validDept) throw new Error('Department does not belong to the given business');
+    if (!validDept) throw new Error('Department does not belong to the specified business');
 
     if (parsed.branchId) {
       const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!validBranch) throw new Error('Branch does not belong to the given business');
+      if (!validBranch) throw new Error('Branch does not belong to the specified business');
+    }
+
+    if (parsed.parentUnitId) {
+      const validParent = await this.validateUnitBelongsToBusiness(parsed.parentUnitId, parsed.businessId);
+      if (!validParent) throw new Error('Parent unit does not belong to the specified business');
     }
 
     const { data, error } = await admin
@@ -492,11 +382,11 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to create unit: ${error.message}`);
+    if (error) throw new Error(`Failed to create organization unit: ${error.message}`);
     return data;
   }
 
-  static async updateUnit(input: UpdateOrganizationUnitInput) {
+  static async updateOrganizationUnit(input: UpdateOrganizationUnitInput) {
     const parsed = updateOrganizationUnitSchema.parse(input);
     const admin = createAdminClient();
 
@@ -519,80 +409,68 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to update unit: ${error.message}`);
+    if (error) throw new Error(`Failed to update organization unit: ${error.message}`);
     return data;
   }
 
-  static async archiveUnit(id: string, businessId: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_units')
-      .update({
-        is_active: false,
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('business_id', businessId)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Failed to archive unit: ${error.message}`);
-    return data;
-  }
-
-  // ==========================================
-  // 5. Job Titles
-  // ==========================================
-
-  static async getJobTitles(
+  static async getOrganizationUnits(
     businessId: string,
-    options?: { hierarchyLevelId?: string; activeOnly?: boolean }
+    options?: { departmentId?: string; branchId?: string | null; activeOnly?: boolean }
   ) {
     const admin = createAdminClient();
     let query = admin
-      .from('organization_job_titles')
-      .select('*, hierarchy_level:organization_hierarchy_levels(id, name, rank, is_management)')
+      .from('organization_units')
+      .select(`
+        *,
+        department:organization_departments(id, name, code),
+        parent_unit:organization_units!parent_unit_id(id, name, code),
+        branch:branches(id, name, code)
+      `)
       .eq('business_id', businessId)
+      .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
 
-    if (options?.hierarchyLevelId) {
-      query = query.eq('hierarchy_level_id', options.hierarchyLevelId);
+    if (options?.departmentId) {
+      query = query.eq('department_id', options.departmentId);
+    }
+    if (options?.branchId !== undefined) {
+      if (options.branchId === null) {
+        query = query.is('branch_id', null);
+      } else {
+        query = query.eq('branch_id', options.branchId);
+      }
     }
     if (options?.activeOnly) {
       query = query.eq('is_active', true).is('archived_at', null);
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch job titles: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch organization units: ${error.message}`);
     return data || [];
   }
 
-  static async getJobTitleById(id: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_job_titles')
-      .select('*, hierarchy_level:organization_hierarchy_levels(id, name, rank, is_management)')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to fetch job title: ${error.message}`);
-    return data;
+  static async createUnit(input: CreateOrganizationUnitInput) {
+    return this.createOrganizationUnit(input);
   }
+
+  static async updateUnit(input: UpdateOrganizationUnitInput) {
+    return this.updateOrganizationUnit(input);
+  }
+
+  static async getUnits(
+    businessId: string,
+    options?: { departmentId?: string; branchId?: string | null; activeOnly?: boolean }
+  ) {
+    return this.getOrganizationUnits(businessId, options);
+  }
+
+  // ==========================================
+  // 5. Job Titles
+  // ==========================================
 
   static async createJobTitle(input: CreateJobTitleInput) {
     const parsed = createJobTitleSchema.parse(input);
     const admin = createAdminClient();
-
-    const { data: level } = await admin
-      .from('organization_hierarchy_levels')
-      .select('id, business_id')
-      .eq('id', parsed.hierarchyLevelId)
-      .maybeSingle();
-
-    if (!level || level.business_id !== parsed.businessId) {
-      throw new Error('Hierarchy level does not belong to the given business');
-    }
 
     const { data, error } = await admin
       .from('organization_job_titles')
@@ -639,153 +517,53 @@ export class OrganizationService {
     return data;
   }
 
-  static async archiveJobTitle(id: string, businessId: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_job_titles')
-      .update({
-        is_active: false,
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('business_id', businessId)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Failed to archive job title: ${error.message}`);
-    return data;
-  }
-
-  // ==========================================
-  // 6. Positions & Occupancy
-  // ==========================================
-
-  static async getPositions(
-    businessId: string,
-    options?: {
-      branchId?: string | null;
-      departmentId?: string;
-      unitId?: string;
-      status?: string;
-      activeOnly?: boolean;
-    }
-  ) {
+  static async getJobTitles(businessId: string, options?: { activeOnly?: boolean; hierarchyLevelId?: string }) {
     const admin = createAdminClient();
     let query = admin
-      .from('organization_positions')
+      .from('organization_job_titles')
       .select(`
         *,
-        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        department:organization_departments(id, name, code),
-        unit:organization_units(id, name, code),
-        branch:branches(id, name, code)
+        hierarchy_level:organization_hierarchy_levels(id, name, rank, is_management)
       `)
       .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+      .order('name', { ascending: true });
 
-    if (options?.branchId !== undefined) {
-      if (options.branchId === null) {
-        query = query.is('branch_id', null);
-      } else {
-        query = query.eq('branch_id', options.branchId);
-      }
-    }
-    if (options?.departmentId) {
-      query = query.eq('department_id', options.departmentId);
-    }
-    if (options?.unitId) {
-      query = query.eq('unit_id', options.unitId);
-    }
-    if (options?.status) {
-      query = query.eq('status', options.status);
+    if (options?.hierarchyLevelId) {
+      query = query.eq('hierarchy_level_id', options.hierarchyLevelId);
     }
     if (options?.activeOnly) {
       query = query.eq('is_active', true).is('archived_at', null);
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch positions: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch job titles: ${error.message}`);
     return data || [];
   }
 
-  static async getPositionById(id: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_positions')
-      .select(`
-        *,
-        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        department:organization_departments(id, name, code),
-        unit:organization_units(id, name, code),
-        branch:branches(id, name, code)
-      `)
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to fetch position: ${error.message}`);
-    return data;
-  }
-
-  static async getPositionOccupancy(positionId: string, referenceDate: Date = new Date()) {
-    const admin = createAdminClient();
-    const { data: pos, error: posErr } = await admin
-      .from('organization_positions')
-      .select('id, headcount_limit, status, position_code, name_override, job_title_id')
-      .eq('id', positionId)
-      .maybeSingle();
-
-    if (posErr || !pos) throw new Error(`Position ${positionId} not found`);
-
-    const refIso = referenceDate.toISOString();
-    const { data: occupants, error: occErr } = await admin
-      .from('staff_assignments')
-      .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id')
-      .eq('position_id', positionId)
-      .eq('status', 'active')
-      .lte('starts_at', refIso)
-      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
-      .is('archived_at', null);
-
-    if (occErr) throw new Error(`Failed to calculate position occupancy: ${occErr.message}`);
-
-    const occupiedCount = occupants?.length || 0;
-    const headcountLimit = pos.headcount_limit || 1;
-    const availableSlots = Math.max(0, headcountLimit - occupiedCount);
-    const isFull = occupiedCount >= headcountLimit;
-
-    return {
-      positionId: pos.id,
-      positionCode: pos.position_code,
-      nameOverride: pos.name_override,
-      status: pos.status,
-      headcountLimit,
-      occupiedCount,
-      availableSlots,
-      isFull,
-      occupants: occupants || [],
-    };
-  }
+  // ==========================================
+  // 6. Organization Positions
+  // ==========================================
 
   static async createPosition(input: CreatePositionInput) {
     const parsed = createPositionSchema.parse(input);
     const admin = createAdminClient();
 
-    const validJt = await this.validateJobTitleBelongsToBusiness(parsed.jobTitleId, parsed.businessId);
-    if (!validJt) throw new Error('Job title does not belong to the given business');
+    const validJT = await this.validateJobTitleBelongsToBusiness(parsed.jobTitleId, parsed.businessId);
+    if (!validJT) throw new Error('Job title does not belong to the specified business');
 
     if (parsed.branchId) {
       const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!validBranch) throw new Error('Branch does not belong to the given business');
+      if (!validBranch) throw new Error('Branch does not belong to the specified business');
     }
+
     if (parsed.departmentId) {
       const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
-      if (!validDept) throw new Error('Department does not belong to the given business');
+      if (!validDept) throw new Error('Department does not belong to the specified business');
     }
+
     if (parsed.unitId) {
-      if (!parsed.departmentId) throw new Error('Department is required when specifying an organization unit');
-      const validUnit = await this.validateUnitBelongsToDepartment(parsed.unitId, parsed.departmentId, parsed.businessId);
-      if (!validUnit) throw new Error('Organization unit does not belong to the given department or business');
+      const validUnit = await this.validateUnitBelongsToBusiness(parsed.unitId, parsed.businessId);
+      if (!validUnit) throw new Error('Unit does not belong to the specified business');
     }
 
     const { data, error } = await admin
@@ -837,74 +615,23 @@ export class OrganizationService {
     return data;
   }
 
-  static async archivePosition(id: string, businessId: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_positions')
-      .update({
-        status: 'archived',
-        is_active: false,
-        archived_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('business_id', businessId)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Failed to archive position: ${error.message}`);
-    return data;
-  }
-
-  // ==========================================
-  // 7. Staff Assignments & Lifecycle
-  // ==========================================
-
-  static isAssignmentEffective(
-    assignment: { status: string; starts_at: string; ends_at?: string | null },
-    referenceDate: Date = new Date()
-  ): boolean {
-    if (assignment.status !== 'active') return false;
-    const refTime = referenceDate.getTime();
-    const startTime = new Date(assignment.starts_at).getTime();
-    if (startTime > refTime) return false;
-    if (assignment.ends_at) {
-      const endTime = new Date(assignment.ends_at).getTime();
-      if (endTime <= refTime) return false;
-    }
-    return true;
-  }
-
-  static async getStaffAssignments(
+  static async getPositions(
     businessId: string,
-    options?: {
-      membershipId?: string;
-      branchId?: string | null;
-      departmentId?: string;
-      positionId?: string;
-      status?: string;
-      activeOnly?: boolean;
-      effectiveOnly?: boolean;
-    }
+    options?: { branchId?: string | null; departmentId?: string; status?: string; activeOnly?: boolean }
   ) {
     const admin = createAdminClient();
     let query = admin
-      .from('staff_assignments')
+      .from('organization_positions')
       .select(`
         *,
         job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        position:organization_positions(id, position_code, name_override, headcount_limit),
         department:organization_departments(id, name, code),
         unit:organization_units(id, name, code),
-        branch:branches(id, name, code),
-        membership:business_memberships(id, user_id, role, membership_status)
+        branch:branches(id, name, code)
       `)
       .eq('business_id', businessId)
-      .order('starts_at', { ascending: false });
+      .order('position_code', { ascending: true });
 
-    if (options?.membershipId) {
-      query = query.eq('business_membership_id', options.membershipId);
-    }
     if (options?.branchId !== undefined) {
       if (options.branchId === null) {
         query = query.is('branch_id', null);
@@ -915,79 +642,227 @@ export class OrganizationService {
     if (options?.departmentId) {
       query = query.eq('department_id', options.departmentId);
     }
-    if (options?.positionId) {
-      query = query.eq('position_id', options.positionId);
-    }
     if (options?.status) {
       query = query.eq('status', options.status);
     }
-    if (options?.effectiveOnly) {
-      const nowIso = new Date().toISOString();
-      query = query
-        .eq('status', 'active')
-        .lte('starts_at', nowIso)
-        .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-        .is('archived_at', null);
-    } else if (options?.activeOnly) {
-      query = query.eq('status', 'active').is('archived_at', null);
+    if (options?.activeOnly) {
+      query = query.eq('is_active', true).is('archived_at', null);
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch staff assignments: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch positions: ${error.message}`);
     return data || [];
   }
 
-  static async getStaffAssignmentById(id: string) {
+  static async getPositionById(id: string) {
     const admin = createAdminClient();
     const { data, error } = await admin
-      .from('staff_assignments')
+      .from('organization_positions')
       .select(`
         *,
         job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        position:organization_positions(id, position_code, name_override, headcount_limit),
         department:organization_departments(id, name, code),
         unit:organization_units(id, name, code),
-        branch:branches(id, name, code),
-        membership:business_memberships(id, user_id, role, membership_status),
-        reports_to:staff_assignments!reports_to_assignment_id(
-          id,
-          assignment_type,
-          is_primary,
-          status,
-          job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-          membership:business_memberships(id, user_id, role)
-        )
+        branch:branches(id, name, code)
       `)
       .eq('id', id)
       .maybeSingle();
 
-    if (error) throw new Error(`Failed to fetch staff assignment: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch position: ${error.message}`);
     return data;
   }
+
+  static async getPositionOccupancy(positionId: string, referenceDate: Date = new Date()) {
+    const admin = createAdminClient();
+    const { data: pos, error: posErr } = await admin
+      .from('organization_positions')
+      .select('id, headcount_limit, status, position_code, name_override, job_title_id')
+      .eq('id', positionId)
+      .maybeSingle();
+
+    if (posErr || !pos) throw new Error(`Position ${positionId} not found`);
+
+    const refIso = referenceDate.toISOString();
+    // Substantive occupancy excludes acting assignments (acting assignments do not consume headcount)
+    const { data: occupants, error: occErr } = await admin
+      .from('staff_assignments')
+      .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id')
+      .eq('position_id', positionId)
+      .neq('assignment_type', 'acting')
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    if (occErr) throw new Error(`Failed to calculate position occupancy: ${occErr.message}`);
+
+    const occupiedCount = occupants?.length || 0;
+    const headcountLimit = pos.headcount_limit || 1;
+    const availableSlots = Math.max(0, headcountLimit - occupiedCount);
+    const isFull = occupiedCount >= headcountLimit;
+
+    return {
+      positionId: pos.id,
+      positionCode: pos.position_code,
+      nameOverride: pos.name_override,
+      status: pos.status,
+      headcountLimit,
+      occupiedCount,
+      availableSlots,
+      isFull,
+      occupants: occupants || [],
+    };
+  }
+
+  static async getPositionCoverage(positionId: string, referenceDate: Date = new Date()) {
+    const admin = createAdminClient();
+    const { data: pos, error: posErr } = await admin
+      .from('organization_positions')
+      .select('id, headcount_limit, status, position_code, name_override, job_title_id')
+      .eq('id', positionId)
+      .maybeSingle();
+
+    if (posErr || !pos) throw new Error(`Position ${positionId} not found`);
+
+    const refIso = referenceDate.toISOString();
+
+    // 1. Substantive occupants (non-acting)
+    const { data: substantiveOccupants } = await admin
+      .from('staff_assignments')
+      .select(`
+        id, assignment_type, is_primary, starts_at, ends_at, business_membership_id,
+        membership:business_memberships(id, user_id, role)
+      `)
+      .eq('position_id', positionId)
+      .neq('assignment_type', 'acting')
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    // 2. Active acting coverage on this position
+    const { data: actingCoverage } = await admin
+      .from('staff_assignments')
+      .select(`
+        id, assignment_type, starts_at, ends_at, acting_for_assignment_id, business_membership_id,
+        membership:business_memberships(id, user_id, role)
+      `)
+      .eq('position_id', positionId)
+      .eq('assignment_type', 'acting')
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    const substantiveOccupiedCount = substantiveOccupants?.length || 0;
+    const headcountLimit = pos.headcount_limit || 1;
+    const availableSlots = Math.max(0, headcountLimit - substantiveOccupiedCount);
+    const isFull = substantiveOccupiedCount >= headcountLimit;
+
+    let coverageState: 'vacant' | 'occupied' | 'acting_covered' | 'over_capacity' | 'frozen' | 'archived' = 'vacant';
+    if (pos.status === 'frozen') {
+      coverageState = 'frozen';
+    } else if (pos.status === 'archived') {
+      coverageState = 'archived';
+    } else if (substantiveOccupiedCount > headcountLimit) {
+      coverageState = 'over_capacity';
+    } else if ((actingCoverage?.length || 0) > 0) {
+      coverageState = 'acting_covered';
+    } else if (substantiveOccupiedCount > 0) {
+      coverageState = 'occupied';
+    } else {
+      coverageState = 'vacant';
+    }
+
+    return {
+      positionId: pos.id,
+      positionCode: pos.position_code,
+      nameOverride: pos.name_override,
+      status: pos.status,
+      headcountLimit,
+      substantiveOccupiedCount,
+      availableSlots,
+      isFull,
+      substantiveOccupants: substantiveOccupants || [],
+      actingCoverage: actingCoverage || [],
+      coverageState,
+    };
+  }
+
+  // ==========================================
+  // 7. Staff Assignments & Lifecycle
+  // ==========================================
 
   static async createStaffAssignment(input: CreateStaffAssignmentInput, actorId?: string) {
     const parsed = createStaffAssignmentSchema.parse(input);
     const admin = createAdminClient();
 
-    // Validate assignment entities
-    const validation = await this.validateAssignmentEntities(
-      parsed.businessId,
-      parsed.businessMembershipId,
-      parsed.jobTitleId,
-      parsed.branchId,
-      parsed.departmentId,
-      parsed.unitId,
-      parsed.positionId
-    );
+    // 1. Validate Business Membership belongs to business
+    const validMember = await this.validateMembershipBelongsToBusiness(parsed.businessMembershipId, parsed.businessId);
+    if (!validMember) throw new Error('Business membership does not belong to the specified business');
 
-    if (!validation.valid) {
-      throw new Error(validation.error || 'Invalid assignment entities');
+    // 2. Validate Job Title belongs to business
+    const validJob = await this.validateJobTitleBelongsToBusiness(parsed.jobTitleId, parsed.businessId);
+    if (!validJob) throw new Error('Job title does not belong to the specified business');
+
+    // 3. Optional Entity Scope Validations
+    if (parsed.branchId) {
+      const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
+      if (!validBranch) throw new Error('Branch does not belong to the specified business');
+    }
+    if (parsed.departmentId) {
+      const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
+      if (!validDept) throw new Error('Department does not belong to the specified business');
+    }
+    if (parsed.unitId) {
+      const validUnit = await this.validateUnitBelongsToBusiness(parsed.unitId, parsed.businessId);
+      if (!validUnit) throw new Error('Unit does not belong to the specified business');
+    }
+    if (parsed.positionId) {
+      const validPos = await this.validatePositionBelongsToBusiness(parsed.positionId, parsed.businessId);
+      if (!validPos) throw new Error('Position does not belong to the specified business');
+
+      // Verify position job title matches
+      const { data: pos } = await admin
+        .from('organization_positions')
+        .select('job_title_id, status, headcount_limit')
+        .eq('id', parsed.positionId)
+        .single();
+      if (pos && pos.job_title_id !== parsed.jobTitleId) {
+        throw new Error('Position job title does not match assignment job title');
+      }
+      if (pos && (pos.status === 'frozen' || pos.status === 'archived')) {
+        throw new Error(`Target position is ${pos.status} and cannot accept new assignments`);
+      }
+      if (pos && parsed.assignmentType !== 'acting') {
+        const occ = await this.getPositionOccupancy(parsed.positionId);
+        if (occ.isFull) {
+          throw new Error(`Target position has reached maximum headcount limit (${occ.occupiedCount} / ${occ.headcountLimit} occupied)`);
+        }
+      }
     }
 
-    const startsAtIso = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
-    const endsAtIso = parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null;
+    // 4. Reporting Manager validation
+    if (parsed.reportsToAssignmentId) {
+      const { data: mgr, error: mgrErr } = await admin
+        .from('staff_assignments')
+        .select('id, business_id, status')
+        .eq('id', parsed.reportsToAssignmentId)
+        .maybeSingle();
 
-    // Try executing via atomic RPC for concurrency & row locking protection
+      if (mgrErr || !mgr) throw new Error(`Reporting manager assignment ${parsed.reportsToAssignmentId} not found`);
+      if (mgr.business_id !== parsed.businessId) {
+        throw new Error('Reporting manager assignment belongs to a different business');
+      }
+      if (mgr.status === 'ended' || mgr.status === 'cancelled') {
+        throw new Error(`Cannot assign manager with status ${mgr.status}`);
+      }
+    }
+
+    const startsAtStr = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtStr = parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null;
+
+    // Concurrency-safe creation via atomic RPC
     const { data: rpcRes, error: rpcErr } = await admin.rpc('create_staff_assignment_atomic', {
       p_business_id: parsed.businessId,
       p_business_membership_id: parsed.businessMembershipId,
@@ -996,28 +871,39 @@ export class OrganizationService {
       p_department_id: parsed.departmentId || null,
       p_unit_id: parsed.unitId || null,
       p_position_id: parsed.positionId || null,
-      p_assignment_type: parsed.assignmentType,
+      p_assignment_type: parsed.assignmentType || 'primary',
       p_is_primary: parsed.isPrimary,
-      p_status: parsed.status,
-      p_starts_at: startsAtIso,
-      p_ends_at: endsAtIso,
-      p_reports_to_id: parsed.reportsToAssignmentId || null,
+      p_status: parsed.status || 'active',
+      p_starts_at: startsAtStr,
+      p_ends_at: endsAtStr,
       p_acting_for_id: parsed.actingForAssignmentId || null,
+      p_reports_to_id: parsed.reportsToAssignmentId || null,
       p_reason: parsed.reason || null,
       p_actor_id: actorId || null,
     });
 
     if (!rpcErr && rpcRes && rpcRes.assignment_id) {
-      const created = await this.getStaffAssignmentById(rpcRes.assignment_id);
-      if (created) return created;
+      const { data, error: fetchErr } = await admin
+        .from('staff_assignments')
+        .select()
+        .eq('id', rpcRes.assignment_id)
+        .single();
+
+      if (!fetchErr && data) {
+        await this.logAssignmentEvent({
+          businessId: parsed.businessId,
+          assignmentId: data.id,
+          eventType: parsed.status === 'scheduled' ? 'scheduled' : 'created',
+          newStatus: parsed.status || 'active',
+          reason: parsed.reason || 'Staff assignment created',
+          changedBy: actorId,
+        });
+        return data;
+      }
     }
 
-    if (rpcErr) {
-      throw new Error(rpcErr.message);
-    }
-
-    // Fallback direct insert if RPC not present
-    const { data, error } = await admin
+    // Direct insertion fallback
+    const { data, error: createErr } = await admin
       .from('staff_assignments')
       .insert({
         business_id: parsed.businessId,
@@ -1027,32 +913,63 @@ export class OrganizationService {
         unit_id: parsed.unitId || null,
         position_id: parsed.positionId || null,
         job_title_id: parsed.jobTitleId,
-        assignment_type: parsed.assignmentType,
+        assignment_type: parsed.assignmentType || 'primary',
         is_primary: parsed.isPrimary,
-        status: parsed.status,
-        starts_at: startsAtIso,
-        ends_at: endsAtIso,
+        status: parsed.status || 'active',
+        starts_at: startsAtStr,
+        ends_at: endsAtStr,
         acting_for_assignment_id: parsed.actingForAssignmentId || null,
+        source_assignment_id: parsed.sourceAssignmentId || null,
+        coverage_absence_id: parsed.coverageAbsenceId || null,
         reports_to_assignment_id: parsed.reportsToAssignmentId || null,
         reason: parsed.reason || null,
       })
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to create staff assignment: ${error.message}`);
-
-    // If manager was assigned, record reporting history
-    if (parsed.reportsToAssignmentId) {
-      await admin.from('organization_reporting_history').insert({
-        business_id: parsed.businessId,
-        assignment_id: data.id,
-        previous_manager_assignment_id: null,
-        new_manager_assignment_id: parsed.reportsToAssignmentId,
-        reason: parsed.reason || 'Initial reporting manager assignment',
-        changed_by: actorId || null,
-        changed_at: data.starts_at,
-      });
+    if (createErr || !data) {
+      throw new Error(`Failed to create staff assignment: ${createErr?.message || rpcErr?.message}`);
     }
+
+    // Optimistic concurrency safety check for positions
+    if (parsed.positionId && parsed.assignmentType !== 'acting') {
+      const { data: currentOccupants } = await admin
+        .from('staff_assignments')
+        .select('id, created_at')
+        .eq('position_id', parsed.positionId)
+        .neq('assignment_type', 'acting')
+        .eq('status', 'active')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+
+      const { data: targetPos } = await admin
+        .from('organization_positions')
+        .select('headcount_limit')
+        .eq('id', parsed.positionId)
+        .single();
+
+      const limit = targetPos?.headcount_limit || 1;
+      const occupantList = currentOccupants || [];
+      const myIndex = occupantList.findIndex((o) => o.id === data.id);
+
+      if (myIndex >= limit) {
+        // We lost the concurrency race! Clean up our insertion
+        await admin.from('staff_assignments').delete().eq('id', data.id);
+        throw new Error(
+          `Target position has reached maximum headcount limit (${occupantList.length} / ${limit} occupied)`
+        );
+      }
+    }
+
+    // Log assignment history event
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: data.id,
+      eventType: parsed.status === 'scheduled' ? 'scheduled' : 'created',
+      newStatus: parsed.status || 'active',
+      reason: parsed.reason || 'Staff assignment created',
+      changedBy: actorId,
+    });
 
     return data;
   }
@@ -1117,6 +1034,8 @@ export class OrganizationService {
       updatePayload.ends_at = parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null;
     }
     if (parsed.actingForAssignmentId !== undefined) updatePayload.acting_for_assignment_id = parsed.actingForAssignmentId;
+    if (parsed.sourceAssignmentId !== undefined) updatePayload.source_assignment_id = parsed.sourceAssignmentId;
+    if (parsed.coverageAbsenceId !== undefined) updatePayload.coverage_absence_id = parsed.coverageAbsenceId;
     if (parsed.reportsToAssignmentId !== undefined) updatePayload.reports_to_assignment_id = parsed.reportsToAssignmentId;
     if (parsed.reason !== undefined) updatePayload.reason = parsed.reason;
 
@@ -1131,13 +1050,12 @@ export class OrganizationService {
     return data;
   }
 
-  static async endStaffAssignment(input: EndStaffAssignmentInput) {
+  static async endStaffAssignment(input: EndStaffAssignmentInput, actorId?: string) {
     const parsed = endStaffAssignmentSchema.parse(input);
     const admin = createAdminClient();
 
     const endedAtStr = typeof parsed.endedAt === 'string' ? parsed.endedAt : parsed.endedAt.toISOString();
 
-    // Preserve historical assignment_type and is_primary unchanged
     const { data, error } = await admin
       .from('staff_assignments')
       .update({
@@ -1151,11 +1069,579 @@ export class OrganizationService {
       .single();
 
     if (error) throw new Error(`Failed to end staff assignment: ${error.message}`);
+
+    // Log history
+    await this.logAssignmentEvent({
+      businessId: data.business_id,
+      assignmentId: data.id,
+      eventType: 'ended',
+      previousStatus: 'active',
+      newStatus: 'ended',
+      reason: parsed.reason || 'Staff assignment ended',
+      changedBy: actorId,
+    });
+
     return data;
   }
 
   // ==========================================
-  // 8. Atomic Transitions (Promotion / Transfer)
+  // 8. Acting Assignments Engine
+  // ==========================================
+
+  static async createActingAssignment(input: CreateActingAssignmentInput, actorId?: string) {
+    const parsed = createActingAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const startsAtStr = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtStr = typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString();
+
+    // 1. Validate target substantive assignment
+    const { data: target, error: targetErr } = await admin
+      .from('staff_assignments')
+      .select('*')
+      .eq('id', parsed.actingForAssignmentId)
+      .maybeSingle();
+
+    if (targetErr || !target) {
+      throw new Error(`Target substantive assignment ${parsed.actingForAssignmentId} not found`);
+    }
+    if (target.business_id !== parsed.businessId) {
+      throw new Error(`Acting target assignment ${parsed.actingForAssignmentId} does not belong to business ${parsed.businessId}`);
+    }
+    if (target.assignment_type === 'acting') {
+      throw new Error('Cannot create an acting assignment covering another acting assignment');
+    }
+    if (target.business_membership_id === parsed.businessMembershipId) {
+      throw new Error('Cannot act for your own assignment');
+    }
+
+    // 2. Check for overlapping acting assignments for the same substantive target
+    const { data: existingActings } = await admin
+      .from('staff_assignments')
+      .select('id, starts_at, ends_at, status')
+      .eq('acting_for_assignment_id', parsed.actingForAssignmentId)
+      .in('status', ['active', 'scheduled']);
+
+    const newStart = new Date(startsAtStr).getTime();
+    const newEnd = new Date(endsAtStr).getTime();
+
+    for (const existing of existingActings || []) {
+      const exStart = new Date(existing.starts_at).getTime();
+      const exEnd = existing.ends_at ? new Date(existing.ends_at).getTime() : Infinity;
+      if (newStart < exEnd && exStart < newEnd) {
+        throw new Error(`Conflicting overlapping acting assignment already exists for substantive assignment ${parsed.actingForAssignmentId}`);
+      }
+    }
+
+    // 3. Validate coverage absence if specified
+    if (parsed.coverageAbsenceId) {
+      const { data: absence } = await admin
+        .from('organization_assignment_absences')
+        .select('*')
+        .eq('id', parsed.coverageAbsenceId)
+        .maybeSingle();
+
+      if (!absence || absence.business_id !== parsed.businessId) {
+        throw new Error('Coverage absence not found in business');
+      }
+      if (absence.assignment_id !== parsed.actingForAssignmentId) {
+        throw new Error(`Coverage absence assignment ${absence.assignment_id} does not match acting target assignment ${parsed.actingForAssignmentId}`);
+      }
+    }
+
+    // Call atomic RPC
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('create_acting_assignment_atomic', {
+      p_business_id: parsed.businessId,
+      p_business_membership_id: parsed.businessMembershipId,
+      p_acting_for_assignment_id: parsed.actingForAssignmentId,
+      p_starts_at: startsAtStr,
+      p_ends_at: endsAtStr,
+      p_coverage_absence_id: parsed.coverageAbsenceId || null,
+      p_reports_to_id: parsed.reportsToAssignmentId || null,
+      p_status: parsed.status || 'active',
+      p_reason: parsed.reason || null,
+      p_actor_id: actorId || null,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.assignment_id) {
+      const { data: created } = await admin
+        .from('staff_assignments')
+        .select()
+        .eq('id', rpcRes.assignment_id)
+        .single();
+      return created;
+    }
+
+    // Fallback: direct insertion
+    const { data: created, error: createErr } = await admin
+      .from('staff_assignments')
+      .insert({
+        business_id: parsed.businessId,
+        business_membership_id: parsed.businessMembershipId,
+        branch_id: target.branch_id,
+        department_id: target.department_id,
+        unit_id: target.unit_id,
+        position_id: target.position_id,
+        job_title_id: target.job_title_id,
+        assignment_type: 'acting',
+        is_primary: false,
+        status: parsed.status || 'active',
+        starts_at: startsAtStr,
+        ends_at: endsAtStr,
+        acting_for_assignment_id: parsed.actingForAssignmentId,
+        coverage_absence_id: parsed.coverageAbsenceId || null,
+        reports_to_assignment_id: parsed.reportsToAssignmentId || target.reports_to_assignment_id || null,
+        reason: parsed.reason || null,
+      })
+      .select()
+      .single();
+
+    if (createErr || !created) {
+      throw new Error(`Failed to create acting assignment: ${createErr?.message}`);
+    }
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: created.id,
+      eventType: parsed.status === 'scheduled' ? 'scheduled' : 'acting_started',
+      newStatus: parsed.status || 'active',
+      relatedAssignmentId: parsed.actingForAssignmentId,
+      reason: parsed.reason || 'Acting assignment created',
+      changedBy: actorId,
+    });
+
+    return created;
+  }
+
+  static async extendActingAssignment(input: ExtendActingAssignmentInput, actorId?: string) {
+    const parsed = extendActingAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const newEndsAtStr = typeof parsed.newEndsAt === 'string' ? parsed.newEndsAt : parsed.newEndsAt.toISOString();
+
+    const { data: assign, error: findErr } = await admin
+      .from('staff_assignments')
+      .select('*')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .single();
+
+    if (findErr || !assign) throw new Error('Acting assignment not found');
+    if (assign.assignment_type !== 'acting') throw new Error('Assignment is not an acting assignment');
+    if (new Date(newEndsAtStr).getTime() <= new Date(assign.starts_at).getTime()) {
+      throw new Error('New end date must be strictly after start date');
+    }
+
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('extend_acting_assignment_atomic', {
+      p_business_id: parsed.businessId,
+      p_assignment_id: parsed.assignmentId,
+      p_new_ends_at: newEndsAtStr,
+      p_reason: parsed.reason || null,
+      p_actor_id: actorId || null,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.success) {
+      return rpcRes;
+    }
+
+    // Fallback: direct update
+    const { error: updateErr } = await admin
+      .from('staff_assignments')
+      .update({
+        ends_at: newEndsAtStr,
+        reason: parsed.reason || assign.reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (updateErr) throw new Error(`Failed to extend acting assignment: ${updateErr.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: parsed.assignmentId,
+      eventType: 'extended',
+      previousStatus: assign.status,
+      newStatus: assign.status,
+      relatedAssignmentId: assign.acting_for_assignment_id,
+      metadata: { previous_ends_at: assign.ends_at, new_ends_at: newEndsAtStr },
+      reason: parsed.reason || 'Acting assignment extended',
+      changedBy: actorId,
+    });
+
+    return {
+      success: true,
+      assignment_id: parsed.assignmentId,
+      previous_ends_at: assign.ends_at,
+      new_ends_at: newEndsAtStr,
+    };
+  }
+
+  static async endActingAssignment(input: EndActingAssignmentInput, actorId?: string) {
+    const parsed = endActingAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const endedAtStr = typeof parsed.endedAt === 'string' ? parsed.endedAt : parsed.endedAt.toISOString();
+
+    const { data: assign, error: findErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id, status, assignment_type, acting_for_assignment_id')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .single();
+
+    if (findErr || !assign) throw new Error('Acting assignment not found');
+    if (assign.assignment_type !== 'acting') throw new Error('Assignment is not an acting assignment');
+
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .update({
+        status: 'ended',
+        ends_at: endedAtStr,
+        reason: parsed.reason || 'Acting assignment ended',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to end acting assignment: ${error.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: parsed.assignmentId,
+      eventType: 'acting_ended',
+      previousStatus: assign.status,
+      newStatus: 'ended',
+      relatedAssignmentId: assign.acting_for_assignment_id,
+      reason: parsed.reason || 'Acting assignment ended',
+      changedBy: actorId,
+    });
+
+    return data;
+  }
+
+  // ==========================================
+  // 9. Secondments Engine
+  // ==========================================
+
+  static async createSecondment(input: CreateSecondmentInput, actorId?: string) {
+    const parsed = createSecondmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const startsAtStr = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtStr = parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null;
+
+    // Validate home source assignment
+    const { data: source, error: sourceErr } = await admin
+      .from('staff_assignments')
+      .select('*')
+      .eq('id', parsed.sourceAssignmentId)
+      .maybeSingle();
+
+    if (sourceErr || !source) {
+      throw new Error(`Home source assignment ${parsed.sourceAssignmentId} not found`);
+    }
+    if (source.business_id !== parsed.businessId) {
+      throw new Error(`Home source assignment ${parsed.sourceAssignmentId} does not belong to business ${parsed.businessId}`);
+    }
+
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('create_secondment_atomic', {
+      p_business_id: parsed.businessId,
+      p_business_membership_id: parsed.businessMembershipId,
+      p_source_assignment_id: parsed.sourceAssignmentId,
+      p_job_title_id: parsed.jobTitleId,
+      p_branch_id: parsed.branchId || null,
+      p_department_id: parsed.departmentId || null,
+      p_unit_id: parsed.unitId || null,
+      p_position_id: parsed.positionId || null,
+      p_starts_at: startsAtStr,
+      p_ends_at: endsAtStr,
+      p_reports_to_id: parsed.reportsToAssignmentId || null,
+      p_reason: parsed.reason || null,
+      p_status: parsed.status || 'active',
+      p_actor_id: actorId || null,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.assignment_id) {
+      const { data: created } = await admin
+        .from('staff_assignments')
+        .select()
+        .eq('id', rpcRes.assignment_id)
+        .single();
+      return created;
+    }
+
+    // Fallback: direct insert
+    const { data: created, error: createErr } = await admin
+      .from('staff_assignments')
+      .insert({
+        business_id: parsed.businessId,
+        business_membership_id: parsed.businessMembershipId,
+        branch_id: parsed.branchId || null,
+        department_id: parsed.departmentId || null,
+        unit_id: parsed.unitId || null,
+        position_id: parsed.positionId || null,
+        job_title_id: parsed.jobTitleId,
+        assignment_type: 'secondment',
+        is_primary: false,
+        status: parsed.status || 'active',
+        starts_at: startsAtStr,
+        ends_at: endsAtStr,
+        source_assignment_id: parsed.sourceAssignmentId,
+        reports_to_assignment_id: parsed.reportsToAssignmentId || null,
+        reason: parsed.reason || null,
+      })
+      .select()
+      .single();
+
+    if (createErr || !created) {
+      throw new Error(`Failed to create secondment: ${createErr?.message}`);
+    }
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: created.id,
+      eventType: parsed.status === 'scheduled' ? 'scheduled' : 'secondment_started',
+      newStatus: parsed.status || 'active',
+      relatedAssignmentId: parsed.sourceAssignmentId,
+      reason: parsed.reason || 'Secondment started',
+      changedBy: actorId,
+    });
+
+    return created;
+  }
+
+  static async endSecondment(input: EndSecondmentInput, actorId?: string) {
+    const parsed = endSecondmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const endedAtStr = typeof parsed.endedAt === 'string' ? parsed.endedAt : parsed.endedAt.toISOString();
+
+    const { data: assign, error: findErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id, status, assignment_type, source_assignment_id')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .single();
+
+    if (findErr || !assign) throw new Error('Secondment assignment not found');
+    if (assign.assignment_type !== 'secondment') throw new Error('Assignment is not a secondment');
+
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .update({
+        status: 'ended',
+        ends_at: endedAtStr,
+        reason: parsed.reason || 'Secondment ended',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to end secondment: ${error.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: parsed.assignmentId,
+      eventType: 'secondment_ended',
+      previousStatus: assign.status,
+      newStatus: 'ended',
+      relatedAssignmentId: assign.source_assignment_id,
+      reason: parsed.reason || 'Secondment ended',
+      changedBy: actorId,
+    });
+
+    return data;
+  }
+
+  // ==========================================
+  // 10. Temporary Assignments Engine
+  // ==========================================
+
+  static async createTemporaryAssignment(input: CreateTemporaryAssignmentInput, actorId?: string) {
+    const parsed = createTemporaryAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const startsAtStr = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtStr = typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString();
+
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .insert({
+        business_id: parsed.businessId,
+        business_membership_id: parsed.businessMembershipId,
+        branch_id: parsed.branchId || null,
+        department_id: parsed.departmentId || null,
+        unit_id: parsed.unitId || null,
+        position_id: parsed.positionId || null,
+        job_title_id: parsed.jobTitleId,
+        source_assignment_id: parsed.sourceAssignmentId || null,
+        assignment_type: 'temporary',
+        is_primary: false,
+        status: parsed.status || 'active',
+        starts_at: startsAtStr,
+        ends_at: endsAtStr,
+        reports_to_assignment_id: parsed.reportsToAssignmentId || null,
+        reason: parsed.reason || null,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to create temporary assignment: ${error.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: data.id,
+      eventType: parsed.status === 'scheduled' ? 'scheduled' : 'temporary_started',
+      newStatus: parsed.status || 'active',
+      relatedAssignmentId: parsed.sourceAssignmentId || null,
+      reason: parsed.reason || 'Temporary assignment created',
+      changedBy: actorId,
+    });
+
+    return data;
+  }
+
+  static async endTemporaryAssignment(input: EndTemporaryAssignmentInput, actorId?: string) {
+    const parsed = endTemporaryAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const endedAtStr = typeof parsed.endedAt === 'string' ? parsed.endedAt : parsed.endedAt.toISOString();
+
+    const { data: assign, error: findErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id, status, assignment_type, source_assignment_id')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .single();
+
+    if (findErr || !assign) throw new Error('Temporary assignment not found');
+
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .update({
+        status: 'ended',
+        ends_at: endedAtStr,
+        reason: parsed.reason || 'Temporary assignment ended',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to end temporary assignment: ${error.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: parsed.assignmentId,
+      eventType: 'temporary_ended',
+      previousStatus: assign.status,
+      newStatus: 'ended',
+      relatedAssignmentId: assign.source_assignment_id,
+      reason: parsed.reason || 'Temporary assignment ended',
+      changedBy: actorId,
+    });
+
+    return data;
+  }
+
+  // ==========================================
+  // 11. Assignment Absences Model
+  // ==========================================
+
+  static async createAssignmentAbsence(input: CreateAssignmentAbsenceInput, actorId?: string) {
+    const parsed = createAssignmentAbsenceSchema.parse(input);
+    const admin = createAdminClient();
+
+    const startsAtStr = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtStr = typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString();
+
+    // Verify assignment belongs to business
+    const { data: assign, error: assignErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id')
+      .eq('id', parsed.assignmentId)
+      .maybeSingle();
+
+    if (assignErr || !assign || assign.business_id !== parsed.businessId) {
+      throw new Error('Assignment does not belong to the specified business');
+    }
+
+    const { data, error } = await admin
+      .from('organization_assignment_absences')
+      .insert({
+        business_id: parsed.businessId,
+        assignment_id: parsed.assignmentId,
+        absence_type: parsed.absenceType,
+        starts_at: startsAtStr,
+        ends_at: endsAtStr,
+        reason: parsed.reason || null,
+        status: parsed.status,
+        created_by: actorId || null,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to create assignment absence: ${error.message}`);
+    return data;
+  }
+
+  static async endAssignmentAbsence(input: EndAssignmentAbsenceInput) {
+    const parsed = endAssignmentAbsenceSchema.parse(input);
+    const admin = createAdminClient();
+
+    const endedAtStr = typeof parsed.endedAt === 'string' ? parsed.endedAt : parsed.endedAt.toISOString();
+
+    const { data, error } = await admin
+      .from('organization_assignment_absences')
+      .update({
+        status: 'ended',
+        ends_at: endedAtStr,
+        reason: parsed.reason || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.id)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to end assignment absence: ${error.message}`);
+    return data;
+  }
+
+  static async getAssignmentAbsences(
+    businessId: string,
+    options?: { assignmentId?: string; activeOnly?: boolean }
+  ) {
+    const admin = createAdminClient();
+    let query = admin
+      .from('organization_assignment_absences')
+      .select(`
+        *,
+        assignment:staff_assignments(
+          id, job_title:organization_job_titles(id, name),
+          membership:business_memberships(id, user_id, role)
+        )
+      `)
+      .eq('business_id', businessId)
+      .order('starts_at', { ascending: false });
+
+    if (options?.assignmentId) {
+      query = query.eq('assignment_id', options.assignmentId);
+    }
+    if (options?.activeOnly) {
+      query = query.eq('status', 'active');
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to fetch assignment absences: ${error.message}`);
+    return data || [];
+  }
+
+  // ==========================================
+  // 12. Primary Transitions (Promotion / Transfer)
   // ==========================================
 
   static async transitionPrimaryAssignment(input: TransitionPrimaryAssignmentInput, actorId?: string) {
@@ -1205,259 +1691,106 @@ export class OrganizationService {
       };
     }
 
-    // Fallback: If RPC is not present or returns error, execute safely via service logic
+    // Fallback: If RPC fails, rethrow error
     if (rpcErr) {
-      // Validate target position capacity if specified
-      let finalJobTitleId = parsed.newJobTitleId;
-      let finalBranchId = parsed.newBranchId || null;
-      let finalDeptId = parsed.newDepartmentId || null;
-      let finalUnitId = parsed.newUnitId || null;
-
-      if (parsed.newPositionId) {
-        const occ = await this.getPositionOccupancy(parsed.newPositionId, new Date(transitionTimeStr));
-        if (occ.isFull) {
-          throw new Error(`Target position has reached maximum headcount limit (${occ.occupiedCount} / ${occ.headcountLimit} occupied)`);
-        }
-        if (occ.status === 'frozen' || occ.status === 'archived') {
-          throw new Error(`Target position is ${occ.status} and cannot accept new assignments`);
-        }
-
-        const { data: pos } = await admin
-          .from('organization_positions')
-          .select('job_title_id, branch_id, department_id, unit_id')
-          .eq('id', parsed.newPositionId)
-          .single();
-
-        if (pos) {
-          finalJobTitleId = pos.job_title_id;
-          finalBranchId = pos.branch_id;
-          finalDeptId = pos.department_id;
-          finalUnitId = pos.unit_id;
-        }
-      }
-
-      if (!finalJobTitleId) {
-        throw new Error('Either a valid target position or job title must be specified for transition');
-      }
-
-      // Step 1: End current primary
-      await this.endStaffAssignment({
-        id: current.id,
-        endedAt: transitionTimeStr,
-        reason: parsed.reason || `Transitioned via ${parsed.transitionType}`,
-      });
-
-      // Step 2: Create new primary
-      const newAssignment = await this.createStaffAssignment(
-        {
-          businessId: parsed.businessId,
-          businessMembershipId: current.business_membership_id,
-          branchId: finalBranchId,
-          departmentId: finalDeptId,
-          unitId: finalUnitId,
-          positionId: parsed.newPositionId || null,
-          jobTitleId: finalJobTitleId,
-          assignmentType: 'primary',
-          isPrimary: true,
-          status: 'active',
-          startsAt: transitionTimeStr,
-          reportsToAssignmentId: parsed.newReportsToId || null,
-          reason: parsed.reason || `Started via ${parsed.transitionType}`,
-        },
-        actorId
-      );
-
-      return {
-        success: true,
-        endedAssignmentId: current.id,
-        newAssignmentId: newAssignment.id,
-        transitionType: parsed.transitionType,
-        transitionTime: transitionTimeStr,
-      };
+      throw new Error(`Transition failed: ${rpcErr.message}`);
     }
 
     return rpcRes;
   }
 
   // ==========================================
-  // 9. Reporting Engine (Direct Reports, Chain, Tree, History)
+  // 13. Reporting Manager Engine & Trees
   // ==========================================
-
-  static async getDirectReports(assignmentId: string, options?: { effectiveOnly?: boolean }) {
-    const admin = createAdminClient();
-    let query = admin
-      .from('staff_assignments')
-      .select(`
-        *,
-        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        position:organization_positions(id, position_code, name_override, headcount_limit),
-        department:organization_departments(id, name, code),
-        unit:organization_units(id, name, code),
-        branch:branches(id, name, code),
-        membership:business_memberships(id, user_id, role, membership_status)
-      `)
-      .eq('reports_to_assignment_id', assignmentId)
-      .order('starts_at', { ascending: true });
-
-    if (options?.effectiveOnly) {
-      const nowIso = new Date().toISOString();
-      query = query
-        .eq('status', 'active')
-        .lte('starts_at', nowIso)
-        .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
-        .is('archived_at', null);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(`Failed to fetch direct reports: ${error.message}`);
-    return data || [];
-  }
-
-  static async getReportingChain(assignmentId: string, maxDepth: number = 50) {
-    const chain: Record<string, unknown>[] = [];
-    const visited = new Set<string>();
-    let currentId: string | null = assignmentId;
-    let depth = 0;
-
-    while (currentId && depth < maxDepth) {
-      if (visited.has(currentId)) {
-        break; // Cycle safe
-      }
-      visited.add(currentId);
-
-      const assignment = await this.getStaffAssignmentById(currentId);
-      if (!assignment) break;
-
-      chain.push(assignment);
-      currentId = (assignment.reports_to_assignment_id as string) || null;
-      depth++;
-    }
-
-    return chain;
-  }
-
-  static async getReportingTree(rootAssignmentId?: string, businessId?: string): Promise<ReportingTreeNode[]> {
-    const admin = createAdminClient();
-
-    // If rootAssignmentId specified, build tree starting from that node
-    if (rootAssignmentId) {
-      const root = await this.getStaffAssignmentById(rootAssignmentId);
-      if (!root) return [];
-
-      const buildSubtree = async (nodeAssignment: Record<string, unknown>): Promise<ReportingTreeNode> => {
-        const directReports = await this.getDirectReports(nodeAssignment.id as string, { effectiveOnly: true });
-        const childrenNodes: ReportingTreeNode[] = [];
-        for (const child of directReports) {
-          childrenNodes.push(await buildSubtree(child));
-        }
-        return {
-          assignment: nodeAssignment,
-          directReports: childrenNodes,
-        };
-      };
-
-      const tree = await buildSubtree(root);
-      return [tree];
-    }
-
-    // Otherwise, fetch all root active assignments for business where reports_to_assignment_id IS NULL
-    if (!businessId) {
-      throw new Error('businessId is required when rootAssignmentId is omitted');
-    }
-
-    const { data: roots, error } = await admin
-      .from('staff_assignments')
-      .select(`
-        *,
-        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        position:organization_positions(id, position_code, name_override, headcount_limit),
-        department:organization_departments(id, name, code),
-        unit:organization_units(id, name, code),
-        branch:branches(id, name, code),
-        membership:business_memberships(id, user_id, role, membership_status)
-      `)
-      .eq('business_id', businessId)
-      .eq('status', 'active')
-      .is('reports_to_assignment_id', null)
-      .is('archived_at', null)
-      .order('starts_at', { ascending: true });
-
-    if (error) throw new Error(`Failed to fetch root assignments: ${error.message}`);
-
-    const buildSubtree = async (nodeAssignment: Record<string, unknown>): Promise<ReportingTreeNode> => {
-      const directReports = await this.getDirectReports(nodeAssignment.id as string, { effectiveOnly: true });
-      const childrenNodes: ReportingTreeNode[] = [];
-      for (const child of directReports) {
-        childrenNodes.push(await buildSubtree(child));
-      }
-      return {
-        assignment: nodeAssignment,
-        directReports: childrenNodes,
-      };
-    };
-
-    const treeList: ReportingTreeNode[] = [];
-    for (const root of roots || []) {
-      treeList.push(await buildSubtree(root));
-    }
-    return treeList;
-  }
 
   static async setReportingManager(input: SetReportingManagerInput, actorId?: string) {
     const parsed = setReportingManagerSchema.parse(input);
     const admin = createAdminClient();
 
-    // Validate assignment
+    if (parsed.reportsToAssignmentId && parsed.assignmentId === parsed.reportsToAssignmentId) {
+      throw new Error('Self-reporting is not allowed: Assignment cannot report to itself');
+    }
+
     const { data: assign, error: assignErr } = await admin
       .from('staff_assignments')
       .select('id, business_id, reports_to_assignment_id, status')
       .eq('id', parsed.assignmentId)
       .eq('business_id', parsed.businessId)
-      .maybeSingle();
+      .single();
 
     if (assignErr || !assign) {
-      throw new Error(`Staff assignment ${parsed.assignmentId} not found in business ${parsed.businessId}`);
+      throw new Error(`Staff assignment ${parsed.assignmentId} not found`);
     }
 
     const previousManagerId = assign.reports_to_assignment_id;
-    const newManagerId = parsed.reportsToAssignmentId || null;
 
-    if (previousManagerId === newManagerId) {
-      return { success: true, unchanged: true };
+    if (parsed.reportsToAssignmentId) {
+      const { data: mgr, error: mgrErr } = await admin
+        .from('staff_assignments')
+        .select('id, business_id, status, reports_to_assignment_id')
+        .eq('id', parsed.reportsToAssignmentId)
+        .maybeSingle();
+
+      if (mgrErr || !mgr) {
+        throw new Error(`Reporting manager assignment ${parsed.reportsToAssignmentId} not found`);
+      }
+      if (mgr.business_id !== parsed.businessId) {
+        throw new Error('Reporting manager assignment belongs to a different business');
+      }
+      if (mgr.status === 'ended' || mgr.status === 'cancelled') {
+        throw new Error(`Cannot assign manager with status ${mgr.status}: Manager assignment is ended or cancelled`);
+      }
+
+      // Check circular reporting cycle in ancestry
+      let curAncestorId: string | null = mgr.reports_to_assignment_id;
+      const visited = new Set<string>([parsed.assignmentId, mgr.id]);
+      while (curAncestorId) {
+        if (curAncestorId === parsed.assignmentId) {
+          throw new Error(`Circular reporting cycle detected in ancestry chain: assignment ${parsed.assignmentId} already exists in ancestry`);
+        }
+        if (visited.has(curAncestorId)) break;
+        visited.add(curAncestorId);
+        const { data: nextAncestor } = await admin
+          .from('staff_assignments')
+          .select('reports_to_assignment_id')
+          .eq('id', curAncestorId)
+          .maybeSingle();
+        curAncestorId = nextAncestor?.reports_to_assignment_id || null;
+      }
     }
 
-    // Try executing via atomic RPC
+    // Try RPC first, fallback to direct update
     const { data: rpcRes, error: rpcErr } = await admin.rpc('set_staff_reporting_manager_atomic', {
       p_business_id: parsed.businessId,
       p_assignment_id: parsed.assignmentId,
-      p_new_reports_to_id: newManagerId,
+      p_reports_to_id: parsed.reportsToAssignmentId || null,
       p_reason: parsed.reason || null,
       p_actor_id: actorId || null,
     });
 
-    if (!rpcErr && rpcRes) {
+    if (!rpcErr && rpcRes && rpcRes.success) {
       return rpcRes;
     }
 
     // Fallback: update directly
-    const { data, error } = await admin
+    const { error: updateErr } = await admin
       .from('staff_assignments')
       .update({
-        reports_to_assignment_id: newManagerId,
+        reports_to_assignment_id: parsed.reportsToAssignmentId || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', parsed.assignmentId)
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to update reporting manager: ${error.message}`);
+    if (updateErr) throw new Error(`Failed to update reporting manager: ${updateErr.message}`);
 
-    // Insert history record
+    // Insert history
     await admin.from('organization_reporting_history').insert({
       business_id: parsed.businessId,
       assignment_id: parsed.assignmentId,
       previous_manager_assignment_id: previousManagerId,
-      new_manager_assignment_id: newManagerId,
+      new_manager_assignment_id: parsed.reportsToAssignmentId || null,
       reason: parsed.reason || null,
       changed_by: actorId || null,
       changed_at: new Date().toISOString(),
@@ -1465,9 +1798,9 @@ export class OrganizationService {
 
     return {
       success: true,
-      assignmentId: data.id,
-      previousManagerAssignmentId: previousManagerId,
-      newManagerAssignmentId: newManagerId,
+      assignment_id: parsed.assignmentId,
+      previous_manager_assignment_id: previousManagerId,
+      new_manager_assignment_id: parsed.reportsToAssignmentId || null,
     };
   }
 
@@ -1478,13 +1811,11 @@ export class OrganizationService {
       .select(`
         *,
         previous_manager:staff_assignments!previous_manager_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name, code),
+          id, job_title:organization_job_titles(id, name),
           membership:business_memberships(id, user_id, role)
         ),
         new_manager:staff_assignments!new_manager_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name, code),
+          id, job_title:organization_job_titles(id, name),
           membership:business_memberships(id, user_id, role)
         )
       `)
@@ -1495,8 +1826,496 @@ export class OrganizationService {
     return data || [];
   }
 
+  static async getStaffAssignmentById(id: string) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override, headcount_limit),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        branch:branches(id, name, code),
+        reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        ),
+        acting_for:staff_assignments!acting_for_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        ),
+        source_assignment:staff_assignments!source_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        )
+      `)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to fetch staff assignment: ${error.message}`);
+    return data;
+  }
+
+  static isAssignmentEffective(assignment: { status: string; starts_at: string; ends_at?: string | null }, referenceDate: Date = new Date()): boolean {
+    if (assignment.status !== 'active') return false;
+    const refTime = referenceDate.getTime();
+    const startTime = new Date(assignment.starts_at).getTime();
+    if (startTime > refTime) return false;
+    if (assignment.ends_at) {
+      const endTime = new Date(assignment.ends_at).getTime();
+      if (endTime <= refTime) return false;
+    }
+    return true;
+  }
+
+  static async getDirectReports(assignmentId: string, options?: { effectiveOnly?: boolean; referenceDate?: Date }) {
+    const admin = createAdminClient();
+    const refDate = options?.referenceDate || new Date();
+
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        membership:business_memberships(id, user_id, role, membership_status),
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override),
+        branch:branches(id, name, code),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code)
+      `)
+      .eq('reports_to_assignment_id', assignmentId)
+      .eq('status', 'active')
+      .is('archived_at', null);
+
+    if (error) throw new Error(`Failed to fetch direct reports: ${error.message}`);
+
+    if (options?.effectiveOnly) {
+      return (data || []).filter((r) => this.isAssignmentEffective(r, refDate));
+    }
+
+    return data || [];
+  }
+
+  static async getReportingChain(assignmentId: string, maxDepth = 50) {
+    const chain: Record<string, unknown>[] = [];
+    const visited = new Set<string>();
+
+    let currentId: string | null = assignmentId;
+    let depth = 0;
+
+    while (currentId && depth < maxDepth) {
+      if (visited.has(currentId)) {
+        break; // Cycle detected, prevent infinite loop
+      }
+      visited.add(currentId);
+
+      const node = await this.getStaffAssignmentById(currentId);
+      if (!node) break;
+
+      chain.push(node);
+      currentId = (node.reports_to_assignment_id as string) || null;
+      depth++;
+    }
+
+    return chain;
+  }
+
+  static async getReportingTree(rootAssignmentId?: string, businessId?: string): Promise<ReportingTreeNode[]> {
+    const admin = createAdminClient();
+
+    if (!rootAssignmentId && !businessId) {
+      throw new Error('Either rootAssignmentId or businessId must be specified to build reporting tree');
+    }
+
+    let rootAssignments: Record<string, unknown>[] = [];
+
+    if (rootAssignmentId) {
+      const root = await this.getStaffAssignmentById(rootAssignmentId);
+      if (root) rootAssignments = [root];
+    } else if (businessId) {
+      const { data } = await admin
+        .from('staff_assignments')
+        .select(`
+          *,
+          membership:business_memberships(id, user_id, role),
+          job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank))
+        `)
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .is('reports_to_assignment_id', null)
+        .is('archived_at', null);
+
+      rootAssignments = data || [];
+    }
+
+    const buildSubtree = async (node: Record<string, unknown>, visited: Set<string>): Promise<ReportingTreeNode> => {
+      const nodeId = node.id as string;
+      if (visited.has(nodeId)) {
+        return { assignment: node, directReports: [] };
+      }
+      visited.add(nodeId);
+
+      const directSubordinates = await this.getDirectReports(nodeId, { effectiveOnly: true });
+      const children: ReportingTreeNode[] = [];
+
+      for (const sub of directSubordinates) {
+        if (!visited.has(sub.id as string)) {
+          const childTree = await buildSubtree(sub, new Set(visited));
+          children.push(childTree);
+        }
+      }
+
+      return {
+        assignment: node,
+        directReports: children,
+      };
+    };
+
+    const trees: ReportingTreeNode[] = [];
+    for (const root of rootAssignments) {
+      const tree = await buildSubtree(root, new Set());
+      trees.push(tree);
+    }
+
+    return trees;
+  }
+
   // ==========================================
-  // 10. Member Assignment History & Organization Profile
+  // 14. Effective Reporting Resolution Engine
+  // ==========================================
+
+  static async resolveEffectiveManager(
+    assignmentId: string,
+    referenceDate: Date = new Date()
+  ): Promise<{
+    substantiveManager: Record<string, unknown> | null;
+    effectiveManager: Record<string, unknown> | null;
+    isActingCoverage: boolean;
+  }> {
+    const admin = createAdminClient();
+    const assignment = await this.getStaffAssignmentById(assignmentId);
+    if (!assignment || !assignment.reports_to_assignment_id) {
+      return { substantiveManager: null, effectiveManager: null, isActingCoverage: false };
+    }
+
+    const substantiveManagerId = assignment.reports_to_assignment_id as string;
+    const substantiveManager = await this.getStaffAssignmentById(substantiveManagerId);
+    if (!substantiveManager) {
+      return { substantiveManager: null, effectiveManager: null, isActingCoverage: false };
+    }
+
+    const refIso = referenceDate.toISOString();
+
+    // Check if there is an active acting assignment covering this substantive manager
+    const { data: actingCoverage } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        membership:business_memberships(id, user_id, role)
+      `)
+      .eq('acting_for_assignment_id', substantiveManagerId)
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null)
+      .order('starts_at', { ascending: false })
+      .limit(1);
+
+    if (actingCoverage && actingCoverage.length > 0) {
+      return {
+        substantiveManager,
+        effectiveManager: actingCoverage[0],
+        isActingCoverage: true,
+      };
+    }
+
+    return {
+      substantiveManager,
+      effectiveManager: substantiveManager,
+      isActingCoverage: false,
+    };
+  }
+
+  static async getEffectiveDirectReports(
+    assignmentId: string,
+    referenceDate: Date = new Date()
+  ): Promise<Record<string, unknown>[]> {
+    const admin = createAdminClient();
+    const assignment = await this.getStaffAssignmentById(assignmentId);
+    if (!assignment) return [];
+
+    const refIso = referenceDate.toISOString();
+
+    // Determine target substantive assignments whose subordinates effectively report to this assignment
+    let targetSubstantiveId = assignment.id;
+    if (assignment.assignment_type === 'acting' && assignment.acting_for_assignment_id) {
+      targetSubstantiveId = assignment.acting_for_assignment_id;
+    }
+
+    // Direct reports who point to targetSubstantiveId
+    const { data: directReports, error } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        membership:business_memberships(id, user_id, role, membership_status),
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override),
+        branch:branches(id, name, code),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code)
+      `)
+      .eq('reports_to_assignment_id', targetSubstantiveId)
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    if (error) throw new Error(`Failed to fetch effective direct reports: ${error.message}`);
+    return directReports || [];
+  }
+
+  static async getEffectiveReportingChain(
+    assignmentId: string,
+    referenceDate: Date = new Date(),
+    maxDepth = 50
+  ): Promise<Record<string, unknown>[]> {
+    const chain: Record<string, unknown>[] = [];
+    const visited = new Set<string>();
+
+    let currentId: string | null = assignmentId;
+    let depth = 0;
+
+    while (currentId && depth < maxDepth) {
+      if (visited.has(currentId)) {
+        break; // Cycle detected
+      }
+      visited.add(currentId);
+
+      const node = await this.getStaffAssignmentById(currentId);
+      if (!node) break;
+
+      chain.push(node);
+
+      // Resolve effective manager for current node
+      const { effectiveManager } = await this.resolveEffectiveManager(currentId, referenceDate);
+      if (!effectiveManager) {
+        break;
+      }
+
+      currentId = (effectiveManager.id as string) || null;
+      depth++;
+    }
+
+    return chain;
+  }
+
+  static async getEffectiveReportingTree(
+    rootAssignmentId?: string,
+    businessId?: string,
+    referenceDate: Date = new Date()
+  ): Promise<EffectiveReportingTreeNode[]> {
+    const admin = createAdminClient();
+
+    if (!rootAssignmentId && !businessId) {
+      throw new Error('Either rootAssignmentId or businessId must be specified to build effective reporting tree');
+    }
+
+    let rootAssignments: Record<string, unknown>[] = [];
+
+    if (rootAssignmentId) {
+      const root = await this.getStaffAssignmentById(rootAssignmentId);
+      if (root) rootAssignments = [root];
+    } else if (businessId) {
+      const { data } = await admin
+        .from('staff_assignments')
+        .select(`
+          *,
+          membership:business_memberships(id, user_id, role),
+          job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank))
+        `)
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .is('reports_to_assignment_id', null)
+        .is('archived_at', null);
+
+      rootAssignments = data || [];
+    }
+
+    const buildEffectiveSubtree = async (
+      node: Record<string, unknown>,
+      visited: Set<string>
+    ): Promise<EffectiveReportingTreeNode> => {
+      const nodeId = node.id as string;
+      if (visited.has(nodeId)) {
+        return { assignment: node, directReports: [] };
+      }
+      visited.add(nodeId);
+
+      const effectiveSubs = await this.getEffectiveDirectReports(nodeId, referenceDate);
+      const children: EffectiveReportingTreeNode[] = [];
+
+      for (const sub of effectiveSubs) {
+        if (!visited.has(sub.id as string)) {
+          const childTree = await buildEffectiveSubtree(sub, new Set(visited));
+          children.push(childTree);
+        }
+      }
+
+      return {
+        assignment: node,
+        isActingCoverage: node.assignment_type === 'acting',
+        substantiveManagerId: (node.reports_to_assignment_id as string) || null,
+        directReports: children,
+      };
+    };
+
+    const trees: EffectiveReportingTreeNode[] = [];
+    for (const root of rootAssignments) {
+      const tree = await buildEffectiveSubtree(root, new Set());
+      trees.push(tree);
+    }
+
+    return trees;
+  }
+
+  // ==========================================
+  // 15. Lifecycle Reconciliation Engine
+  // ==========================================
+
+  static async reconcileAssignmentLifecycle(
+    businessId?: string,
+    referenceTime: Date = new Date()
+  ) {
+    const admin = createAdminClient();
+    const refIso = referenceTime.toISOString();
+
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('reconcile_temporary_staff_assignments', {
+      p_business_id: businessId || null,
+      p_reference_time: refIso,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.success) {
+      return rpcRes;
+    }
+
+    // Fallback: direct reconciliation
+    let activatedCount = 0;
+    let endedCount = 0;
+
+    // 1. Activate scheduled assignments
+    let scheduledQuery = admin
+      .from('staff_assignments')
+      .select('id, business_id, assignment_type')
+      .eq('status', 'scheduled')
+      .lte('starts_at', refIso);
+
+    if (businessId) scheduledQuery = scheduledQuery.eq('business_id', businessId);
+    const { data: scheduledList } = await scheduledQuery;
+
+    for (const item of scheduledList || []) {
+      await admin.from('staff_assignments').update({ status: 'active', updated_at: new Date().toISOString() }).eq('id', item.id);
+      await this.logAssignmentEvent({
+        businessId: item.business_id,
+        assignmentId: item.id,
+        eventType: 'activated',
+        previousStatus: 'scheduled',
+        newStatus: 'active',
+        reason: 'Activated by lifecycle reconciliation',
+      });
+      activatedCount++;
+    }
+
+    // 2. End expired temporary/acting/secondment assignments
+    let expiredQuery = admin
+      .from('staff_assignments')
+      .select('id, business_id, assignment_type')
+      .eq('status', 'active')
+      .not('ends_at', 'is', null)
+      .lte('ends_at', refIso)
+      .in('assignment_type', ['acting', 'temporary', 'secondment']);
+
+    if (businessId) expiredQuery = expiredQuery.eq('business_id', businessId);
+    const { data: expiredList } = await expiredQuery;
+
+    for (const item of expiredList || []) {
+      await admin.from('staff_assignments').update({ status: 'ended', updated_at: new Date().toISOString() }).eq('id', item.id);
+      await this.logAssignmentEvent({
+        businessId: item.business_id,
+        assignmentId: item.id,
+        eventType: item.assignment_type === 'acting' ? 'acting_ended' : (item.assignment_type === 'secondment' ? 'secondment_ended' : 'ended'),
+        previousStatus: 'active',
+        newStatus: 'ended',
+        reason: 'Ended by lifecycle reconciliation due to expiration',
+      });
+      endedCount++;
+    }
+
+    return {
+      success: true,
+      reference_time: refIso,
+      activated_count: activatedCount,
+      ended_count: endedCount,
+    };
+  }
+
+  // ==========================================
+  // 16. Assignment Event History Logging
+  // ==========================================
+
+  static async logAssignmentEvent(params: {
+    businessId: string;
+    assignmentId: string;
+    eventType: string;
+    previousStatus?: string | null;
+    newStatus?: string | null;
+    relatedAssignmentId?: string | null;
+    metadata?: Record<string, unknown> | null;
+    reason?: string | null;
+    changedBy?: string | null;
+  }) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('organization_assignment_history')
+      .insert({
+        business_id: params.businessId,
+        assignment_id: params.assignmentId,
+        event_type: params.eventType,
+        previous_status: params.previousStatus || null,
+        new_status: params.newStatus || null,
+        related_assignment_id: params.relatedAssignmentId || null,
+        metadata: params.metadata || null,
+        reason: params.reason || null,
+        changed_by: params.changedBy || null,
+        changed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.warn(`[OrganizationService] Warning: Failed to log assignment event: ${error.message}`);
+    }
+    return data;
+  }
+
+  static async getAssignmentEventHistory(assignmentId: string) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('organization_assignment_history')
+      .select('*')
+      .eq('assignment_id', assignmentId)
+      .order('changed_at', { ascending: false });
+
+    if (error) throw new Error(`Failed to fetch assignment event history: ${error.message}`);
+    return data || [];
+  }
+
+  // ==========================================
+  // 17. Member Assignment History & Profiles
   // ==========================================
 
   static async getMemberAssignmentHistory(membershipId: string) {
@@ -1511,6 +2330,16 @@ export class OrganizationService {
         unit:organization_units(id, name, code),
         branch:branches(id, name, code),
         reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        ),
+        acting_for:staff_assignments!acting_for_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        ),
+        source_assignment:staff_assignments!source_assignment_id(
           id,
           job_title:organization_job_titles(id, name, code),
           membership:business_memberships(id, user_id, role)
@@ -1543,7 +2372,10 @@ export class OrganizationService {
     const effectiveAssignments = allAssignments.filter((a) => this.isAssignmentEffective(a as { status: string; starts_at: string; ends_at?: string | null }, now));
 
     const primaryAssignment = activeAssignments.find((a) => a.is_primary) || null;
-    const additionalAssignments = activeAssignments.filter((a) => !a.is_primary);
+    const additionalAssignments = activeAssignments.filter((a) => !a.is_primary && a.assignment_type !== 'acting' && a.assignment_type !== 'secondment' && a.assignment_type !== 'temporary');
+    const actingAssignments = activeAssignments.filter((a) => a.assignment_type === 'acting');
+    const secondmentAssignments = activeAssignments.filter((a) => a.assignment_type === 'secondment');
+    const temporaryAssignments = activeAssignments.filter((a) => a.assignment_type === 'temporary');
 
     // 3. Reporting manager and direct reports for primary assignment
     let reportingManager = null;
@@ -1564,9 +2396,10 @@ export class OrganizationService {
     const accessibleBranchIds = (branchAccessList || []).map((ba) => ba.branch_id);
     let organizationBranchAccessMismatch = false;
 
-    if (primaryAssignment && primaryAssignment.branch_id) {
-      if (!accessibleBranchIds.includes(primaryAssignment.branch_id as string)) {
+    for (const assign of effectiveAssignments) {
+      if (assign.branch_id && !accessibleBranchIds.includes(assign.branch_id as string)) {
         organizationBranchAccessMismatch = true;
+        break;
       }
     }
 
@@ -1574,6 +2407,9 @@ export class OrganizationService {
       membership: member,
       primaryAssignment,
       additionalAssignments,
+      actingAssignments,
+      secondmentAssignments,
+      temporaryAssignments,
       effectiveAssignments,
       reportingManager,
       directReports,
@@ -1584,7 +2420,7 @@ export class OrganizationService {
   }
 
   // ==========================================
-  // 11. Organization Integrity Diagnostics
+  // 18. Organization Integrity Diagnostics
   // ==========================================
 
   static async getOrganizationIntegrityIssues(businessId: string) {
@@ -1614,6 +2450,7 @@ export class OrganizationService {
         business_membership_id,
         branch_id,
         position_id,
+        assignment_type,
         reports_to_assignment_id,
         status,
         is_primary,
@@ -1704,7 +2541,7 @@ export class OrganizationService {
       }
     }
 
-    // 3. Check position occupancy
+    // 3. Check position occupancy (substantive occupants only)
     const { data: positions } = await admin
       .from('organization_positions')
       .select('id, headcount_limit, position_code, name_override')
@@ -1713,7 +2550,7 @@ export class OrganizationService {
 
     const posOccupantCount = new Map<string, number>();
     for (const assign of assignments || []) {
-      if (assign.position_id) {
+      if (assign.position_id && assign.assignment_type !== 'acting') {
         posOccupantCount.set(assign.position_id, (posOccupantCount.get(assign.position_id) || 0) + 1);
       }
     }

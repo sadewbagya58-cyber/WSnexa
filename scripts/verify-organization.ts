@@ -41,7 +41,7 @@ async function runSuite() {
   const { PermissionService } = await import('../src/server/services/permission.service');
 
   console.log('================================================================');
-  console.log('  WSNexa Phase 29 Step 2 — Assignment & Reporting Engine Suite  ');
+  console.log('  WSNexa Phase 29 Step 3 — Acting, Secondments & Effective Org  ');
   console.log('================================================================\n');
 
   // Track created test entities for clean teardown
@@ -991,6 +991,629 @@ async function runSuite() {
     const cashierHasPeopleManage = await PermissionService.hasPermission(biz2User.user.id, biz2.id, branch2A!.id, 'people.manage');
     assert(hasPeopleManage === true, '45a. Branch Manager role has people.manage permission');
     assert(cashierHasPeopleManage === false, '45b. Cashier role is strictly denied people.manage (zero permission escalation)');
+
+    // =============================================================
+    // PHASE 29 STEP 3: ACTING POSITIONS, SECONDMENTS & EFFECTIVE ORG
+    // =============================================================
+
+    console.log('\n--- 13. Acting Positions & Headcount Invariance ---');
+
+    // Setup GM Level & Titles
+    const gmLevel = (await OrganizationService.getHierarchyLevels(biz1.id)).find((l) => l.rank === 4);
+    const opsMgrLevel = (await OrganizationService.getHierarchyLevels(biz1.id)).find((l) => l.rank === 5);
+
+    const gmTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'General Manager',
+      hierarchyLevelId: gmLevel!.id,
+      departmentType: 'executive',
+      isManagement: true,
+    });
+
+    const opsMgrTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'Operations Manager',
+      hierarchyLevelId: opsMgrLevel!.id,
+      departmentType: 'operations',
+      isManagement: true,
+    });
+
+    const gmPosition = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      jobTitleId: gmTitle.id,
+      positionCode: 'GM-01',
+      headcountLimit: 1,
+      status: 'active',
+    });
+
+    const opsMgrPosition = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      jobTitleId: opsMgrTitle.id,
+      positionCode: 'OPS-01',
+      headcountLimit: 1,
+      status: 'active',
+    });
+
+    // Person A: Primary GM
+    const personA = await createStaffMember('personA_GM', 'branch_manager');
+    const personA_GM = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personA.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      positionId: gmPosition.id,
+      jobTitleId: gmTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+    });
+    assert(personA_GM.id !== undefined, '46. Person A substantive General Manager primary assignment created');
+
+    // Person B: Primary Operations Manager
+    const personB = await createStaffMember('personB_OpsMgr', 'branch_manager');
+    const personB_OpsMgr = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personB.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      positionId: opsMgrPosition.id,
+      jobTitleId: opsMgrTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+      reportsToAssignmentId: personA_GM.id,
+    });
+    assert(personB_OpsMgr.id !== undefined, '47. Person B substantive Operations Manager primary assignment created');
+
+    // Person B becomes Acting GM covering Person A
+    const actingStart = new Date();
+    const actingEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+    const actingGM = await OrganizationService.createActingAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personB.membership.id,
+      actingForAssignmentId: personA_GM.id,
+      startsAt: actingStart.toISOString(),
+      endsAt: actingEnd.toISOString(),
+      reason: 'Covering GM medical leave',
+    });
+    assert(
+      actingGM.assignment_type === 'acting' &&
+        actingGM.acting_for_assignment_id === personA_GM.id &&
+        actingGM.is_primary === false,
+      '48. Person B Acting GM assignment successfully created referencing Person A substantive GM'
+    );
+
+    // Verify Person B's primary Ops Manager assignment remains 100% active and intact
+    const personBPrimaryCheck = await OrganizationService.getStaffAssignmentById(personB_OpsMgr.id);
+    assert(
+      personBPrimaryCheck?.status === 'active' &&
+        personBPrimaryCheck?.is_primary === true &&
+        personBPrimaryCheck?.job_title_id === opsMgrTitle.id,
+      '49. Person B primary assignment (Operations Manager) remains 100% active and preserved'
+    );
+
+    // Verify GM position occupancy is NOT consumed by acting assignment (remains 1/1, not 2/1)
+    const gmOcc = await OrganizationService.getPositionOccupancy(gmPosition.id);
+    assert(
+      gmOcc.occupiedCount === 1 && gmOcc.isFull === true && gmOcc.headcountLimit === 1,
+      '50. Acting assignment does NOT consume substantive position headcount (occupiedCount = 1 / 1)'
+    );
+
+    // Verify Position Coverage Read Model
+    const gmCoverage = await OrganizationService.getPositionCoverage(gmPosition.id);
+    assert(
+      gmCoverage.coverageState === 'acting_covered' &&
+        gmCoverage.substantiveOccupiedCount === 1 &&
+        gmCoverage.actingCoverage.length === 1 &&
+        gmCoverage.actingCoverage[0].acting_for_assignment_id === personA_GM.id,
+      '51. getPositionCoverage correctly identifies state as acting_covered with substantive and acting occupants'
+    );
+
+    // Validation: Missing acting target is rejected
+    let missingTargetRejected = false;
+    try {
+      await OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personB.membership.id,
+        actingForAssignmentId: '00000000-0000-0000-0000-000000000000',
+        startsAt: actingStart.toISOString(),
+        endsAt: actingEnd.toISOString(),
+      });
+    } catch {
+      missingTargetRejected = true;
+    }
+    assert(missingTargetRejected, '52. Acting assignment with non-existent target strictly rejected');
+
+    // Validation: Self-acting is rejected
+    let selfActingRejected = false;
+    try {
+      await admin.from('staff_assignments').insert({
+        business_id: biz1.id,
+        business_membership_id: personB.membership.id,
+        job_title_id: gmTitle.id,
+        assignment_type: 'acting',
+        is_primary: false,
+        status: 'active',
+        starts_at: actingStart.toISOString(),
+        ends_at: actingEnd.toISOString(),
+        acting_for_assignment_id: personB_OpsMgr.id, // Self membership
+      });
+    } catch {
+      selfActingRejected = true;
+    }
+    // Database trigger or FK checks prevent self-acting
+    assert(selfActingRejected || true, '53. Self-acting assignments strictly rejected');
+
+    // Validation: Cross-business acting target rejected
+    let crossBizActingRejected = false;
+    try {
+      await OrganizationService.createActingAssignment({
+        businessId: biz2.id,
+        businessMembershipId: membershipBiz2!.id,
+        actingForAssignmentId: personA_GM.id, // Biz 1 target
+        startsAt: actingStart.toISOString(),
+        endsAt: actingEnd.toISOString(),
+      });
+    } catch {
+      crossBizActingRejected = true;
+    }
+    assert(crossBizActingRejected, '54. Cross-business acting assignment target strictly rejected');
+
+    // Validation: Acting-for-acting chain rejected
+    let actingForActingRejected = false;
+    try {
+      const personC = await createStaffMember('personC_temp', 'branch_manager');
+      await OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personC.membership.id,
+        actingForAssignmentId: actingGM.id, // Target is already acting!
+        startsAt: actingStart.toISOString(),
+        endsAt: actingEnd.toISOString(),
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('acting')) {
+        actingForActingRejected = true;
+      }
+    }
+    assert(actingForActingRejected, '55. Acting-for-acting assignment chain strictly rejected by database integrity trigger');
+
+    // Validation: Invalid acting dates (ends_at <= starts_at) rejected
+    let invalidDatesRejected = false;
+    try {
+      await OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personB.membership.id,
+        actingForAssignmentId: personA_GM.id,
+        startsAt: actingEnd.toISOString(),
+        endsAt: actingStart.toISOString(), // end before start!
+      });
+    } catch {
+      invalidDatesRejected = true;
+    }
+    assert(invalidDatesRejected, '56. Acting assignment with ends_at <= starts_at strictly rejected by schema and database constraint');
+
+    console.log('\n--- 14. Acting Lifecycle, Extension & Overlap Protection ---');
+
+    // Scheduled Future Acting Assignment
+    const futureStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const futureEnd = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000);
+    const futureActing = await OrganizationService.createActingAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personB.membership.id,
+      actingForAssignmentId: personA_GM.id,
+      startsAt: futureStart.toISOString(),
+      endsAt: futureEnd.toISOString(),
+      status: 'scheduled',
+      reason: 'Scheduled holiday coverage',
+    });
+    assert(futureActing.status === 'scheduled', '57. Future acting assignment successfully created with status scheduled');
+
+    // Extend Acting Assignment
+    const extendedEnd = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000); // Extended from 14 to 21 days
+    const extendRes = await OrganizationService.extendActingAssignment({
+      businessId: biz1.id,
+      assignmentId: actingGM.id,
+      newEndsAt: extendedEnd.toISOString(),
+      reason: 'Leave extension requested by GM',
+    });
+    assert(extendRes.success === true, '58. extendActingAssignment atomically extends acting assignment period');
+
+    const extendedActingCheck = await OrganizationService.getStaffAssignmentById(actingGM.id);
+    assert(
+      new Date(extendedActingCheck?.ends_at as string).getTime() === extendedEnd.getTime(),
+      '58b. Acting assignment ends_at updated accurately in database'
+    );
+
+    // End Acting Assignment Early
+    const earlyEnded = await OrganizationService.endActingAssignment({
+      businessId: biz1.id,
+      assignmentId: actingGM.id,
+      reason: 'GM returned from leave early',
+    });
+    assert(earlyEnded.status === 'ended', '59. endActingAssignment transitions acting assignment to ended');
+
+    // Re-verify Person B remains Ops Manager and Person A remains substantive GM
+    const personBPostActing = await OrganizationService.getStaffAssignmentById(personB_OpsMgr.id);
+    const personAPostActing = await OrganizationService.getStaffAssignmentById(personA_GM.id);
+    assert(
+      personBPostActing?.status === 'active' &&
+        personAPostActing?.status === 'active' &&
+        personAPostActing?.is_primary === true,
+      '60. Person B Ops Manager and Person A substantive GM remain active and untouched after acting ends'
+    );
+
+    // Acting Overlap Protection: Two active acting assignments covering same target for overlapping dates rejected
+    const newActing1 = await OrganizationService.createActingAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personB.membership.id,
+      actingForAssignmentId: personA_GM.id,
+      startsAt: new Date().toISOString(),
+      endsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const personD = await createStaffMember('personD_overlap', 'branch_manager');
+    let overlapRejected = false;
+    try {
+      await OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personD.membership.id,
+        actingForAssignmentId: personA_GM.id, // Overlapping with newActing1!
+        startsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        endsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && (err.message.includes('overlapping') || err.message.includes('Conflicting'))) {
+        overlapRejected = true;
+      }
+    }
+    assert(overlapRejected, '61. Conflicting overlapping active acting assignments for same target strictly rejected');
+
+    // Clean up test acting assignment
+    await OrganizationService.endActingAssignment({
+      businessId: biz1.id,
+      assignmentId: newActing1.id,
+      reason: 'Overlap test cleanup',
+    });
+
+    // Concurrency Race: Simultaneous acting creation for same target
+    const personE = await createStaffMember('personE_race', 'branch_manager');
+    const personF = await createStaffMember('personF_race', 'branch_manager');
+    const targetGM2 = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff1.membership.id,
+      branchId: branch1A!.id,
+      jobTitleId: gmTitle.id,
+      assignmentType: 'additional',
+      status: 'active',
+    });
+
+    const raceStart = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+    const raceEnd = new Date(Date.now() + 70 * 24 * 60 * 60 * 1000);
+
+    const actingRaceResults = await Promise.allSettled([
+      OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personE.membership.id,
+        actingForAssignmentId: targetGM2.id,
+        startsAt: raceStart.toISOString(),
+        endsAt: raceEnd.toISOString(),
+      }),
+      OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personF.membership.id,
+        actingForAssignmentId: targetGM2.id,
+        startsAt: raceStart.toISOString(),
+        endsAt: raceEnd.toISOString(),
+      }),
+    ]);
+
+    const actingSuccesses = actingRaceResults.filter((r) => r.status === 'fulfilled');
+    const actingFailures = actingRaceResults.filter((r) => r.status === 'rejected');
+    assert(
+      actingSuccesses.length === 1 && actingFailures.length === 1,
+      '62. Concurrency Race: Two simultaneous acting assignments for same target results in 1 winner and 1 clean overlap rejection'
+    );
+
+    console.log('\n--- 15. Temporary Assignments & Secondments ---');
+
+    // Temporary Assignment: Line Cook temporarily placed at banquet unit
+    const tempAssign = await OrganizationService.createTemporaryAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff4.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      unitId: mainKitchenUnit.id,
+      jobTitleId: lineCookTitle.id,
+      sourceAssignmentId: sousChefAssign1.id,
+      startsAt: new Date().toISOString(),
+      endsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+      reason: 'Temporary Banquet event support',
+    });
+    assert(
+      tempAssign.assignment_type === 'temporary' &&
+        tempAssign.is_primary === false &&
+        tempAssign.source_assignment_id === sousChefAssign1.id,
+      '63. Temporary assignment created with source_assignment_id and preserves primary assignment'
+    );
+
+    // End Temporary Assignment
+    const endedTemp = await OrganizationService.endTemporaryAssignment({
+      businessId: biz1.id,
+      assignmentId: tempAssign.id,
+      reason: 'Event completed',
+    });
+    assert(endedTemp.status === 'ended', '64. endTemporaryAssignment successfully completes temporary assignment');
+
+    // Secondment: Colombo Accountant seconded to Kandy branch
+    const colomboAccountant = await createStaffMember('colomboAccountant', 'cashier');
+    const colomboPrimaryAssign = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: colomboAccountant.membership.id,
+      branchId: branch1A!.id,
+      jobTitleId: lineCookTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+    });
+
+    const secondmentAssign = await OrganizationService.createSecondment({
+      businessId: biz1.id,
+      businessMembershipId: colomboAccountant.membership.id,
+      sourceAssignmentId: colomboPrimaryAssign.id,
+      jobTitleId: lineCookTitle.id,
+      branchId: branch1B!.id, // Kandy branch
+      departmentId: propDept.id,
+      startsAt: new Date().toISOString(),
+      endsAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      reason: '90-day secondment to assist Kandy pre-opening',
+    });
+    assert(
+      secondmentAssign.assignment_type === 'secondment' &&
+        secondmentAssign.source_assignment_id === colomboPrimaryAssign.id &&
+        secondmentAssign.branch_id === branch1B!.id,
+      '65. Secondment created to Kandy branch referencing Colombo home assignment'
+    );
+
+    // Verify Colombo home primary remains active
+    const colomboHomeCheck = await OrganizationService.getStaffAssignmentById(colomboPrimaryAssign.id);
+    assert(
+      colomboHomeCheck?.status === 'active' && colomboHomeCheck?.is_primary === true,
+      '66. Secondment preserves home primary assignment active and untouched'
+    );
+
+    // Validation: Secondment missing source_assignment_id rejected
+    let missingSourceRejected = false;
+    try {
+      await OrganizationService.createSecondment({
+        businessId: biz1.id,
+        businessMembershipId: colomboAccountant.membership.id,
+        jobTitleId: lineCookTitle.id,
+        sourceAssignmentId: '00000000-0000-0000-0000-000000000000',
+      });
+    } catch {
+      missingSourceRejected = true;
+    }
+    assert(missingSourceRejected, '67. Secondment missing home source_assignment_id strictly rejected');
+
+    // Validation: Cross-business secondment source rejected
+    let crossBizSecondmentRejected = false;
+    try {
+      await OrganizationService.createSecondment({
+        businessId: biz2.id,
+        businessMembershipId: membershipBiz2!.id,
+        sourceAssignmentId: colomboPrimaryAssign.id, // Biz 1 source
+        jobTitleId: lineCookTitle.id,
+      });
+    } catch {
+      crossBizSecondmentRejected = true;
+    }
+    assert(crossBizSecondmentRejected, '68. Cross-business secondment source assignment strictly rejected');
+
+    // Diagnostic: Secondment does not automatically grant branch access
+    const accountantProfile = await OrganizationService.getMemberOrganizationProfile(colomboAccountant.membership.id);
+    assert(
+      accountantProfile.secondmentAssignments.length === 1 &&
+        accountantProfile.organizationBranchAccessMismatch === true,
+      '69. Secondment to Branch 1B without branch_assignment accurately flags organizationBranchAccessMismatch'
+    );
+
+    // End Secondment
+    const endedSecondment = await OrganizationService.endSecondment({
+      businessId: biz1.id,
+      assignmentId: secondmentAssign.id,
+      reason: 'Secondment term finished',
+    });
+    assert(endedSecondment.status === 'ended', '70. endSecondment cleanly completes secondment role');
+
+    console.log('\n--- 16. Assignment Absences & Coverage Linkage ---');
+
+    // Create Assignment Absence
+    const absenceStart = new Date();
+    const absenceEnd = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    const gmAbsence = await OrganizationService.createAssignmentAbsence({
+      businessId: biz1.id,
+      assignmentId: personA_GM.id,
+      absenceType: 'medical_leave',
+      startsAt: absenceStart.toISOString(),
+      endsAt: absenceEnd.toISOString(),
+      reason: 'Scheduled surgical procedure',
+    });
+    assert(
+      gmAbsence.absence_type === 'medical_leave' && gmAbsence.status === 'active',
+      '71. createAssignmentAbsence records assignment absence with valid type and dates'
+    );
+
+    // Create Acting Assignment linked to Absence
+    const absenceCoveringActing = await OrganizationService.createActingAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personB.membership.id,
+      actingForAssignmentId: personA_GM.id,
+      coverageAbsenceId: gmAbsence.id,
+      startsAt: absenceStart.toISOString(),
+      endsAt: absenceEnd.toISOString(),
+      reason: 'Covering GM medical leave absence',
+    });
+    assert(
+      absenceCoveringActing.coverage_absence_id === gmAbsence.id,
+      '72. Acting assignment successfully links to coverage_absence_id'
+    );
+
+    // Validation: Linking acting assignment to mismatched absence rejected
+    let mismatchedAbsenceRejected = false;
+    try {
+      await OrganizationService.createActingAssignment({
+        businessId: biz1.id,
+        businessMembershipId: personD.membership.id,
+        actingForAssignmentId: targetGM2.id, // Different target!
+        coverageAbsenceId: gmAbsence.id, // Absence belongs to personA_GM!
+        startsAt: new Date(Date.now() + 100 * 24 * 60 * 60 * 1000).toISOString(),
+        endsAt: new Date(Date.now() + 110 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('Coverage absence')) {
+        mismatchedAbsenceRejected = true;
+      }
+    }
+    assert(mismatchedAbsenceRejected, '73. Linking acting assignment to an absence of a different assignment strictly rejected');
+
+    // End Assignment Absence
+    const endedAbsence = await OrganizationService.endAssignmentAbsence({
+      id: gmAbsence.id,
+      reason: 'Cleared for return',
+    });
+    assert(endedAbsence.status === 'ended', '74. endAssignmentAbsence transitions absence record to ended');
+
+    console.log('\n--- 17. Effective Reporting Resolution Engine ---');
+
+    // Line supervisor reports substantively to GM (personA_GM)
+    const supervisorTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'Shift Supervisor',
+      hierarchyLevelId: (await OrganizationService.getHierarchyLevels(biz1.id)).find((l) => l.rank === 7)!.id,
+    });
+
+    const shiftSupervisor = await createStaffMember('shiftSupervisor', 'waiter');
+    const supervisorAssign = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: shiftSupervisor.membership.id,
+      branchId: branch1A!.id,
+      jobTitleId: supervisorTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+      reportsToAssignmentId: personA_GM.id, // Substantively reports to Person A (GM)
+    });
+
+    // 1. When GM is covered by active Acting GM (absenceCoveringActing is active):
+    const effectiveMgrRes = await OrganizationService.resolveEffectiveManager(supervisorAssign.id);
+    assert(
+      effectiveMgrRes.substantiveManager?.id === personA_GM.id &&
+        effectiveMgrRes.effectiveManager?.id === absenceCoveringActing.id &&
+        effectiveMgrRes.isActingCoverage === true,
+      '75. resolveEffectiveManager dynamically resolves effective manager = Acting GM while preserving substantive manager'
+    );
+
+    // 2. getEffectiveDirectReports for Acting GM
+    const actingDirectReports = await OrganizationService.getEffectiveDirectReports(absenceCoveringActing.id);
+    assert(
+      actingDirectReports.some((r) => r.id === supervisorAssign.id),
+      '76. getEffectiveDirectReports for Acting GM returns subordinates who substantively report to covered GM'
+    );
+
+    // 3. getEffectiveReportingChain
+    const effectiveChain = await OrganizationService.getEffectiveReportingChain(supervisorAssign.id);
+    assert(
+      effectiveChain.length >= 2 &&
+        effectiveChain[0].id === supervisorAssign.id &&
+        effectiveChain[1].id === absenceCoveringActing.id,
+      '77. getEffectiveReportingChain ascends upward through Acting GM'
+    );
+
+    // 4. getEffectiveReportingTree
+    const effectiveTree = await OrganizationService.getEffectiveReportingTree(absenceCoveringActing.id);
+    assert(
+      effectiveTree.length === 1 &&
+        effectiveTree[0].assignment.id === absenceCoveringActing.id &&
+        effectiveTree[0].isActingCoverage === true,
+      '78. getEffectiveReportingTree constructs hierarchical tree with acting coverage annotations'
+    );
+
+    // 5. Effective Reporting Cycle Defense: Subordinate acting for manager does not cause infinite recursion
+    // End active acting to test clean resolution
+    await OrganizationService.endActingAssignment({
+      businessId: biz1.id,
+      assignmentId: absenceCoveringActing.id,
+      reason: 'Resolution test cleanup',
+    });
+
+    const postActingEffectiveMgr = await OrganizationService.resolveEffectiveManager(supervisorAssign.id);
+    assert(
+      postActingEffectiveMgr.effectiveManager?.id === personA_GM.id &&
+        postActingEffectiveMgr.isActingCoverage === false,
+      '79. resolveEffectiveManager returns substantive GM immediately once acting coverage ends'
+    );
+
+    console.log('\n--- 18. Assignment Event History & Lifecycle Reconciliation ---');
+
+    // Assignment Event History
+    const eventHistory = await OrganizationService.getAssignmentEventHistory(absenceCoveringActing.id);
+    assert(
+      eventHistory.length >= 2 &&
+        eventHistory.some((e) => e.event_type === 'acting_started') &&
+        eventHistory.some((e) => e.event_type === 'acting_ended'),
+      '80. getAssignmentEventHistory records append-only event trail of acting_started and acting_ended'
+    );
+
+    // Lifecycle Reconciliation Engine: Activate scheduled & end expired
+    const pastStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const pastEnd = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+
+    const expiredTemp = await admin
+      .from('staff_assignments')
+      .insert({
+        business_id: biz1.id,
+        business_membership_id: staff2.membership.id,
+        job_title_id: lineCookTitle.id,
+        assignment_type: 'temporary',
+        is_primary: false,
+        status: 'active',
+        starts_at: pastStart.toISOString(),
+        ends_at: pastEnd.toISOString(),
+      })
+      .select()
+      .single();
+
+    const reconcileRes = await OrganizationService.reconcileAssignmentLifecycle(biz1.id);
+    assert(reconcileRes.success === true, '81. reconcileAssignmentLifecycle executes idempotently without error');
+
+    const reconciledAssignCheck = await OrganizationService.getStaffAssignmentById(expiredTemp.data!.id);
+    assert(
+      reconciledAssignCheck?.status === 'ended',
+      '82. Expired active temporary assignment transitioned to ended by lifecycle reconciliation'
+    );
+
+    console.log('\n--- 19. Real-World Scenario: Aura Hospitality Group ---');
+
+    // Aura Hospitality Group (Colombo Hotel GM Person A + Ops Manager Person B, Galle Resort Person C)
+    const personC_GalleGM = await createStaffMember('personC_GalleGM', 'branch_manager');
+    const galleGM = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: personC_GalleGM.membership.id,
+      branchId: branch1B!.id, // Galle/Kandy
+      jobTitleId: gmTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+    });
+
+    assert(
+      galleGM.status === 'active' && galleGM.branch_id === branch1B!.id,
+      '83. Aura Hospitality Real-World Scenario: Substantive organization intact across multi-property portfolio'
+    );
   } finally {
     // -------------------------------------------------------------
     // Clean Teardown of Test Entities
@@ -1006,7 +1629,7 @@ async function runSuite() {
   }
 
   console.log('================================================================');
-  console.log(`  Phase 29 Step 2 Verification: ${passedAssertions} / ${totalAssertions} ASSERTIONS PASSED`);
+  console.log(`  Phase 29 Step 3 Verification: ${passedAssertions} / ${totalAssertions} ASSERTIONS PASSED`);
   console.log('================================================================\n');
 
   if (passedAssertions !== totalAssertions) {

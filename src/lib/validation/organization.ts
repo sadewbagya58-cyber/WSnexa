@@ -50,6 +50,17 @@ export const assignmentTransitionTypeEnum = z.enum([
 ]);
 export type AssignmentTransitionType = z.infer<typeof assignmentTransitionTypeEnum>;
 
+export const assignmentAbsenceTypeEnum = z.enum([
+  'leave',
+  'medical_leave',
+  'training',
+  'travel',
+  'suspension',
+  'temporary_unavailability',
+  'other',
+]);
+export type AssignmentAbsenceType = z.infer<typeof assignmentAbsenceTypeEnum>;
+
 // Helper to coerce empty string to null/undefined
 const emptyStringToNull = z.literal('').transform(() => null);
 const optionalNullableUuid = z
@@ -218,6 +229,8 @@ export const createStaffAssignmentSchema = z
     startsAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
     endsAt: z.union([z.string().datetime(), z.date(), emptyStringToNull, z.null(), z.undefined()]).optional(),
     actingForAssignmentId: optionalNullableUuid,
+    sourceAssignmentId: optionalNullableUuid,
+    coverageAbsenceId: optionalNullableUuid,
     reportsToAssignmentId: optionalNullableUuid,
     reason: optionalNullableString,
   })
@@ -266,6 +279,8 @@ export const createAdditionalAssignmentSchema = z
     startsAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
     endsAt: z.union([z.string().datetime(), z.date(), emptyStringToNull, z.null(), z.undefined()]).optional(),
     actingForAssignmentId: optionalNullableUuid,
+    sourceAssignmentId: optionalNullableUuid,
+    coverageAbsenceId: optionalNullableUuid,
     reportsToAssignmentId: optionalNullableUuid,
     reason: optionalNullableString,
   })
@@ -302,6 +317,8 @@ export const updateStaffAssignmentSchema = z
     startsAt: z.union([z.string().datetime(), z.date()]).optional(),
     endsAt: z.union([z.string().datetime(), z.date(), emptyStringToNull, z.null(), z.undefined()]).optional(),
     actingForAssignmentId: optionalNullableUuid,
+    sourceAssignmentId: optionalNullableUuid,
+    coverageAbsenceId: optionalNullableUuid,
     reportsToAssignmentId: optionalNullableUuid,
     reason: optionalNullableString,
   })
@@ -382,3 +399,166 @@ export const setReportingManagerSchema = z.object({
   reason: optionalNullableString,
 });
 export type SetReportingManagerInput = z.input<typeof setReportingManagerSchema>;
+
+// ==========================================
+// 10. Assignment Absences Validation
+// ==========================================
+
+export const createAssignmentAbsenceSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    assignmentId: z.string().uuid('Invalid staff assignment ID'),
+    absenceType: assignmentAbsenceTypeEnum,
+    startsAt: z.union([z.string().datetime(), z.date()]),
+    endsAt: z.union([z.string().datetime(), z.date()]),
+    reason: optionalNullableString,
+    status: z.enum(['active', 'ended', 'cancelled']).default('active'),
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.startsAt).getTime();
+      const end = new Date(data.endsAt).getTime();
+      return end > start;
+    },
+    {
+      message: 'Absence end date must be strictly after start date',
+      path: ['endsAt'],
+    }
+  );
+export type CreateAssignmentAbsenceInput = z.input<typeof createAssignmentAbsenceSchema>;
+
+export const endAssignmentAbsenceSchema = z.object({
+  id: z.string().uuid('Invalid absence ID'),
+  endedAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+  reason: optionalNullableString,
+});
+export type EndAssignmentAbsenceInput = z.input<typeof endAssignmentAbsenceSchema>;
+
+// ==========================================
+// 11. Acting Assignments Validation
+// ==========================================
+
+export const createActingAssignmentSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    businessMembershipId: z.string().uuid('Invalid business membership ID'),
+    actingForAssignmentId: z.string().uuid('Invalid acting target assignment ID'),
+    startsAt: z.union([z.string().datetime(), z.date()]),
+    endsAt: z.union([z.string().datetime(), z.date()]),
+    coverageAbsenceId: optionalNullableUuid,
+    reportsToAssignmentId: optionalNullableUuid,
+    status: staffAssignmentStatusEnum.default('active'),
+    reason: optionalNullableString,
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.startsAt).getTime();
+      const end = new Date(data.endsAt).getTime();
+      return end > start;
+    },
+    {
+      message: 'Acting end date must be strictly after start date',
+      path: ['endsAt'],
+    }
+  );
+export type CreateActingAssignmentInput = z.input<typeof createActingAssignmentSchema>;
+
+export const extendActingAssignmentSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    assignmentId: z.string().uuid('Invalid acting assignment ID'),
+    newEndsAt: z.union([z.string().datetime(), z.date()]),
+    reason: optionalNullableString,
+  });
+export type ExtendActingAssignmentInput = z.input<typeof extendActingAssignmentSchema>;
+
+export const endActingAssignmentSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  assignmentId: z.string().uuid('Invalid acting assignment ID'),
+  endedAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+  reason: optionalNullableString,
+});
+export type EndActingAssignmentInput = z.input<typeof endActingAssignmentSchema>;
+
+// ==========================================
+// 12. Secondments Validation
+// ==========================================
+
+export const createSecondmentSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    businessMembershipId: z.string().uuid('Invalid business membership ID'),
+    sourceAssignmentId: z.string().uuid('Invalid source assignment ID'),
+    jobTitleId: z.string().uuid('Invalid job title ID'),
+    branchId: optionalNullableUuid,
+    departmentId: optionalNullableUuid,
+    unitId: optionalNullableUuid,
+    positionId: optionalNullableUuid,
+    startsAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+    endsAt: z.union([z.string().datetime(), z.date(), emptyStringToNull, z.null(), z.undefined()]).optional(),
+    reportsToAssignmentId: optionalNullableUuid,
+    status: staffAssignmentStatusEnum.default('active'),
+    reason: optionalNullableString,
+  })
+  .refine(
+    (data) => {
+      if (!data.endsAt) return true;
+      const start = new Date(data.startsAt).getTime();
+      const end = new Date(data.endsAt).getTime();
+      return end > start;
+    },
+    {
+      message: 'Secondment end date must be strictly after start date',
+      path: ['endsAt'],
+    }
+  );
+export type CreateSecondmentInput = z.input<typeof createSecondmentSchema>;
+
+export const endSecondmentSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  assignmentId: z.string().uuid('Invalid secondment assignment ID'),
+  endedAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+  reason: optionalNullableString,
+});
+export type EndSecondmentInput = z.input<typeof endSecondmentSchema>;
+
+// ==========================================
+// 13. Temporary Assignments Validation
+// ==========================================
+
+export const createTemporaryAssignmentSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    businessMembershipId: z.string().uuid('Invalid business membership ID'),
+    jobTitleId: z.string().uuid('Invalid job title ID'),
+    sourceAssignmentId: optionalNullableUuid,
+    branchId: optionalNullableUuid,
+    departmentId: optionalNullableUuid,
+    unitId: optionalNullableUuid,
+    positionId: optionalNullableUuid,
+    startsAt: z.union([z.string().datetime(), z.date()]),
+    endsAt: z.union([z.string().datetime(), z.date()]),
+    reportsToAssignmentId: optionalNullableUuid,
+    status: staffAssignmentStatusEnum.default('active'),
+    reason: optionalNullableString,
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.startsAt).getTime();
+      const end = new Date(data.endsAt).getTime();
+      return end > start;
+    },
+    {
+      message: 'Temporary assignment end date must be strictly after start date',
+      path: ['endsAt'],
+    }
+  );
+export type CreateTemporaryAssignmentInput = z.input<typeof createTemporaryAssignmentSchema>;
+
+export const endTemporaryAssignmentSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  assignmentId: z.string().uuid('Invalid temporary assignment ID'),
+  endedAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+  reason: optionalNullableString,
+});
+export type EndTemporaryAssignmentInput = z.input<typeof endTemporaryAssignmentSchema>;

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/server';
 import {
   CreateHierarchyLevelInput,
@@ -974,7 +975,10 @@ export class OrganizationService {
     return data;
   }
 
-  static async createAdditionalAssignment(input: CreateAdditionalAssignmentInput, actorId?: string) {
+  static async createAdditionalAssignment(
+    input: CreateAdditionalAssignmentInput | z.output<typeof createAdditionalAssignmentSchema>,
+    actorId?: string
+  ) {
     const parsed = createAdditionalAssignmentSchema.parse(input);
     return this.createStaffAssignment(
       {
@@ -2568,5 +2572,384 @@ export class OrganizationService {
     }
 
     return issues;
+  }
+
+  // ==========================================
+  // 19. UI Listing & Aggregation Helpers
+  // ==========================================
+
+  static async getOrganizationSummary(businessId: string) {
+    const admin = createAdminClient();
+
+    const [
+      { count: totalMembersCount },
+      { data: assignments },
+      { count: departmentsCount },
+      { count: unitsCount },
+      { data: positions },
+      { data: absences },
+      issues,
+    ] = await Promise.all([
+      admin.from('business_memberships').select('*', { count: 'exact', head: true }).eq('business_id', businessId).eq('membership_status', 'active'),
+      admin.from('staff_assignments').select('id, assignment_type, is_primary, status, position_id').eq('business_id', businessId).eq('status', 'active'),
+      admin.from('organization_departments').select('*', { count: 'exact', head: true }).eq('business_id', businessId).eq('is_active', true),
+      admin.from('organization_units').select('*', { count: 'exact', head: true }).eq('business_id', businessId).eq('is_active', true),
+      admin.from('organization_positions').select('id, headcount_limit, status').eq('business_id', businessId).eq('status', 'active'),
+      admin.from('organization_assignment_absences').select('id').eq('business_id', businessId).eq('status', 'active'),
+      this.getOrganizationIntegrityIssues(businessId),
+    ]);
+
+    const activeAssignments = assignments || [];
+    const activePositions = positions || [];
+
+    const activePrimaryCount = activeAssignments.filter((a) => a.is_primary).length;
+    const activeActingCount = activeAssignments.filter((a) => a.assignment_type === 'acting').length;
+    const activeSecondmentsCount = activeAssignments.filter((a) => a.assignment_type === 'secondment').length;
+    const activeTemporaryCount = activeAssignments.filter((a) => a.assignment_type === 'temporary').length;
+
+    let totalHeadcountLimit = 0;
+    const posOccupantMap = new Map<string, number>();
+
+    for (const a of activeAssignments) {
+      if (a.position_id && a.assignment_type !== 'acting') {
+        posOccupantMap.set(a.position_id, (posOccupantMap.get(a.position_id) || 0) + 1);
+      }
+    }
+
+    let occupiedPositionsCount = 0;
+    let vacantPositionsCount = 0;
+
+    for (const p of activePositions) {
+      const limit = p.headcount_limit || 1;
+      totalHeadcountLimit += limit;
+      const count = posOccupantMap.get(p.id) || 0;
+      if (count >= limit) {
+        occupiedPositionsCount++;
+      } else {
+        vacantPositionsCount++;
+      }
+    }
+
+    return {
+      totalMembers: totalMembersCount || 0,
+      activePrimaryAssignments: activePrimaryCount,
+      departmentsCount: departmentsCount || 0,
+      unitsCount: unitsCount || 0,
+      positionsCount: activePositions.length,
+      totalHeadcountLimit,
+      occupiedPositionsCount,
+      vacantPositionsCount,
+      activeActingCount,
+      activeSecondmentsCount,
+      activeTemporaryCount,
+      activeAbsencesCount: absences?.length || 0,
+      integrityIssuesCount: issues.length,
+      criticalIssuesCount: issues.filter((i) => i.severity === 'error').length,
+    };
+  }
+
+  static async listOrganizationStaff(
+    businessId: string,
+    options?: {
+      branchId?: string;
+      departmentId?: string;
+      jobTitleId?: string;
+      search?: string;
+    }
+  ) {
+    const admin = createAdminClient();
+
+    // 1. Fetch active memberships with user profiles
+    const { data: members, error: memErr } = await admin
+      .from('business_memberships')
+      .select(`
+        id,
+        business_id,
+        user_id,
+        role,
+        membership_status,
+        created_at,
+        user_profiles(first_name, last_name)
+      `)
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (memErr) throw new Error(`Failed to list staff: ${memErr.message}`);
+
+    // 2. Fetch all active assignments for business
+    const { data: assignments } = await admin
+      .from('staff_assignments')
+      .select(`
+        id,
+        business_membership_id,
+        assignment_type,
+        is_primary,
+        status,
+        starts_at,
+        ends_at,
+        branch:branches(id, name, code),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        position:organization_positions(id, position_code),
+        job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name),
+          membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+        ),
+        acting_for:staff_assignments!acting_for_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name)
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'active');
+
+    // 3. Fetch branch access mappings
+    const { data: branchAccessList } = await admin
+      .from('branch_assignments')
+      .select('business_membership_id, branch_id');
+
+    const branchAccessMap = new Map<string, Set<string>>();
+    for (const ba of branchAccessList || []) {
+      if (!branchAccessMap.has(ba.business_membership_id)) {
+        branchAccessMap.set(ba.business_membership_id, new Set());
+      }
+      branchAccessMap.get(ba.business_membership_id)!.add(ba.branch_id);
+    }
+
+    const memberAssignmentsMap = new Map<string, typeof assignments>();
+    for (const a of assignments || []) {
+      if (!memberAssignmentsMap.has(a.business_membership_id)) {
+        memberAssignmentsMap.set(a.business_membership_id, []);
+      }
+      memberAssignmentsMap.get(a.business_membership_id)!.push(a);
+    }
+
+    // Compose staff directory list
+    const staffList = (members || []).map((m) => {
+      const userProfile = (Array.isArray(m.user_profiles) ? m.user_profiles[0] : m.user_profiles) as { first_name?: string; last_name?: string } | null;
+      const firstName = userProfile?.first_name || '';
+      const lastName = userProfile?.last_name || '';
+      const fullName = `${firstName} ${lastName}`.trim() || 'Staff Member';
+
+      const memberAssigns = memberAssignmentsMap.get(m.id) || [];
+      const primaryAssign = memberAssigns.find((a) => a.is_primary) || null;
+      const actingAssigns = memberAssigns.filter((a) => a.assignment_type === 'acting');
+      const secondmentAssigns = memberAssigns.filter((a) => a.assignment_type === 'secondment');
+      const temporaryAssigns = memberAssigns.filter((a) => a.assignment_type === 'temporary');
+      const additionalAssigns = memberAssigns.filter((a) => !a.is_primary && a.assignment_type !== 'acting' && a.assignment_type !== 'secondment' && a.assignment_type !== 'temporary');
+
+      let hasBranchAccessMismatch = false;
+      const allowedBranches = branchAccessMap.get(m.id) || new Set();
+      for (const a of memberAssigns) {
+        const branch = a.branch as unknown as { id: string } | null;
+        if (branch?.id && !allowedBranches.has(branch.id)) {
+          hasBranchAccessMismatch = true;
+          break;
+        }
+      }
+
+      return {
+        membershipId: m.id,
+        userId: m.user_id,
+        fullName,
+        role: m.role,
+        status: m.membership_status,
+        primaryAssignment: primaryAssign,
+        actingAssignments: actingAssigns,
+        secondmentAssignments: secondmentAssigns,
+        temporaryAssignments: temporaryAssigns,
+        additionalAssignments: additionalAssigns,
+        totalActiveAssignments: memberAssigns.length,
+        hasBranchAccessMismatch,
+      };
+    });
+
+    // Apply filtering
+    let filtered = staffList;
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      filtered = filtered.filter((s) => s.fullName.toLowerCase().includes(q));
+    }
+    if (options?.branchId) {
+      filtered = filtered.filter((s) => {
+        const pBranch = s.primaryAssignment?.branch as unknown as { id: string } | null;
+        return pBranch?.id === options.branchId;
+      });
+    }
+    if (options?.departmentId) {
+      filtered = filtered.filter((s) => {
+        const pDept = s.primaryAssignment?.department as unknown as { id: string } | null;
+        return pDept?.id === options.departmentId;
+      });
+    }
+    if (options?.jobTitleId) {
+      filtered = filtered.filter((s) => {
+        const pJob = s.primaryAssignment?.job_title as unknown as { id: string } | null;
+        return pJob?.id === options.jobTitleId;
+      });
+    }
+
+    return filtered;
+  }
+
+  static async listAllPositionsWithCoverage(
+    businessId: string,
+    options?: { branchId?: string; departmentId?: string }
+  ) {
+    const admin = createAdminClient();
+
+    let query = admin
+      .from('organization_positions')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        branch:branches(id, name, code)
+      `)
+      .eq('business_id', businessId)
+      .order('position_code', { ascending: true });
+
+    if (options?.branchId) query = query.eq('branch_id', options.branchId);
+    if (options?.departmentId) query = query.eq('department_id', options.departmentId);
+
+    const { data: positions, error } = await query;
+    if (error) throw new Error(`Failed to list positions: ${error.message}`);
+
+    const nowIso = new Date().toISOString();
+
+    // Fetch all active assignments for business
+    const { data: assignments } = await admin
+      .from('staff_assignments')
+      .select(`
+        id,
+        position_id,
+        assignment_type,
+        is_primary,
+        starts_at,
+        ends_at,
+        acting_for_assignment_id,
+        business_membership_id,
+        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'active')
+      .lte('starts_at', nowIso)
+      .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
+      .is('archived_at', null);
+
+    const posSubstantiveMap = new Map<string, typeof assignments>();
+    const posActingMap = new Map<string, typeof assignments>();
+
+    for (const a of assignments || []) {
+      if (a.position_id) {
+        if (a.assignment_type === 'acting') {
+          if (!posActingMap.has(a.position_id)) posActingMap.set(a.position_id, []);
+          posActingMap.get(a.position_id)!.push(a);
+        } else {
+          if (!posSubstantiveMap.has(a.position_id)) posSubstantiveMap.set(a.position_id, []);
+          posSubstantiveMap.get(a.position_id)!.push(a);
+        }
+      }
+    }
+
+    return (positions || []).map((p) => {
+      const substantiveOccupants = posSubstantiveMap.get(p.id) || [];
+      const actingCoverage = posActingMap.get(p.id) || [];
+      const occupiedCount = substantiveOccupants.length;
+      const limit = p.headcount_limit || 1;
+      const availableSlots = Math.max(0, limit - occupiedCount);
+      const isFull = occupiedCount >= limit;
+
+      let coverageState: 'vacant' | 'occupied' | 'acting_covered' | 'over_capacity' | 'frozen' | 'archived' = 'vacant';
+      if (p.status === 'frozen') coverageState = 'frozen';
+      else if (p.status === 'archived') coverageState = 'archived';
+      else if (occupiedCount > limit) coverageState = 'over_capacity';
+      else if (actingCoverage.length > 0) coverageState = 'acting_covered';
+      else if (occupiedCount > 0) coverageState = 'occupied';
+
+      return {
+        ...p,
+        substantiveOccupants,
+        actingCoverage,
+        occupiedCount,
+        availableSlots,
+        isFull,
+        coverageState,
+      };
+    });
+  }
+
+  static async listActingAssignments(businessId: string, options?: { activeOnly?: boolean }) {
+    const admin = createAdminClient();
+
+    let query = admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name)),
+        job_title:organization_job_titles(id, name, code),
+        position:organization_positions(id, position_code),
+        branch:branches(id, name, code),
+        department:organization_departments(id, name, code),
+        acting_for:staff_assignments!acting_for_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name),
+          membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+        ),
+        coverage_absence:organization_assignment_absences!coverage_absence_id(
+          id,
+          absence_type,
+          starts_at,
+          ends_at,
+          reason,
+          status
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('assignment_type', 'acting')
+      .order('starts_at', { ascending: false });
+
+    if (options?.activeOnly) {
+      query = query.eq('status', 'active');
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to list acting assignments: ${error.message}`);
+    return data || [];
+  }
+
+  static async listSecondments(businessId: string, options?: { activeOnly?: boolean }) {
+    const admin = createAdminClient();
+
+    let query = admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name)),
+        job_title:organization_job_titles(id, name, code),
+        position:organization_positions(id, position_code),
+        branch:branches(id, name, code),
+        department:organization_departments(id, name, code),
+        source_assignment:staff_assignments!source_assignment_id(
+          id,
+          branch:branches(id, name, code),
+          department:organization_departments(id, name, code),
+          job_title:organization_job_titles(id, name)
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('assignment_type', 'secondment')
+      .order('starts_at', { ascending: false });
+
+    if (options?.activeOnly) {
+      query = query.eq('status', 'active');
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to list secondments: ${error.message}`);
+    return data || [];
   }
 }

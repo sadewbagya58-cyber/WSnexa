@@ -45,6 +45,16 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/inventory', permission: 'inventory.view' },
   { prefix: '/dashboard/settings/order-security', permission: 'order_security.view' },
   { prefix: '/dashboard/settings/payments', permission: 'branches.manage' },
+  // Phase 29 Organization & People Management
+  { prefix: '/dashboard/organization/positions', permission: 'positions.manage' },
+  { prefix: '/dashboard/organization/structure', permission: 'organization.view' },
+  { prefix: '/dashboard/organization/chart', permission: 'organization.view' },
+  { prefix: '/dashboard/organization/job-titles', permission: 'organization.view' },
+  { prefix: '/dashboard/organization', permission: 'organization.view' },
+  { prefix: '/dashboard/people/acting', permission: 'people.view' },
+  { prefix: '/dashboard/people/secondments', permission: 'people.view' },
+  { prefix: '/dashboard/people/integrity', permission: 'organization.view' },
+  { prefix: '/dashboard/people', permission: 'people.view' },
   { prefix: '/dashboard', permission: 'orders.view', exact: true },
 ];
 

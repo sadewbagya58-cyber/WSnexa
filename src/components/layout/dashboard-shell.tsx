@@ -56,6 +56,20 @@ const rawNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'ORGANIZATION & PEOPLE',
+    items: [
+      { label: 'Organization Hub', href: '/dashboard/organization' },
+      { label: 'Structure & Units', href: '/dashboard/organization/structure' },
+      { label: 'Org Chart', href: '/dashboard/organization/chart' },
+      { label: 'Job Titles', href: '/dashboard/organization/job-titles' },
+      { label: 'Positions & Headcount', href: '/dashboard/organization/positions' },
+      { label: 'People Directory', href: '/dashboard/people' },
+      { label: 'Acting & Coverage', href: '/dashboard/people/acting' },
+      { label: 'Secondments', href: '/dashboard/people/secondments' },
+      { label: 'Integrity Diagnostics', href: '/dashboard/people/integrity' },
+    ],
+  },
+  {
     title: 'MENU',
     items: [
       { label: 'Menu Overview', href: '/dashboard/menu' },

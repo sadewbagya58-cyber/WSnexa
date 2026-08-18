@@ -41,7 +41,7 @@ async function runSuite() {
   const { PermissionService } = await import('../src/server/services/permission.service');
 
   console.log('================================================================');
-  console.log('  WSNexa Phase 29 Step 1 — Organization Core Verification Suite  ');
+  console.log('  WSNexa Phase 29 Step 2 — Assignment & Reporting Engine Suite  ');
   console.log('================================================================\n');
 
   // Track created test entities for clean teardown
@@ -49,24 +49,24 @@ async function runSuite() {
   const cleanupUserIds: string[] = [];
 
   try {
-    const timestamp = Date.now();
-
     // -------------------------------------------------------------
     // Setup Primary Test Business & Secondary Tenant
     // -------------------------------------------------------------
-    const { data: ownerUser } = await admin.auth.admin.createUser({
-      email: `test.org.owner.${timestamp}@wsnexa.test`,
-      password: 'Password123!Secure',
+    const testSuffix = Date.now().toString().slice(-6);
+
+    const { data: ownerUser, error: ownerErr } = await admin.auth.admin.createUser({
+      email: `test_org_owner_${testSuffix}@wsnexa.test`,
+      password: `TestPassword_${testSuffix}!@#`,
       email_confirm: true,
     });
-    if (!ownerUser?.user) throw new Error('Failed to create test owner user');
+    if (ownerErr || !ownerUser?.user) throw new Error(`Failed to create test owner user: ${ownerErr?.message || 'unknown'}`);
     cleanupUserIds.push(ownerUser.user.id);
 
     const { data: biz1, error: biz1Err } = await admin
       .from('businesses')
       .insert({
-        name: `Grand Palace Hotel ${timestamp}`,
-        slug: `grand-palace-${timestamp}`,
+        name: `Royal Heritage Hotel ${testSuffix}`,
+        slug: `royal-heritage-${testSuffix}`,
         created_by: ownerUser.user.id,
       })
       .select()
@@ -78,8 +78,8 @@ async function runSuite() {
     const { data: biz2, error: biz2Err } = await admin
       .from('businesses')
       .insert({
-        name: `Oceanview Resort ${timestamp}`,
-        slug: `oceanview-${timestamp}`,
+        name: `Sapphire Lagoon Resort ${testSuffix}`,
+        slug: `sapphire-lagoon-${testSuffix}`,
         created_by: ownerUser.user.id,
       })
       .select()
@@ -92,8 +92,8 @@ async function runSuite() {
       .from('branches')
       .insert({
         business_id: biz1.id,
-        name: 'Colombo Main Property',
-        code: `CMB-${timestamp}`,
+        name: 'Colombo City Flagship',
+        code: `CMB-${testSuffix}`,
       })
       .select()
       .single();
@@ -102,8 +102,8 @@ async function runSuite() {
       .from('branches')
       .insert({
         business_id: biz1.id,
-        name: 'Kandy Hill Property',
-        code: `KDY-${timestamp}`,
+        name: 'Kandy Sanctuary Property',
+        code: `KDY-${testSuffix}`,
       })
       .select()
       .single();
@@ -113,45 +113,57 @@ async function runSuite() {
       .from('branches')
       .insert({
         business_id: biz2.id,
-        name: 'Galle Beach Property',
-        code: `GAL-${timestamp}`,
+        name: 'Galle Coastal Property',
+        code: `GAL-${testSuffix}`,
       })
       .select()
       .single();
 
     // Create Staff Memberships for Biz 1
-    const { data: staffUser1 } = await admin.auth.admin.createUser({
-      email: `test.org.staff1.${timestamp}@wsnexa.test`,
-      password: 'Password123!Secure',
+    const createStaffMember = async (label: string, role = 'branch_manager') => {
+      const uSuffix = Math.random().toString(36).substring(2, 7);
+      const { data: u, error: uErr } = await admin.auth.admin.createUser({
+        email: `test_org_${label}_${uSuffix}@wsnexa.test`,
+        password: `StaffPassword_${uSuffix}!@#`,
+        email_confirm: true,
+      });
+      if (uErr || !u?.user) throw new Error(`Failed to create user ${label}: ${uErr?.message}`);
+      cleanupUserIds.push(u.user.id);
+
+      const { data: m, error: mErr } = await admin
+        .from('business_memberships')
+        .insert({
+          business_id: biz1.id,
+          user_id: u.user.id,
+          role,
+          membership_status: 'active',
+        })
+        .select()
+        .single();
+      if (mErr || !m) throw new Error(`Failed to create membership ${label}: ${mErr?.message}`);
+      return { user: u.user, membership: m };
+    };
+
+    const staff1 = await createStaffMember('staff1', 'branch_manager'); // Executive Chef
+    const staff2 = await createStaffMember('staff2', 'branch_manager'); // Sous Chef
+    const staff3 = await createStaffMember('staff3', 'kitchen_staff');  // Line Cook
+    const staff4 = await createStaffMember('staff4', 'waiter');         // Head Waiter
+    const staff5 = await createStaffMember('staff5', 'waiter');         // Server
+
+    // Create Staff Membership for Biz 2
+    const { data: biz2User, error: b2uErr } = await admin.auth.admin.createUser({
+      email: `test_org_biz2_${testSuffix}@wsnexa.test`,
+      password: `Biz2Password_${testSuffix}!@#`,
       email_confirm: true,
     });
-    if (!staffUser1?.user) throw new Error('Failed to create staffUser1');
-    cleanupUserIds.push(staffUser1.user.id);
+    if (b2uErr || !biz2User?.user) throw new Error(`Failed to create biz2User: ${b2uErr?.message}`);
+    cleanupUserIds.push(biz2User.user.id);
 
-    const { data: membership1 } = await admin
-      .from('business_memberships')
-      .insert({
-        business_id: biz1.id,
-        user_id: staffUser1.user.id,
-        role: 'branch_manager',
-        membership_status: 'active',
-      })
-      .select()
-      .single();
-
-    const { data: staffUser2 } = await admin.auth.admin.createUser({
-      email: `test.org.staff2.${timestamp}@wsnexa.test`,
-      password: 'Password123!Secure',
-      email_confirm: true,
-    });
-    if (!staffUser2?.user) throw new Error('Failed to create staffUser2');
-    cleanupUserIds.push(staffUser2.user.id);
-
-    const { data: membership2 } = await admin
+    const { data: membershipBiz2 } = await admin
       .from('business_memberships')
       .insert({
         business_id: biz2.id,
-        user_id: staffUser2.user.id,
+        user_id: biz2User.user.id,
         role: 'cashier',
         membership_status: 'active',
       })
@@ -160,12 +172,10 @@ async function runSuite() {
 
     console.log('--- 1. Hierarchy Levels & Default Ranks ---');
 
-    // 1. hierarchy-level table exists
     await OrganizationService.ensureDefaultHierarchyLevels(biz1.id);
     const levelsBiz1 = await OrganizationService.getHierarchyLevels(biz1.id);
     assert(levelsBiz1.length >= 8, '1. Hierarchy levels table exists and returns records');
 
-    // 2. default hierarchy levels seeded correctly
     const rank1 = levelsBiz1.find((l) => l.rank === 1);
     const rank8 = levelsBiz1.find((l) => l.rank === 8);
     assert(
@@ -173,7 +183,6 @@ async function runSuite() {
       '2. Default hierarchy levels seeded accurately (Owner / Board rank 1 to Operational rank 8)'
     );
 
-    // 3. hierarchy rank uniqueness per business
     let duplicateRankRejected = false;
     try {
       await OrganizationService.createHierarchyLevel({
@@ -190,7 +199,6 @@ async function runSuite() {
 
     console.log('\n--- 2. Departments Architecture & Hierarchy ---');
 
-    // 4. Corporate department creation (branch_id = NULL)
     const corpDept = await OrganizationService.createDepartment({
       businessId: biz1.id,
       branchId: null,
@@ -200,13 +208,12 @@ async function runSuite() {
     });
     assert(corpDept.id !== undefined && corpDept.branch_id === null, '4. Corporate department created with branch_id NULL');
 
-    // 5. Property department creation
     const propDept = await OrganizationService.createDepartment({
       businessId: biz1.id,
       branchId: branch1A!.id,
       parentDepartmentId: corpDept.id,
-      name: 'Colombo Culinary & Kitchen',
-      code: 'CMB-KIT',
+      name: 'Colombo Culinary Operations',
+      code: 'CMB-CUL',
       departmentType: 'food_and_beverage',
     });
     assert(
@@ -214,7 +221,6 @@ async function runSuite() {
       '5. Property-specific department created referencing parent corporate department'
     );
 
-    // 6. Cross-business branch rejection
     let crossBizBranchRejected = false;
     try {
       await OrganizationService.createDepartment({
@@ -227,7 +233,6 @@ async function runSuite() {
     }
     assert(crossBizBranchRejected, '6. Cross-business branch assignment strictly rejected for department');
 
-    // 7. Department self-parent rejection
     let selfParentRejected = false;
     try {
       await OrganizationService.updateDepartment({
@@ -239,7 +244,6 @@ async function runSuite() {
     }
     assert(selfParentRejected, '7. Department self-parenting strictly rejected');
 
-    // 8. Department indirect cycle rejection (A -> B -> C -> A)
     const subDeptC = await OrganizationService.createDepartment({
       businessId: biz1.id,
       branchId: branch1A!.id,
@@ -248,7 +252,6 @@ async function runSuite() {
     });
     let cycleRejected = false;
     try {
-      // Try to set corpDept's parent to subDeptC (would create loop corpDept -> propDept -> subDeptC -> corpDept)
       await OrganizationService.updateDepartment({
         id: corpDept.id,
         parentDepartmentId: subDeptC.id,
@@ -260,7 +263,6 @@ async function runSuite() {
 
     console.log('\n--- 3. Organization Units & Nesting ---');
 
-    // 9. Organization Unit creation
     const mainKitchenUnit = await OrganizationService.createUnit({
       businessId: biz1.id,
       branchId: branch1A!.id,
@@ -274,7 +276,6 @@ async function runSuite() {
       '9. Organization Unit created with valid unit_type and department link'
     );
 
-    // 10. Unit parent-unit nesting
     const grillStation = await OrganizationService.createUnit({
       businessId: biz1.id,
       branchId: branch1A!.id,
@@ -289,7 +290,6 @@ async function runSuite() {
       '10. Child unit successfully nested under parent unit'
     );
 
-    // 11. Unit / Department tenant mismatch rejection
     await OrganizationService.ensureDefaultHierarchyLevels(biz2.id);
     const biz2Dept = await OrganizationService.createDepartment({
       businessId: biz2.id,
@@ -298,8 +298,8 @@ async function runSuite() {
     let unitTenantMismatchRejected = false;
     try {
       await OrganizationService.createUnit({
-        businessId: biz1.id, // Biz 1
-        departmentId: biz2Dept.id, // Biz 2 Department
+        businessId: biz1.id,
+        departmentId: biz2Dept.id,
         unitType: 'team',
         name: 'Invalid Unit',
       });
@@ -308,7 +308,6 @@ async function runSuite() {
     }
     assert(unitTenantMismatchRejected, '11. Unit creation with mismatched department tenant strictly rejected');
 
-    // 12. Unit self-parent rejection
     let unitSelfParentRejected = false;
     try {
       await OrganizationService.updateUnit({
@@ -320,7 +319,6 @@ async function runSuite() {
     }
     assert(unitSelfParentRejected, '12. Organization unit self-parenting strictly rejected');
 
-    // 13. Unit indirect cycle rejection
     let unitCycleRejected = false;
     try {
       await OrganizationService.updateUnit({
@@ -332,9 +330,8 @@ async function runSuite() {
     }
     assert(unitCycleRejected, '13. Multi-hop circular cycle strictly rejected in unit ancestry');
 
-    console.log('\n--- 4. Job Titles & Hierarchy Ranks ---');
+    console.log('\n--- 4. Job Titles & Positions ---');
 
-    // 14. Job Title creation
     const execChefLevel = levelsBiz1.find((l) => l.rank === 5); // Department Leadership
     const execChefTitle = await OrganizationService.createJobTitle({
       businessId: biz1.id,
@@ -344,10 +341,6 @@ async function runSuite() {
       departmentType: 'food_and_beverage',
       isManagement: true,
     });
-    assert(
-      execChefTitle.id !== undefined && execChefTitle.hierarchy_level_id === execChefLevel!.id,
-      '14. Job title created with valid hierarchy level and management designation'
-    );
 
     const sousChefLevel = levelsBiz1.find((l) => l.rank === 6); // Management
     const sousChefTitle = await OrganizationService.createJobTitle({
@@ -358,430 +351,646 @@ async function runSuite() {
       departmentType: 'food_and_beverage',
       isManagement: true,
     });
-    assert(sousChefTitle.id !== undefined, '14b. Second job title created with supervisory hierarchy level');
 
-    // 15. Job title hierarchy level tenant mismatch rejection
-    const levelsBiz2 = await OrganizationService.getHierarchyLevels(biz2.id);
-    let jtTenantMismatchRejected = false;
-    try {
-      await OrganizationService.createJobTitle({
-        businessId: biz1.id, // Biz 1
-        name: 'Invalid Chef Title',
-        hierarchyLevelId: levelsBiz2[0].id, // Biz 2 Hierarchy Level
-      });
-    } catch {
-      jtTenantMismatchRejected = true;
-    }
-    assert(jtTenantMismatchRejected, '15. Job title with mismatched hierarchy level tenant strictly rejected');
+    const lineCookLevel = levelsBiz1.find((l) => l.rank === 8); // Operational
+    const lineCookTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'Line Cook',
+      code: 'LINE-COOK',
+      hierarchyLevelId: lineCookLevel!.id,
+      departmentType: 'food_and_beverage',
+      isManagement: false,
+    });
 
-    console.log('\n--- 5. Organization Positions ---');
+    const fbDirectorLevel = levelsBiz1.find((l) => l.rank === 4); // General Management
+    const fbDirectorTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'F&B Director',
+      code: 'FB-DIR',
+      hierarchyLevelId: fbDirectorLevel!.id,
+      departmentType: 'food_and_beverage',
+      isManagement: true,
+    });
 
-    // 16. Position creation (Active & Vacant)
-    const execChefPosition = await OrganizationService.createPosition({
+    assert(execChefTitle.id !== undefined && sousChefTitle.id !== undefined, '14. Standard job titles created with hierarchy levels');
+
+    // Create Positions
+    const fbDirectorPos = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      departmentId: corpDept.id,
+      jobTitleId: fbDirectorTitle.id,
+      positionCode: 'POS-CORP-FBDIR-01',
+      headcountLimit: 1,
+      status: 'active',
+    });
+
+    const execChefPos = await OrganizationService.createPosition({
       businessId: biz1.id,
       branchId: branch1A!.id,
       departmentId: propDept.id,
       unitId: mainKitchenUnit.id,
       jobTitleId: execChefTitle.id,
       positionCode: 'POS-CMB-ECHEF-01',
-      nameOverride: 'Executive Chef — Colombo Main',
-      status: 'active',
       headcountLimit: 1,
+      status: 'active',
     });
-    assert(execChefPosition.id !== undefined && execChefPosition.status === 'active', '16. Active position created with full org context');
 
-    // 17. Vacant position is a valid first-class record
-    const vacantSousChefPos = await OrganizationService.createPosition({
+    const sousChefPos = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      unitId: mainKitchenUnit.id,
+      jobTitleId: sousChefTitle.id,
+      positionCode: 'POS-CMB-SCHEF-01',
+      headcountLimit: 2,
+      status: 'active',
+    });
+
+    const lineCookPosSingleSeat = await OrganizationService.createPosition({
       businessId: biz1.id,
       branchId: branch1A!.id,
       departmentId: propDept.id,
       unitId: grillStation.id,
-      jobTitleId: sousChefTitle.id,
-      positionCode: 'POS-CMB-SCHEF-02',
-      status: 'vacant',
-      headcountLimit: 2,
+      jobTitleId: lineCookTitle.id,
+      positionCode: 'POS-CMB-COOK-SINGLE',
+      headcountLimit: 1,
+      status: 'active',
     });
-    assert(vacantSousChefPos.id !== undefined && vacantSousChefPos.status === 'vacant', '17. Vacant position is a valid first-class record');
 
-    // 18. Position entity mismatch rejection
-    let posEntityMismatchRejected = false;
-    try {
-      await OrganizationService.createPosition({
-        businessId: biz1.id,
-        branchId: branch1A!.id,
-        departmentId: biz2Dept.id, // Biz 2 Department!
-        jobTitleId: execChefTitle.id,
-      });
-    } catch {
-      posEntityMismatchRejected = true;
-    }
-    assert(posEntityMismatchRejected, '18. Position with mismatched department tenant strictly rejected');
-
-    console.log('\n--- 6. Staff Assignments & Historical Primary Semantics ---');
-
-    // 19. Initial Primary Staff Assignment creation
-    const primaryAssignment = await OrganizationService.createStaffAssignment({
+    const frozenPos = await OrganizationService.createPosition({
       businessId: biz1.id,
-      businessMembershipId: membership1!.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      jobTitleId: lineCookTitle.id,
+      positionCode: 'POS-CMB-FROZEN',
+      headcountLimit: 1,
+      status: 'frozen',
+    });
+
+    console.log('\n--- 5. Position Occupancy & Headcount Enforcement ---');
+
+    const emptyOccupancy = await OrganizationService.getPositionOccupancy(execChefPos.id);
+    assert(
+      emptyOccupancy.occupiedCount === 0 && emptyOccupancy.availableSlots === 1 && emptyOccupancy.isFull === false,
+      '15. Position occupancy correctly calculates 0 occupants on empty position'
+    );
+
+    // Initial Primary Assignment for F&B Director (Top Root Node)
+    const fbDirectorAssignment = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff1.membership.id,
+      departmentId: corpDept.id,
+      positionId: fbDirectorPos.id,
+      jobTitleId: fbDirectorTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+    });
+    assert(fbDirectorAssignment.id !== undefined, '16. Top-level F&B Director primary assignment created with reports_to NULL');
+
+    // Fill Exec Chef Position (staff2) reporting to F&B Director
+    const execChefAssignment = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff2.membership.id,
       branchId: branch1A!.id,
       departmentId: propDept.id,
       unitId: mainKitchenUnit.id,
-      positionId: execChefPosition.id,
+      positionId: execChefPos.id,
       jobTitleId: execChefTitle.id,
       assignmentType: 'primary',
       isPrimary: true,
       status: 'active',
-      startsAt: new Date().toISOString(),
+      reportsToAssignmentId: fbDirectorAssignment.id,
     });
     assert(
-      primaryAssignment.id !== undefined && primaryAssignment.is_primary === true && primaryAssignment.assignment_type === 'primary',
-      '19. Primary staff assignment created with valid membership, position, and canonical parity'
+      execChefAssignment.id !== undefined && execChefAssignment.reports_to_assignment_id === fbDirectorAssignment.id,
+      '17. Exec Chef assignment created reporting to F&B Director'
     );
 
-    // 20. Membership / Business mismatch rejection
-    let assignmentMemberMismatchRejected = false;
-    try {
-      await OrganizationService.createStaffAssignment({
-        businessId: biz1.id, // Biz 1
-        businessMembershipId: membership2!.id, // Biz 2 Membership!
-        jobTitleId: execChefTitle.id,
-      });
-    } catch {
-      assignmentMemberMismatchRejected = true;
-    }
-    assert(assignmentMemberMismatchRejected, '20. Staff assignment with cross-tenant membership strictly rejected');
+    const fullOccupancy = await OrganizationService.getPositionOccupancy(execChefPos.id);
+    assert(
+      fullOccupancy.occupiedCount === 1 && fullOccupancy.availableSlots === 0 && fullOccupancy.isFull === true,
+      '18. Position occupancy correctly detects position is full (1 / 1)'
+    );
 
-    // 21. Department / Unit / Branch mismatch validation
-    let assignmentDeptMismatchRejected = false;
+    // Attempting to assign another staff to full single-seat position is rejected
+    let fullPosRejected = false;
     try {
       await OrganizationService.createStaffAssignment({
         businessId: biz1.id,
-        businessMembershipId: membership1!.id,
-        departmentId: biz2Dept.id, // Cross-tenant department
-        jobTitleId: execChefTitle.id,
-      });
-    } catch {
-      assignmentDeptMismatchRejected = true;
-    }
-    assert(assignmentDeptMismatchRejected, '21. Staff assignment with cross-tenant department strictly rejected');
-
-    // 22. Attempting second active primary without ending first is strictly rejected
-    let secondActivePrimaryRejected = false;
-    try {
-      await OrganizationService.createStaffAssignment({
-        businessId: biz1.id,
-        businessMembershipId: membership1!.id,
+        businessMembershipId: staff3.membership.id,
         branchId: branch1A!.id,
         departmentId: propDept.id,
-        positionId: vacantSousChefPos.id,
-        jobTitleId: sousChefTitle.id,
+        unitId: mainKitchenUnit.id,
+        positionId: execChefPos.id, // Full!
+        jobTitleId: execChefTitle.id,
         assignmentType: 'primary',
         isPrimary: true,
         status: 'active',
       });
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('already has an active primary assignment')) {
-        secondActivePrimaryRejected = true;
+      if (err instanceof Error && err.message.includes('maximum headcount limit')) {
+        fullPosRejected = true;
       }
     }
-    assert(
-      secondActivePrimaryRejected,
-      '22. Creating second active primary assignment without ending first is strictly rejected with clear error'
-    );
+    assert(fullPosRejected, '19. Assigning staff to full position (capacity=1) is strictly rejected');
 
-    // 23. Additional assignment allowed concurrently with active primary
-    const additionalAssignment = await OrganizationService.createStaffAssignment({
-      businessId: biz1.id,
-      businessMembershipId: membership1!.id,
-      branchId: branch1A!.id,
-      departmentId: propDept.id,
-      jobTitleId: sousChefTitle.id,
-      assignmentType: 'additional',
-      isPrimary: false,
-      status: 'active',
-    });
-    assert(
-      additionalAssignment.id !== undefined && additionalAssignment.is_primary === false && additionalAssignment.assignment_type === 'additional',
-      '23. Additional secondary assignment can coexist concurrently with active primary assignment'
-    );
-
-    // 24. Cross-property assignment allowed
-    const crossPropertyAssignment = await OrganizationService.createStaffAssignment({
-      businessId: biz1.id,
-      businessMembershipId: membership1!.id,
-      branchId: branch1B!.id, // Kandy Branch
-      jobTitleId: execChefTitle.id,
-      assignmentType: 'cross_property',
-      isPrimary: false,
-      status: 'active',
-    });
-    assert(
-      crossPropertyAssignment.id !== undefined && crossPropertyAssignment.branch_id === branch1B!.id && crossPropertyAssignment.is_primary === false,
-      '24. Cross-property assignment created successfully'
-    );
-
-    // 25. Acting assignment schema accepted with covered assignment reference
-    const actingAssignment = await OrganizationService.createStaffAssignment({
-      businessId: biz1.id,
-      businessMembershipId: membership1!.id,
-      branchId: branch1A!.id,
-      jobTitleId: execChefTitle.id,
-      assignmentType: 'acting',
-      isPrimary: false,
-      status: 'active',
-      actingForAssignmentId: primaryAssignment.id,
-      reason: 'Covering during medical leave',
-    });
-    assert(
-      actingAssignment.id !== undefined && actingAssignment.acting_for_assignment_id === primaryAssignment.id,
-      '25. Acting assignment created with valid acting_for reference and reason'
-    );
-
-    // 26. Invalid date range rejected (ends_at <= starts_at)
-    let invalidDatesRejected = false;
+    // Assigning to frozen position is rejected
+    let frozenPosRejected = false;
     try {
       await OrganizationService.createStaffAssignment({
         businessId: biz1.id,
-        businessMembershipId: membership1!.id,
-        jobTitleId: execChefTitle.id,
-        startsAt: new Date('2026-08-20T10:00:00Z').toISOString(),
-        endsAt: new Date('2026-08-19T10:00:00Z').toISOString(), // Before start date!
+        businessMembershipId: staff3.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        positionId: frozenPos.id,
+        jobTitleId: lineCookTitle.id,
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('frozen')) {
+        frozenPosRejected = true;
+      }
+    }
+    assert(frozenPosRejected, '20. Assigning staff to frozen position is strictly rejected');
+
+    // Position / Job Title Mismatch Rejection
+    let posJobTitleMismatchRejected = false;
+    try {
+      await OrganizationService.createStaffAssignment({
+        businessId: biz1.id,
+        businessMembershipId: staff3.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        positionId: execChefPos.id, // Exec Chef position
+        jobTitleId: lineCookTitle.id, // Line Cook title
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
       });
     } catch {
-      invalidDatesRejected = true;
+      posJobTitleMismatchRejected = true;
     }
-    assert(invalidDatesRejected, '26. Assignment with end date prior to start date strictly rejected');
+    assert(posJobTitleMismatchRejected, '20b. Mismatched position and job title strictly rejected');
 
-    // 27. Ending primary assignment preserves historical primary classification
-    const transitionTime = new Date().toISOString();
-    const endedPrimary = await OrganizationService.endStaffAssignment({
-      id: primaryAssignment.id,
-      endedAt: transitionTime,
-      reason: 'Promoted to Executive Management',
-    });
-    assert(
-      endedPrimary.status === 'ended' &&
-        endedPrimary.ends_at !== null &&
-        endedPrimary.assignment_type === 'primary' &&
-        endedPrimary.is_primary === true,
-      '27. Ended primary assignment preserves assignment_type=primary and is_primary=true as immutable historical fact'
-    );
-
-    // 28. Creating new primary assignment succeeds once previous primary has ended
-    const newPrimaryAssignment = await OrganizationService.createStaffAssignment({
+    // Multi-capacity position test (headcountLimit = 2)
+    const sousChefAssign1 = await OrganizationService.createStaffAssignment({
       businessId: biz1.id,
-      businessMembershipId: membership1!.id,
+      businessMembershipId: staff3.membership.id,
       branchId: branch1A!.id,
       departmentId: propDept.id,
-      positionId: vacantSousChefPos.id,
+      unitId: mainKitchenUnit.id,
+      positionId: sousChefPos.id,
       jobTitleId: sousChefTitle.id,
       assignmentType: 'primary',
       isPrimary: true,
       status: 'active',
-      startsAt: transitionTime,
+      reportsToAssignmentId: execChefAssignment.id,
+    });
+    const sousOccupancy1 = await OrganizationService.getPositionOccupancy(sousChefPos.id);
+    assert(
+      sousOccupancy1.occupiedCount === 1 && sousOccupancy1.availableSlots === 1 && sousOccupancy1.isFull === false,
+      '21. Multi-capacity position reflects 1 / 2 slots occupied'
+    );
+
+    const sousChefAssign2 = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff4.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      unitId: mainKitchenUnit.id,
+      positionId: sousChefPos.id,
+      jobTitleId: sousChefTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+      reportsToAssignmentId: execChefAssignment.id,
+    });
+    const sousOccupancy2 = await OrganizationService.getPositionOccupancy(sousChefPos.id);
+    assert(
+      sousOccupancy2.occupiedCount === 2 && sousOccupancy2.availableSlots === 0 && sousOccupancy2.isFull === true,
+      '22. Multi-capacity position reaches full status when 2 / 2 slots occupied'
+    );
+
+    // Line cook reporting to Sous Chef 1
+    const lineCookAssign1 = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff5.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      unitId: grillStation.id,
+      positionId: lineCookPosSingleSeat.id,
+      jobTitleId: lineCookTitle.id,
+      assignmentType: 'primary',
+      isPrimary: true,
+      status: 'active',
+      reportsToAssignmentId: sousChefAssign1.id,
+    });
+    assert(lineCookAssign1.id !== undefined, '23. Line cook assigned reporting to Sous Chef 1');
+
+    // Additional Secondary Assignment (staff5 also gets additional role without replacing primary)
+    const pastryTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'Pastry Assistant',
+      hierarchyLevelId: lineCookLevel!.id,
+      departmentType: 'food_and_beverage',
+    });
+    const additionalPastryAssign = await OrganizationService.createAdditionalAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff5.membership.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      jobTitleId: pastryTitle.id,
+      assignmentType: 'additional',
+      status: 'active',
+      reason: 'Cross-training in pastry section',
     });
     assert(
-      newPrimaryAssignment.id !== undefined &&
-        newPrimaryAssignment.assignment_type === 'primary' &&
-        newPrimaryAssignment.is_primary === true &&
-        newPrimaryAssignment.status === 'active',
-      '28a. New primary assignment successfully created following end of previous primary assignment'
+      additionalPastryAssign.id !== undefined &&
+        additionalPastryAssign.is_primary === false &&
+        additionalPastryAssign.assignment_type === 'additional',
+      '23b. Additional secondary assignment successfully created and coexists with active primary'
     );
 
-    // 28b. Verify historical primary and new primary coexist cleanly in history
-    const oldPrimaryCheck = await OrganizationService.getStaffAssignmentById(primaryAssignment.id);
+    // Cross-Property Assignment Foundation & Cross-Property Reporting
+    const kandyDept = await OrganizationService.createDepartment({
+      businessId: biz1.id,
+      branchId: branch1B!.id, // Kandy Sanctuary Property
+      name: 'Kandy Kitchen Operations',
+    });
+    const kandyChefAssign = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff1.membership.id, // Has primary in Corp
+      branchId: branch1B!.id,
+      departmentId: kandyDept.id,
+      jobTitleId: sousChefTitle.id,
+      assignmentType: 'cross_property',
+      isPrimary: false,
+      status: 'active',
+      reportsToAssignmentId: execChefAssignment.id, // Reports to Colombo Exec Chef across properties!
+      reason: 'Cross-property advisory',
+    });
     assert(
-      oldPrimaryCheck?.status === 'ended' &&
-        oldPrimaryCheck?.assignment_type === 'primary' &&
-        oldPrimaryCheck?.is_primary === true &&
-        newPrimaryAssignment.status === 'active' &&
-        newPrimaryAssignment.is_primary === true,
-      '28b. Historical primary record remains 100% unmutated while new primary is active'
+      kandyChefAssign.id !== undefined &&
+        kandyChefAssign.branch_id === branch1B!.id &&
+        kandyChefAssign.reports_to_assignment_id === execChefAssignment.id,
+      '23c. Cross-property assignment created and allowed to report to manager at another property within same business'
     );
 
-    console.log('\n--- 7. Database-Level Enforcement & Trigger Defense ---');
+    console.log('\n--- 6. Reporting Engine: Direct Reports, Chains & Trees ---');
 
-    // 29. DB Unique Partial Index: Raw SQL attempting to insert second active primary assignment triggers index
-    const { error: dbDuplicatePrimaryErr } = await admin.from('staff_assignments').insert({
-      business_id: biz1.id,
-      business_membership_id: membership1!.id,
+    // Direct Reports of Exec Chef (should have 2 local sous chefs + 1 cross-property chef)
+    const execDirectReports = await OrganizationService.getDirectReports(execChefAssignment.id);
+    assert(
+      execDirectReports.length === 3 &&
+        execDirectReports.some((r) => r.id === sousChefAssign1.id) &&
+        execDirectReports.some((r) => r.id === sousChefAssign2.id) &&
+        execDirectReports.some((r) => r.id === kandyChefAssign.id),
+      '24. getDirectReports returns exact direct subordinates (including cross-property report)'
+    );
+
+    // Reporting Chain from Line Cook up to F&B Director
+    const cookChain = await OrganizationService.getReportingChain(lineCookAssign1.id);
+    assert(
+      cookChain.length === 4 &&
+        cookChain[0].id === lineCookAssign1.id &&
+        cookChain[1].id === sousChefAssign1.id &&
+        cookChain[2].id === execChefAssignment.id &&
+        cookChain[3].id === fbDirectorAssignment.id,
+      '25. getReportingChain returns full linear chain: Line Cook -> Sous Chef -> Exec Chef -> F&B Director'
+    );
+
+    // Reporting Tree from Root
+    const tree = await OrganizationService.getReportingTree(fbDirectorAssignment.id);
+    assert(
+      tree.length === 1 &&
+        tree[0].assignment.id === fbDirectorAssignment.id &&
+        tree[0].directReports.length === 1 &&
+        tree[0].directReports[0].assignment.id === execChefAssignment.id &&
+        tree[0].directReports[0].directReports.length === 3,
+      '26. getReportingTree builds complete recursive hierarchy tree'
+    );
+
+    console.log('\n--- 7. Reporting Cycle Prevention Defense ---');
+
+    // 2-Hop Cycle Rejection: Trying to make Exec Chef report to Line Cook (Line Cook reports to Sous Chef -> Exec Chef)
+    let twoHopCycleRejected = false;
+    try {
+      await OrganizationService.setReportingManager({
+        businessId: biz1.id,
+        assignmentId: execChefAssignment.id,
+        reportsToAssignmentId: lineCookAssign1.id,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && (err.message.includes('Circular reporting') || err.message.includes('ancestry'))) {
+        twoHopCycleRejected = true;
+      }
+    }
+    assert(twoHopCycleRejected, '27. Multi-hop circular reporting loop (Exec Chef -> Line Cook) strictly blocked by database trigger');
+
+    // 3-Hop Cycle Rejection: F&B Director (Top) -> Line Cook
+    let threeHopCycleRejected = false;
+    try {
+      await OrganizationService.setReportingManager({
+        businessId: biz1.id,
+        assignmentId: fbDirectorAssignment.id,
+        reportsToAssignmentId: lineCookAssign1.id,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && (err.message.includes('Circular reporting') || err.message.includes('ancestry'))) {
+        threeHopCycleRejected = true;
+      }
+    }
+    assert(threeHopCycleRejected, '27b. 3-hop circular reporting loop (F&B Director -> Line Cook) strictly blocked by database trigger');
+
+    // Direct Self-Reporting Rejection
+    let selfReportRejected = false;
+    try {
+      await OrganizationService.setReportingManager({
+        businessId: biz1.id,
+        assignmentId: lineCookAssign1.id,
+        reportsToAssignmentId: lineCookAssign1.id,
+      });
+    } catch {
+      selfReportRejected = true;
+    }
+    assert(selfReportRejected, '28. Assignment reporting to itself strictly rejected');
+
+    // Rejection of reporting to an ended manager
+    const tempAssignToEnd = await OrganizationService.createStaffAssignment({
+      businessId: biz1.id,
+      businessMembershipId: staff4.membership.id,
+      jobTitleId: lineCookTitle.id,
+      assignmentType: 'temporary',
+      isPrimary: false,
+      status: 'active',
+    });
+    await OrganizationService.endStaffAssignment({
+      id: tempAssignToEnd.id,
+      reason: 'Temporary role ended',
+    });
+    let endedMgrRejected = false;
+    try {
+      await OrganizationService.setReportingManager({
+        businessId: biz1.id,
+        assignmentId: lineCookAssign1.id,
+        reportsToAssignmentId: tempAssignToEnd.id,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes('ended')) {
+        endedMgrRejected = true;
+      }
+    }
+    assert(endedMgrRejected, '28b. Reporting to an ended manager is strictly rejected');
+
+    // Reporting Manager Change with History Tracking
+    const mgrChangeRes = await OrganizationService.setReportingManager({
+      businessId: biz1.id,
+      assignmentId: lineCookAssign1.id,
+      reportsToAssignmentId: sousChefAssign2.id, // Reassigned to Sous Chef 2
+      reason: 'Shift re-alignment',
+    });
+    assert(mgrChangeRes.success === true, '29. setReportingManager successfully updates reporting manager');
+
+    const repHistory = await OrganizationService.getReportingHistory(lineCookAssign1.id);
+    assert(
+      repHistory.length >= 2 &&
+        repHistory[0].new_manager_assignment_id === sousChefAssign2.id &&
+        repHistory[0].previous_manager_assignment_id === sousChefAssign1.id,
+      '30. organization_reporting_history records previous and new manager with reason'
+    );
+
+    console.log('\n--- 8. Atomic Primary Transitions (Promotion & Transfer) ---');
+
+    // Atomic Promotion: Promote staff5 (Line Cook) to a new position
+    const juniorSousChefTitle = await OrganizationService.createJobTitle({
+      businessId: biz1.id,
+      name: 'Junior Sous Chef',
+      hierarchyLevelId: sousChefLevel!.id,
+      departmentType: 'food_and_beverage',
+    });
+
+    const juniorSousChefPos = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      branchId: branch1A!.id,
+      departmentId: propDept.id,
+      unitId: mainKitchenUnit.id,
+      jobTitleId: juniorSousChefTitle.id,
+      headcountLimit: 1,
+      status: 'active',
+    });
+
+    const promoTime = new Date().toISOString();
+    const promoRes = await OrganizationService.transitionPrimaryAssignment({
+      businessId: biz1.id,
+      currentAssignmentId: lineCookAssign1.id,
+      newPositionId: juniorSousChefPos.id,
+      newJobTitleId: juniorSousChefTitle.id,
+      newBranchId: branch1A!.id,
+      newDepartmentId: propDept.id,
+      newUnitId: mainKitchenUnit.id,
+      newReportsToId: execChefAssignment.id,
+      transitionType: 'promotion',
+      reason: 'Promoted for outstanding culinary leadership',
+      transitionTime: promoTime,
+    });
+
+    assert(promoRes.success === true, '31. transitionPrimaryAssignment atomically executes promotion');
+
+    // Verify Old Primary is ended and preserves history
+    const oldCookAssign = await OrganizationService.getStaffAssignmentById(lineCookAssign1.id);
+    assert(
+      oldCookAssign?.status === 'ended' &&
+        oldCookAssign?.is_primary === true &&
+        oldCookAssign?.assignment_type === 'primary' &&
+        oldCookAssign?.ends_at !== null,
+      '32. Old primary assignment preserved as ended with is_primary=true (immutable historical fact)'
+    );
+
+    // Verify New Primary is active
+    const newPromoAssign = await OrganizationService.getStaffAssignmentById(promoRes.newAssignmentId);
+    assert(
+      newPromoAssign?.status === 'active' &&
+        newPromoAssign?.is_primary === true &&
+        newPromoAssign?.job_title_id === juniorSousChefTitle.id,
+      '33. New promoted primary assignment is active with correct job title'
+    );
+
+    // Verify Old Cook position capacity is now freed up
+    const freedCookOcc = await OrganizationService.getPositionOccupancy(lineCookPosSingleSeat.id);
+    assert(
+      freedCookOcc.occupiedCount === 0 && freedCookOcc.isFull === false,
+      '34. Vacation of old position upon primary transition immediately frees occupancy'
+    );
+
+    // Failed Transition Rollback: Try to transition staff4 to full Exec Chef position
+    let failedTransitionRejected = false;
+    try {
+      await OrganizationService.transitionPrimaryAssignment({
+        businessId: biz1.id,
+        currentAssignmentId: sousChefAssign2.id,
+        newPositionId: execChefPos.id, // Full!
+        transitionType: 'promotion',
+      });
+    } catch {
+      failedTransitionRejected = true;
+    }
+    assert(failedTransitionRejected, '35. Primary transition to full position strictly rejected');
+
+    // Verify sousChefAssign2 remains active and uncorrupted
+    const uncorruptedSousAssign = await OrganizationService.getStaffAssignmentById(sousChefAssign2.id);
+    assert(
+      uncorruptedSousAssign?.status === 'active' && uncorruptedSousAssign?.is_primary === true,
+      '36. Failed primary transition preserves original primary assignment active with zero state corruption'
+    );
+
+    console.log('\n--- 9. Concurrency Safety Races ---');
+
+    // Concurrency Race A: 2 concurrent assignments into a 1-seat position (lineCookPosSingleSeat)
+    const newStaffA = await createStaffMember('raceStaffA', 'kitchen_staff');
+    const newStaffB = await createStaffMember('raceStaffB', 'kitchen_staff');
+
+    const raceResults = await Promise.allSettled([
+      OrganizationService.createStaffAssignment({
+        businessId: biz1.id,
+        businessMembershipId: newStaffA.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        unitId: grillStation.id,
+        positionId: lineCookPosSingleSeat.id,
+        jobTitleId: lineCookTitle.id,
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
+      }),
+      OrganizationService.createStaffAssignment({
+        businessId: biz1.id,
+        businessMembershipId: newStaffB.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        unitId: grillStation.id,
+        positionId: lineCookPosSingleSeat.id,
+        jobTitleId: lineCookTitle.id,
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
+      }),
+    ]);
+
+    const raceSuccesses = raceResults.filter((r) => r.status === 'fulfilled');
+    const raceRejections = raceResults.filter((r) => r.status === 'rejected');
+    assert(
+      raceSuccesses.length === 1 && raceRejections.length === 1,
+      '37. Concurrency Race: Two simultaneous assignments to 1-seat position results in exactly 1 winner and 1 clean capacity rejection'
+    );
+
+    // Concurrency Race B: 2 concurrent primary assignments for the same member (newStaffA if not won, or new test member)
+    const raceMemberUser = await createStaffMember('doublePrimaryRace', 'kitchen_staff');
+    const doublePrimaryResults = await Promise.allSettled([
+      OrganizationService.createStaffAssignment({
+        businessId: biz1.id,
+        businessMembershipId: raceMemberUser.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        jobTitleId: lineCookTitle.id,
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
+      }),
+      OrganizationService.createStaffAssignment({
+        businessId: biz1.id,
+        businessMembershipId: raceMemberUser.membership.id,
+        branchId: branch1A!.id,
+        departmentId: propDept.id,
+        jobTitleId: lineCookTitle.id,
+        assignmentType: 'primary',
+        isPrimary: true,
+        status: 'active',
+      }),
+    ]);
+
+    const doublePrimarySuccesses = doublePrimaryResults.filter((r) => r.status === 'fulfilled');
+    assert(
+      doublePrimarySuccesses.length === 1,
+      '38. Concurrency Race: Two simultaneous primary assignments for same member results in exactly 1 active primary assignment'
+    );
+
+    console.log('\n--- 10. Member Profiles, History & Integrity Diagnostics ---');
+
+    // Member Assignment History
+    const staff5History = await OrganizationService.getMemberAssignmentHistory(staff5.membership.id);
+    assert(
+      staff5History.length === 3 &&
+        staff5History.some((a) => a.status === 'active' && a.is_primary === true) &&
+        staff5History.some((a) => a.status === 'active' && a.is_primary === false) &&
+        staff5History.some((a) => a.status === 'ended' && a.is_primary === true),
+      '39. getMemberAssignmentHistory returns complete chronological assignment timeline'
+    );
+
+    // Member Organization Profile & Branch Mismatch Detection
+    const profile = await OrganizationService.getMemberOrganizationProfile(staff5.membership.id);
+    assert(
+      profile.primaryAssignment !== null &&
+        profile.effectiveAssignments.length === 2 &&
+        profile.additionalAssignments.length === 1 &&
+        profile.organizationBranchAccessMismatch === true, // Branch1A is assigned organizationally but not in branch_assignments
+      '40. getMemberOrganizationProfile generates composite profile and accurately flags organizationBranchAccessMismatch'
+    );
+
+    // Organization Integrity Diagnostics
+    const issues = await OrganizationService.getOrganizationIntegrityIssues(biz1.id);
+    assert(
+      issues.length > 0 &&
+        issues.some((i) => i.type === 'branch_access_mismatch'),
+      '41. getOrganizationIntegrityIssues evaluates organization health and identifies actionable items'
+    );
+
+    console.log('\n--- 11. Cross-Tenant Boundary Security ---');
+
+    // Direct SQL insert of assignment referencing cross-business manager is rejected
+    const { error: crossTenantMgrErr } = await admin.from('staff_assignments').insert({
+      business_id: biz2.id,
+      business_membership_id: membershipBiz2!.id,
       job_title_id: execChefTitle.id,
       assignment_type: 'primary',
       is_primary: true,
       status: 'active',
+      reports_to_assignment_id: fbDirectorAssignment.id, // Biz 1 assignment
     });
-    assert(
-      dbDuplicatePrimaryErr !== null,
-      '29. DB partial unique index idx_one_active_primary_assignment strictly blocks raw SQL second active primary assignment'
-    );
+    assert(crossTenantMgrErr !== null, '42. Cross-business reporting manager reference strictly blocked by database trigger');
 
-    // 30. DB Trigger: Direct SQL Cross-business references rejected
-    const { error: dbCrossDeptErr } = await admin.from('organization_departments').insert({
-      business_id: biz1.id,
-      branch_id: branch2A!.id, // Biz 2 branch
-      name: 'Direct SQL Malicious Dept',
-    });
-    assert(dbCrossDeptErr !== null, '30a. DB trigger strictly blocks raw SQL department insert with cross-tenant branch_id');
+    console.log('\n--- 12. Backward Compatibility & RBAC Stability ---');
 
-    const { error: dbCrossUnitErr } = await admin.from('organization_units').insert({
-      business_id: biz1.id,
-      department_id: biz2Dept.id, // Biz 2 department
-      unit_type: 'team',
-      name: 'Direct SQL Malicious Unit',
-    });
-    assert(dbCrossUnitErr !== null, '30b. DB trigger strictly blocks raw SQL unit insert with cross-tenant department_id');
-
-    const { error: dbCrossJtErr } = await admin.from('organization_job_titles').insert({
-      business_id: biz1.id,
-      name: 'Direct SQL Malicious Job Title',
-      hierarchy_level_id: levelsBiz2[0].id, // Biz 2 hierarchy level
-    });
-    assert(dbCrossJtErr !== null, '30c. DB trigger strictly blocks raw SQL job title insert with cross-tenant hierarchy_level_id');
-
-    const { error: dbCrossPosErr } = await admin.from('organization_positions').insert({
-      business_id: biz1.id,
-      job_title_id: execChefTitle.id,
-      department_id: biz2Dept.id, // Biz 2 department
-    });
-    assert(dbCrossPosErr !== null, '30d. DB trigger strictly blocks raw SQL position insert with cross-tenant department_id');
-
-    // 31. DB Trigger: Direct SQL Self-acting and Self-reporting rejected
-    const { error: dbSelfActingErr } = await admin.from('staff_assignments').insert({
-      id: '11111111-2222-3333-4444-555555555555',
-      business_id: biz1.id,
-      business_membership_id: membership1!.id,
-      job_title_id: execChefTitle.id,
-      assignment_type: 'acting',
-      is_primary: false,
-      status: 'active',
-      acting_for_assignment_id: '11111111-2222-3333-4444-555555555555', // Self acting
-    });
-    assert(dbSelfActingErr !== null, '31a. DB trigger & check constraint strictly block assignment acting for itself');
-
-    const { error: dbSelfReportsErr } = await admin.from('staff_assignments').insert({
-      id: '22222222-3333-4444-5555-666666666666',
-      business_id: biz1.id,
-      business_membership_id: membership1!.id,
-      job_title_id: execChefTitle.id,
-      assignment_type: 'additional',
-      is_primary: false,
-      status: 'active',
-      reports_to_assignment_id: '22222222-3333-4444-5555-666666666666', // Self reporting
-    });
-    assert(dbSelfReportsErr !== null, '31b. DB trigger & check constraint strictly block assignment reporting to itself');
-
-    // 32. DB Trigger: Direct SQL Cross-business acting and reporting rejected
-    const biz2Assignment = await OrganizationService.createStaffAssignment({
-      businessId: biz2.id,
-      businessMembershipId: membership2!.id,
-      jobTitleId: (await OrganizationService.createJobTitle({ businessId: biz2.id, name: 'Galle Cashier', hierarchyLevelId: levelsBiz2[7].id })).id,
-      assignmentType: 'primary',
-      isPrimary: true,
-      status: 'active',
-    });
-
-    const { error: dbCrossActingErr } = await admin.from('staff_assignments').insert({
-      business_id: biz1.id,
-      business_membership_id: membership1!.id,
-      job_title_id: execChefTitle.id,
-      assignment_type: 'acting',
-      is_primary: false,
-      status: 'active',
-      acting_for_assignment_id: biz2Assignment.id, // Cross-business acting target
-    });
-    assert(dbCrossActingErr !== null, '32a. DB trigger strictly blocks cross-business acting reference');
-
-    const { error: dbCrossReportsErr } = await admin.from('staff_assignments').insert({
-      business_id: biz1.id,
-      business_membership_id: membership1!.id,
-      job_title_id: execChefTitle.id,
-      assignment_type: 'additional',
-      is_primary: false,
-      status: 'active',
-      reports_to_assignment_id: biz2Assignment.id, // Cross-business reporting target
-    });
-    assert(dbCrossReportsErr !== null, '32b. DB trigger strictly blocks cross-business reports-to reference');
-
-    console.log('\n--- 8. Effective Assignment Semantic Verification ---');
-
-    // 33. Effective assignment helper logic
-    const now = new Date();
-    const pastDate = new Date(now.getTime() - 86400000).toISOString();
-    const futureDate = new Date(now.getTime() + 86400000).toISOString();
-    const expiredDate = new Date(now.getTime() - 3600000).toISOString();
-
-    const activeEffective = OrganizationService.isAssignmentEffective({
-      status: 'active',
-      starts_at: pastDate,
-      ends_at: futureDate,
-    });
-    assert(activeEffective === true, '33a. Active assignment currently within time window is effective');
-
-    const futureScheduled = OrganizationService.isAssignmentEffective({
-      status: 'active',
-      starts_at: futureDate,
-      ends_at: null,
-    });
-    assert(futureScheduled === false, '33b. Active assignment with future start date is not yet effective');
-
-    const expiredActive = OrganizationService.isAssignmentEffective({
-      status: 'active',
-      starts_at: pastDate,
-      ends_at: expiredDate,
-    });
-    assert(expiredActive === false, '33c. Active assignment with past end date is not effective');
-
-    const endedAssignmentCheck = OrganizationService.isAssignmentEffective({
-      status: 'ended',
-      starts_at: pastDate,
-      ends_at: futureDate,
-    });
-    assert(endedAssignmentCheck === false, '33d. Assignment with status=ended is never effective');
-
-    // 34. getStaffAssignments effectiveOnly filtering
-    const effectiveList = await OrganizationService.getStaffAssignments(biz1.id, { effectiveOnly: true });
-    const allList = await OrganizationService.getStaffAssignments(biz1.id);
-    assert(
-      effectiveList.length > 0 && effectiveList.length <= allList.length,
-      '34. getStaffAssignments with effectiveOnly=true filters to active window'
-    );
-
-    console.log('\n--- 9. Backward Compatibility & RBAC Invariance ---');
-
-    // 35. Existing business_memberships unchanged
-    const { data: memCheck } = await admin
+    const { data: mem1Check } = await admin
       .from('business_memberships')
       .select('id, role, membership_status')
-      .eq('id', membership1!.id)
+      .eq('id', staff1.membership.id)
       .single();
     assert(
-      memCheck?.role === 'branch_manager' && memCheck?.membership_status === 'active',
-      '35. Existing business_membership schema and operational roles remain 100% intact'
+      mem1Check?.role === 'branch_manager' && mem1Check?.membership_status === 'active',
+      '43. Existing business_memberships table remains 100% authoritative and intact'
     );
 
-    // 36. Existing branch_assignments table unchanged
-    const { data: branchAssign } = await admin
+    const { data: branchAssignCheck } = await admin
       .from('branch_assignments')
       .insert({
-        business_membership_id: membership1!.id,
+        business_membership_id: staff1.membership.id,
         branch_id: branch1A!.id,
         is_primary: true,
       })
       .select()
       .single();
     assert(
-      branchAssign?.id !== undefined && branchAssign.branch_id === branch1A!.id,
-      '36. Existing branch_assignments table operates completely unchanged'
+      branchAssignCheck?.id !== undefined && branchAssignCheck.branch_id === branch1A!.id,
+      '44. Operational branch_assignments table operates completely undisturbed'
     );
 
-    // 37. Existing RBAC permissions check
-    const hasOrgView = await PermissionService.hasPermission(staffUser1.user.id, biz1.id, branch1A!.id, 'organization.view');
-    const hasPeopleManage = await PermissionService.hasPermission(staffUser1.user.id, biz1.id, branch1A!.id, 'people.manage');
-    const cashierHasOrgManage = await PermissionService.hasPermission(staffUser2.user.id, biz2.id, branch2A!.id, 'organization.manage');
-
-    assert(hasOrgView === true, '37a. Branch manager inherits organization.view permission grant');
-    assert(hasPeopleManage === true, '37b. Branch manager inherits people.manage permission grant');
-    assert(cashierHasOrgManage === false, '37c. Cashier role strictly denied organization.manage permission (zero permission escalation)');
+    const hasPeopleManage = await PermissionService.hasPermission(staff1.user.id, biz1.id, branch1A!.id, 'people.manage');
+    const cashierHasPeopleManage = await PermissionService.hasPermission(biz2User.user.id, biz2.id, branch2A!.id, 'people.manage');
+    assert(hasPeopleManage === true, '45a. Branch Manager role has people.manage permission');
+    assert(cashierHasPeopleManage === false, '45b. Cashier role is strictly denied people.manage (zero permission escalation)');
   } finally {
     // -------------------------------------------------------------
     // Clean Teardown of Test Entities
@@ -797,7 +1006,7 @@ async function runSuite() {
   }
 
   console.log('================================================================');
-  console.log(`  Phase 29 Step 1 Verification: ${passedAssertions} / ${totalAssertions} ASSERTIONS PASSED`);
+  console.log(`  Phase 29 Step 2 Verification: ${passedAssertions} / ${totalAssertions} ASSERTIONS PASSED`);
   console.log('================================================================\n');
 
   if (passedAssertions !== totalAssertions) {

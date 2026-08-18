@@ -41,6 +41,15 @@ export const staffAssignmentStatusEnum = z.enum([
 ]);
 export type StaffAssignmentStatus = z.infer<typeof staffAssignmentStatusEnum>;
 
+export const assignmentTransitionTypeEnum = z.enum([
+  'promotion',
+  'transfer',
+  'reorganization',
+  'demotion',
+  'other',
+]);
+export type AssignmentTransitionType = z.infer<typeof assignmentTransitionTypeEnum>;
+
 // Helper to coerce empty string to null/undefined
 const emptyStringToNull = z.literal('').transform(() => null);
 const optionalNullableUuid = z
@@ -215,7 +224,7 @@ export const createStaffAssignmentSchema = z
   .transform((data) => {
     // Canonical parity sync: assignment_type = 'primary' iff is_primary = true
     const isPrimaryComputed = data.isPrimary !== undefined ? data.isPrimary : data.assignmentType === 'primary';
-    const assignmentTypeComputed = isPrimaryComputed ? 'primary' : (data.assignmentType === 'primary' ? 'additional' : data.assignmentType);
+    const assignmentTypeComputed = (isPrimaryComputed ? 'primary' : (data.assignmentType === 'primary' ? 'additional' : data.assignmentType)) as StaffAssignmentType;
     return {
       ...data,
       isPrimary: isPrimaryComputed,
@@ -243,6 +252,42 @@ export const createStaffAssignmentSchema = z
   );
 export type CreateStaffAssignmentInput = z.input<typeof createStaffAssignmentSchema>;
 
+export const createAdditionalAssignmentSchema = z
+  .object({
+    businessId: z.string().uuid('Invalid business ID'),
+    businessMembershipId: z.string().uuid('Invalid business membership ID'),
+    branchId: optionalNullableUuid,
+    departmentId: optionalNullableUuid,
+    unitId: optionalNullableUuid,
+    positionId: optionalNullableUuid,
+    jobTitleId: z.string().uuid('Invalid job title ID'),
+    assignmentType: z.enum(['additional', 'cross_property', 'temporary', 'acting', 'secondment']).default('additional'),
+    status: staffAssignmentStatusEnum.default('active'),
+    startsAt: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+    endsAt: z.union([z.string().datetime(), z.date(), emptyStringToNull, z.null(), z.undefined()]).optional(),
+    actingForAssignmentId: optionalNullableUuid,
+    reportsToAssignmentId: optionalNullableUuid,
+    reason: optionalNullableString,
+  })
+  .transform((data) => ({
+    ...data,
+    isPrimary: false,
+    assignmentType: data.assignmentType as StaffAssignmentType,
+  }))
+  .refine(
+    (data) => {
+      if (!data.endsAt) return true;
+      const start = new Date(data.startsAt).getTime();
+      const end = new Date(data.endsAt).getTime();
+      return end > start;
+    },
+    {
+      message: 'End date must be strictly after start date',
+      path: ['endsAt'],
+    }
+  );
+export type CreateAdditionalAssignmentInput = z.input<typeof createAdditionalAssignmentSchema>;
+
 export const updateStaffAssignmentSchema = z
   .object({
     id: z.string().uuid('Invalid staff assignment ID'),
@@ -262,7 +307,7 @@ export const updateStaffAssignmentSchema = z
   })
   .transform((data) => {
     let isPrimaryComputed = data.isPrimary;
-    let assignmentTypeComputed = data.assignmentType;
+    let assignmentTypeComputed = data.assignmentType as StaffAssignmentType | undefined;
 
     if (isPrimaryComputed !== undefined && assignmentTypeComputed === undefined) {
       assignmentTypeComputed = isPrimaryComputed ? 'primary' : 'additional';
@@ -306,3 +351,34 @@ export const endStaffAssignmentSchema = z.object({
   reason: optionalNullableString,
 });
 export type EndStaffAssignmentInput = z.input<typeof endStaffAssignmentSchema>;
+
+// ==========================================
+// 8. Primary Assignment Transition Validation
+// ==========================================
+
+export const transitionPrimaryAssignmentSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  currentAssignmentId: z.string().uuid('Invalid current assignment ID'),
+  newPositionId: optionalNullableUuid,
+  newJobTitleId: optionalNullableUuid,
+  newBranchId: optionalNullableUuid,
+  newDepartmentId: optionalNullableUuid,
+  newUnitId: optionalNullableUuid,
+  newReportsToId: optionalNullableUuid,
+  transitionType: assignmentTransitionTypeEnum.default('promotion'),
+  reason: optionalNullableString,
+  transitionTime: z.union([z.string().datetime(), z.date()]).default(() => new Date().toISOString()),
+});
+export type TransitionPrimaryAssignmentInput = z.input<typeof transitionPrimaryAssignmentSchema>;
+
+// ==========================================
+// 9. Reporting Manager Validation
+// ==========================================
+
+export const setReportingManagerSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  assignmentId: z.string().uuid('Invalid staff assignment ID'),
+  reportsToAssignmentId: optionalNullableUuid,
+  reason: optionalNullableString,
+});
+export type SetReportingManagerInput = z.input<typeof setReportingManagerSchema>;

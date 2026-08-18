@@ -11,8 +11,11 @@ import {
   CreatePositionInput,
   UpdatePositionInput,
   CreateStaffAssignmentInput,
+  CreateAdditionalAssignmentInput,
   UpdateStaffAssignmentInput,
   EndStaffAssignmentInput,
+  TransitionPrimaryAssignmentInput,
+  SetReportingManagerInput,
   createHierarchyLevelSchema,
   updateHierarchyLevelSchema,
   createDepartmentSchema,
@@ -24,8 +27,11 @@ import {
   createPositionSchema,
   updatePositionSchema,
   createStaffAssignmentSchema,
+  createAdditionalAssignmentSchema,
   updateStaffAssignmentSchema,
   endStaffAssignmentSchema,
+  transitionPrimaryAssignmentSchema,
+  setReportingManagerSchema,
 } from '@/lib/validation/organization';
 
 // Default standard hierarchy levels
@@ -39,6 +45,11 @@ export const DEFAULT_ORGANIZATION_HIERARCHY_LEVELS = [
   { rank: 7, name: 'Supervisory', isManagement: false },
   { rank: 8, name: 'Operational', isManagement: false },
 ];
+
+export interface ReportingTreeNode {
+  assignment: Record<string, unknown>;
+  directReports: ReportingTreeNode[];
+}
 
 export class OrganizationService {
   // ==========================================
@@ -151,103 +162,78 @@ export class OrganizationService {
       .maybeSingle();
 
     if (!member || member.business_id !== businessId) {
-      return { valid: false, error: `Business membership ${membershipId} does not belong to business ${businessId}` };
+      return { valid: false, error: 'Business membership does not belong to the given business' };
     }
 
     // Check job title
-    const { data: jt } = await admin
-      .from('organization_job_titles')
-      .select('id, business_id')
-      .eq('id', jobTitleId)
-      .maybeSingle();
-
-    if (!jt || jt.business_id !== businessId) {
-      return { valid: false, error: `Job title ${jobTitleId} does not belong to business ${businessId}` };
+    const validJt = await this.validateJobTitleBelongsToBusiness(jobTitleId, businessId);
+    if (!validJt) {
+      return { valid: false, error: 'Job title does not belong to the given business' };
     }
 
-    // Check branch
+    // Check branch if provided
     if (branchId) {
       const validBranch = await this.validateBranchBelongsToBusiness(branchId, businessId);
-      if (!validBranch) return { valid: false, error: `Branch ${branchId} does not belong to business ${businessId}` };
+      if (!validBranch) {
+        return { valid: false, error: 'Branch does not belong to the given business' };
+      }
     }
 
-    // Check department
+    // Check department if provided
     if (departmentId) {
       const validDept = await this.validateDepartmentBelongsToBusiness(departmentId, businessId);
-      if (!validDept) return { valid: false, error: `Department ${departmentId} does not belong to business ${businessId}` };
+      if (!validDept) {
+        return { valid: false, error: 'Department does not belong to the given business' };
+      }
     }
 
-    // Check unit
+    // Check unit if provided
     if (unitId) {
-      const { data: u } = await admin
-        .from('organization_units')
-        .select('id, business_id, department_id')
-        .eq('id', unitId)
+      if (!departmentId) {
+        return { valid: false, error: 'Department is required when specifying an organization unit' };
+      }
+      const validUnit = await this.validateUnitBelongsToDepartment(unitId, departmentId, businessId);
+      if (!validUnit) {
+        return { valid: false, error: 'Organization unit does not belong to the given department or business' };
+      }
+    }
+
+    // Check position if provided
+    if (positionId) {
+      const validPos = await this.validatePositionHierarchy(positionId, businessId, branchId, departmentId, unitId);
+      if (!validPos) {
+        return { valid: false, error: 'Position does not match the provided organizational hierarchy context' };
+      }
+
+      // Check job title matches position job title
+      const { data: pos } = await admin
+        .from('organization_positions')
+        .select('job_title_id')
+        .eq('id', positionId)
         .maybeSingle();
 
-      if (!u || u.business_id !== businessId) {
-        return { valid: false, error: `Unit ${unitId} does not belong to business ${businessId}` };
+      if (pos && pos.job_title_id !== jobTitleId) {
+        return { valid: false, error: 'Assignment job title must match position job title' };
       }
-      if (departmentId && u.department_id !== departmentId) {
-        return { valid: false, error: `Unit ${unitId} does not belong to department ${departmentId}` };
-      }
-    }
-
-    // Check position
-    if (positionId) {
-      const validPos = await this.validatePositionHierarchy(positionId, businessId);
-      if (!validPos) return { valid: false, error: `Position ${positionId} does not belong to business ${businessId}` };
     }
 
     return { valid: true };
   }
 
   // ==========================================
-  // 2. Organization Hierarchy Levels
+  // 2. Hierarchy Levels
   // ==========================================
 
-  static async ensureDefaultHierarchyLevels(businessId: string): Promise<void> {
+  static async getHierarchyLevels(businessId: string) {
     const admin = createAdminClient();
-    const rows = DEFAULT_ORGANIZATION_HIERARCHY_LEVELS.map((lvl) => ({
-      business_id: businessId,
-      rank: lvl.rank,
-      name: lvl.name,
-      is_management: lvl.isManagement,
-      is_active: true,
-    }));
-
-    await admin
-      .from('organization_hierarchy_levels')
-      .upsert(rows, { onConflict: 'business_id,rank', ignoreDuplicates: true });
-  }
-
-  static async getHierarchyLevels(businessId: string, options?: { activeOnly?: boolean }) {
-    const admin = createAdminClient();
-    let query = admin
+    const { data, error } = await admin
       .from('organization_hierarchy_levels')
       .select('*')
       .eq('business_id', businessId)
       .order('rank', { ascending: true });
 
-    if (options?.activeOnly) {
-      query = query.eq('is_active', true);
-    }
-
-    const { data, error } = await query;
     if (error) throw new Error(`Failed to fetch hierarchy levels: ${error.message}`);
     return data || [];
-  }
-
-  static async getHierarchyLevelById(id: string) {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('organization_hierarchy_levels')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to fetch hierarchy level: ${error.message}`);
-    return data;
   }
 
   static async createHierarchyLevel(input: CreateHierarchyLevelInput) {
@@ -293,6 +279,27 @@ export class OrganizationService {
     return data;
   }
 
+  static async ensureDefaultHierarchyLevels(businessId: string) {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from('organization_hierarchy_levels')
+      .select('id')
+      .eq('business_id', businessId)
+      .limit(1);
+
+    if (!existing || existing.length === 0) {
+      const inserts = DEFAULT_ORGANIZATION_HIERARCHY_LEVELS.map((lvl) => ({
+        business_id: businessId,
+        rank: lvl.rank,
+        name: lvl.name,
+        is_management: lvl.isManagement,
+        is_active: true,
+      }));
+
+      await admin.from('organization_hierarchy_levels').insert(inserts);
+    }
+  }
+
   // ==========================================
   // 3. Departments
   // ==========================================
@@ -301,7 +308,7 @@ export class OrganizationService {
     const admin = createAdminClient();
     let query = admin
       .from('organization_departments')
-      .select('*, branch:branches(id, name, code)')
+      .select('*, branch:branches(id, name, code), parent_department:organization_departments!parent_department_id(id, name, code)')
       .eq('business_id', businessId)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
@@ -313,7 +320,6 @@ export class OrganizationService {
         query = query.eq('branch_id', options.branchId);
       }
     }
-
     if (options?.activeOnly) {
       query = query.eq('is_active', true).is('archived_at', null);
     }
@@ -327,7 +333,7 @@ export class OrganizationService {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('organization_departments')
-      .select('*, branch:branches(id, name, code), parent:organization_departments(id, name, code)')
+      .select('*, branch:branches(id, name, code), parent_department:organization_departments!parent_department_id(id, name, code)')
       .eq('id', id)
       .maybeSingle();
 
@@ -339,16 +345,13 @@ export class OrganizationService {
     const parsed = createDepartmentSchema.parse(input);
     const admin = createAdminClient();
 
-    // Verify branch tenant if provided
     if (parsed.branchId) {
-      const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!validBranch) throw new Error(`Branch ${parsed.branchId} does not belong to business ${parsed.businessId}`);
+      const valid = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
+      if (!valid) throw new Error('Branch does not belong to the given business');
     }
-
-    // Verify parent department tenant if provided
     if (parsed.parentDepartmentId) {
-      const validParent = await this.validateDepartmentBelongsToBusiness(parsed.parentDepartmentId, parsed.businessId);
-      if (!validParent) throw new Error(`Parent department ${parsed.parentDepartmentId} does not belong to business ${parsed.businessId}`);
+      const valid = await this.validateDepartmentBelongsToBusiness(parsed.parentDepartmentId, parsed.businessId);
+      if (!valid) throw new Error('Parent department does not belong to the given business');
     }
 
     const { data, error } = await admin
@@ -377,11 +380,11 @@ export class OrganizationService {
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
+    if (parsed.branchId !== undefined) updatePayload.branch_id = parsed.branchId;
+    if (parsed.parentDepartmentId !== undefined) updatePayload.parent_department_id = parsed.parentDepartmentId;
     if (parsed.name !== undefined) updatePayload.name = parsed.name;
     if (parsed.code !== undefined) updatePayload.code = parsed.code;
     if (parsed.departmentType !== undefined) updatePayload.department_type = parsed.departmentType;
-    if (parsed.branchId !== undefined) updatePayload.branch_id = parsed.branchId;
-    if (parsed.parentDepartmentId !== undefined) updatePayload.parent_department_id = parsed.parentDepartmentId;
     if (parsed.isActive !== undefined) updatePayload.is_active = parsed.isActive;
     if (parsed.sortOrder !== undefined) updatePayload.sort_order = parsed.sortOrder;
 
@@ -418,11 +421,14 @@ export class OrganizationService {
   // 4. Organization Units
   // ==========================================
 
-  static async getUnits(businessId: string, options?: { departmentId?: string; branchId?: string | null; activeOnly?: boolean }) {
+  static async getUnits(
+    businessId: string,
+    options?: { departmentId?: string; branchId?: string | null; activeOnly?: boolean }
+  ) {
     const admin = createAdminClient();
     let query = admin
       .from('organization_units')
-      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code)')
+      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code), parent_unit:organization_units!parent_unit_id(id, name, code)')
       .eq('business_id', businessId)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
@@ -450,7 +456,7 @@ export class OrganizationService {
     const admin = createAdminClient();
     const { data, error } = await admin
       .from('organization_units')
-      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code), parent:organization_units(id, name, code)')
+      .select('*, department:organization_departments(id, name, code), branch:branches(id, name, code), parent_unit:organization_units!parent_unit_id(id, name, code)')
       .eq('id', id)
       .maybeSingle();
 
@@ -462,14 +468,12 @@ export class OrganizationService {
     const parsed = createOrganizationUnitSchema.parse(input);
     const admin = createAdminClient();
 
-    // Validate department
     const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
-    if (!validDept) throw new Error(`Department ${parsed.departmentId} does not belong to business ${parsed.businessId}`);
+    if (!validDept) throw new Error('Department does not belong to the given business');
 
-    // Validate branch if provided
     if (parsed.branchId) {
       const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!validBranch) throw new Error(`Branch ${parsed.branchId} does not belong to business ${parsed.businessId}`);
+      if (!validBranch) throw new Error('Branch does not belong to the given business');
     }
 
     const { data, error } = await admin
@@ -488,7 +492,7 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to create organization unit: ${error.message}`);
+    if (error) throw new Error(`Failed to create unit: ${error.message}`);
     return data;
   }
 
@@ -499,12 +503,12 @@ export class OrganizationService {
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (parsed.name !== undefined) updatePayload.name = parsed.name;
-    if (parsed.code !== undefined) updatePayload.code = parsed.code;
-    if (parsed.unitType !== undefined) updatePayload.unit_type = parsed.unitType;
     if (parsed.branchId !== undefined) updatePayload.branch_id = parsed.branchId;
     if (parsed.departmentId !== undefined) updatePayload.department_id = parsed.departmentId;
     if (parsed.parentUnitId !== undefined) updatePayload.parent_unit_id = parsed.parentUnitId;
+    if (parsed.unitType !== undefined) updatePayload.unit_type = parsed.unitType;
+    if (parsed.name !== undefined) updatePayload.name = parsed.name;
+    if (parsed.code !== undefined) updatePayload.code = parsed.code;
     if (parsed.isActive !== undefined) updatePayload.is_active = parsed.isActive;
     if (parsed.sortOrder !== undefined) updatePayload.sort_order = parsed.sortOrder;
 
@@ -515,7 +519,7 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to update organization unit: ${error.message}`);
+    if (error) throw new Error(`Failed to update unit: ${error.message}`);
     return data;
   }
 
@@ -533,7 +537,7 @@ export class OrganizationService {
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to archive organization unit: ${error.message}`);
+    if (error) throw new Error(`Failed to archive unit: ${error.message}`);
     return data;
   }
 
@@ -541,7 +545,10 @@ export class OrganizationService {
   // 5. Job Titles
   // ==========================================
 
-  static async getJobTitles(businessId: string, options?: { hierarchyLevelId?: string; activeOnly?: boolean }) {
+  static async getJobTitles(
+    businessId: string,
+    options?: { hierarchyLevelId?: string; activeOnly?: boolean }
+  ) {
     const admin = createAdminClient();
     let query = admin
       .from('organization_job_titles')
@@ -577,15 +584,14 @@ export class OrganizationService {
     const parsed = createJobTitleSchema.parse(input);
     const admin = createAdminClient();
 
-    // Verify hierarchy level belongs to business
-    const { data: hl } = await admin
+    const { data: level } = await admin
       .from('organization_hierarchy_levels')
       .select('id, business_id')
       .eq('id', parsed.hierarchyLevelId)
       .maybeSingle();
 
-    if (!hl || hl.business_id !== parsed.businessId) {
-      throw new Error(`Hierarchy level ${parsed.hierarchyLevelId} does not belong to business ${parsed.businessId}`);
+    if (!level || level.business_id !== parsed.businessId) {
+      throw new Error('Hierarchy level does not belong to the given business');
     }
 
     const { data, error } = await admin
@@ -652,10 +658,19 @@ export class OrganizationService {
   }
 
   // ==========================================
-  // 6. Positions
+  // 6. Positions & Occupancy
   // ==========================================
 
-  static async getPositions(businessId: string, options?: { branchId?: string | null; departmentId?: string; status?: string; activeOnly?: boolean }) {
+  static async getPositions(
+    businessId: string,
+    options?: {
+      branchId?: string | null;
+      departmentId?: string;
+      unitId?: string;
+      status?: string;
+      activeOnly?: boolean;
+    }
+  ) {
     const admin = createAdminClient();
     let query = admin
       .from('organization_positions')
@@ -678,6 +693,9 @@ export class OrganizationService {
     }
     if (options?.departmentId) {
       query = query.eq('department_id', options.departmentId);
+    }
+    if (options?.unitId) {
+      query = query.eq('unit_id', options.unitId);
     }
     if (options?.status) {
       query = query.eq('status', options.status);
@@ -709,34 +727,65 @@ export class OrganizationService {
     return data;
   }
 
+  static async getPositionOccupancy(positionId: string, referenceDate: Date = new Date()) {
+    const admin = createAdminClient();
+    const { data: pos, error: posErr } = await admin
+      .from('organization_positions')
+      .select('id, headcount_limit, status, position_code, name_override, job_title_id')
+      .eq('id', positionId)
+      .maybeSingle();
+
+    if (posErr || !pos) throw new Error(`Position ${positionId} not found`);
+
+    const refIso = referenceDate.toISOString();
+    const { data: occupants, error: occErr } = await admin
+      .from('staff_assignments')
+      .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id')
+      .eq('position_id', positionId)
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    if (occErr) throw new Error(`Failed to calculate position occupancy: ${occErr.message}`);
+
+    const occupiedCount = occupants?.length || 0;
+    const headcountLimit = pos.headcount_limit || 1;
+    const availableSlots = Math.max(0, headcountLimit - occupiedCount);
+    const isFull = occupiedCount >= headcountLimit;
+
+    return {
+      positionId: pos.id,
+      positionCode: pos.position_code,
+      nameOverride: pos.name_override,
+      status: pos.status,
+      headcountLimit,
+      occupiedCount,
+      availableSlots,
+      isFull,
+      occupants: occupants || [],
+    };
+  }
+
   static async createPosition(input: CreatePositionInput) {
     const parsed = createPositionSchema.parse(input);
     const admin = createAdminClient();
 
-    // Validate job title
     const validJt = await this.validateJobTitleBelongsToBusiness(parsed.jobTitleId, parsed.businessId);
-    if (!validJt) throw new Error(`Job title ${parsed.jobTitleId} does not belong to business ${parsed.businessId}`);
+    if (!validJt) throw new Error('Job title does not belong to the given business');
 
-    // Validate branch
     if (parsed.branchId) {
       const validBranch = await this.validateBranchBelongsToBusiness(parsed.branchId, parsed.businessId);
-      if (!validBranch) throw new Error(`Branch ${parsed.branchId} does not belong to business ${parsed.businessId}`);
+      if (!validBranch) throw new Error('Branch does not belong to the given business');
     }
-
-    // Validate department
     if (parsed.departmentId) {
       const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
-      if (!validDept) throw new Error(`Department ${parsed.departmentId} does not belong to business ${parsed.businessId}`);
+      if (!validDept) throw new Error('Department does not belong to the given business');
     }
-
-    // Validate unit
     if (parsed.unitId) {
-      if (!parsed.departmentId) {
-        const { data: u } = await admin.from('organization_units').select('department_id').eq('id', parsed.unitId).maybeSingle();
-        if (u) parsed.departmentId = u.department_id;
-      }
-      const validUnit = await this.validateUnitBelongsToDepartment(parsed.unitId, parsed.departmentId!, parsed.businessId);
-      if (!validUnit) throw new Error(`Unit ${parsed.unitId} is invalid for department ${parsed.departmentId}`);
+      if (!parsed.departmentId) throw new Error('Department is required when specifying an organization unit');
+      const validUnit = await this.validateUnitBelongsToDepartment(parsed.unitId, parsed.departmentId, parsed.businessId);
+      if (!validUnit) throw new Error('Organization unit does not belong to the given department or business');
     }
 
     const { data, error } = await admin
@@ -808,7 +857,7 @@ export class OrganizationService {
   }
 
   // ==========================================
-  // 7. Staff Assignments
+  // 7. Staff Assignments & Lifecycle
   // ==========================================
 
   static isAssignmentEffective(
@@ -899,7 +948,15 @@ export class OrganizationService {
         department:organization_departments(id, name, code),
         unit:organization_units(id, name, code),
         branch:branches(id, name, code),
-        membership:business_memberships(id, user_id, role, membership_status)
+        membership:business_memberships(id, user_id, role, membership_status),
+        reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          assignment_type,
+          is_primary,
+          status,
+          job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+          membership:business_memberships(id, user_id, role)
+        )
       `)
       .eq('id', id)
       .maybeSingle();
@@ -908,7 +965,7 @@ export class OrganizationService {
     return data;
   }
 
-  static async createStaffAssignment(input: CreateStaffAssignmentInput) {
+  static async createStaffAssignment(input: CreateStaffAssignmentInput, actorId?: string) {
     const parsed = createStaffAssignmentSchema.parse(input);
     const admin = createAdminClient();
 
@@ -927,23 +984,39 @@ export class OrganizationService {
       throw new Error(validation.error || 'Invalid assignment entities');
     }
 
-    // If marked as primary and active, ensure no other active primary assignment exists for this membership
-    if (parsed.isPrimary && parsed.status === 'active') {
-      const { data: existingPrimary } = await admin
-        .from('staff_assignments')
-        .select('id')
-        .eq('business_membership_id', parsed.businessMembershipId)
-        .eq('is_primary', true)
-        .eq('status', 'active')
-        .maybeSingle();
+    const startsAtIso = typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString();
+    const endsAtIso = parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null;
 
-      if (existingPrimary) {
-        throw new Error(
-          'Business membership already has an active primary assignment. End or transfer the existing primary assignment before creating a new one.'
-        );
-      }
+    // Try executing via atomic RPC for concurrency & row locking protection
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('create_staff_assignment_atomic', {
+      p_business_id: parsed.businessId,
+      p_business_membership_id: parsed.businessMembershipId,
+      p_job_title_id: parsed.jobTitleId,
+      p_branch_id: parsed.branchId || null,
+      p_department_id: parsed.departmentId || null,
+      p_unit_id: parsed.unitId || null,
+      p_position_id: parsed.positionId || null,
+      p_assignment_type: parsed.assignmentType,
+      p_is_primary: parsed.isPrimary,
+      p_status: parsed.status,
+      p_starts_at: startsAtIso,
+      p_ends_at: endsAtIso,
+      p_reports_to_id: parsed.reportsToAssignmentId || null,
+      p_acting_for_id: parsed.actingForAssignmentId || null,
+      p_reason: parsed.reason || null,
+      p_actor_id: actorId || null,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.assignment_id) {
+      const created = await this.getStaffAssignmentById(rpcRes.assignment_id);
+      if (created) return created;
     }
 
+    if (rpcErr) {
+      throw new Error(rpcErr.message);
+    }
+
+    // Fallback direct insert if RPC not present
     const { data, error } = await admin
       .from('staff_assignments')
       .insert({
@@ -957,8 +1030,8 @@ export class OrganizationService {
         assignment_type: parsed.assignmentType,
         is_primary: parsed.isPrimary,
         status: parsed.status,
-        starts_at: typeof parsed.startsAt === 'string' ? parsed.startsAt : parsed.startsAt.toISOString(),
-        ends_at: parsed.endsAt ? (typeof parsed.endsAt === 'string' ? parsed.endsAt : parsed.endsAt.toISOString()) : null,
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
         acting_for_assignment_id: parsed.actingForAssignmentId || null,
         reports_to_assignment_id: parsed.reportsToAssignmentId || null,
         reason: parsed.reason || null,
@@ -967,7 +1040,33 @@ export class OrganizationService {
       .single();
 
     if (error) throw new Error(`Failed to create staff assignment: ${error.message}`);
+
+    // If manager was assigned, record reporting history
+    if (parsed.reportsToAssignmentId) {
+      await admin.from('organization_reporting_history').insert({
+        business_id: parsed.businessId,
+        assignment_id: data.id,
+        previous_manager_assignment_id: null,
+        new_manager_assignment_id: parsed.reportsToAssignmentId,
+        reason: parsed.reason || 'Initial reporting manager assignment',
+        changed_by: actorId || null,
+        changed_at: data.starts_at,
+      });
+    }
+
     return data;
+  }
+
+  static async createAdditionalAssignment(input: CreateAdditionalAssignmentInput, actorId?: string) {
+    const parsed = createAdditionalAssignmentSchema.parse(input);
+    return this.createStaffAssignment(
+      {
+        ...parsed,
+        isPrimary: false,
+        assignmentType: parsed.assignmentType || 'additional',
+      },
+      actorId
+    );
   }
 
   static async updateStaffAssignment(input: UpdateStaffAssignmentInput) {
@@ -1053,5 +1152,584 @@ export class OrganizationService {
 
     if (error) throw new Error(`Failed to end staff assignment: ${error.message}`);
     return data;
+  }
+
+  // ==========================================
+  // 8. Atomic Transitions (Promotion / Transfer)
+  // ==========================================
+
+  static async transitionPrimaryAssignment(input: TransitionPrimaryAssignmentInput, actorId?: string) {
+    const parsed = transitionPrimaryAssignmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const transitionTimeStr = typeof parsed.transitionTime === 'string' ? parsed.transitionTime : parsed.transitionTime.toISOString();
+
+    // Validate current assignment
+    const { data: current, error: currErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id, business_membership_id, status, is_primary, reports_to_assignment_id')
+      .eq('id', parsed.currentAssignmentId)
+      .eq('business_id', parsed.businessId)
+      .maybeSingle();
+
+    if (currErr || !current) {
+      throw new Error(`Current staff assignment ${parsed.currentAssignmentId} not found in business ${parsed.businessId}`);
+    }
+    if (current.status !== 'active') {
+      throw new Error(`Current staff assignment is not active (status: ${current.status})`);
+    }
+
+    // Try executing via atomic PostgreSQL RPC
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('transition_staff_primary_assignment', {
+      p_business_id: parsed.businessId,
+      p_current_assignment_id: parsed.currentAssignmentId,
+      p_new_position_id: parsed.newPositionId || null,
+      p_new_job_title_id: parsed.newJobTitleId || null,
+      p_new_branch_id: parsed.newBranchId || null,
+      p_new_department_id: parsed.newDepartmentId || null,
+      p_new_unit_id: parsed.newUnitId || null,
+      p_new_reports_to_id: parsed.newReportsToId || null,
+      p_transition_type: parsed.transitionType || 'promotion',
+      p_reason: parsed.reason || null,
+      p_actor_id: actorId || null,
+      p_transition_time: transitionTimeStr,
+    });
+
+    if (!rpcErr && rpcRes && rpcRes.success) {
+      return {
+        success: true,
+        endedAssignmentId: rpcRes.ended_assignment_id,
+        newAssignmentId: rpcRes.new_assignment_id,
+        transitionType: rpcRes.transition_type,
+        transitionTime: rpcRes.transition_time,
+      };
+    }
+
+    // Fallback: If RPC is not present or returns error, execute safely via service logic
+    if (rpcErr) {
+      // Validate target position capacity if specified
+      let finalJobTitleId = parsed.newJobTitleId;
+      let finalBranchId = parsed.newBranchId || null;
+      let finalDeptId = parsed.newDepartmentId || null;
+      let finalUnitId = parsed.newUnitId || null;
+
+      if (parsed.newPositionId) {
+        const occ = await this.getPositionOccupancy(parsed.newPositionId, new Date(transitionTimeStr));
+        if (occ.isFull) {
+          throw new Error(`Target position has reached maximum headcount limit (${occ.occupiedCount} / ${occ.headcountLimit} occupied)`);
+        }
+        if (occ.status === 'frozen' || occ.status === 'archived') {
+          throw new Error(`Target position is ${occ.status} and cannot accept new assignments`);
+        }
+
+        const { data: pos } = await admin
+          .from('organization_positions')
+          .select('job_title_id, branch_id, department_id, unit_id')
+          .eq('id', parsed.newPositionId)
+          .single();
+
+        if (pos) {
+          finalJobTitleId = pos.job_title_id;
+          finalBranchId = pos.branch_id;
+          finalDeptId = pos.department_id;
+          finalUnitId = pos.unit_id;
+        }
+      }
+
+      if (!finalJobTitleId) {
+        throw new Error('Either a valid target position or job title must be specified for transition');
+      }
+
+      // Step 1: End current primary
+      await this.endStaffAssignment({
+        id: current.id,
+        endedAt: transitionTimeStr,
+        reason: parsed.reason || `Transitioned via ${parsed.transitionType}`,
+      });
+
+      // Step 2: Create new primary
+      const newAssignment = await this.createStaffAssignment(
+        {
+          businessId: parsed.businessId,
+          businessMembershipId: current.business_membership_id,
+          branchId: finalBranchId,
+          departmentId: finalDeptId,
+          unitId: finalUnitId,
+          positionId: parsed.newPositionId || null,
+          jobTitleId: finalJobTitleId,
+          assignmentType: 'primary',
+          isPrimary: true,
+          status: 'active',
+          startsAt: transitionTimeStr,
+          reportsToAssignmentId: parsed.newReportsToId || null,
+          reason: parsed.reason || `Started via ${parsed.transitionType}`,
+        },
+        actorId
+      );
+
+      return {
+        success: true,
+        endedAssignmentId: current.id,
+        newAssignmentId: newAssignment.id,
+        transitionType: parsed.transitionType,
+        transitionTime: transitionTimeStr,
+      };
+    }
+
+    return rpcRes;
+  }
+
+  // ==========================================
+  // 9. Reporting Engine (Direct Reports, Chain, Tree, History)
+  // ==========================================
+
+  static async getDirectReports(assignmentId: string, options?: { effectiveOnly?: boolean }) {
+    const admin = createAdminClient();
+    let query = admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override, headcount_limit),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        branch:branches(id, name, code),
+        membership:business_memberships(id, user_id, role, membership_status)
+      `)
+      .eq('reports_to_assignment_id', assignmentId)
+      .order('starts_at', { ascending: true });
+
+    if (options?.effectiveOnly) {
+      const nowIso = new Date().toISOString();
+      query = query
+        .eq('status', 'active')
+        .lte('starts_at', nowIso)
+        .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
+        .is('archived_at', null);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Failed to fetch direct reports: ${error.message}`);
+    return data || [];
+  }
+
+  static async getReportingChain(assignmentId: string, maxDepth: number = 50) {
+    const chain: Record<string, unknown>[] = [];
+    const visited = new Set<string>();
+    let currentId: string | null = assignmentId;
+    let depth = 0;
+
+    while (currentId && depth < maxDepth) {
+      if (visited.has(currentId)) {
+        break; // Cycle safe
+      }
+      visited.add(currentId);
+
+      const assignment = await this.getStaffAssignmentById(currentId);
+      if (!assignment) break;
+
+      chain.push(assignment);
+      currentId = (assignment.reports_to_assignment_id as string) || null;
+      depth++;
+    }
+
+    return chain;
+  }
+
+  static async getReportingTree(rootAssignmentId?: string, businessId?: string): Promise<ReportingTreeNode[]> {
+    const admin = createAdminClient();
+
+    // If rootAssignmentId specified, build tree starting from that node
+    if (rootAssignmentId) {
+      const root = await this.getStaffAssignmentById(rootAssignmentId);
+      if (!root) return [];
+
+      const buildSubtree = async (nodeAssignment: Record<string, unknown>): Promise<ReportingTreeNode> => {
+        const directReports = await this.getDirectReports(nodeAssignment.id as string, { effectiveOnly: true });
+        const childrenNodes: ReportingTreeNode[] = [];
+        for (const child of directReports) {
+          childrenNodes.push(await buildSubtree(child));
+        }
+        return {
+          assignment: nodeAssignment,
+          directReports: childrenNodes,
+        };
+      };
+
+      const tree = await buildSubtree(root);
+      return [tree];
+    }
+
+    // Otherwise, fetch all root active assignments for business where reports_to_assignment_id IS NULL
+    if (!businessId) {
+      throw new Error('businessId is required when rootAssignmentId is omitted');
+    }
+
+    const { data: roots, error } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override, headcount_limit),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        branch:branches(id, name, code),
+        membership:business_memberships(id, user_id, role, membership_status)
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'active')
+      .is('reports_to_assignment_id', null)
+      .is('archived_at', null)
+      .order('starts_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to fetch root assignments: ${error.message}`);
+
+    const buildSubtree = async (nodeAssignment: Record<string, unknown>): Promise<ReportingTreeNode> => {
+      const directReports = await this.getDirectReports(nodeAssignment.id as string, { effectiveOnly: true });
+      const childrenNodes: ReportingTreeNode[] = [];
+      for (const child of directReports) {
+        childrenNodes.push(await buildSubtree(child));
+      }
+      return {
+        assignment: nodeAssignment,
+        directReports: childrenNodes,
+      };
+    };
+
+    const treeList: ReportingTreeNode[] = [];
+    for (const root of roots || []) {
+      treeList.push(await buildSubtree(root));
+    }
+    return treeList;
+  }
+
+  static async setReportingManager(input: SetReportingManagerInput, actorId?: string) {
+    const parsed = setReportingManagerSchema.parse(input);
+    const admin = createAdminClient();
+
+    // Validate assignment
+    const { data: assign, error: assignErr } = await admin
+      .from('staff_assignments')
+      .select('id, business_id, reports_to_assignment_id, status')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .maybeSingle();
+
+    if (assignErr || !assign) {
+      throw new Error(`Staff assignment ${parsed.assignmentId} not found in business ${parsed.businessId}`);
+    }
+
+    const previousManagerId = assign.reports_to_assignment_id;
+    const newManagerId = parsed.reportsToAssignmentId || null;
+
+    if (previousManagerId === newManagerId) {
+      return { success: true, unchanged: true };
+    }
+
+    // Try executing via atomic RPC
+    const { data: rpcRes, error: rpcErr } = await admin.rpc('set_staff_reporting_manager_atomic', {
+      p_business_id: parsed.businessId,
+      p_assignment_id: parsed.assignmentId,
+      p_new_reports_to_id: newManagerId,
+      p_reason: parsed.reason || null,
+      p_actor_id: actorId || null,
+    });
+
+    if (!rpcErr && rpcRes) {
+      return rpcRes;
+    }
+
+    // Fallback: update directly
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .update({
+        reports_to_assignment_id: newManagerId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to update reporting manager: ${error.message}`);
+
+    // Insert history record
+    await admin.from('organization_reporting_history').insert({
+      business_id: parsed.businessId,
+      assignment_id: parsed.assignmentId,
+      previous_manager_assignment_id: previousManagerId,
+      new_manager_assignment_id: newManagerId,
+      reason: parsed.reason || null,
+      changed_by: actorId || null,
+      changed_at: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      assignmentId: data.id,
+      previousManagerAssignmentId: previousManagerId,
+      newManagerAssignmentId: newManagerId,
+    };
+  }
+
+  static async getReportingHistory(assignmentId: string) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('organization_reporting_history')
+      .select(`
+        *,
+        previous_manager:staff_assignments!previous_manager_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        ),
+        new_manager:staff_assignments!new_manager_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        )
+      `)
+      .eq('assignment_id', assignmentId)
+      .order('changed_at', { ascending: false });
+
+    if (error) throw new Error(`Failed to fetch reporting history: ${error.message}`);
+    return data || [];
+  }
+
+  // ==========================================
+  // 10. Member Assignment History & Organization Profile
+  // ==========================================
+
+  static async getMemberAssignmentHistory(membershipId: string) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('staff_assignments')
+      .select(`
+        *,
+        job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, position_code, name_override, headcount_limit),
+        department:organization_departments(id, name, code),
+        unit:organization_units(id, name, code),
+        branch:branches(id, name, code),
+        reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role)
+        )
+      `)
+      .eq('business_membership_id', membershipId)
+      .order('starts_at', { ascending: false });
+
+    if (error) throw new Error(`Failed to fetch member assignment history: ${error.message}`);
+    return data || [];
+  }
+
+  static async getMemberOrganizationProfile(membershipId: string) {
+    const admin = createAdminClient();
+
+    // 1. Fetch membership context
+    const { data: member, error: memErr } = await admin
+      .from('business_memberships')
+      .select('id, business_id, user_id, role, membership_status')
+      .eq('id', membershipId)
+      .maybeSingle();
+
+    if (memErr || !member) throw new Error(`Business membership ${membershipId} not found`);
+
+    // 2. Fetch all assignments for this member
+    const allAssignments = await this.getMemberAssignmentHistory(membershipId);
+
+    const now = new Date();
+    const activeAssignments = allAssignments.filter((a) => a.status === 'active');
+    const effectiveAssignments = allAssignments.filter((a) => this.isAssignmentEffective(a as { status: string; starts_at: string; ends_at?: string | null }, now));
+
+    const primaryAssignment = activeAssignments.find((a) => a.is_primary) || null;
+    const additionalAssignments = activeAssignments.filter((a) => !a.is_primary);
+
+    // 3. Reporting manager and direct reports for primary assignment
+    let reportingManager = null;
+    let directReports: Record<string, unknown>[] = [];
+    if (primaryAssignment) {
+      if (primaryAssignment.reports_to_assignment_id) {
+        reportingManager = await this.getStaffAssignmentById(primaryAssignment.reports_to_assignment_id as string);
+      }
+      directReports = await this.getDirectReports(primaryAssignment.id as string, { effectiveOnly: true });
+    }
+
+    // 4. Branch access mismatch diagnostics
+    const { data: branchAccessList } = await admin
+      .from('branch_assignments')
+      .select('branch_id')
+      .eq('business_membership_id', membershipId);
+
+    const accessibleBranchIds = (branchAccessList || []).map((ba) => ba.branch_id);
+    let organizationBranchAccessMismatch = false;
+
+    if (primaryAssignment && primaryAssignment.branch_id) {
+      if (!accessibleBranchIds.includes(primaryAssignment.branch_id as string)) {
+        organizationBranchAccessMismatch = true;
+      }
+    }
+
+    return {
+      membership: member,
+      primaryAssignment,
+      additionalAssignments,
+      effectiveAssignments,
+      reportingManager,
+      directReports,
+      totalHistoricalAssignments: allAssignments.length,
+      organizationBranchAccessMismatch,
+      accessibleBranchIds,
+    };
+  }
+
+  // ==========================================
+  // 11. Organization Integrity Diagnostics
+  // ==========================================
+
+  static async getOrganizationIntegrityIssues(businessId: string) {
+    const admin = createAdminClient();
+    const issues: {
+      type:
+        | 'no_reporting_manager'
+        | 'position_over_capacity'
+        | 'branch_access_mismatch'
+        | 'temporal_anomaly_expired'
+        | 'temporal_anomaly_future_active'
+        | 'hierarchy_anomaly';
+      severity: 'error' | 'warning' | 'info';
+      message: string;
+      assignmentId?: string;
+      positionId?: string;
+      membershipId?: string;
+    }[] = [];
+
+    const now = new Date();
+
+    // 1. Fetch active assignments with hierarchy and positions
+    const { data: assignments } = await admin
+      .from('staff_assignments')
+      .select(`
+        id,
+        business_membership_id,
+        branch_id,
+        position_id,
+        reports_to_assignment_id,
+        status,
+        is_primary,
+        starts_at,
+        ends_at,
+        job_title:organization_job_titles(id, name, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
+        position:organization_positions(id, headcount_limit, position_code),
+        reports_to:staff_assignments!reports_to_assignment_id(
+          id,
+          job_title:organization_job_titles(id, name, hierarchy_level:organization_hierarchy_levels(id, name, rank))
+        )
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'active');
+
+    // 2. Fetch all branch_assignments for the business
+    const { data: branchAccessList } = await admin
+      .from('branch_assignments')
+      .select('business_membership_id, branch_id');
+
+    const branchAccessMap = new Map<string, Set<string>>();
+    for (const ba of branchAccessList || []) {
+      if (!branchAccessMap.has(ba.business_membership_id)) {
+        branchAccessMap.set(ba.business_membership_id, new Set());
+      }
+      branchAccessMap.get(ba.business_membership_id)!.add(ba.branch_id);
+    }
+
+    // Evaluate each assignment
+    for (const assign of assignments || []) {
+      const jobTitle = assign.job_title as unknown as { id: string; name: string; hierarchy_level?: { rank: number } } | null;
+      const rank = jobTitle?.hierarchy_level?.rank;
+
+      // Check: Missing reporting manager for non-top-level staff
+      if (!assign.reports_to_assignment_id && rank !== undefined && rank > 2) {
+        issues.push({
+          type: 'no_reporting_manager',
+          severity: 'warning',
+          message: `Active assignment has no reporting manager assigned (Rank ${rank}: ${jobTitle?.name || 'Unknown'})`,
+          assignmentId: assign.id,
+          membershipId: assign.business_membership_id,
+        });
+      }
+
+      // Check: Temporal anomalies
+      if (assign.ends_at && new Date(assign.ends_at).getTime() < now.getTime()) {
+        issues.push({
+          type: 'temporal_anomaly_expired',
+          severity: 'warning',
+          message: `Assignment has status active but end date (${assign.ends_at}) has already passed`,
+          assignmentId: assign.id,
+        });
+      }
+
+      if (new Date(assign.starts_at).getTime() > now.getTime()) {
+        issues.push({
+          type: 'temporal_anomaly_future_active',
+          severity: 'info',
+          message: `Assignment has status active but start date (${assign.starts_at}) is in the future`,
+          assignmentId: assign.id,
+        });
+      }
+
+      // Check: Branch access mismatch
+      if (assign.branch_id) {
+        const allowedBranches = branchAccessMap.get(assign.business_membership_id);
+        if (!allowedBranches || !allowedBranches.has(assign.branch_id)) {
+          issues.push({
+            type: 'branch_access_mismatch',
+            severity: 'warning',
+            message: `Staff member is assigned to branch ${assign.branch_id} organizationally, but does not have operational branch_assignment`,
+            assignmentId: assign.id,
+            membershipId: assign.business_membership_id,
+          });
+        }
+      }
+
+      // Check: Hierarchy anomaly (subordinate rank number is less than manager rank number)
+      const reportsTo = assign.reports_to as unknown as { id: string; job_title?: { hierarchy_level?: { rank: number } } } | null;
+      const mgrRank = reportsTo?.job_title?.hierarchy_level?.rank;
+      if (rank !== undefined && mgrRank !== undefined && rank < mgrRank) {
+        issues.push({
+          type: 'hierarchy_anomaly',
+          severity: 'info',
+          message: `Subordinate hierarchy level (Rank ${rank}) has a higher seniority rank than their manager (Rank ${mgrRank})`,
+          assignmentId: assign.id,
+        });
+      }
+    }
+
+    // 3. Check position occupancy
+    const { data: positions } = await admin
+      .from('organization_positions')
+      .select('id, headcount_limit, position_code, name_override')
+      .eq('business_id', businessId)
+      .eq('status', 'active');
+
+    const posOccupantCount = new Map<string, number>();
+    for (const assign of assignments || []) {
+      if (assign.position_id) {
+        posOccupantCount.set(assign.position_id, (posOccupantCount.get(assign.position_id) || 0) + 1);
+      }
+    }
+
+    for (const pos of positions || []) {
+      const count = posOccupantCount.get(pos.id) || 0;
+      if (count > pos.headcount_limit) {
+        issues.push({
+          type: 'position_over_capacity',
+          severity: 'error',
+          message: `Position ${pos.position_code || pos.id} is over capacity (${count} / ${pos.headcount_limit})`,
+          positionId: pos.id,
+        });
+      }
+    }
+
+    return issues;
   }
 }

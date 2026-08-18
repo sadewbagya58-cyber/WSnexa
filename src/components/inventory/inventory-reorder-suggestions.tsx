@@ -359,10 +359,10 @@ export function InventoryReorderSuggestions({
                 </div>
 
                 {/* Right action: Create PO button */}
-                <div className="flex items-center gap-2 self-end lg:self-center">
+                <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
                   <Link
                     href={poHref}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl transition-all shadow-xs min-h-[38px]"
                   >
                     <span>Create PO</span>
                     <span>→</span>

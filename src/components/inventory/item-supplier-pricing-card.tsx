@@ -119,7 +119,109 @@ export function ItemSupplierPricingCard({
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-zinc-100">
+          {/* Mobile Comparison Cards View */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {group.suppliers.map((s) => (
+              <div
+                key={s.supplierId}
+                className={`bg-white border rounded-2xl p-4 shadow-xs space-y-3 ${
+                  s.isCheapest ? 'border-emerald-300 bg-emerald-50/10' : 'border-zinc-200'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-zinc-950 text-sm block truncate">{s.supplierName}</span>
+                    {s.supplierSku && (
+                      <span className="text-[11px] text-zinc-400 font-mono mt-0.5 block">SKU: {s.supplierSku}</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                    {s.isCheapest && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                        🏷️ Best Price
+                      </span>
+                    )}
+                    {s.isPreferred && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
+                        ★ Preferred
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-zinc-500 text-[11px] font-medium">Purchasing Unit & Pack:</span>
+                    <div className="text-right">
+                      <span className="font-bold text-zinc-900 capitalize">{s.purchasingUnit}</span>
+                      {s.conversionToBase !== 1 && (
+                        <span className="text-[10px] text-zinc-400 block font-mono">
+                          (1 {s.purchasingUnit} = {s.conversionToBase} {comparison.baseUnit})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {hasCostPermission && (
+                    <div className="grid grid-cols-2 gap-2 border-t border-zinc-200/50 pt-1.5">
+                      <div>
+                        <span className="text-[10px] text-zinc-400 block uppercase font-bold">Pack Price</span>
+                        <span className="font-mono text-zinc-800 font-semibold">
+                          {s.lastPriceCents !== null
+                            ? `${formatCurrencyMinor(s.lastPriceCents, s.currency)}`
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-400 block uppercase font-bold">Normalized Cost</span>
+                        <span className="font-mono text-zinc-950 font-bold">
+                          {s.normalizedPricePerBaseCents !== null
+                            ? `${formatCurrencyMinor(s.normalizedPricePerBaseCents, s.currency)} / ${comparison.baseUnit}`
+                            : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {hasCostPermission && (
+                    <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500">Variance vs Best:</span>
+                      {s.isCheapest ? (
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                          Cheapest
+                        </span>
+                      ) : s.priceDifferenceCents !== null && s.priceDifferenceCents !== undefined && s.priceDifferenceCents > 0 ? (
+                        <span className="font-bold text-rose-600">
+                          +{formatCurrencyMinor(s.priceDifferenceCents, s.currency)} (+{s.percentagePremium}%)
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-[11px] text-zinc-500 border-t border-zinc-200/50 pt-1.5">
+                    <span>Terms:</span>
+                    <span>{s.paymentTerms || 'Standard'}</span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <Link
+                    href={`/dashboard/inventory/purchasing/new?supplierId=${s.supplierId}&itemId=${comparison.itemId}`}
+                    className="w-full text-xs font-bold text-zinc-900 hover:text-white bg-zinc-100 hover:bg-zinc-950 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 min-h-[38px] shadow-xs"
+                  >
+                    <span>Create Purchase Order</span>
+                    <span>→</span>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Comparison Table */}
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
@@ -145,12 +247,12 @@ export function ItemSupplierPricingCard({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-zinc-950">{s.supplierName}</span>
                         {s.isPreferred && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
                             ★ Preferred
                           </span>
                         )}
                         {s.isCheapest && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
                             🏷️ Best Price
                           </span>
                         )}

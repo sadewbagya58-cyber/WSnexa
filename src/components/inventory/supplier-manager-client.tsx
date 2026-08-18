@@ -219,7 +219,7 @@ export function SupplierManagerClient({ initialSuppliers, currency }: SupplierMa
                     )}
                   </div>
                   {s.isPreferred && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 uppercase">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 uppercase whitespace-nowrap shrink-0">
                       Preferred ★
                     </span>
                   )}

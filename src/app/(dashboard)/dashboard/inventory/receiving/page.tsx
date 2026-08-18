@@ -144,10 +144,10 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
       />
 
       {/* Navigation Subtabs */}
-      <div className="flex border-b border-zinc-200 gap-6 text-xs font-bold">
+      <div className="flex border-b border-zinc-200 gap-6 text-xs font-bold overflow-x-auto whitespace-nowrap py-0.5 no-scrollbar">
         <a
           href="/dashboard/inventory/receiving"
-          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
             !isReturnsTab
               ? 'border-zinc-950 text-zinc-950 font-extrabold'
               : 'border-transparent text-zinc-500 hover:text-zinc-800'
@@ -163,7 +163,7 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
 
         <a
           href="/dashboard/inventory/receiving?tab=returns"
-          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+          className={`pb-3 border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
             isReturnsTab
               ? 'border-zinc-950 text-zinc-950 font-extrabold'
               : 'border-transparent text-zinc-500 hover:text-zinc-800'

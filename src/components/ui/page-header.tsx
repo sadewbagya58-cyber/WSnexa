@@ -43,26 +43,32 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     <div className="space-y-3 pb-2 border-b border-zinc-200">
       {/* Breadcrumbs & Back */}
       {(breadcrumbs || backHref) && (
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-zinc-500 overflow-x-auto whitespace-nowrap py-0.5 no-scrollbar">
           {backHref && (
             <Link
               href={backHref}
-              className="flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors"
+              className="flex items-center gap-1 font-medium text-zinc-600 hover:text-zinc-950 transition-colors shrink-0"
             >
               ← Back
             </Link>
           )}
 
-          {backHref && breadcrumbs && breadcrumbs.length > 0 && <span>/</span>}
+          {backHref && breadcrumbs && breadcrumbs.length > 0 && <span className="text-zinc-300">/</span>}
 
           {breadcrumbs && (
-            <nav className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-              <Link href="/dashboard" className="hover:text-zinc-950 transition-colors">
-                Dashboard
-              </Link>
+            <nav className="flex items-center gap-1.5 shrink-0">
+              {/* Only show default Dashboard root if the first crumb is not already Dashboard */}
+              {breadcrumbs[0]?.label?.toLowerCase() !== 'dashboard' && (
+                <>
+                  <Link href="/dashboard" className="hover:text-zinc-950 transition-colors">
+                    Dashboard
+                  </Link>
+                  <span className="text-zinc-300">/</span>
+                </>
+              )}
               {breadcrumbs.map((crumb, idx) => (
                 <React.Fragment key={idx}>
-                  <span>/</span>
+                  {idx > 0 && <span className="text-zinc-300">/</span>}
                   {crumb.href ? (
                     <Link href={crumb.href} className="hover:text-zinc-950 transition-colors">
                       {crumb.label}
@@ -80,8 +86,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Main Header Content */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">{title}</h1>
-          {description && <p className="mt-1 text-xs text-zinc-500">{description}</p>}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-950">{title}</h1>
+          {description && <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{description}</p>}
         </div>
 
         {/* Action Buttons & Contextual Help */}
@@ -93,14 +99,14 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 
             {secondaryAction &&
               (secondaryAction.href ? (
-                <Link href={secondaryAction.href}>
-                  <Button variant="outline" size="sm">
+                <Link href={secondaryAction.href} className="inline-block">
+                  <Button variant="outline" size="sm" className="min-h-[38px] text-xs font-semibold">
                     {secondaryAction.icon}
                     {secondaryAction.label}
                   </Button>
                 </Link>
               ) : (
-                <Button variant="outline" size="sm" onClick={secondaryAction.onClick}>
+                <Button variant="outline" size="sm" onClick={secondaryAction.onClick} className="min-h-[38px] text-xs font-semibold">
                   {secondaryAction.icon}
                   {secondaryAction.label}
                 </Button>
@@ -108,14 +114,14 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 
             {primaryAction &&
               (primaryAction.href ? (
-                <Link href={primaryAction.href}>
-                  <Button size="sm">
+                <Link href={primaryAction.href} className="inline-block">
+                  <Button size="sm" className="min-h-[38px] text-xs font-semibold">
                     {primaryAction.icon}
                     {primaryAction.label}
                   </Button>
                 </Link>
               ) : (
-                <Button size="sm" onClick={primaryAction.onClick}>
+                <Button size="sm" onClick={primaryAction.onClick} className="min-h-[38px] text-xs font-semibold">
                   {primaryAction.icon}
                   {primaryAction.label}
                 </Button>

@@ -450,7 +450,7 @@ export function GoodsReceivingClient({
         <Button
           type="submit"
           disabled={isPending}
-          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-w-40"
+          className="w-full sm:w-auto text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-w-40 min-h-[38px] rounded-xl shadow-xs"
         >
           {isPending ? 'Receiving Stock…' : 'Receive Delivery ✓'}
         </Button>

@@ -102,7 +102,7 @@ export default async function RecipeDetailPage({ params }: RecipeDetailPageProps
 
       {/* Bill of Materials Table */}
       <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs overflow-hidden">
-        <div className="border-b border-zinc-200 px-6 py-4">
+        <div className="border-b border-zinc-200 px-5 sm:px-6 py-4">
           <h2 className="text-base font-semibold text-zinc-900">
             Bill of Materials (BOM Ingredients)
           </h2>
@@ -111,7 +111,61 @@ export default async function RecipeDetailPage({ params }: RecipeDetailPageProps
           </p>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile BOM Cards View */}
+        <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+          {recipe.ingredients.map((ing) => (
+            <div
+              key={ing.id}
+              className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-2.5 text-xs"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  {ing.subRecipeName ? (
+                    <span className="text-indigo-600 font-bold block truncate">
+                      🍲 {ing.subRecipeName} <span className="text-[10px] text-indigo-400 font-normal">(Sub-Recipe)</span>
+                    </span>
+                  ) : (
+                    <span className="font-bold text-zinc-900 block truncate">
+                      🥦 {ing.itemName || 'Raw Item'}
+                    </span>
+                  )}
+                  {ing.notes && <p className="text-[11px] text-zinc-500 mt-0.5 italic">&quot;{ing.notes}&quot;</p>}
+                </div>
+
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-800 whitespace-nowrap">
+                  Yield: {(ing.yieldFactor * 100).toFixed(0)}%
+                </span>
+              </div>
+
+              <div className="bg-white rounded-lg p-2.5 border border-zinc-200/70 space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">Formula Quantity:</span>
+                  <span className="font-bold text-zinc-900">
+                    {ing.quantity} {ing.unit} <span className="text-zinc-400 font-mono font-normal">({ing.quantityBase.toFixed(3)} base)</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 pt-1.5">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block uppercase font-bold">Unit Cost</span>
+                    <span className="font-mono text-zinc-700">
+                      {formatCurrencyMinor(ing.unitCostCents, recipe.currency)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-400 block uppercase font-bold">Line Total</span>
+                    <span className="font-mono font-bold text-zinc-950">
+                      {formatCurrencyMinor(ing.totalCostCents, recipe.currency)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop BOM Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-500 uppercase">
               <tr>

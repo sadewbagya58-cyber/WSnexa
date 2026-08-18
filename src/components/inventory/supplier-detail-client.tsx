@@ -533,98 +533,199 @@ export function SupplierDetailClient({
             No catalog items matched &quot;{searchQuery}&quot;.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-zinc-100">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
-                  <th className="py-2.5 px-3">Inventory Ingredient</th>
-                  <th className="py-2.5 px-3">Vendor SKU</th>
-                  <th className="py-2.5 px-3">Purchase Unit & Pack Size</th>
-                  {hasCostPermission && <th className="py-2.5 px-3 text-right">Agreed Pack Price</th>}
-                  {hasCostPermission && <th className="py-2.5 px-3 text-right">Normalized / Base Unit</th>}
-                  <th className="py-2.5 px-3 text-center">Item Preference</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {filteredCatalog.map((item) => (
-                  <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3 px-3">
+          <div className="space-y-3">
+            {/* Mobile Catalog Cards View */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {filteredCatalog.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
                       <Link
                         href={`/dashboard/inventory/items/${item.itemId}`}
-                        className="font-bold text-zinc-950 hover:underline hover:text-zinc-800 flex items-center gap-1.5"
+                        className="font-bold text-zinc-950 hover:underline text-sm flex items-center gap-1.5 truncate"
                       >
                         <span>🥦</span>
-                        <span>{item.itemName}</span>
+                        <span className="truncate">{item.itemName}</span>
                       </Link>
-                    </td>
-
-                    <td className="py-3 px-3 font-mono text-[11px] text-zinc-600">
-                      {item.supplierSku || '—'}
-                    </td>
-
-                    <td className="py-3 px-3">
-                      <span className="font-bold text-zinc-900 capitalize">{item.purchasingUnit}</span>
-                      {item.conversionToBase !== 1 && (
-                        <span className="text-[10px] text-zinc-400 block font-mono">
-                          (1 {item.purchasingUnit} = {item.conversionToBase} {item.itemBaseUnit})
-                        </span>
+                      {item.supplierSku && (
+                        <div className="text-[11px] text-zinc-400 font-mono mt-0.5">
+                          SKU: {item.supplierSku}
+                        </div>
                       )}
-                    </td>
+                    </div>
 
-                    {hasCostPermission && (
-                      <td className="py-3 px-3 text-right font-mono text-zinc-700">
-                        {item.lastPriceCents !== null
-                          ? `${formatCurrencyMinor(item.lastPriceCents, item.currency)} / ${item.purchasingUnit}`
-                          : '—'}
-                      </td>
-                    )}
-
-                    {hasCostPermission && (
-                      <td className="py-3 px-3 text-right font-mono font-black text-zinc-950">
-                        {item.normalizedPricePerBaseCents !== null
-                          ? `${formatCurrencyMinor(item.normalizedPricePerBaseCents, item.currency)} / ${item.itemBaseUnit}`
-                          : '—'}
-                      </td>
-                    )}
-
-                    <td className="py-3 px-3 text-center">
+                    <div className="shrink-0">
                       {item.isPreferred ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                          ★ Preferred Vendor
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
+                          ★ Preferred
                         </span>
                       ) : (
-                        <span className="text-zinc-400 text-[11px]">Secondary</span>
+                        <span className="text-zinc-400 text-[10px] font-semibold bg-zinc-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          Secondary
+                        </span>
                       )}
-                    </td>
+                    </div>
+                  </div>
 
-                    <td className="py-3 px-3 text-right space-x-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenHistory(item)}
-                        className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        📊 History
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditMappingModal(item)}
-                        className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItemMapping(item.itemId, item.itemName)}
-                        className="text-[11px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </td>
+                  <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-zinc-500 text-[11px] font-medium">Pack Specification:</span>
+                      <div className="text-right">
+                        <span className="font-bold text-zinc-900 capitalize">{item.purchasingUnit}</span>
+                        {item.conversionToBase !== 1 && (
+                          <span className="text-[10px] text-zinc-400 block font-mono">
+                            (1 {item.purchasingUnit} = {item.conversionToBase} {item.itemBaseUnit})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {hasCostPermission && (
+                      <div className="grid grid-cols-2 gap-2 border-t border-zinc-200/50 pt-1.5">
+                        <div>
+                          <span className="text-[10px] text-zinc-400 block uppercase font-bold">Pack Price</span>
+                          <span className="font-mono text-zinc-800 font-semibold">
+                            {item.lastPriceCents !== null
+                              ? `${formatCurrencyMinor(item.lastPriceCents, item.currency)}`
+                              : '—'}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-zinc-400 block uppercase font-bold">Normalized Cost</span>
+                          <span className="font-mono text-zinc-950 font-bold">
+                            {item.normalizedPricePerBaseCents !== null
+                              ? `${formatCurrencyMinor(item.normalizedPricePerBaseCents, item.currency)} / ${item.itemBaseUnit}`
+                              : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenHistory(item)}
+                      className="text-xs font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-3 py-2 rounded-xl transition-colors flex-1 min-h-[38px] text-center"
+                    >
+                      📊 History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditMappingModal(item)}
+                      className="text-xs font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-3 py-2 rounded-xl transition-colors flex-1 min-h-[38px] text-center"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItemMapping(item.itemId, item.itemName)}
+                      className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-2 rounded-xl border border-rose-200 transition-colors flex-1 min-h-[38px] text-center"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
+                    <th className="py-2.5 px-3">Inventory Ingredient</th>
+                    <th className="py-2.5 px-3">Vendor SKU</th>
+                    <th className="py-2.5 px-3">Purchase Unit & Pack Size</th>
+                    {hasCostPermission && <th className="py-2.5 px-3 text-right">Agreed Pack Price</th>}
+                    {hasCostPermission && <th className="py-2.5 px-3 text-right">Normalized / Base Unit</th>}
+                    <th className="py-2.5 px-3 text-center">Item Preference</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium">
+                  {filteredCatalog.map((item) => (
+                    <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3 px-3">
+                        <Link
+                          href={`/dashboard/inventory/items/${item.itemId}`}
+                          className="font-bold text-zinc-950 hover:underline hover:text-zinc-800 flex items-center gap-1.5"
+                        >
+                          <span>🥦</span>
+                          <span>{item.itemName}</span>
+                        </Link>
+                      </td>
+
+                      <td className="py-3 px-3 font-mono text-[11px] text-zinc-600">
+                        {item.supplierSku || '—'}
+                      </td>
+
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-zinc-900 capitalize">{item.purchasingUnit}</span>
+                        {item.conversionToBase !== 1 && (
+                          <span className="text-[10px] text-zinc-400 block font-mono">
+                            (1 {item.purchasingUnit} = {item.conversionToBase} {item.itemBaseUnit})
+                          </span>
+                        )}
+                      </td>
+
+                      {hasCostPermission && (
+                        <td className="py-3 px-3 text-right font-mono text-zinc-700">
+                          {item.lastPriceCents !== null
+                            ? `${formatCurrencyMinor(item.lastPriceCents, item.currency)} / ${item.purchasingUnit}`
+                            : '—'}
+                        </td>
+                      )}
+
+                      {hasCostPermission && (
+                        <td className="py-3 px-3 text-right font-mono font-black text-zinc-950">
+                          {item.normalizedPricePerBaseCents !== null
+                            ? `${formatCurrencyMinor(item.normalizedPricePerBaseCents, item.currency)} / ${item.itemBaseUnit}`
+                            : '—'}
+                        </td>
+                      )}
+
+                      <td className="py-3 px-3 text-center">
+                        {item.isPreferred ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            ★ Preferred Vendor
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400 text-[11px]">Secondary</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-right space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenHistory(item)}
+                          className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          📊 History
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditMappingModal(item)}
+                          className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItemMapping(item.itemId, item.itemName)}
+                          className="text-[11px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -632,7 +733,7 @@ export function SupplierDetailClient({
       {/* Map Ingredient Modal / Dialog */}
       {isMappingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-2xs">
-          <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl border border-zinc-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
               <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-950 flex items-center gap-2">
                 <span>🏷️</span> {editingItemRecord ? 'Edit Ingredient Mapping' : 'Map Ingredient to Catalog'}

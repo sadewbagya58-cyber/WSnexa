@@ -108,13 +108,54 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
 
       {/* Ordered Items Table */}
       <div className="rounded-2xl border border-zinc-200 bg-white shadow-xs overflow-hidden">
-        <div className="border-b border-zinc-200 px-6 py-4">
+        <div className="border-b border-zinc-200 px-5 sm:px-6 py-4">
           <h2 className="text-base font-semibold text-zinc-900">
-            Purchase Order Line Items
+            Purchase Order Line Items ({po.items.length})
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Line Items Cards View */}
+        <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+          {po.items.map((item) => (
+            <div
+              key={item.id}
+              className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-2.5 text-xs"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-bold text-zinc-950 text-sm truncate flex-1">
+                  🥦 {item.itemName}
+                </span>
+                <span className="font-mono font-bold text-zinc-950 text-xs">
+                  {formatCurrencyMinor(item.totalCostCents, po.currency)}
+                </span>
+              </div>
+
+              <div className="bg-white rounded-lg p-2.5 border border-zinc-200/70 space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">Ordered Quantity:</span>
+                  <span className="font-bold text-zinc-900">
+                    {item.quantityOrdered} {item.purchasingUnit}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-zinc-500 border-t border-zinc-100 pt-1.5">
+                  <span>Received Base Units:</span>
+                  <span className="font-mono text-zinc-700">{item.quantityReceivedBase} base</span>
+                </div>
+
+                <div className="flex justify-between items-center border-t border-zinc-100 pt-1.5">
+                  <span className="text-zinc-500">Unit Price:</span>
+                  <span className="font-mono font-semibold text-zinc-800">
+                    {formatCurrencyMinor(item.unitCostCents, po.currency)} / {item.purchasingUnit}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Line Items Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50/50 text-xs font-semibold text-zinc-500 uppercase">
               <tr>

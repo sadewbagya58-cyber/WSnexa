@@ -158,75 +158,157 @@ export function ItemBatchesCard({
         </div>
       </div>
 
-      {/* Batches Table */}
-      <div className="overflow-x-auto rounded-xl border border-zinc-100">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
-              <th className="py-2.5 px-3">Batch / Lot Code</th>
-              <th className="py-2.5 px-3">Status</th>
-              <th className="py-2.5 px-3">Location</th>
-              <th className="py-2.5 px-3">Received Date</th>
-              <th className="py-2.5 px-3">Expiry Date</th>
-              <th className="py-2.5 px-3 text-right">Remaining / Initial</th>
-              {hasCostPermission && <th className="py-2.5 px-3 text-right">Unit Cost</th>}
-              {hasCostPermission && <th className="py-2.5 px-3 text-right">Stock Value</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100 font-medium">
-            {displayedBatches.map((b) => {
-              const isDepleted = b.remainingQuantity <= 0;
-              return (
-                <tr
-                  key={b.id}
-                  className={`hover:bg-zinc-50/50 transition-colors ${
-                    isDepleted ? 'opacity-60 bg-zinc-50/30' : ''
-                  }`}
-                >
-                  <td className="py-3 px-3">
-                    <div className="font-bold text-zinc-950 font-mono flex items-center gap-1.5">
+      {/* Batches Table / Mobile Cards */}
+      <div className="space-y-3">
+        {/* Mobile Batches Cards */}
+        <div className="grid grid-cols-1 gap-3 md:hidden">
+          {displayedBatches.map((b) => {
+            const isDepleted = b.remainingQuantity <= 0;
+            return (
+              <div
+                key={b.id}
+                className={`bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3 ${
+                  isDepleted ? 'opacity-60 bg-zinc-50/50' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-zinc-950 font-mono text-sm flex items-center gap-1.5">
                       <span>🏷️</span>
                       <span>{b.batchCode || 'Unnamed Lot'}</span>
                     </div>
                     {isDepleted && (
-                      <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">Depleted / Fully Consumed</span>
+                      <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">Depleted / Consumed</span>
                     )}
-                  </td>
-                  <td className="py-3 px-3">
+                  </div>
+                  <div className="shrink-0">
                     {getStatusBadge(b.expiryStatus, b.daysUntilExpiry)}
-                  </td>
-                  <td className="py-3 px-3 text-zinc-700">
-                    📍 {b.locationName}
-                  </td>
-                  <td className="py-3 px-3 text-zinc-500">
-                    {b.receivedDate ? new Date(b.receivedDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
-                  </td>
-                  <td className="py-3 px-3 text-zinc-700">
-                    {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="font-black text-zinc-950">
+                  </div>
+                </div>
+
+                <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-zinc-500 text-[11px] font-medium">On-Hand Quantity:</span>
+                    <div className="font-black text-zinc-950 text-sm">
                       {b.remainingQuantity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {baseUnit}
+                      <span className="text-[10px] text-zinc-400 font-normal block text-right">
+                        Initial: {b.initialQuantity.toLocaleString()} {baseUnit}
+                      </span>
                     </div>
-                    <div className="text-[10px] text-zinc-400">
-                      Initial: {b.initialQuantity.toLocaleString()} {baseUnit}
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] text-zinc-600 border-t border-zinc-200/50 pt-1.5">
+                    <span>Location:</span>
+                    <span className="font-medium text-zinc-900">📍 {b.locationName}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 border-t border-zinc-200/50 pt-1.5 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold">Received</span>
+                      <span className="text-zinc-700">
+                        {b.receivedDate ? new Date(b.receivedDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                      </span>
                     </div>
-                  </td>
+                    <div className="text-right">
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold">Expiry Date</span>
+                      <span className="text-zinc-700">
+                        {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                      </span>
+                    </div>
+                  </div>
+
                   {hasCostPermission && (
-                    <td className="py-3 px-3 text-right text-zinc-700 font-mono">
-                      {b.unitCostCents !== null ? formatCurrencyMinor(b.unitCostCents, currency) : '—'}
-                    </td>
+                    <div className="grid grid-cols-2 gap-2 border-t border-zinc-200/50 pt-1.5">
+                      <div>
+                        <span className="text-[10px] text-zinc-400 block uppercase font-bold">Unit Cost</span>
+                        <span className="font-mono text-zinc-800 font-semibold">
+                          {b.unitCostCents !== null ? formatCurrencyMinor(b.unitCostCents, currency) : '—'}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-400 block uppercase font-bold">Stock Value</span>
+                        <span className="font-mono text-zinc-950 font-bold">
+                          {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                  {hasCostPermission && (
-                    <td className="py-3 px-3 text-right font-black text-zinc-950 font-mono">
-                      {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Batches Table */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
+                <th className="py-2.5 px-3">Batch / Lot Code</th>
+                <th className="py-2.5 px-3">Status</th>
+                <th className="py-2.5 px-3">Location</th>
+                <th className="py-2.5 px-3">Received Date</th>
+                <th className="py-2.5 px-3">Expiry Date</th>
+                <th className="py-2.5 px-3 text-right">Remaining / Initial</th>
+                {hasCostPermission && <th className="py-2.5 px-3 text-right">Unit Cost</th>}
+                {hasCostPermission && <th className="py-2.5 px-3 text-right">Stock Value</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 font-medium">
+              {displayedBatches.map((b) => {
+                const isDepleted = b.remainingQuantity <= 0;
+                return (
+                  <tr
+                    key={b.id}
+                    className={`hover:bg-zinc-50/50 transition-colors ${
+                      isDepleted ? 'opacity-60 bg-zinc-50/30' : ''
+                    }`}
+                  >
+                    <td className="py-3 px-3">
+                      <div className="font-bold text-zinc-950 font-mono flex items-center gap-1.5">
+                        <span>🏷️</span>
+                        <span>{b.batchCode || 'Unnamed Lot'}</span>
+                      </div>
+                      {isDepleted && (
+                        <span className="text-[10px] text-zinc-400 font-sans block mt-0.5">Depleted / Fully Consumed</span>
+                      )}
                     </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td className="py-3 px-3">
+                      {getStatusBadge(b.expiryStatus, b.daysUntilExpiry)}
+                    </td>
+                    <td className="py-3 px-3 text-zinc-700">
+                      📍 {b.locationName}
+                    </td>
+                    <td className="py-3 px-3 text-zinc-500">
+                      {b.receivedDate ? new Date(b.receivedDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-zinc-700">
+                      {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="font-black text-zinc-950">
+                        {b.remainingQuantity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {baseUnit}
+                      </div>
+                      <div className="text-[10px] text-zinc-400">
+                        Initial: {b.initialQuantity.toLocaleString()} {baseUnit}
+                      </div>
+                    </td>
+                    {hasCostPermission && (
+                      <td className="py-3 px-3 text-right text-zinc-700 font-mono">
+                        {b.unitCostCents !== null ? formatCurrencyMinor(b.unitCostCents, currency) : '—'}
+                      </td>
+                    )}
+                    {hasCostPermission && (
+                      <td className="py-3 px-3 text-right font-black text-zinc-950 font-mono">
+                        {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {hasCostPermission && totalValueCents !== null && activeCount > 0 && (

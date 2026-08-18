@@ -84,57 +84,114 @@ export default async function InventoryWastePage() {
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Item & Location</th>
-                  <th className="py-3 px-4">Wasted Qty</th>
-                  <th className="py-3 px-4">Reason</th>
-                  {hasCostPermission && <th className="py-3 px-4">Estimated Loss</th>}
-                  <th className="py-3 px-4">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {wasteRecords.map((w) => (
-                  <tr key={w.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3.5 px-4 text-zinc-500">
-                      <div>{new Date(w.createdAt).toLocaleDateString()}</div>
-                      <div className="text-[10px] text-zinc-400">
-                        {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </td>
+        <div className="space-y-3">
+          {/* Mobile Waste Cards View */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {wasteRecords.map((w) => (
+              <div
+                key={w.id}
+                className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-zinc-950 text-sm block truncate">{w.itemName}</span>
+                    <span className="text-[11px] text-zinc-500 font-medium mt-0.5 block">📍 {w.locationName}</span>
+                  </div>
 
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-zinc-950">{w.itemName}</div>
-                      <div className="text-[11px] text-zinc-400">{w.locationName}</div>
-                    </td>
+                  <div className="shrink-0">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
+                      {formatReason(w.reason)}
+                    </span>
+                  </div>
+                </div>
 
-                    <td className="py-3.5 px-4 font-black text-rose-600">
+                <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-zinc-500 text-[11px] font-medium">Quantity Wasted:</span>
+                    <span className="font-black text-rose-600 text-sm">
                       -{w.quantity} {w.unit}
-                    </td>
+                    </span>
+                  </div>
 
-                    <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                        {formatReason(w.reason)}
-                      </span>
-                    </td>
-
-                    {hasCostPermission && (
-                      <td className="py-3.5 px-4 font-bold text-zinc-900">
+                  {hasCostPermission && (
+                    <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500">Estimated Financial Loss:</span>
+                      <span className="font-mono font-bold text-zinc-950">
                         {w.totalCostCents !== null ? formatCurrency(w.totalCostCents, w.currency) : '—'}
-                      </td>
-                    )}
+                      </span>
+                    </div>
+                  )}
 
-                    <td className="py-3.5 px-4 text-zinc-500 text-[11px] italic">
-                      {w.notes || '—'}
-                    </td>
+                  <div className="flex justify-between items-center text-[11px] text-zinc-400 border-t border-zinc-200/50 pt-1.5 font-mono">
+                    <span>Logged At:</span>
+                    <span>
+                      {new Date(w.createdAt).toLocaleDateString()} {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  {w.notes && (
+                    <div className="border-t border-zinc-200/50 pt-1.5 text-[11px] text-zinc-600 italic">
+                      &quot;{w.notes}&quot;
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Date & Time</th>
+                    <th className="py-3 px-4">Item & Location</th>
+                    <th className="py-3 px-4">Wasted Qty</th>
+                    <th className="py-3 px-4">Reason</th>
+                    {hasCostPermission && <th className="py-3 px-4">Estimated Loss</th>}
+                    <th className="py-3 px-4">Notes</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium">
+                  {wasteRecords.map((w) => (
+                    <tr key={w.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3.5 px-4 text-zinc-500">
+                        <div>{new Date(w.createdAt).toLocaleDateString()}</div>
+                        <div className="text-[10px] text-zinc-400">
+                          {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-zinc-950">{w.itemName}</div>
+                        <div className="text-[11px] text-zinc-400">{w.locationName}</div>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-black text-rose-600">
+                        -{w.quantity} {w.unit}
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          {formatReason(w.reason)}
+                        </span>
+                      </td>
+
+                      {hasCostPermission && (
+                        <td className="py-3.5 px-4 font-bold text-zinc-900">
+                          {w.totalCostCents !== null ? formatCurrency(w.totalCostCents, w.currency) : '—'}
+                        </td>
+                      )}
+
+                      <td className="py-3.5 px-4 text-zinc-500 text-[11px] italic">
+                        {w.notes || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

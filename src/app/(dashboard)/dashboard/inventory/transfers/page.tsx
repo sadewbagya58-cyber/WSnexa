@@ -150,110 +150,217 @@ export default async function StockTransfersPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="py-3 px-4">Transfer #</th>
-                  <th className="py-3 px-4">Source</th>
-                  <th className="py-3 px-4">Destination</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {transfers.map((t) => {
-                  const isDestination = t.destinationBranchId === activeBranchId;
-                  const isSource = t.sourceBranchId === activeBranchId;
+        <div className="space-y-3">
+          {/* Mobile Transfers Cards View */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {transfers.map((t) => {
+              const isDestination = t.destinationBranchId === activeBranchId;
+              const isSource = t.sourceBranchId === activeBranchId;
 
-                  return (
-                    <tr key={t.id} className="hover:bg-zinc-50/50 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-zinc-950">
-                        {t.transferNumber}
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-zinc-900">{t.sourceBranchName}</div>
-                        <div className="text-[11px] text-zinc-400">{t.sourceLocationName}</div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-zinc-900">{t.destinationBranchName}</div>
-                        <div className="text-[11px] text-zinc-400">{t.destinationLocationName}</div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <span
-                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
-                              t.status === 'received'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : t.status === 'in_transit'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : t.status === 'sent'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
-                            }`}
-                          >
-                            {t.status === 'in_transit' ? 'In Transit 🚚' : t.status === 'received' ? 'Received ✓' : t.status}
-                          </span>
-                          {t.status === 'in_transit' && !isDestination && (
-                            <span className="text-[10px] text-zinc-400">
-                              Awaiting receipt at {t.destinationBranchName}
-                            </span>
-                          )}
-                          {t.status === 'in_transit' && isDestination && (
-                            <span className="text-[10px] font-semibold text-amber-700">
-                              Ready to receive at {branchName}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-zinc-500">
+              return (
+                <div
+                  key={t.id}
+                  className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono font-bold text-zinc-950 text-sm block">{t.transferNumber}</span>
+                      <span className="text-[11px] text-zinc-400 font-mono mt-0.5 block">
                         {new Date(t.createdAt).toLocaleDateString()}
-                      </td>
+                      </span>
+                    </div>
 
-                      <td className="py-3.5 px-4 text-right">
-                        {t.status === 'draft' ? (
-                          <form
-                            action={async () => {
-                              'use server';
-                              await sendStockTransferAction(t.id);
-                            }}
-                            className="inline-block"
-                          >
-                            <Button size="sm" type="submit" className="text-xs font-bold bg-zinc-950 text-white h-7">
-                              Dispatch →
-                            </Button>
-                          </form>
-                        ) : t.status === 'in_transit' && isDestination ? (
-                          <form
-                            action={async () => {
-                              'use server';
-                              await receiveStockTransferAction({ transferId: t.id });
-                            }}
-                            className="inline-block"
-                          >
-                            <Button size="sm" type="submit" className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-7">
-                              Receive Stock ✓
-                            </Button>
-                          </form>
-                        ) : t.status === 'in_transit' && isSource ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
-                            Awaiting {t.destinationBranchName}
-                          </span>
-                        ) : (
-                          <span className="text-zinc-400 text-[11px] italic">Completed</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    <div className="shrink-0">
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${
+                          t.status === 'received'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : t.status === 'in_transit'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : t.status === 'sent'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+                        }`}
+                      >
+                        {t.status === 'in_transit' ? 'In Transit 🚚' : t.status === 'received' ? 'Received ✓' : t.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-zinc-500 font-medium">Source:</span>
+                        <div className="text-right">
+                          <span className="font-bold text-zinc-900">{t.sourceBranchName}</span>
+                          <span className="text-zinc-400 block text-[10px]">{t.sourceLocationName}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                        <span className="text-zinc-500 font-medium">Destination:</span>
+                        <div className="text-right">
+                          <span className="font-bold text-zinc-900">{t.destinationBranchName}</span>
+                          <span className="text-zinc-400 block text-[10px]">{t.destinationLocationName}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {t.status === 'in_transit' && !isDestination && (
+                      <div className="border-t border-zinc-200/50 pt-1.5 text-[11px] text-zinc-500">
+                        Awaiting receipt at {t.destinationBranchName}
+                      </div>
+                    )}
+                    {t.status === 'in_transit' && isDestination && (
+                      <div className="border-t border-zinc-200/50 pt-1.5 text-[11px] font-semibold text-amber-700">
+                        Ready to receive into {t.destinationLocationName}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mobile Actions */}
+                  <div className="pt-1">
+                    {t.status === 'draft' ? (
+                      <form
+                        action={async () => {
+                          'use server';
+                          await sendStockTransferAction(t.id);
+                        }}
+                      >
+                        <Button size="sm" type="submit" className="w-full text-xs font-bold bg-zinc-950 text-white min-h-[38px] rounded-xl shadow-xs">
+                          Dispatch Transfer →
+                        </Button>
+                      </form>
+                    ) : t.status === 'in_transit' && isDestination ? (
+                      <form
+                        action={async () => {
+                          'use server';
+                          await receiveStockTransferAction({ transferId: t.id });
+                        }}
+                      >
+                        <Button size="sm" type="submit" className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[38px] rounded-xl shadow-xs">
+                          Receive Stock into {t.destinationLocationName} ✓
+                        </Button>
+                      </form>
+                    ) : t.status === 'in_transit' && isSource ? (
+                      <span className="inline-flex items-center justify-center w-full py-2 rounded-xl text-xs font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                        Awaiting {t.destinationBranchName}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 text-xs italic block text-center py-1">Transfer Completed</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Transfer #</th>
+                    <th className="py-3 px-4">Source</th>
+                    <th className="py-3 px-4">Destination</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium">
+                  {transfers.map((t) => {
+                    const isDestination = t.destinationBranchId === activeBranchId;
+                    const isSource = t.sourceBranchId === activeBranchId;
+
+                    return (
+                      <tr key={t.id} className="hover:bg-zinc-50/50 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-zinc-950">
+                          {t.transferNumber}
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-zinc-900">{t.sourceBranchName}</div>
+                          <div className="text-[11px] text-zinc-400">{t.sourceLocationName}</div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-zinc-900">{t.destinationBranchName}</div>
+                          <div className="text-[11px] text-zinc-400">{t.destinationLocationName}</div>
+                        </td>
+
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <span
+                              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap ${
+                                t.status === 'received'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : t.status === 'in_transit'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : t.status === 'sent'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+                              }`}
+                            >
+                              {t.status === 'in_transit' ? 'In Transit 🚚' : t.status === 'received' ? 'Received ✓' : t.status}
+                            </span>
+                            {t.status === 'in_transit' && !isDestination && (
+                              <span className="text-[10px] text-zinc-400">
+                                Awaiting receipt at {t.destinationBranchName}
+                              </span>
+                            )}
+                            {t.status === 'in_transit' && isDestination && (
+                              <span className="text-[10px] font-semibold text-amber-700">
+                                Ready to receive at {branchName}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-zinc-500">
+                          {new Date(t.createdAt).toLocaleDateString()}
+                        </td>
+
+                        <td className="py-3.5 px-4 text-right">
+                          {t.status === 'draft' ? (
+                            <form
+                              action={async () => {
+                                'use server';
+                                await sendStockTransferAction(t.id);
+                              }}
+                              className="inline-block"
+                            >
+                              <Button size="sm" type="submit" className="text-xs font-bold bg-zinc-950 text-white h-7">
+                                Dispatch →
+                              </Button>
+                            </form>
+                          ) : t.status === 'in_transit' && isDestination ? (
+                            <form
+                              action={async () => {
+                                'use server';
+                                await receiveStockTransferAction({ transferId: t.id });
+                              }}
+                              className="inline-block"
+                            >
+                              <Button size="sm" type="submit" className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-7">
+                                Receive Stock ✓
+                              </Button>
+                            </form>
+                          ) : t.status === 'in_transit' && isSource ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                              Awaiting {t.destinationBranchName}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400 text-[11px] italic">Completed</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

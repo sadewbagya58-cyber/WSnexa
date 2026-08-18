@@ -440,58 +440,117 @@ export function SupplierReturnsClient({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                <tr>
-                  <th className="px-5 py-3">Return #</th>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Supplier</th>
-                  <th className="px-5 py-3">Source GRN</th>
-                  <th className="px-5 py-3">Item & Qty</th>
-                  <th className="px-5 py-3">Credit Value</th>
-                  <th className="px-5 py-3">Reason</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200">
-                {supplierReturns.map((ret) => (
-                  <tr key={ret.id} className="hover:bg-zinc-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-zinc-900">
-                      {ret.returnNumber}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-500">
-                      {new Date(ret.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-5 py-3.5 font-medium text-zinc-800">
-                      {ret.supplierName}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-600">
-                      {ret.grnNumber ? (
-                        <span className="font-mono text-[11px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-800">
-                          #{ret.grnNumber}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400 italic">Direct Return</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="font-semibold text-zinc-900">{ret.itemName}</div>
-                      <div className="font-mono text-[10px] text-zinc-500">
-                        {ret.quantity} {ret.unit} ({ret.locationName})
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 font-mono font-bold text-emerald-600">
-                      {formatCurrencyMinor(ret.totalCostCents, currency)}
-                    </td>
-                    <td className="px-5 py-3.5 text-zinc-600">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                        {ret.reason}
+          <div className="p-4 sm:p-0">
+            {/* Mobile Returns Cards View */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {supplierReturns.map((ret) => (
+                <div
+                  key={ret.id}
+                  className="bg-white border border-zinc-200 rounded-xl p-4 space-y-2.5 text-xs shadow-xs"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono font-bold text-zinc-950 text-sm block">{ret.returnNumber}</span>
+                      <span className="text-[11px] text-zinc-400 font-mono mt-0.5 block">
+                        {new Date(ret.createdAt).toLocaleDateString()}
                       </span>
-                    </td>
+                    </div>
+
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
+                      {ret.reason}
+                    </span>
+                  </div>
+
+                  <div className="bg-zinc-50 rounded-lg p-2.5 border border-zinc-100 space-y-1.5 text-[11px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500">Supplier:</span>
+                      <span className="font-bold text-zinc-900">{ret.supplierName}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500">Returned Item:</span>
+                      <span className="font-semibold text-zinc-900">{ret.itemName}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-zinc-600 border-t border-zinc-200/50 pt-1.5">
+                      <span>Quantity & Location:</span>
+                      <span className="font-mono font-medium text-zinc-800">
+                        {ret.quantity} {ret.unit} ({ret.locationName})
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500 font-medium">Credit Value:</span>
+                      <span className="font-mono font-bold text-emerald-600">
+                        {formatCurrencyMinor(ret.totalCostCents, currency)}
+                      </span>
+                    </div>
+
+                    {ret.grnNumber && (
+                      <div className="flex justify-between items-center border-t border-zinc-200/50 pt-1.5 text-zinc-400 font-mono">
+                        <span>Source GRN:</span>
+                        <span className="text-zinc-700">#{ret.grnNumber}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-zinc-200 bg-zinc-50 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-5 py-3">Return #</th>
+                    <th className="px-5 py-3">Date</th>
+                    <th className="px-5 py-3">Supplier</th>
+                    <th className="px-5 py-3">Source GRN</th>
+                    <th className="px-5 py-3">Item & Qty</th>
+                    <th className="px-5 py-3">Credit Value</th>
+                    <th className="px-5 py-3">Reason</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {supplierReturns.map((ret) => (
+                    <tr key={ret.id} className="hover:bg-zinc-50/80 transition-colors">
+                      <td className="px-5 py-3.5 font-mono font-bold text-zinc-900">
+                        {ret.returnNumber}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-500">
+                        {new Date(ret.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-5 py-3.5 font-medium text-zinc-800">
+                        {ret.supplierName}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-600">
+                        {ret.grnNumber ? (
+                          <span className="font-mono text-[11px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-800">
+                            #{ret.grnNumber}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400 italic">Direct Return</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="font-semibold text-zinc-900">{ret.itemName}</div>
+                        <div className="font-mono text-[10px] text-zinc-500">
+                          {ret.quantity} {ret.unit} ({ret.locationName})
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono font-bold text-emerald-600">
+                        {formatCurrencyMinor(ret.totalCostCents, currency)}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-600">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          {ret.reason}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

@@ -485,7 +485,125 @@ export function ItemPriceHistoryCard({
           Price History Ledger ({reversedLedger.length})
         </h4>
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-100">
+        {/* Mobile Ledger Cards View */}
+        <div className="grid grid-cols-1 gap-3 md:hidden">
+          {reversedLedger.map((row) => (
+            <div
+              key={row.id}
+              className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <span className="font-bold text-zinc-950 text-sm block truncate">{row.supplierName}</span>
+                  <div className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                    {new Date(row.recordedAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border whitespace-nowrap ${
+                      row.sourceType === 'catalog'
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : row.sourceType === 'goods_receipt'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : row.sourceType === 'purchase_order'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                    }`}
+                  >
+                    {row.sourceType === 'catalog'
+                      ? '🏷️ Catalog'
+                      : row.sourceType === 'goods_receipt'
+                      ? '🚚 GRN'
+                      : row.sourceType === 'purchase_order'
+                      ? '📦 PO'
+                      : 'Manual'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-zinc-500 text-[11px] font-medium">Purchasing Unit:</span>
+                  <div className="text-right">
+                    <span className="font-bold text-zinc-900 capitalize">{row.purchasingUnit}</span>
+                    {row.conversionToBase !== 1 && (
+                      <span className="text-[10px] text-zinc-400 block font-mono">
+                        (1 {row.purchasingUnit} = {row.conversionToBase} {row.baseUnit})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {hasCostPermission && (
+                  <div className="grid grid-cols-2 gap-2 border-t border-zinc-200/50 pt-1.5">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold">Pack Price</span>
+                      <span className="font-mono text-zinc-800 font-semibold">
+                        {row.packPriceCents !== null
+                          ? `${formatCurrencyMinor(row.packPriceCents, row.currency)}`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-zinc-400 block uppercase font-bold">Normalized Cost</span>
+                      <span className="font-mono text-zinc-950 font-bold">
+                        {row.normalizedPricePerBaseCents !== null
+                          ? `${formatCurrencyMinor(row.normalizedPricePerBaseCents, row.currency)} / ${row.baseUnit}`
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {hasCostPermission && (
+                  <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                    <span className="text-zinc-500">Change vs Prior:</span>
+                    {row.changeVsPreviousCents !== null &&
+                    row.changeVsPreviousCents !== undefined ? (
+                      <span
+                        className={`font-bold ${
+                          row.changeVsPreviousCents < 0
+                            ? 'text-emerald-700'
+                            : row.changeVsPreviousCents > 0
+                            ? 'text-rose-700'
+                            : 'text-zinc-500'
+                        }`}
+                      >
+                        {row.changeVsPreviousCents < 0 ? '↓ ' : row.changeVsPreviousCents > 0 ? '↑ +' : '● '}
+                        {formatCurrencyMinor(Math.abs(row.changeVsPreviousCents), row.currency)}
+                        {row.changeVsPreviousPercentage !== null &&
+                          row.changeVsPreviousPercentage !== undefined &&
+                          ` (${row.changeVsPreviousPercentage > 0 ? '+' : ''}${row.changeVsPreviousPercentage}%)`}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">First Record</span>
+                    )}
+                  </div>
+                )}
+
+                {(row.referenceNumber || row.notes) && (
+                  <div className="border-t border-zinc-200/50 pt-1.5 text-[11px] text-zinc-500">
+                    {row.referenceNumber && (
+                      <span className="font-mono text-zinc-800 font-bold mr-1.5">
+                        Ref: {row.referenceNumber}
+                      </span>
+                    )}
+                    {row.notes && <span>{row.notes}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Ledger Table */}
+        <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">

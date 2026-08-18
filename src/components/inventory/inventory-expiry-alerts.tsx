@@ -181,70 +181,143 @@ export function InventoryExpiryAlerts({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-100">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
-                <th className="py-2.5 px-3">Ingredient Item</th>
-                <th className="py-2.5 px-3">Batch Code</th>
-                <th className="py-2.5 px-3">Severity & Timeline</th>
-                <th className="py-2.5 px-3">Storage Location</th>
-                <th className="py-2.5 px-3 text-right">Remaining Stock</th>
-                {hasCostPermission && <th className="py-2.5 px-3 text-right">Stock Value</th>}
-                <th className="py-2.5 px-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 font-medium">
-              {displayedBatches.map((b) => (
-                <tr key={b.id} className="hover:bg-zinc-50/50 transition-colors">
-                  <td className="py-3 px-3">
+        <div className="space-y-3">
+          {/* Mobile Alert Cards View */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {displayedBatches.map((b) => (
+              <div
+                key={b.id}
+                className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <Link
                       href={`/dashboard/inventory/items/${b.itemId}`}
-                      className="font-bold text-zinc-950 hover:underline hover:text-zinc-800 flex items-center gap-1.5"
+                      className="font-bold text-zinc-950 hover:underline text-sm flex items-center gap-1.5 truncate"
                     >
                       <span>🥦</span>
-                      <span>{b.itemName}</span>
+                      <span className="truncate">{b.itemName}</span>
                     </Link>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="font-mono text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md text-[11px] font-bold">
+                    <span className="font-mono text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-md text-[10px] font-bold mt-1 inline-block">
                       {b.batchCode}
                     </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="space-y-0.5">
-                      {getSeverityBadge(b.severity, b.daysUntilExpiry)}
-                      <div className="text-[10px] text-zinc-400 font-mono">
-                        Exp: {new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-zinc-700">
-                    📍 {b.locationName}
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="font-black text-zinc-950">
+                  </div>
+
+                  <div className="shrink-0">
+                    {getSeverityBadge(b.severity, b.daysUntilExpiry)}
+                  </div>
+                </div>
+
+                <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-zinc-500 text-[11px] font-medium">Remaining At Risk:</span>
+                    <div className="font-black text-zinc-950 text-sm">
                       {b.remainingQuantity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{' '}
                       <span className="text-zinc-500 font-normal">{b.baseUnit}</span>
                     </div>
-                  </td>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] text-zinc-600 border-t border-zinc-200/50 pt-1.5">
+                    <span>Location:</span>
+                    <span className="font-medium text-zinc-900">📍 {b.locationName}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[11px] text-zinc-600 border-t border-zinc-200/50 pt-1.5">
+                    <span>Expires On:</span>
+                    <span className="font-mono text-zinc-800 font-medium">
+                      {new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                    </span>
+                  </div>
+
                   {hasCostPermission && (
-                    <td className="py-3 px-3 text-right font-black text-zinc-950 font-mono">
-                      {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
-                    </td>
+                    <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-400 uppercase font-bold text-[10px]">At-Risk Stock Value:</span>
+                      <span className="font-mono text-zinc-950 font-bold">
+                        {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
+                      </span>
+                    </div>
                   )}
-                  <td className="py-3 px-3 text-right">
-                    <Link
-                      href={`/dashboard/inventory/items/${b.itemId}`}
-                      className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-lg transition-colors inline-block"
-                    >
-                      View Item →
-                    </Link>
-                  </td>
+                </div>
+
+                <div className="pt-1">
+                  <Link
+                    href={`/dashboard/inventory/items/${b.itemId}`}
+                    className="w-full text-xs font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 min-h-[38px]"
+                  >
+                    <span>View Ingredient Record</span>
+                    <span>→</span>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-zinc-100">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider border-b border-zinc-100">
+                  <th className="py-2.5 px-3">Ingredient Item</th>
+                  <th className="py-2.5 px-3">Batch Code</th>
+                  <th className="py-2.5 px-3">Severity & Timeline</th>
+                  <th className="py-2.5 px-3">Storage Location</th>
+                  <th className="py-2.5 px-3 text-right">Remaining Stock</th>
+                  {hasCostPermission && <th className="py-2.5 px-3 text-right">Stock Value</th>}
+                  <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 font-medium">
+                {displayedBatches.map((b) => (
+                  <tr key={b.id} className="hover:bg-zinc-50/50 transition-colors">
+                    <td className="py-3 px-3">
+                      <Link
+                        href={`/dashboard/inventory/items/${b.itemId}`}
+                        className="font-bold text-zinc-950 hover:underline hover:text-zinc-800 flex items-center gap-1.5"
+                      >
+                        <span>🥦</span>
+                        <span>{b.itemName}</span>
+                      </Link>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-mono text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md text-[11px] font-bold">
+                        {b.batchCode}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <div className="space-y-0.5">
+                        {getSeverityBadge(b.severity, b.daysUntilExpiry)}
+                        <div className="text-[10px] text-zinc-400 font-mono">
+                          Exp: {new Date(b.expiryDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-700">
+                      📍 {b.locationName}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="font-black text-zinc-950">
+                        {b.remainingQuantity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{' '}
+                        <span className="text-zinc-500 font-normal">{b.baseUnit}</span>
+                      </div>
+                    </td>
+                    {hasCostPermission && (
+                      <td className="py-3 px-3 text-right font-black text-zinc-950 font-mono">
+                        {b.totalStockValueCents !== null ? formatCurrencyMinor(b.totalStockValueCents, currency) : '—'}
+                      </td>
+                    )}
+                    <td className="py-3 px-3 text-right">
+                      <Link
+                        href={`/dashboard/inventory/items/${b.itemId}`}
+                        className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-lg transition-colors inline-block"
+                      >
+                        View Item →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

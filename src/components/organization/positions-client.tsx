@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PositionModal } from './position-modal';
 
@@ -61,6 +62,9 @@ export function PositionsClient({
   units,
   canManage,
 }: PositionsClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('all');
@@ -315,7 +319,7 @@ export function PositionsClient({
       <PositionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         initialData={editingPosition}
         jobTitles={jobTitles}
         branches={branches}

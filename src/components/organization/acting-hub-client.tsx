@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { endActingAssignmentAction, extendActingAssignmentAction } from '@/server/actions/organization';
 
@@ -45,6 +46,9 @@ export function ActingHubClient({
   actingAssignments,
   canManage,
 }: ActingHubClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [filterActiveOnly, setFilterActiveOnly] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [extendingId, setExtendingId] = useState<string | null>(null);
@@ -78,7 +82,9 @@ export function ActingHubClient({
       if (!res.success) {
         setErrorMsg(res.message || 'Failed to end acting appointment');
       } else {
-        window.location.reload();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to end acting role');
@@ -101,7 +107,12 @@ export function ActingHubClient({
       if (!res.success) {
         setErrorMsg(res.message || 'Failed to extend acting appointment');
       } else {
-        window.location.reload();
+        setExtendingId(null);
+        setNewEndDate('');
+        setExtendReason('');
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to extend acting role');

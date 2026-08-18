@@ -6,13 +6,24 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
 import { PermissionService } from '@/server/services/permission.service';
 import { PeopleDirectoryClient, StaffRow } from '@/components/organization/people-directory-client';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const metadata: Metadata = {
   title: 'People Directory | WSNexa',
   description: 'Enterprise staff directory, primary assignments, reporting relationships, and coverage',
 };
 
-export default async function PeopleDirectoryPage() {
+interface PeopleDirectoryPageProps {
+  searchParams?: Promise<{
+    branch?: string;
+    dept?: string;
+    job?: string;
+    search?: string;
+    type?: string;
+  }>;
+}
+
+export default async function PeopleDirectoryPage({ searchParams }: PeopleDirectoryPageProps) {
   const { allowed, context } = await requireRoutePermission('/dashboard/people');
   if (!allowed) {
     return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
@@ -21,10 +32,54 @@ export default async function PeopleDirectoryPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch, branches } = context;
+  const { business, user, activeBranch, branches, membership } = context;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+
+  // Determine user branch permissions
+  const isOwner = membership?.role === 'business_owner';
+  let allowedBranchIds: string[] | null = null;
+  let canViewAllProperties = isOwner;
+
+  if (!isOwner) {
+    const admin = createAdminClient();
+    const { data: userBranchAssignments } = await admin
+      .from('branch_assignments')
+      .select('branch_id')
+      .eq('business_membership_id', membership.id);
+
+    const assignedBranchIds = (userBranchAssignments || []).map((ba) => ba.branch_id);
+    allowedBranchIds = assignedBranchIds;
+    if (branches.length > 0 && assignedBranchIds.length >= branches.length) {
+      canViewAllProperties = true;
+    }
+  }
+
+  // Authoritative default branch resolution:
+  // Default to active branch context; fallback to corporate or first branch if no active branch.
+  const activeBranchId = activeBranch?.id || (branches.length > 0 ? branches[0].id : 'corporate');
+  let effectiveBranch = resolvedSearchParams.branch;
+
+  if (!effectiveBranch) {
+    effectiveBranch = activeBranchId;
+  } else if (effectiveBranch === 'all') {
+    if (!canViewAllProperties) {
+      effectiveBranch = activeBranchId;
+    }
+  } else if (effectiveBranch !== 'corporate' && effectiveBranch !== 'unassigned') {
+    // Validate target branch is within user's allowed scope
+    if (allowedBranchIds && !allowedBranchIds.includes(effectiveBranch)) {
+      effectiveBranch = activeBranchId;
+    }
+  }
 
   const [staffList, departments, jobTitles, canManage] = await Promise.all([
-    OrganizationService.listOrganizationStaff(business.id),
+    OrganizationService.listOrganizationStaff(business.id, {
+      branchId: effectiveBranch,
+      allowedBranchIds,
+      departmentId: resolvedSearchParams.dept,
+      jobTitleId: resolvedSearchParams.job,
+      search: resolvedSearchParams.search,
+    }),
     OrganizationService.getDepartments(business.id),
     OrganizationService.getJobTitles(business.id),
     PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'people.manage'),
@@ -38,6 +93,9 @@ export default async function PeopleDirectoryPage() {
         departments={departments}
         jobTitles={jobTitles}
         canManage={canManage}
+        initialBranch={effectiveBranch}
+        activeBranchId={activeBranch?.id || null}
+        canViewAllProperties={canViewAllProperties}
       />
     </div>
   );

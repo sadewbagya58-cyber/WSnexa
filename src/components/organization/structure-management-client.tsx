@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { DepartmentModal } from './department-modal';
 import { UnitModal } from './unit-modal';
@@ -46,6 +47,9 @@ export function StructureManagementClient({
   branches,
   canManage,
 }: StructureManagementClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set(departments.map((d) => d.id)));
@@ -309,7 +313,7 @@ export function StructureManagementClient({
       <DepartmentModal
         isOpen={isDeptModalOpen}
         onClose={() => setIsDeptModalOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         initialData={editingDept}
         departments={departments}
         branches={branches}
@@ -318,7 +322,7 @@ export function StructureManagementClient({
       <UnitModal
         isOpen={isUnitModalOpen}
         onClose={() => setIsUnitModalOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         initialData={editingUnit}
         departments={departments}
         units={units}

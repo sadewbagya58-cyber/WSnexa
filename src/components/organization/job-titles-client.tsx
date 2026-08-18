@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { JobTitleModal } from './job-title-modal';
 
@@ -35,6 +36,9 @@ export function JobTitlesClient({
   jobTitles,
   canManage,
 }: JobTitlesClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [selectedRankFilter, setSelectedRankFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -231,7 +235,7 @@ export function JobTitlesClient({
       <JobTitleModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         initialData={editingTitle}
         hierarchyLevels={hierarchyLevels}
       />

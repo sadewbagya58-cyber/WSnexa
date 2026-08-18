@@ -2652,10 +2652,12 @@ export class OrganizationService {
   static async listOrganizationStaff(
     businessId: string,
     options?: {
-      branchId?: string;
+      branchId?: string | null;
       departmentId?: string;
       jobTitleId?: string;
       search?: string;
+      allowedBranchIds?: string[] | null;
+      scope?: 'all' | 'corporate' | 'unassigned' | 'branch';
     }
   ) {
     const admin = createAdminClient();
@@ -2781,6 +2783,10 @@ export class OrganizationService {
         }
       }
 
+      const hasPrimaryAssignment = Boolean(primaryAssign);
+      const isCorporate = Boolean(primaryAssign && !primaryAssign.branch);
+      const isUnassigned = !primaryAssign;
+
       return {
         membershipId: m.id,
         userId: m.user_id,
@@ -2794,28 +2800,70 @@ export class OrganizationService {
         additionalAssignments: additionalAssigns,
         totalActiveAssignments: memberAssigns.length,
         hasBranchAccessMismatch,
+        hasPrimaryAssignment,
+        isCorporate,
+        isUnassigned,
       };
     });
 
-    // Apply filtering
+    // 5. Server-side security enforcement for branch-scoped users
     let filtered = staffList;
-    if (options?.search) {
-      const q = options.search.toLowerCase();
-      filtered = filtered.filter((s) => s.fullName.toLowerCase().includes(q));
-    }
-    if (options?.branchId) {
+    if (options?.allowedBranchIds && options.allowedBranchIds.length > 0) {
+      const allowedSet = new Set(options.allowedBranchIds);
       filtered = filtered.filter((s) => {
-        const pBranch = s.primaryAssignment?.branch as unknown as { id: string } | null;
-        return pBranch?.id === options.branchId;
+        const pBranchId = (s.primaryAssignment?.branch as unknown as { id: string } | null)?.id;
+        if (pBranchId && allowedSet.has(pBranchId)) return true;
+        // Check active secondments to allowed branch
+        const hasSecToAllowed = s.secondmentAssignments.some((sec) => {
+          const secBranchId = (sec as unknown as { branch?: { id: string } }).branch?.id;
+          return secBranchId && allowedSet.has(secBranchId);
+        });
+        if (hasSecToAllowed) return true;
+        // Check branch access
+        const memberBranchAccess = branchAccessMap.get(s.membershipId);
+        if (memberBranchAccess) {
+          for (const bId of options.allowedBranchIds!) {
+            if (memberBranchAccess.has(bId)) return true;
+          }
+        }
+        return false;
       });
     }
-    if (options?.departmentId) {
+
+    // 6. Branch / Scope filtering
+    if (options?.scope === 'corporate' || options?.branchId === 'corporate') {
+      filtered = filtered.filter((s) => s.isCorporate);
+    } else if (options?.scope === 'unassigned' || options?.branchId === 'unassigned') {
+      filtered = filtered.filter((s) => s.isUnassigned);
+    } else if (options?.branchId && options.branchId !== 'all') {
+      filtered = filtered.filter((s) => {
+        const pBranch = s.primaryAssignment?.branch as unknown as { id: string } | null;
+        if (pBranch?.id === options.branchId) return true;
+        // Also match staff seconded to this branch
+        return s.secondmentAssignments.some((sec) => {
+          const secBranch = (sec as unknown as { branch?: { id: string } }).branch;
+          return secBranch?.id === options.branchId;
+        });
+      });
+    }
+
+    // 7. Additional multi-filters
+    if (options?.search) {
+      const q = options.search.toLowerCase();
+      filtered = filtered.filter((s) => {
+        const nameMatch = s.fullName.toLowerCase().includes(q);
+        const pJob = s.primaryAssignment?.job_title as unknown as { name?: string } | null;
+        const titleMatch = pJob?.name?.toLowerCase().includes(q);
+        return Boolean(nameMatch || titleMatch);
+      });
+    }
+    if (options?.departmentId && options.departmentId !== 'all') {
       filtered = filtered.filter((s) => {
         const pDept = s.primaryAssignment?.department as unknown as { id: string } | null;
         return pDept?.id === options.departmentId;
       });
     }
-    if (options?.jobTitleId) {
+    if (options?.jobTitleId && options.jobTitleId !== 'all') {
       filtered = filtered.filter((s) => {
         const pJob = s.primaryAssignment?.job_title as unknown as { id: string } | null;
         return pJob?.id === options.jobTitleId;

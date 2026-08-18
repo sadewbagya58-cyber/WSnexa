@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { reconcileAssignmentLifecycleAction } from '@/server/actions/organization';
 
@@ -23,6 +24,9 @@ export function IntegrityCenterClient({
   issues,
   canManage,
 }: IntegrityCenterClientProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [severityFilter, setSeverityFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
   const [isReconciling, setIsReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<string | null>(null);
@@ -39,6 +43,9 @@ export function IntegrityCenterClient({
       const res = await reconcileAssignmentLifecycleAction();
       if (res.success) {
         setReconcileResult(res.message || 'Lifecycle reconciled successfully.');
+        startTransition(() => {
+          router.refresh();
+        });
       } else {
         setReconcileResult(`Error: ${res.message || 'Reconciliation failed'}`);
       }

@@ -1614,6 +1614,67 @@ async function runSuite() {
       galleGM.status === 'active' && galleGM.branch_id === branch1B!.id,
       '83. Aura Hospitality Real-World Scenario: Substantive organization intact across multi-property portfolio'
     );
+
+    console.log('\n--- 20. Step 4.2 People Directory Branch Scoping & Security Hardening ---');
+
+    // 1. Unassigned member creation for verification
+    const unassignedStaff = await createStaffMember('unassignedStaff', 'cashier');
+
+    // 2. Querying branch1A scope: Must only return branch1A staff
+    const branch1AStaff = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1A!.id,
+    });
+    assert(
+      branch1AStaff.length > 0 &&
+        branch1AStaff.every((s) => {
+          const primaryBranch = (s.primaryAssignment?.branch as unknown as { id: string } | null)?.id;
+          const isSecondedToBranch = s.secondmentAssignments.some((sec) => (sec.branch as unknown as { id: string } | null)?.id === branch1A!.id);
+          return primaryBranch === branch1A!.id || isSecondedToBranch;
+        }),
+      '84. listOrganizationStaff scoped to branch1A returns only staff placed at or seconded to branch1A'
+    );
+    assert(
+      !branch1AStaff.some((s) => s.membershipId === personC_GalleGM.membership.id),
+      '85. listOrganizationStaff scoped to branch1A strictly excludes branch1B staff'
+    );
+
+    // 3. Querying Corporate scope
+    const corporateStaff = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: 'corporate',
+    });
+    assert(
+      corporateStaff.every((s) => s.primaryAssignment !== null && s.primaryAssignment.branch === null),
+      '86. listOrganizationStaff scoped to corporate returns only staff with primaryAssignment.branch === null'
+    );
+
+    // 4. Querying Unassigned scope
+    const unassignedList = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: 'unassigned',
+    });
+    assert(
+      unassignedList.some((s) => s.membershipId === unassignedStaff.membership.id) &&
+        unassignedList.every((s) => s.primaryAssignment === null && s.isUnassigned === true),
+      '87. listOrganizationStaff scoped to unassigned returns only unassigned staff with explicit isUnassigned flag'
+    );
+
+    // 5. Security Boundary check: Unauthorized user attempting to query branch1B with allowedBranchIds = [branch1A.id]
+    const unauthorizedAttempt = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1B!.id,
+      allowedBranchIds: [branch1A!.id],
+    });
+    assert(
+      !unauthorizedAttempt.some((s) => s.membershipId === personC_GalleGM.membership.id),
+      '88. listOrganizationStaff enforces server-side security boundary: prevents unauthorized branch query'
+    );
+
+    // 6. Seconded staff visibility when filtering host branch
+    const secondmentDestStaff = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1B!.id,
+    });
+    assert(
+      secondmentDestStaff.some((s) => s.membershipId === personC_GalleGM.membership.id),
+      '89. listOrganizationStaff correctly includes host branch substantive and seconded staff'
+    );
   } finally {
     // -------------------------------------------------------------
     // Clean Teardown of Test Entities

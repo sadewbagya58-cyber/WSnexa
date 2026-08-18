@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CreateAssignmentModal } from './modals/create-assignment-modal';
 import { PrimaryTransitionModal } from './modals/primary-transition-modal';
@@ -150,6 +151,9 @@ export function MemberProfileClient({
   allActiveAssignmentsToCover,
   canManage,
 }: MemberProfileProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
 
   // Modals visibility
@@ -174,7 +178,9 @@ export function MemberProfileClient({
       if (!res.success) {
         setActionError(res.message || 'Failed to end acting assignment');
       } else {
-        window.location.reload();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Failed to end acting role');
@@ -191,7 +197,9 @@ export function MemberProfileClient({
       if (!res.success) {
         setActionError(res.message || 'Failed to end secondment');
       } else {
-        window.location.reload();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Failed to end secondment');
@@ -700,7 +708,7 @@ export function MemberProfileClient({
       <CreateAssignmentModal
         isOpen={isCreateAssignOpen}
         onClose={() => setIsCreateAssignOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         membershipId={membershipId}
         memberName={member.fullName}
         hasActivePrimary={Boolean(pAssign)}
@@ -717,7 +725,7 @@ export function MemberProfileClient({
           <PrimaryTransitionModal
             isOpen={isTransitionOpen}
             onClose={() => setIsTransitionOpen(false)}
-            onSuccess={() => window.location.reload()}
+            onSuccess={() => startTransition(() => router.refresh())}
             currentAssignment={pAssign}
             memberName={member.fullName}
             jobTitles={jobTitles}
@@ -731,7 +739,7 @@ export function MemberProfileClient({
           <ChangeManagerModal
             isOpen={isChangeMgrOpen}
             onClose={() => setIsChangeMgrOpen(false)}
-            onSuccess={() => window.location.reload()}
+            onSuccess={() => startTransition(() => router.refresh())}
             assignmentId={pAssign.id}
             memberName={member.fullName}
             currentManagerName={subMgrName}
@@ -741,7 +749,7 @@ export function MemberProfileClient({
           <SecondmentModal
             isOpen={isSecondmentOpen}
             onClose={() => setIsSecondmentOpen(false)}
-            onSuccess={() => window.location.reload()}
+            onSuccess={() => startTransition(() => router.refresh())}
             sourceAssignment={{
               id: pAssign.id,
               membershipId,
@@ -760,7 +768,7 @@ export function MemberProfileClient({
           <AbsenceModal
             isOpen={isAbsenceOpen}
             onClose={() => setIsAbsenceOpen(false)}
-            onSuccess={() => window.location.reload()}
+            onSuccess={() => startTransition(() => router.refresh())}
             assignmentId={pAssign.id}
             memberName={member.fullName}
             jobTitleName={pAssign.job_title?.name || 'Staff Member'}
@@ -771,7 +779,7 @@ export function MemberProfileClient({
       <ActingAssignmentModal
         isOpen={isActingOpen}
         onClose={() => setIsActingOpen(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={() => startTransition(() => router.refresh())}
         actingMembershipId={membershipId}
         actingMemberName={member.fullName}
         assignmentsToCover={allActiveAssignmentsToCover}

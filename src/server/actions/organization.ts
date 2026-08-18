@@ -92,9 +92,8 @@ export async function createStaffAssignmentAction(
 
     const created = await OrganizationService.createStaffAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
     revalidatePath('/dashboard/people');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -145,9 +144,8 @@ export async function createAdditionalAssignmentAction(
 
     const created = await OrganizationService.createAdditionalAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
     revalidatePath('/dashboard/people');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -195,9 +193,8 @@ export async function updateStaffAssignmentAction(
 
     const updated = await OrganizationService.updateStaffAssignment(parsed.data);
 
-    revalidatePath('/dashboard/team');
     revalidatePath('/dashboard/people');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -244,8 +241,8 @@ export async function endStaffAssignmentAction(
 
     const ended = await OrganizationService.endStaffAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -296,8 +293,8 @@ export async function transitionPrimaryAssignmentAction(
 
     const res = await OrganizationService.transitionPrimaryAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -351,8 +348,8 @@ export async function setReportingManagerAction(
 
     await OrganizationService.setReportingManager(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -403,8 +400,9 @@ export async function createActingAssignmentAction(
 
     const created = await OrganizationService.createActingAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/acting');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -455,8 +453,9 @@ export async function extendActingAssignmentAction(
 
     await OrganizationService.extendActingAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/acting');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -507,8 +506,9 @@ export async function endActingAssignmentAction(
 
     await OrganizationService.endActingAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/acting');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -559,8 +559,9 @@ export async function createSecondmentAction(
 
     const created = await OrganizationService.createSecondment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/secondments');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -611,8 +612,9 @@ export async function endSecondmentAction(
 
     await OrganizationService.endSecondment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people/secondments');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -663,8 +665,9 @@ export async function createAssignmentAbsenceAction(
 
     const created = await OrganizationService.createAssignmentAbsence(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/acting');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -711,8 +714,9 @@ export async function endAssignmentAbsenceAction(
 
     await OrganizationService.endAssignmentAbsence(parsed.data);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/acting');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -763,8 +767,8 @@ export async function createTemporaryAssignmentAction(
 
     const assignment = await OrganizationService.createTemporaryAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,
@@ -776,7 +780,6 @@ export async function createTemporaryAssignmentAction(
     return { success: false, message };
   }
 }
-
 
 /**
  * Ends a temporary assignment.
@@ -816,8 +819,8 @@ export async function endTemporaryAssignmentAction(
 
     const ended = await OrganizationService.endTemporaryAssignment(parsed.data, context.user.id);
 
-    revalidatePath('/dashboard/team');
-    revalidatePath('/dashboard/organization');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
 
     return {
       success: true,

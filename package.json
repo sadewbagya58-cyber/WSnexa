@@ -44,7 +44,8 @@
     "verify:super-admin": "tsx scripts/verify-super-admin.ts",
     "verify:help-center": "tsx scripts/verify-help-center.ts",
     "verify:inventory": "tsx scripts/verify-inventory.ts",
-    "verify:inventory-v2": "tsx scripts/verify-inventory-v2.ts"
+    "verify:inventory-v2": "tsx scripts/verify-inventory-v2.ts",
+    "verify:organization": "tsx scripts/verify-organization.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

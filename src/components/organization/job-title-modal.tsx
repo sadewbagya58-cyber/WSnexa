@@ -91,14 +91,14 @@ function JobTitleModalForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl space-y-6">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-lg rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-6">
+        <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
           <div>
-            <h3 className="text-xl font-bold text-zinc-100">
+            <h3 className="text-xl font-bold text-zinc-900">
               {isEditing ? 'Edit Job Title' : 'Create Job Title'}
             </h3>
-            <p className="text-xs text-zinc-400 mt-1">
+            <p className="text-xs text-zinc-500 mt-1">
               {isEditing
                 ? 'Update job role classification, rank, and management attributes'
                 : 'Define a standardized enterprise job role'}
@@ -106,22 +106,22 @@ function JobTitleModalForm({
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-200 p-2 rounded-lg hover:bg-zinc-800"
+            className="text-zinc-400 hover:text-zinc-700 p-2 rounded-lg hover:bg-zinc-100"
           >
             ✕
           </button>
         </div>
 
         {errorMsg && (
-          <div className="rounded-xl bg-red-950/50 border border-red-800/80 p-3 text-xs text-red-300">
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
             {errorMsg}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-              Job Title Name <span className="text-red-400">*</span>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+              Job Title Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -129,13 +129,13 @@ function JobTitleModalForm({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Executive Chef, General Manager, Line Cook"
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+              <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
                 Job Code
               </label>
               <input
@@ -143,12 +143,12 @@ function JobTitleModalForm({
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="e.g. EXEC-CHEF, GM-01"
-                className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
-                Seniority Rank Level <span className="text-red-400">*</span>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+                Seniority Rank Level <span className="text-red-500">*</span>
               </label>
               <select
                 value={hierarchyLevelId}
@@ -159,7 +159,7 @@ function JobTitleModalForm({
                     setIsManagement(selectedLvl.is_management);
                   }
                 }}
-                className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
               >
                 {hierarchyLevels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
@@ -171,13 +171,13 @@ function JobTitleModalForm({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
               Department Category
             </label>
             <select
               value={departmentType}
               onChange={(e) => setDepartmentType(e.target.value)}
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             >
               <option value="operations">Operations & Front of House</option>
               <option value="culinary">Culinary & Kitchen</option>
@@ -191,7 +191,7 @@ function JobTitleModalForm({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
               Role Description & Key Responsibilities
             </label>
             <textarea
@@ -199,7 +199,7 @@ function JobTitleModalForm({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Outline standard operational duties, qualifications, and oversight responsibilities..."
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 resize-none"
             />
           </div>
 
@@ -210,9 +210,9 @@ function JobTitleModalForm({
                 id="job_is_management"
                 checked={isManagement}
                 onChange={(e) => setIsManagement(e.target.checked)}
-                className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
               />
-              <label htmlFor="job_is_management" className="text-xs font-medium text-zinc-300 cursor-pointer">
+              <label htmlFor="job_is_management" className="text-xs font-medium text-zinc-700 cursor-pointer">
                 Management Tier Role
               </label>
             </div>
@@ -222,27 +222,27 @@ function JobTitleModalForm({
                 id="job_is_active"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
+                className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
               />
-              <label htmlFor="job_is_active" className="text-xs font-medium text-zinc-300 cursor-pointer">
+              <label htmlFor="job_is_active" className="text-xs font-medium text-zinc-700 cursor-pointer">
                 Active Job Title
               </label>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-200">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              className="border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-300"
+              className="border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-xs"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30"
+              className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium shadow-sm"
             >
               {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Job Title'}
             </Button>

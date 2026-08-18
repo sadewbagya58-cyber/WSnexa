@@ -74,41 +74,41 @@ export function SecondmentsHubClient({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             Cross-Property Secondments & Taskforces
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Inter-branch staff deployments while preserving substantive home property placements
           </p>
         </div>
 
         <div className="flex items-center space-x-2.5">
           <Link href="/dashboard/people">
-            <Button variant="outline" className="text-xs bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200">
-              👥 Authorize via Staff Profile
+            <Button variant="outline" className="text-xs bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium">
+              Authorize via Staff Profile
             </Button>
           </Link>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="rounded-xl bg-red-950/60 border border-red-800/80 p-3.5 text-xs text-red-300">
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3.5 text-xs text-red-700">
           {errorMsg}
         </div>
       )}
 
       {/* Security Architecture Banner */}
-      <div className="rounded-2xl bg-blue-950/30 border border-blue-800/60 p-4 md:p-5 flex items-start space-x-3.5 text-xs text-blue-200 leading-relaxed">
+      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 md:p-5 flex items-start space-x-3.5 text-xs text-zinc-700 leading-relaxed shadow-xs">
         <span className="text-xl mt-0.5">ℹ️</span>
         <div>
-          <strong>WSNexa Security Architecture Principle:</strong>
+          <strong className="text-zinc-900">WSNexa Security Architecture Principle:</strong>
           <br />
           Secondment placement assigns an employee to an organization node at the destination property for workforce hierarchy, reporting, and costing.
-          Operational branch access (POS terminal, kitchen display, waiter tools) is governed strictly by <Link href="/dashboard/branches" className="underline font-semibold hover:text-white">Branch Assignments</Link> and is NOT automatically granted.
+          Operational branch access (POS terminal, kitchen display, waiter tools) is governed strictly by <Link href="/dashboard/branches" className="underline font-semibold text-zinc-900 hover:text-black">Branch Assignments</Link> and is NOT automatically granted.
         </div>
       </div>
 
@@ -120,26 +120,26 @@ export function SecondmentsHubClient({
             placeholder="Search seconded staff member..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setFilterActiveOnly(true)}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all shadow-xs ${
               filterActiveOnly
-                ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
             }`}
           >
             Active Only ({secondments.filter((s) => s.status === 'active').length})
           </button>
           <button
             onClick={() => setFilterActiveOnly(false)}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all shadow-xs ${
               !filterActiveOnly
-                ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
             }`}
           >
             All Deployments ({secondments.length})
@@ -148,41 +148,41 @@ export function SecondmentsHubClient({
       </div>
 
       {/* Secondments List */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
         {filtered.length === 0 ? (
           <div className="p-8 text-center space-y-2">
             <span className="text-3xl">✈️</span>
-            <div className="text-sm font-semibold text-zinc-300">No secondments recorded</div>
+            <div className="text-sm font-semibold text-zinc-900">No secondments recorded</div>
             <div className="text-xs text-zinc-500">No active cross-property deployments found.</div>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-zinc-100">
             {filtered.map((sec) => {
               const prof = sec.membership?.user_profiles;
               const p = Array.isArray(prof) ? prof[0] : prof;
               const staffName = `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Staff Member';
 
               return (
-                <div key={sec.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-zinc-850/20 transition-colors">
+                <div key={sec.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-zinc-50/70 transition-colors">
                   <div className="space-y-1.5">
                     <div className="flex items-center space-x-3">
-                      <span className="text-base font-bold text-zinc-100">
+                      <span className="text-base font-bold text-zinc-900">
                         👤 {staffName}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950/80 border border-blue-800 text-blue-300">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 border border-zinc-200 text-zinc-800">
                         Seconded Role: {sec.job_title?.name}
                       </span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        sec.status === 'active' ? 'bg-emerald-950 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+                        sec.status === 'active' ? 'bg-zinc-100 text-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-200'
                       }`}>
                         {sec.status}
                       </span>
                     </div>
 
-                    <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-2">
-                      <span>Home: <strong className="text-zinc-200">{sec.source_assignment?.branch?.name || 'Corporate'}</strong> ({sec.source_assignment?.job_title?.name})</span>
+                    <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-2">
+                      <span>Home: <strong className="text-zinc-900">{sec.source_assignment?.branch?.name || 'Corporate'}</strong> ({sec.source_assignment?.job_title?.name})</span>
                       <span>➔</span>
-                      <span>Destination: <strong className="text-blue-300">{sec.branch?.name || 'Corporate'}</strong> ({sec.department?.name || 'None'})</span>
+                      <span>Destination: <strong className="text-zinc-900">{sec.branch?.name || 'Corporate'}</strong> ({sec.department?.name || 'None'})</span>
                     </div>
 
                     <div className="text-[11px] font-mono text-zinc-500">
@@ -190,7 +190,7 @@ export function SecondmentsHubClient({
                     </div>
 
                     {sec.reason && (
-                      <div className="text-xs text-zinc-400 italic">“{sec.reason}”</div>
+                      <div className="text-xs text-zinc-500 italic">“{sec.reason}”</div>
                     )}
                   </div>
 
@@ -201,7 +201,7 @@ export function SecondmentsHubClient({
                         variant="outline"
                         onClick={() => handleEndSecondment(sec.id)}
                         disabled={isSubmitting}
-                        className="text-xs h-8 bg-red-950/60 border-red-800 hover:bg-red-900 text-red-300"
+                        className="text-xs h-8 bg-white border-red-200 hover:bg-red-50 text-red-700 font-medium"
                       >
                         Conclude Secondment
                       </Button>

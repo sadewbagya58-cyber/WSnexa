@@ -38,8 +38,7 @@ export default async function MemberProfilePage({
       id,
       user_id,
       role,
-      membership_status,
-      user_profiles(first_name, last_name)
+      membership_status
     `)
     .eq('id', membershipId)
     .eq('business_id', business.id)
@@ -49,7 +48,12 @@ export default async function MemberProfilePage({
     notFound();
   }
 
-  const userProfile = (Array.isArray(memberData.user_profiles) ? memberData.user_profiles[0] : memberData.user_profiles) as { first_name?: string; last_name?: string } | null;
+  const { data: userProfile } = await admin
+    .from('user_profiles')
+    .select('first_name, last_name')
+    .eq('id', memberData.user_id)
+    .maybeSingle();
+
   const fullName = `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Staff Member';
 
   // 2. Fetch profile details
@@ -63,10 +67,10 @@ export default async function MemberProfilePage({
   // Fetch absences and event history
   const [absencesRes, eventsRes] = await Promise.all([
     assignmentIds.length > 0
-      ? admin.from('assignment_absences').select('*').in('assignment_id', assignmentIds).order('starts_at', { ascending: false })
+      ? admin.from('organization_assignment_absences').select('*').in('assignment_id', assignmentIds).order('starts_at', { ascending: false })
       : Promise.resolve({ data: [] }),
     assignmentIds.length > 0
-      ? admin.from('staff_assignment_events').select('*').in('assignment_id', assignmentIds).order('created_at', { ascending: false })
+      ? admin.from('organization_assignment_history').select('*').in('assignment_id', assignmentIds).order('changed_at', { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);
 

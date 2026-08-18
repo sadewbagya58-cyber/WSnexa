@@ -66,14 +66,14 @@ export function JobTitlesClient({
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             Job Titles & Seniority Tiers
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Standardized organizational roles mapped to 8 authoritative seniority ranks
           </p>
         </div>
@@ -81,7 +81,7 @@ export function JobTitlesClient({
         {canManage && (
           <Button
             onClick={handleOpenAdd}
-            className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-sm"
+            className="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium shadow-sm"
           >
             + Add Job Title
           </Button>
@@ -96,14 +96,14 @@ export function JobTitlesClient({
             placeholder="Search job titles by title, code, or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div>
           <select
             value={selectedRankFilter}
             onChange={(e) => setSelectedRankFilter(e.target.value)}
-            className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Seniority Ranks (Rank 1–8)</option>
             {hierarchyLevels.map((lvl) => (
@@ -119,36 +119,43 @@ export function JobTitlesClient({
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
         {hierarchyLevels.map((lvl) => {
           const count = jobTitles.filter((jt) => jt.hierarchy_level_id === lvl.id).length;
+          const isSelected = selectedRankFilter === lvl.id;
           return (
             <div
               key={lvl.id}
-              onClick={() => setSelectedRankFilter(selectedRankFilter === lvl.id ? 'all' : lvl.id)}
-              className={`rounded-xl border p-2.5 cursor-pointer transition-all ${
-                selectedRankFilter === lvl.id
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                  : 'border-zinc-800/80 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700'
+              onClick={() => setSelectedRankFilter(isSelected ? 'all' : lvl.id)}
+              className={`rounded-lg border p-3 cursor-pointer transition-all shadow-xs ${
+                isSelected
+                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                  : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
               }`}
             >
-              <div className="text-[10px] font-mono font-bold uppercase text-zinc-500">Rank {lvl.rank}</div>
-              <div className="text-xs font-semibold text-zinc-200 truncate mt-0.5">{lvl.name}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">{count} titles</div>
+              <div className={`text-[10px] font-mono font-bold uppercase ${isSelected ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                Rank {lvl.rank}
+              </div>
+              <div className={`text-xs font-semibold truncate mt-0.5 ${isSelected ? 'text-white' : 'text-zinc-900'}`}>
+                {lvl.name}
+              </div>
+              <div className={`text-[10px] mt-1 font-medium ${isSelected ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                {count} titles
+              </div>
             </div>
           );
         })}
       </div>
 
       {/* Job Titles Table / Card Grid */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
         {filteredTitles.length === 0 ? (
           <div className="p-8 text-center space-y-2">
             <span className="text-3xl">🎖️</span>
-            <div className="text-sm font-semibold text-zinc-300">No job titles found</div>
+            <div className="text-sm font-semibold text-zinc-900">No job titles found</div>
             <div className="text-xs text-zinc-500">No titles match the selected rank or search terms.</div>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-zinc-300">
-              <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+            <table className="w-full text-left text-xs text-zinc-700">
+              <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Job Title & Code</th>
                   <th className="py-3 px-4">Seniority Level</th>
@@ -158,44 +165,44 @@ export function JobTitlesClient({
                   {canManage && <th className="py-3 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-zinc-100">
                 {filteredTitles.map((jt) => {
                   const lvl = jt.hierarchy_level || hierarchyLevels.find((l) => l.id === jt.hierarchy_level_id);
                   return (
-                    <tr key={jt.id} className="hover:bg-zinc-850/30 transition-colors">
+                    <tr key={jt.id} className="hover:bg-zinc-50/70 transition-colors">
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-zinc-100">{jt.name}</div>
-                        {jt.code && <div className="text-[10px] font-mono text-zinc-500 mt-0.5">{jt.code}</div>}
+                        <div className="font-semibold text-zinc-900">{jt.name}</div>
+                        {jt.code && <div className="text-[10px] font-mono text-zinc-400 mt-0.5">[{jt.code}]</div>}
                         {jt.description && (
-                          <div className="text-[11px] text-zinc-400 mt-1 max-w-md line-clamp-1">{jt.description}</div>
+                          <div className="text-[11px] text-zinc-500 mt-1 max-w-md line-clamp-1">{jt.description}</div>
                         )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800 border border-zinc-700 text-zinc-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 border border-zinc-200 text-zinc-800">
                           Rank {lvl?.rank ?? '?'}: {lvl?.name || 'Unassigned'}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 capitalize text-zinc-400 whitespace-nowrap">
+                      <td className="py-3.5 px-4 capitalize text-zinc-600 whitespace-nowrap">
                         {jt.department_type || 'Operations'}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {jt.is_management ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-950/80 border border-purple-800 text-purple-300">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 border border-zinc-300 text-zinc-900">
                             Management Tier
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-400">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
                             Operational
                           </span>
                         )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {jt.is_active ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-400">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-800">
                             Active
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-500">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 text-zinc-400">
                             Archived
                           </span>
                         )}
@@ -206,7 +213,7 @@ export function JobTitlesClient({
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenEdit(jt)}
-                            className="text-xs h-7 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+                            className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
                           >
                             Edit
                           </Button>

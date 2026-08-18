@@ -113,14 +113,14 @@ export function StructureManagementClient({
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             Structure & Department Units
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Configure organizational departments, divisions, operational sections, and kitchen/dining stations
           </p>
         </div>
@@ -130,13 +130,13 @@ export function StructureManagementClient({
             <Button
               onClick={() => handleOpenAddUnit()}
               variant="outline"
-              className="text-xs bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200"
+              className="text-xs bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
             >
               + Add Unit / Team
             </Button>
             <Button
               onClick={handleOpenAddDept}
-              className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-sm"
+              className="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium shadow-sm"
             >
               + Add Department
             </Button>
@@ -152,14 +152,14 @@ export function StructureManagementClient({
             placeholder="Search departments or operational units..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div className="flex items-center space-x-2">
           <select
             value={selectedBranchFilter}
             onChange={(e) => setSelectedBranchFilter(e.target.value)}
-            className="rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Scopes (Corporate & Properties)</option>
             <option value="corporate">Corporate / Group-wide Only</option>
@@ -175,14 +175,14 @@ export function StructureManagementClient({
       {/* Department Tree / Card List */}
       <div className="space-y-4">
         {filteredDepartments.length === 0 ? (
-          <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800 p-8 text-center space-y-3">
+          <div className="rounded-xl bg-white border border-zinc-200 p-8 text-center space-y-3 shadow-sm">
             <span className="text-3xl">🏢</span>
-            <h3 className="text-sm font-semibold text-zinc-300">No departments found</h3>
+            <h3 className="text-sm font-semibold text-zinc-900">No departments found</h3>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto">
               No organizational departments match your filter criteria. Create a department to structure your workforce.
             </p>
             {canManage && (
-              <Button size="sm" onClick={handleOpenAddDept} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs">
+              <Button size="sm" onClick={handleOpenAddDept} className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs">
                 Create First Department
               </Button>
             )}
@@ -196,43 +196,43 @@ export function StructureManagementClient({
             return (
               <div
                 key={dept.id}
-                className="rounded-2xl bg-zinc-900/50 border border-zinc-800/80 overflow-hidden transition-all"
+                className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm transition-all"
               >
                 {/* Department Header */}
-                <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-zinc-900/80 border-b border-zinc-800/60">
+                <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white border-b border-zinc-100">
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => toggleDeptExpand(dept.id)}
-                      className="h-7 w-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-xs text-zinc-300 transition-colors"
+                      className="h-7 w-7 rounded-md bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-xs text-zinc-700 transition-colors"
                       title={isExpanded ? 'Collapse units' : 'Expand units'}
                     >
                       {isExpanded ? '▼' : '▶'}
                     </button>
                     <div>
                       <div className="flex items-center space-x-2.5">
-                        <h3 className="text-base font-bold text-zinc-100">{dept.name}</h3>
+                        <h3 className="text-base font-bold text-zinc-900">{dept.name}</h3>
                         {dept.code && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 font-mono">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 font-mono">
                             {dept.code}
                           </span>
                         )}
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${
+                          className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${
                             dept.branch_id
-                              ? 'bg-blue-950/80 border border-blue-800/80 text-blue-300'
-                              : 'bg-emerald-950/80 border border-emerald-800/80 text-emerald-300'
+                              ? 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                              : 'bg-zinc-900 border-zinc-900 text-white'
                           }`}
                         >
                           {dept.branch_id ? `Property: ${branch?.name || 'Assigned'}` : 'Corporate / Group'}
                         </span>
                         {!dept.is_active && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-950 text-red-400">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-red-100 text-red-700 font-medium">
                             Inactive
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        Type: <span className="capitalize">{dept.department_type || 'Operations'}</span> • {deptUnits.length} operational units/stations
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Type: <span className="capitalize">{dept.department_type || 'Operations'}</span> &bull; {deptUnits.length} operational units/stations
                       </p>
                     </div>
                   </div>
@@ -243,7 +243,7 @@ export function StructureManagementClient({
                         size="sm"
                         variant="outline"
                         onClick={() => handleOpenAddUnit(dept.id)}
-                        className="text-xs h-8 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+                        className="text-xs h-8 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900"
                       >
                         + Add Section
                       </Button>
@@ -251,7 +251,7 @@ export function StructureManagementClient({
                         size="sm"
                         variant="outline"
                         onClick={() => handleOpenEditDept(dept)}
-                        className="text-xs h-8 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+                        className="text-xs h-8 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900"
                       >
                         Edit
                       </Button>
@@ -261,9 +261,9 @@ export function StructureManagementClient({
 
                 {/* Sub-Units List */}
                 {isExpanded && (
-                  <div className="p-4 bg-zinc-950/40 space-y-2">
+                  <div className="p-4 bg-zinc-50/50 space-y-2 border-t border-zinc-100">
                     {deptUnits.length === 0 ? (
-                      <div className="text-xs text-zinc-500 py-3 text-center">
+                      <div className="text-xs text-zinc-400 py-3 text-center">
                         No operational sections or stations configured in this department yet.
                       </div>
                     ) : (
@@ -271,16 +271,16 @@ export function StructureManagementClient({
                         {deptUnits.map((u) => (
                           <div
                             key={u.id}
-                            className="rounded-xl bg-zinc-900 border border-zinc-800/80 p-3 flex items-center justify-between gap-3 hover:border-zinc-700 transition-all"
+                            className="rounded-lg bg-white border border-zinc-200 p-3.5 flex items-center justify-between gap-3 hover:border-zinc-300 transition-all shadow-xs"
                           >
                             <div className="space-y-0.5">
                               <div className="flex items-center space-x-2">
-                                <span className="text-xs font-semibold text-zinc-200">{u.name}</span>
+                                <span className="text-xs font-semibold text-zinc-900">{u.name}</span>
                                 {u.code && (
-                                  <span className="text-[10px] font-mono text-zinc-500">[{u.code}]</span>
+                                  <span className="text-[10px] font-mono text-zinc-400">[{u.code}]</span>
                                 )}
                               </div>
-                              <div className="text-[11px] text-zinc-400 capitalize">
+                              <div className="text-[11px] text-zinc-500 capitalize">
                                 Type: {u.unit_type}
                               </div>
                             </div>
@@ -288,7 +288,7 @@ export function StructureManagementClient({
                             {canManage && (
                               <button
                                 onClick={() => handleOpenEditUnit(u)}
-                                className="text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                                className="text-[11px] text-zinc-700 hover:text-zinc-900 px-2.5 py-1 rounded border border-zinc-200 bg-white hover:bg-zinc-50 transition-colors font-medium"
                               >
                                 Edit
                               </button>

@@ -100,14 +100,14 @@ export function PositionsClient({
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             Position Slots & Headcount Capacity
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Authoritative establishment slots, substantive occupancy, and acting coverage distinction
           </p>
         </div>
@@ -115,7 +115,7 @@ export function PositionsClient({
         {canManage && (
           <Button
             onClick={handleOpenAdd}
-            className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-sm"
+            className="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium shadow-sm"
           >
             + Create Position Slot
           </Button>
@@ -130,14 +130,14 @@ export function PositionsClient({
             placeholder="Search code, title, or name override..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div>
           <select
             value={selectedBranchFilter}
             onChange={(e) => setSelectedBranchFilter(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Properties & Corporate</option>
             <option value="corporate">Corporate Only (branch_id = NULL)</option>
@@ -152,7 +152,7 @@ export function PositionsClient({
           <select
             value={selectedDeptFilter}
             onChange={(e) => setSelectedDeptFilter(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Departments</option>
             {departments.map((d) => (
@@ -166,7 +166,7 @@ export function PositionsClient({
           <select
             value={selectedStateFilter}
             onChange={(e) => setSelectedStateFilter(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Occupancy States</option>
             <option value="vacant">Vacant Slots</option>
@@ -178,17 +178,17 @@ export function PositionsClient({
       </div>
 
       {/* Position Cards / Table */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
         {filteredPositions.length === 0 ? (
           <div className="p-8 text-center space-y-2">
             <span className="text-3xl">🪑</span>
-            <div className="text-sm font-semibold text-zinc-300">No positions found</div>
+            <div className="text-sm font-semibold text-zinc-900">No positions found</div>
             <div className="text-xs text-zinc-500">No position establishment slots match your filters.</div>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-zinc-300">
-              <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+            <table className="w-full text-left text-xs text-zinc-700">
+              <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Position / Job Title</th>
                   <th className="py-3 px-4">Branch & Department</th>
@@ -198,15 +198,15 @@ export function PositionsClient({
                   {canManage && <th className="py-3 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-zinc-100">
                 {filteredPositions.map((pos) => {
                   const occupants = pos.substantiveOccupants || [];
                   const actingCovers = pos.actingCoverage || [];
 
                   return (
-                    <tr key={pos.id} className="hover:bg-zinc-850/30 transition-colors">
+                    <tr key={pos.id} className="hover:bg-zinc-50/70 transition-colors">
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-zinc-100">
+                        <div className="font-semibold text-zinc-900">
                           {pos.name_override || pos.job_title?.name || 'Position Slot'}
                         </div>
                         <div className="flex items-center space-x-2 text-[10px] font-mono text-zinc-400 mt-0.5">
@@ -215,7 +215,7 @@ export function PositionsClient({
                         </div>
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-zinc-200 font-medium">{pos.branch?.name || 'Corporate'}</div>
+                        <div className="text-zinc-900 font-medium">{pos.branch?.name || 'Corporate'}</div>
                         <div className="text-[11px] text-zinc-500">
                           {pos.department?.name || 'None'} {pos.unit?.name ? `• ${pos.unit.name}` : ''}
                         </div>
@@ -225,22 +225,22 @@ export function PositionsClient({
                           <span
                             className={`font-mono font-bold ${
                               pos.occupiedCount > pos.headcount_limit
-                                ? 'text-red-400'
+                                ? 'text-red-600'
                                 : pos.isFull
-                                ? 'text-emerald-400'
-                                : 'text-blue-400'
+                                ? 'text-zinc-900'
+                                : 'text-zinc-700'
                             }`}
                           >
                             {pos.occupiedCount} / {pos.headcount_limit}
                           </span>
-                          <span className="text-[10px] text-zinc-500">
+                          <span className="text-[10px] text-zinc-400">
                             {pos.isFull ? '(Filled)' : `(${pos.availableSlots} free)`}
                           </span>
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
                         {occupants.length === 0 ? (
-                          <span className="text-zinc-500 italic">No permanent occupant</span>
+                          <span className="text-zinc-400 italic">No permanent occupant</span>
                         ) : (
                           <div className="space-y-1">
                             {occupants.map((occ, i) => {
@@ -248,8 +248,8 @@ export function PositionsClient({
                               const p = Array.isArray(prof) ? prof[0] : prof;
                               const name = `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Member';
                               return (
-                                <div key={i} className="text-zinc-200 font-medium">
-                                  👤 {name}
+                                <div key={i} className="text-zinc-900 font-medium">
+                                  {name}
                                 </div>
                               );
                             })}
@@ -266,27 +266,27 @@ export function PositionsClient({
                               return (
                                 <span
                                   key={i}
-                                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-950/80 border border-purple-800 text-purple-300"
+                                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-50 border border-purple-200 text-purple-700"
                                 >
-                                  🎭 Acting: {name}
+                                  Acting: {name}
                                 </span>
                               );
                             })}
                           </div>
                         ) : pos.occupiedCount > pos.headcount_limit ? (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-950 border border-red-800 text-red-300">
-                            ⚠️ Over-capacity
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-50 border border-red-200 text-red-700">
+                            Over-capacity
                           </span>
                         ) : pos.status === 'frozen' ? (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-800 text-zinc-400">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 text-zinc-500">
                             Frozen
                           </span>
                         ) : pos.isFull ? (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-950 text-emerald-400">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-100 text-zinc-800">
                             Substantive Full
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-950 text-blue-400">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
                             Vacant Slot
                           </span>
                         )}
@@ -297,7 +297,7 @@ export function PositionsClient({
                             size="sm"
                             variant="outline"
                             onClick={() => handleOpenEdit(pos)}
-                            className="text-xs h-7 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+                            className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
                           >
                             Edit
                           </Button>

@@ -681,7 +681,8 @@ export class OrganizationService {
       .eq('id', positionId)
       .maybeSingle();
 
-    if (posErr || !pos) throw new Error(`Position ${positionId} not found`);
+    if (posErr) throw new Error(`Database error fetching position ${positionId}: ${posErr.message}`);
+    if (!pos) throw new Error(`Position ${positionId} not found`);
 
     const refIso = referenceDate.toISOString();
     // Substantive occupancy excludes acting assignments (acting assignments do not consume headcount)
@@ -2659,7 +2660,7 @@ export class OrganizationService {
   ) {
     const admin = createAdminClient();
 
-    // 1. Fetch active memberships with user profiles
+    // 1. Fetch active memberships
     const { data: members, error: memErr } = await admin
       .from('business_memberships')
       .select(`
@@ -2668,16 +2669,24 @@ export class OrganizationService {
         user_id,
         role,
         membership_status,
-        created_at,
-        user_profiles(first_name, last_name)
+        created_at
       `)
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
     if (memErr) throw new Error(`Failed to list staff: ${memErr.message}`);
 
-    // 2. Fetch all active assignments for business
-    const { data: assignments } = await admin
+    // 2. Fetch profiles
+    const userIds = Array.from(new Set((members || []).map((m) => m.user_id).filter(Boolean)));
+    const { data: profiles, error: profErr } = userIds.length > 0
+      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', userIds)
+      : { data: [], error: null };
+
+    if (profErr) throw new Error(`Failed to fetch user profiles: ${profErr.message}`);
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    // 3. Fetch all active assignments for business
+    const { data: assignments, error: assignErr } = await admin
       .from('staff_assignments')
       .select(`
         id,
@@ -2695,17 +2704,20 @@ export class OrganizationService {
         reports_to:staff_assignments!reports_to_assignment_id(
           id,
           job_title:organization_job_titles(id, name),
-          membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+          membership:business_memberships(id, user_id, role)
         ),
         acting_for:staff_assignments!acting_for_assignment_id(
           id,
-          job_title:organization_job_titles(id, name)
+          job_title:organization_job_titles(id, name),
+          membership:business_memberships(id, user_id, role)
         )
       `)
       .eq('business_id', businessId)
       .eq('status', 'active');
 
-    // 3. Fetch branch access mappings
+    if (assignErr) throw new Error(`Failed to fetch assignments: ${assignErr.message}`);
+
+    // 4. Fetch branch access mappings
     const { data: branchAccessList } = await admin
       .from('branch_assignments')
       .select('business_membership_id, branch_id');
@@ -2718,7 +2730,26 @@ export class OrganizationService {
       branchAccessMap.get(ba.business_membership_id)!.add(ba.branch_id);
     }
 
-    const memberAssignmentsMap = new Map<string, typeof assignments>();
+    // Enrich assignments with profiles
+    type RelStaffMember = { user_id?: string; user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null };
+    type RelStaffAssignment = {
+      reports_to?: { membership?: RelStaffMember | null } | null;
+      acting_for?: { membership?: RelStaffMember | null } | null;
+    };
+
+    for (const a of (assignments || []) as RelStaffAssignment[]) {
+      const repMem = a.reports_to?.membership;
+      if (repMem?.user_id) {
+        repMem.user_profiles = profileMap.get(repMem.user_id) || null;
+      }
+      const actMem = a.acting_for?.membership;
+      if (actMem?.user_id) {
+        actMem.user_profiles = profileMap.get(actMem.user_id) || null;
+      }
+    }
+
+    type AssignmentItem = NonNullable<typeof assignments>[number];
+    const memberAssignmentsMap = new Map<string, AssignmentItem[]>();
     for (const a of assignments || []) {
       if (!memberAssignmentsMap.has(a.business_membership_id)) {
         memberAssignmentsMap.set(a.business_membership_id, []);
@@ -2728,7 +2759,7 @@ export class OrganizationService {
 
     // Compose staff directory list
     const staffList = (members || []).map((m) => {
-      const userProfile = (Array.isArray(m.user_profiles) ? m.user_profiles[0] : m.user_profiles) as { first_name?: string; last_name?: string } | null;
+      const userProfile = profileMap.get(m.user_id);
       const firstName = userProfile?.first_name || '';
       const lastName = userProfile?.last_name || '';
       const fullName = `${firstName} ${lastName}`.trim() || 'Staff Member';
@@ -2821,18 +2852,14 @@ export class OrganizationService {
     const nowIso = new Date().toISOString();
 
     // Fetch all active assignments for business
-    const { data: assignments } = await admin
+    const { data: assignments, error: assignErr } = await admin
       .from('staff_assignments')
       .select(`
         id,
         position_id,
-        assignment_type,
-        is_primary,
-        starts_at,
-        ends_at,
-        acting_for_assignment_id,
-        business_membership_id,
-        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+        *,
+        job_title:organization_job_titles(id, name, code),
+        membership:business_memberships(id, user_id, role)
       `)
       .eq('business_id', businessId)
       .eq('status', 'active')
@@ -2840,8 +2867,37 @@ export class OrganizationService {
       .or(`ends_at.is.null,ends_at.gt.${nowIso}`)
       .is('archived_at', null);
 
-    const posSubstantiveMap = new Map<string, typeof assignments>();
-    const posActingMap = new Map<string, typeof assignments>();
+    if (assignErr) throw new Error(`Failed to fetch position assignments: ${assignErr.message}`);
+
+    const userIds = Array.from(
+      new Set(
+        (assignments || [])
+          .map((a) => (a.membership as { user_id?: string } | null)?.user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    const { data: profiles } = userIds.length > 0
+      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', userIds)
+      : { data: [] };
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    type RelMember = { user_id?: string; user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null };
+    type RelAssignment = {
+      membership?: RelMember | null;
+      position_id?: string | null;
+      assignment_type?: string;
+    };
+
+    for (const a of (assignments || []) as RelAssignment[]) {
+      const mem = a.membership;
+      if (mem?.user_id) {
+        mem.user_profiles = profileMap.get(mem.user_id) || null;
+      }
+    }
+
+    type PositionAssignment = NonNullable<typeof assignments>[number];
+    const posSubstantiveMap = new Map<string, PositionAssignment[]>();
+    const posActingMap = new Map<string, PositionAssignment[]>();
 
     for (const a of assignments || []) {
       if (a.position_id) {
@@ -2889,7 +2945,7 @@ export class OrganizationService {
       .from('staff_assignments')
       .select(`
         *,
-        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name)),
+        membership:business_memberships(id, user_id, role),
         job_title:organization_job_titles(id, name, code),
         position:organization_positions(id, position_code),
         branch:branches(id, name, code),
@@ -2897,7 +2953,7 @@ export class OrganizationService {
         acting_for:staff_assignments!acting_for_assignment_id(
           id,
           job_title:organization_job_titles(id, name),
-          membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name))
+          membership:business_memberships(id, user_id, role)
         ),
         coverage_absence:organization_assignment_absences!coverage_absence_id(
           id,
@@ -2916,9 +2972,39 @@ export class OrganizationService {
       query = query.eq('status', 'active');
     }
 
-    const { data, error } = await query;
+    const { data: actingRaw, error } = await query;
     if (error) throw new Error(`Failed to list acting assignments: ${error.message}`);
-    return data || [];
+
+    type RelMember = { user_id?: string; user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null };
+    type RelAssignment = {
+      membership?: RelMember | null;
+      acting_for?: { membership?: RelMember | null } | null;
+    };
+
+    const userIds = new Set<string>();
+    for (const a of (actingRaw || []) as RelAssignment[]) {
+      if (a.membership?.user_id) userIds.add(a.membership.user_id);
+      const actMem = a.acting_for?.membership;
+      if (actMem?.user_id) userIds.add(actMem.user_id);
+    }
+
+    const { data: profiles } = userIds.size > 0
+      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', Array.from(userIds))
+      : { data: [] };
+
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    for (const a of (actingRaw || []) as RelAssignment[]) {
+      if (a.membership?.user_id) {
+        a.membership.user_profiles = profileMap.get(a.membership.user_id) || null;
+      }
+      const actMem = a.acting_for?.membership;
+      if (actMem?.user_id) {
+        actMem.user_profiles = profileMap.get(actMem.user_id) || null;
+      }
+    }
+
+    return actingRaw || [];
   }
 
   static async listSecondments(businessId: string, options?: { activeOnly?: boolean }) {
@@ -2928,7 +3014,7 @@ export class OrganizationService {
       .from('staff_assignments')
       .select(`
         *,
-        membership:business_memberships(id, user_id, role, user_profiles(first_name, last_name)),
+        membership:business_memberships(id, user_id, role),
         job_title:organization_job_titles(id, name, code),
         position:organization_positions(id, position_code),
         branch:branches(id, name, code),
@@ -2948,8 +3034,31 @@ export class OrganizationService {
       query = query.eq('status', 'active');
     }
 
-    const { data, error } = await query;
+    const { data: secondmentsRaw, error } = await query;
     if (error) throw new Error(`Failed to list secondments: ${error.message}`);
-    return data || [];
+
+    type RelMember = { user_id?: string; user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null };
+    type RelAssignment = {
+      membership?: RelMember | null;
+    };
+
+    const userIds = new Set<string>();
+    for (const s of (secondmentsRaw || []) as RelAssignment[]) {
+      if (s.membership?.user_id) userIds.add(s.membership.user_id);
+    }
+
+    const { data: profiles } = userIds.size > 0
+      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', Array.from(userIds))
+      : { data: [] };
+
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    for (const s of (secondmentsRaw || []) as RelAssignment[]) {
+      if (s.membership?.user_id) {
+        s.membership.user_profiles = profileMap.get(s.membership.user_id) || null;
+      }
+    }
+
+    return secondmentsRaw || [];
   }
 }

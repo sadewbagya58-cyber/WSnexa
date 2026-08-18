@@ -71,14 +71,14 @@ export function PeopleDirectoryClient({
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             People & Workforce Directory
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Organization-aware staff directory with primary roles, leadership coverage, and direct supervisors
           </p>
         </div>
@@ -86,19 +86,19 @@ export function PeopleDirectoryClient({
         <div className="flex items-center space-x-2.5">
           {canManage && (
             <Link href="/dashboard/organization/positions">
-              <Button className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30">
+              <Button className="text-xs bg-zinc-900 hover:bg-zinc-800 text-white font-medium shadow-sm">
                 + Manage Positions
               </Button>
             </Link>
           )}
           <Link href="/dashboard/organization/chart">
-            <Button variant="outline" className="text-xs bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200">
-              📊 Visual Org Chart
+            <Button variant="outline" className="text-xs bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium">
+              Visual Org Chart
             </Button>
           </Link>
           <Link href="/dashboard/people/acting">
-            <Button variant="outline" className="text-xs bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200">
-              🎭 Acting Coverage
+            <Button variant="outline" className="text-xs bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium">
+              Acting Coverage
             </Button>
           </Link>
         </div>
@@ -112,14 +112,14 @@ export function PeopleDirectoryClient({
             placeholder="Search employee name or job title..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div>
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Properties</option>
             {branches.map((b) => (
@@ -133,7 +133,7 @@ export function PeopleDirectoryClient({
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Departments</option>
             {departments.map((d) => (
@@ -147,7 +147,7 @@ export function PeopleDirectoryClient({
           <select
             value={selectedJob}
             onChange={(e) => setSelectedJob(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Job Titles</option>
             {jobTitles.map((jt) => (
@@ -161,7 +161,7 @@ export function PeopleDirectoryClient({
           <select
             value={selectedTypeFilter}
             onChange={(e) => setSelectedTypeFilter(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           >
             <option value="all">All Work Statuses</option>
             <option value="acting">Active Acting Roles</option>
@@ -172,17 +172,17 @@ export function PeopleDirectoryClient({
       </div>
 
       {/* Directory Table */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
         {filteredStaff.length === 0 ? (
           <div className="p-8 text-center space-y-2">
             <span className="text-3xl">👥</span>
-            <div className="text-sm font-semibold text-zinc-300">No staff members found</div>
+            <div className="text-sm font-semibold text-zinc-900">No staff members found</div>
             <div className="text-xs text-zinc-500">Try adjusting your search criteria or property filters.</div>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-zinc-300">
-              <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+            <table className="w-full text-left text-xs text-zinc-700">
+              <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Staff Member</th>
                   <th className="py-3 px-4">Primary Role</th>
@@ -192,7 +192,7 @@ export function PeopleDirectoryClient({
                   <th className="py-3 px-4 text-right">Profile</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60">
+              <tbody className="divide-y divide-zinc-100">
                 {filteredStaff.map((s) => {
                   const pAssign = s.primaryAssignment;
                   const mgrProfiles = pAssign?.reports_to?.membership?.user_profiles;
@@ -200,16 +200,16 @@ export function PeopleDirectoryClient({
                   const mgrName = mgrProf ? `${mgrProf.first_name || ''} ${mgrProf.last_name || ''}`.trim() : null;
 
                   return (
-                    <tr key={s.membershipId} className="hover:bg-zinc-850/30 transition-colors">
+                    <tr key={s.membershipId} className="hover:bg-zinc-50/70 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center space-x-3">
-                          <div className="h-8 w-8 rounded-full bg-emerald-950/80 border border-emerald-800 flex items-center justify-center text-xs font-bold text-emerald-300">
+                          <div className="h-8 w-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-800">
                             {s.fullName.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <Link
                               href={`/dashboard/people/${s.membershipId}`}
-                              className="font-semibold text-zinc-100 hover:text-emerald-400 transition-colors"
+                              className="font-semibold text-zinc-900 hover:underline transition-colors"
                             >
                               {s.fullName}
                             </Link>
@@ -223,7 +223,7 @@ export function PeopleDirectoryClient({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {pAssign?.job_title ? (
                           <div>
-                            <div className="font-medium text-zinc-200">{pAssign.job_title.name}</div>
+                            <div className="font-semibold text-zinc-900">{pAssign.job_title.name}</div>
                             {pAssign.job_title.hierarchy_level && (
                               <span className="text-[10px] text-zinc-500 font-mono">
                                 Rank {pAssign.job_title.hierarchy_level.rank} ({pAssign.job_title.hierarchy_level.name})
@@ -231,12 +231,12 @@ export function PeopleDirectoryClient({
                             )}
                           </div>
                         ) : (
-                          <span className="text-zinc-500 italic">No primary assignment</span>
+                          <span className="text-zinc-400 italic">No primary assignment</span>
                         )}
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-zinc-200">{pAssign?.branch?.name || 'Corporate / Group'}</div>
+                        <div className="text-zinc-900 font-medium">{pAssign?.branch?.name || 'Corporate / Group'}</div>
                         <div className="text-[11px] text-zinc-500">
                           {pAssign?.department?.name || 'No Dept'} {pAssign?.unit?.name ? `• ${pAssign.unit.name}` : ''}
                         </div>
@@ -245,43 +245,43 @@ export function PeopleDirectoryClient({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {mgrName ? (
                           <div>
-                            <div className="text-zinc-200 font-medium">👤 {mgrName}</div>
+                            <div className="text-zinc-900 font-medium">👤 {mgrName}</div>
                             {pAssign?.reports_to?.job_title?.name && (
                               <div className="text-[10px] text-zinc-500">{pAssign.reports_to.job_title.name}</div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-zinc-500 italic">Direct to Board / Unassigned</span>
+                          <span className="text-zinc-400 italic">Direct to Board / Unassigned</span>
                         )}
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex flex-wrap gap-1.5">
                           {s.actingAssignments.length > 0 && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-950/80 border border-purple-800 text-purple-300">
-                              🎭 Acting Lead ({s.actingAssignments.length})
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 border border-purple-200 text-purple-700">
+                              Acting Lead ({s.actingAssignments.length})
                             </span>
                           )}
                           {s.secondmentAssignments.length > 0 && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-950/80 border border-blue-800 text-blue-300">
-                              ✈️ Seconded
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-100 border border-zinc-200 text-zinc-800">
+                              Seconded
                             </span>
                           )}
                           {s.hasBranchAccessMismatch && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-950/80 border border-amber-800 text-amber-300" title="Organization placement exists without operational branch access">
-                              ⚠️ Access Mismatch
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 border border-amber-200 text-amber-800" title="Organization placement exists without operational branch access">
+                              Access Mismatch
                             </span>
                           )}
                           {s.totalActiveAssignments <= 1 && s.actingAssignments.length === 0 && s.secondmentAssignments.length === 0 && !s.hasBranchAccessMismatch && (
-                            <span className="text-[11px] text-zinc-500">Standard</span>
+                            <span className="text-[11px] text-zinc-400">Standard</span>
                           )}
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <Link href={`/dashboard/people/${s.membershipId}`}>
-                          <Button size="sm" variant="outline" className="text-xs h-7 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300">
-                            View Profile →
+                          <Button size="sm" variant="outline" className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium">
+                            View Profile &rarr;
                           </Button>
                         </Link>
                       </td>

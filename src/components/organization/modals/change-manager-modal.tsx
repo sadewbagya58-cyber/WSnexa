@@ -59,36 +59,36 @@ export function ChangeManagerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl space-y-6">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="w-full max-w-md rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-6">
+        <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
           <div>
-            <h3 className="text-xl font-bold text-zinc-100">Change Reporting Manager</h3>
-            <p className="text-xs text-zinc-400 mt-1">Update direct supervisor for <span className="text-emerald-400 font-semibold">{memberName}</span></p>
+            <h3 className="text-xl font-bold text-zinc-900">Change Reporting Manager</h3>
+            <p className="text-xs text-zinc-500 mt-1">Update direct supervisor for <span className="text-zinc-900 font-semibold">{memberName}</span></p>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-200 p-2 rounded-lg hover:bg-zinc-800">✕</button>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 p-2 rounded-lg hover:bg-zinc-100">✕</button>
         </div>
 
         {errorMsg && (
-          <div className="rounded-xl bg-red-950/50 border border-red-800/80 p-3 text-xs text-red-300">
+          <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
             {errorMsg}
           </div>
         )}
 
-        <div className="rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-xs text-zinc-400">
+        <div className="rounded-lg bg-zinc-50 border border-zinc-200 p-3 text-xs text-zinc-600">
           Current Reporting Manager:{' '}
-          <span className="font-semibold text-zinc-200">
+          <span className="font-semibold text-zinc-900">
             {currentManagerName || 'None (Direct to Board / Unassigned)'}
           </span>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">New Reporting Manager</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">New Reporting Manager</label>
             <select
               value={newReportsToId}
               onChange={(e) => setNewReportsToId(e.target.value)}
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             >
               <option value="">No Manager (Unset / Direct Top-level)</option>
               {potentialManagers
@@ -105,29 +105,29 @@ export function ChangeManagerModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Effective Date</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Effective Date</label>
             <input
               type="date"
               value={effectiveFrom}
               onChange={(e) => setEffectiveFrom(e.target.value)}
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1.5">Reason / Justification</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">Reason / Justification</label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Department reorganization, new team lead"
-              className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             />
           </div>
 
-          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-zinc-800">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium">
+          <div className="flex items-center justify-end space-x-3 pt-4 border-t border-zinc-200">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-xs">Cancel</Button>
+            <Button type="submit" disabled={isSubmitting} className="bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs shadow-sm">
               {isSubmitting ? 'Updating...' : 'Set Reporting Manager'}
             </Button>
           </div>

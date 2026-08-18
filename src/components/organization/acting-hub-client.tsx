@@ -111,29 +111,29 @@ export function ActingHubClient({
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             Acting Leadership & Absence Coverage
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 mt-1">
             Manage temporary leadership appointments, active absence coverages, and effective reporting routing
           </p>
         </div>
 
         <div className="flex items-center space-x-2.5">
           <Link href="/dashboard/people">
-            <Button variant="outline" className="text-xs bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200">
-              👥 Assign from Staff Directory
+            <Button variant="outline" className="text-xs bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium">
+              Assign from Staff Directory
             </Button>
           </Link>
         </div>
       </div>
 
       {errorMsg && (
-        <div className="rounded-xl bg-red-950/60 border border-red-800/80 p-3.5 text-xs text-red-300">
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3.5 text-xs text-red-700">
           {errorMsg}
         </div>
       )}
@@ -146,26 +146,26 @@ export function ActingHubClient({
             placeholder="Search acting appointee or covered role..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-3.5 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900"
           />
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setFilterActiveOnly(true)}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all shadow-xs ${
               filterActiveOnly
-                ? 'border-purple-500 bg-purple-500/10 text-purple-300'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
             }`}
           >
             Active Only ({actingAssignments.filter((a) => a.status === 'active').length})
           </button>
           <button
             onClick={() => setFilterActiveOnly(false)}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all shadow-xs ${
               !filterActiveOnly
-                ? 'border-purple-500 bg-purple-500/10 text-purple-300'
-                : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300'
             }`}
           >
             All Appointments ({actingAssignments.length})
@@ -174,15 +174,15 @@ export function ActingHubClient({
       </div>
 
       {/* Acting Roles List */}
-      <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+      <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
         {filtered.length === 0 ? (
           <div className="p-8 text-center space-y-2">
             <span className="text-3xl">🎭</span>
-            <div className="text-sm font-semibold text-zinc-300">No acting assignments found</div>
+            <div className="text-sm font-semibold text-zinc-900">No acting assignments found</div>
             <div className="text-xs text-zinc-500">No active leadership coverages currently scheduled.</div>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-zinc-100">
             {filtered.map((act) => {
               const prof = act.membership?.user_profiles;
               const p = Array.isArray(prof) ? prof[0] : prof;
@@ -193,24 +193,24 @@ export function ActingHubClient({
               const coveredName = `${cp?.first_name || ''} ${cp?.last_name || ''}`.trim() || 'Substantive Leader';
 
               return (
-                <div key={act.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-zinc-850/20 transition-colors">
+                <div key={act.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-zinc-50/70 transition-colors">
                   <div className="space-y-1.5">
                     <div className="flex items-center space-x-3">
-                      <span className="text-base font-bold text-zinc-100">
+                      <span className="text-base font-bold text-zinc-900">
                         🎭 {appointeeName}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-950/80 border border-purple-800 text-purple-300">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 border border-purple-200 text-purple-700">
                         Acting {act.job_title?.name}
                       </span>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        act.status === 'active' ? 'bg-emerald-950 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+                        act.status === 'active' ? 'bg-zinc-100 text-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-200'
                       }`}>
                         {act.status}
                       </span>
                     </div>
 
-                    <div className="text-xs text-zinc-400 flex flex-wrap items-center gap-3">
-                      <span>Covering: <strong className="text-zinc-200">{coveredName}</strong> ({act.acting_for?.job_title?.name})</span>
+                    <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-3">
+                      <span>Covering: <strong className="text-zinc-900">{coveredName}</strong> ({act.acting_for?.job_title?.name})</span>
                       <span>• Property: {act.branch?.name || 'Corporate'}</span>
                       {act.position?.position_code && <span>• Slot: [{act.position.position_code}]</span>}
                     </div>
@@ -218,14 +218,14 @@ export function ActingHubClient({
                     <div className="text-[11px] font-mono text-zinc-500 flex items-center space-x-2">
                       <span>Period: {act.starts_at?.split('T')[0]} → {act.ends_at?.split('T')[0] || 'Ongoing / Indefinite'}</span>
                       {act.coverage_absence && (
-                        <span className="text-amber-400">
+                        <span className="text-amber-700">
                           (Linked: {act.coverage_absence.absence_type} leave)
                         </span>
                       )}
                     </div>
 
                     {act.reason && (
-                      <div className="text-xs text-zinc-400 italic">“{act.reason}”</div>
+                      <div className="text-xs text-zinc-500 italic">“{act.reason}”</div>
                     )}
                   </div>
 
@@ -238,7 +238,7 @@ export function ActingHubClient({
                           setExtendingId(act.id);
                           setNewEndDate(act.ends_at?.split('T')[0] || '');
                         }}
-                        className="text-xs h-8 bg-zinc-950 border-zinc-800 hover:bg-zinc-800 text-zinc-300"
+                        className="text-xs h-8 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
                       >
                         Extend Term
                       </Button>
@@ -247,7 +247,7 @@ export function ActingHubClient({
                         variant="outline"
                         onClick={() => handleEndActing(act.id)}
                         disabled={isSubmitting}
-                        className="text-xs h-8 bg-red-950/60 border-red-800 hover:bg-red-900 text-red-300"
+                        className="text-xs h-8 bg-white border-red-200 hover:bg-red-50 text-red-700 font-medium"
                       >
                         End Role
                       </Button>
@@ -262,33 +262,33 @@ export function ActingHubClient({
 
       {/* Extend Modal */}
       {extendingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl space-y-4">
-            <h3 className="text-lg font-bold text-zinc-100">Extend Acting Term</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-zinc-900">Extend Acting Term</h3>
             <form onSubmit={handleExtendActing} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">New End Date</label>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">New End Date</label>
                 <input
                   type="date"
                   required
                   value={newEndDate}
                   onChange={(e) => setNewEndDate(e.target.value)}
-                  className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-200"
+                  className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">Extension Reason</label>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Extension Reason</label>
                 <input
                   type="text"
                   value={extendReason}
                   onChange={(e) => setExtendReason(e.target.value)}
                   placeholder="e.g. Leave prolonged by 14 days"
-                  className="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-200"
+                  className="w-full rounded-lg bg-white border border-zinc-200 px-3 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 />
               </div>
-              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-zinc-800">
-                <Button type="button" variant="outline" size="sm" onClick={() => setExtendingId(null)}>Cancel</Button>
-                <Button type="submit" size="sm" disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-500 text-white">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-zinc-200">
+                <Button type="button" variant="outline" size="sm" onClick={() => setExtendingId(null)} className="border-zinc-200 bg-white text-zinc-700">Cancel</Button>
+                <Button type="submit" size="sm" disabled={isSubmitting} className="bg-zinc-900 hover:bg-zinc-800 text-white font-medium">
                   Save Extension
                 </Button>
               </div>

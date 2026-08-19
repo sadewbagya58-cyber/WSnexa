@@ -39,6 +39,7 @@ interface StructureManagementClientProps {
   units: UnitData[];
   branches: BranchData[];
   canManage: boolean;
+  activeBranchId?: string | null;
 }
 
 export function StructureManagementClient({
@@ -46,11 +47,14 @@ export function StructureManagementClient({
   units,
   branches,
   canManage,
+  activeBranchId,
 }: StructureManagementClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(
+    activeBranchId ?? 'all'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set(departments.map((d) => d.id)));
 
@@ -328,6 +332,7 @@ export function StructureManagementClient({
         units={units}
         branches={branches}
         defaultDepartmentId={targetDeptIdForUnit}
+        activeBranchId={activeBranchId}
       />
     </div>
   );

@@ -2836,14 +2836,23 @@ export class OrganizationService {
     } else if (options?.scope === 'unassigned' || options?.branchId === 'unassigned') {
       filtered = filtered.filter((s) => s.isUnassigned);
     } else if (options?.branchId && options.branchId !== 'all') {
+      const targetBranchId: string = options.branchId;
       filtered = filtered.filter((s) => {
         const pBranch = s.primaryAssignment?.branch as unknown as { id: string } | null;
-        if (pBranch?.id === options.branchId) return true;
+        if (pBranch?.id === targetBranchId) return true;
         // Also match staff seconded to this branch
-        return s.secondmentAssignments.some((sec) => {
+        const isSecondedHere = s.secondmentAssignments.some((sec) => {
           const secBranch = (sec as unknown as { branch?: { id: string } }).branch;
-          return secBranch?.id === options.branchId;
+          return secBranch?.id === targetBranchId;
         });
+        if (isSecondedHere) return true;
+        // Also include operationally-assigned staff with no org placement (legacy/new staff):
+        // They appear in the directory as "Unassigned" but are visible within their operational branch.
+        if (s.isUnassigned) {
+          const memberBranchAccess = branchAccessMap.get(s.membershipId);
+          if (memberBranchAccess?.has(targetBranchId)) return true;
+        }
+        return false;
       });
     }
 

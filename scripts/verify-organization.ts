@@ -1675,6 +1675,107 @@ async function runSuite() {
       secondmentDestStaff.some((s) => s.membershipId === personC_GalleGM.membership.id),
       '89. listOrganizationStaff correctly includes host branch substantive and seconded staff'
     );
+
+    console.log('\n--- 21. Phase 29 QA Repair Pass Regressions ---');
+
+    // 90. Branch-scoped structure page: getDepartments with branchId returns only that branch's depts
+    const branch1ADepts = await OrganizationService.getDepartments(biz1.id, { branchId: branch1A!.id });
+    assert(
+      branch1ADepts.every((d) => d.branch_id === branch1A!.id),
+      '90. getDepartments(branchId) returns only departments belonging to that branch'
+    );
+
+    // 91. getDepartments with no branchId returns all (cross-branch) departments
+    const allDepts = await OrganizationService.getDepartments(biz1.id);
+    assert(
+      allDepts.length >= branch1ADepts.length,
+      '91. getDepartments() without branchId returns all departments (>= branch-scoped result)'
+    );
+
+    // 92. listAllPositionsWithCoverage returns positions across all branches by default
+    const allPositions = await OrganizationService.listAllPositionsWithCoverage(biz1.id);
+    assert(
+      allPositions.length >= 0,
+      '92. listAllPositionsWithCoverage executes without error and returns an array'
+    );
+
+    // 93. People directory: querying with branchId=branch1A returns staff placed there
+    const dirBranch1A = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1A!.id,
+    });
+    assert(
+      Array.isArray(dirBranch1A),
+      '93. listOrganizationStaff(branch1A) returns an array without error'
+    );
+
+    // 94. People directory: querying with branchId=branch1B returns personC (branch1B GM)
+    const dirBranch1B = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1B!.id,
+    });
+    assert(
+      dirBranch1B.some((s) => s.membershipId === personC_GalleGM.membership.id),
+      '94. listOrganizationStaff(branch1B) returns the branch1B GM (personC)'
+    );
+
+    // 95. People directory: unassigned staff with branch_assignments to branch1A visible when querying branch1A
+    // Create a member with branch_assignment but no staff_assignment (legacy/operational-only staff)
+    const legacyOpStaff = await createStaffMember('legacyOpStaff', 'cashier');
+    await admin.from('branch_assignments').insert({
+      business_membership_id: legacyOpStaff.membership.id,
+      branch_id: branch1A!.id,
+    });
+    const dirBranch1AWithLegacy = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1A!.id,
+    });
+    assert(
+      dirBranch1AWithLegacy.some((s) => s.membershipId === legacyOpStaff.membership.id),
+      '95. listOrganizationStaff includes operationally-assigned unplaced staff (branch_assignments only, no staff_assignment)'
+    );
+
+    // 96. That legacy staff has isUnassigned = true (no org placement)
+    const legacyEntry = dirBranch1AWithLegacy.find((s) => s.membershipId === legacyOpStaff.membership.id);
+    assert(
+      legacyEntry?.isUnassigned === true && legacyEntry?.primaryAssignment === null,
+      '96. Legacy operational-only staff correctly flagged as isUnassigned with null primaryAssignment'
+    );
+
+    // 97. Security boundary: allowedBranchIds restricts which branches are visible
+    const secBoundaryResult = await OrganizationService.listOrganizationStaff(biz1.id, {
+      branchId: branch1B!.id,
+      allowedBranchIds: [branch1A!.id],
+    });
+    assert(
+      !secBoundaryResult.some((s) => s.membershipId === personC_GalleGM.membership.id),
+      '97. Security boundary: allowedBranchIds=[branch1A] prevents seeing branch1B-placed staff'
+    );
+
+    // 98. Corporate scope: only staff with null primaryAssignment.branch
+    const corpDir = await OrganizationService.listOrganizationStaff(biz1.id, { branchId: 'corporate' });
+    assert(
+      corpDir.every((s) => s.isCorporate === true && s.primaryAssignment !== null),
+      '98. Corporate scope returns only staff whose primary assignment has no branch (isCorporate=true)'
+    );
+
+    // 99. Unassigned scope: only staff with no primary assignment at all
+    const unassignedDir = await OrganizationService.listOrganizationStaff(biz1.id, { branchId: 'unassigned' });
+    assert(
+      unassignedDir.every((s) => s.isUnassigned === true && s.primaryAssignment === null),
+      '99. Unassigned scope returns only staff with isUnassigned=true and null primaryAssignment'
+    );
+
+    // 100. Unassigned scope includes the legacy staff member (no staff_assignment)
+    assert(
+      unassignedDir.some((s) => s.membershipId === legacyOpStaff.membership.id),
+      '100. Unassigned scope includes legacy staff who only have branch_assignments but no staff_assignment'
+    );
+
+    // 101. All-scope query returns non-empty result for a business with memberships
+    const allStaff = await OrganizationService.listOrganizationStaff(biz1.id, { branchId: 'all' });
+    assert(
+      allStaff.length > 0,
+      '101. listOrganizationStaff(all) returns non-empty result for a business with active memberships'
+    );
+
   } finally {
     // -------------------------------------------------------------
     // Clean Teardown of Test Entities

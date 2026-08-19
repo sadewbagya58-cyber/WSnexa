@@ -19,10 +19,11 @@ interface UnitModalProps {
     sort_order?: number;
     is_active?: boolean;
   } | null;
-  departments: Array<{ id: string; name: string }>;
+  departments: Array<{ id: string; name: string; branch_id?: string | null }>;
   units: Array<{ id: string; name: string; department_id: string }>;
   branches: Array<{ id: string; name: string }>;
   defaultDepartmentId?: string;
+  activeBranchId?: string | null;
 }
 
 function UnitModalForm({
@@ -33,6 +34,7 @@ function UnitModalForm({
   units,
   branches,
   defaultDepartmentId,
+  activeBranchId,
 }: Omit<UnitModalProps, 'isOpen'>) {
   const isEditing = Boolean(initialData);
 
@@ -43,12 +45,26 @@ function UnitModalForm({
     initialData?.department_id || defaultDepartmentId || departments[0]?.id || ''
   );
   const [parentUnitId, setParentUnitId] = useState(initialData?.parent_unit_id || '');
-  const [branchId, setBranchId] = useState<string>(initialData?.branch_id || 'corporate');
+  const [branchId, setBranchId] = useState<string>(
+    initialData?.branch_id ?? activeBranchId ?? 'corporate'
+  );
   const [sortOrder, setSortOrder] = useState(String(initialData?.sort_order ?? 0));
   const [isActive, setIsActive] = useState(initialData?.is_active ?? true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Scope department dropdown to the selected branch:
+  // corporate  → only corporate (branch_id IS NULL) departments
+  // <uuid>     → corporate departments + branch-specific departments
+  const filteredDepartments = departments.filter((d) => {
+    if (branchId === 'corporate') return !d.branch_id;
+    return !d.branch_id || d.branch_id === branchId;
+  });
+
+  const availableParents = units.filter(
+    (u) => (!initialData || u.id !== initialData.id) && (!departmentId || u.department_id === departmentId)
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,10 +119,6 @@ function UnitModalForm({
     }
   };
 
-  const availableParents = units.filter(
-    (u) => (!initialData || u.id !== initialData.id) && (!departmentId || u.department_id === departmentId)
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="w-full max-w-lg rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-6">
@@ -136,7 +148,31 @@ function UnitModalForm({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Department Selection */}
+          {/* Location Scope — pick branch first so department list is scoped */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
+              Location Scope
+            </label>
+            <select
+              value={branchId}
+              onChange={(e) => {
+                setBranchId(e.target.value);
+                // Reset department when scope changes so an invalid dept isn't submitted
+                setDepartmentId('');
+                setParentUnitId('');
+              }}
+              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+            >
+              <option value="corporate">Corporate / Inherited from Department</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  Property: {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Department Selection — scoped to chosen branch */}
           <div>
             <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
               Parent Department <span className="text-red-500">*</span>
@@ -153,7 +189,7 @@ function UnitModalForm({
               <option value="" disabled>
                 Select Department
               </option>
-              {departments.map((d) => (
+              {filteredDepartments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
@@ -161,24 +197,6 @@ function UnitModalForm({
             </select>
           </div>
 
-          {/* Scope selection */}
-          <div>
-            <label className="block text-xs font-semibold text-zinc-700 mb-1.5">
-              Location Scope
-            </label>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
-            >
-              <option value="corporate">Corporate / Inherited from Department</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  Property: {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
 
           <div>
             <label className="block text-xs font-semibold text-zinc-700 mb-1.5">

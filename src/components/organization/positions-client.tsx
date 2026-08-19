@@ -49,9 +49,10 @@ interface PositionsClientProps {
   positions: PositionRow[];
   jobTitles: Array<{ id: string; name: string; is_management: boolean }>;
   branches: Array<{ id: string; name: string }>;
-  departments: Array<{ id: string; name: string }>;
+  departments: Array<{ id: string; name: string; branch_id?: string | null }>;
   units: Array<{ id: string; name: string; department_id: string }>;
   canManage: boolean;
+  activeBranchId?: string | null;
 }
 
 export function PositionsClient({
@@ -61,11 +62,14 @@ export function PositionsClient({
   departments,
   units,
   canManage,
+  activeBranchId,
 }: PositionsClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(
+    activeBranchId ?? 'all'
+  );
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -325,6 +329,7 @@ export function PositionsClient({
         branches={branches}
         departments={departments}
         units={units}
+        activeBranchId={activeBranchId}
       />
     </div>
   );

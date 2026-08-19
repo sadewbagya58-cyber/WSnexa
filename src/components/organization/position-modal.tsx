@@ -23,6 +23,7 @@ interface PositionModalProps {
   branches: Array<{ id: string; name: string }>;
   departments: Array<{ id: string; name: string; branch_id?: string | null }>;
   units: Array<{ id: string; name: string; department_id: string }>;
+  activeBranchId?: string | null;
 }
 
 function PositionModalForm({
@@ -33,6 +34,7 @@ function PositionModalForm({
   branches,
   departments,
   units,
+  activeBranchId,
 }: Omit<PositionModalProps, 'isOpen'>) {
   const isEditing = Boolean(initialData);
 
@@ -40,7 +42,7 @@ function PositionModalForm({
     initialData?.job_title_id || jobTitles[0]?.id || ''
   );
   const [branchId, setBranchId] = useState<string>(
-    initialData?.branch_id || 'corporate'
+    initialData?.branch_id ?? activeBranchId ?? 'corporate'
   );
   const [departmentId, setDepartmentId] = useState(
     initialData?.department_id || ''

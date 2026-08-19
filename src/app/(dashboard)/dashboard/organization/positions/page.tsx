@@ -40,6 +40,7 @@ export default async function PositionsPage() {
         departments={departments}
         units={units}
         canManage={canManage}
+        activeBranchId={activeBranch?.id ?? null}
       />
     </div>
   );

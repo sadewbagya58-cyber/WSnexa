@@ -15,6 +15,16 @@ const CORE_DASHBOARD_ROUTES = [
   '/dashboard/business',
   '/dashboard/branches',
   '/dashboard/team',
+  // Organization & People — loading.tsx skeletons make these feel instant
+  '/dashboard/organization',
+  '/dashboard/organization/structure',
+  '/dashboard/organization/positions',
+  '/dashboard/organization/job-titles',
+  '/dashboard/organization/chart',
+  '/dashboard/people',
+  '/dashboard/people/acting',
+  '/dashboard/people/secondments',
+  '/dashboard/people/integrity',
 ];
 
 export const RoutePrefetcher: React.FC = () => {

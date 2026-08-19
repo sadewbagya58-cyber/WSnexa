@@ -36,6 +36,7 @@ export default async function OrganizationStructurePage() {
         units={units}
         branches={branches}
         canManage={canManage}
+        activeBranchId={activeBranch?.id ?? null}
       />
     </div>
   );

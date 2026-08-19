@@ -20,6 +20,7 @@ interface DepartmentModalProps {
   } | null;
   departments: Array<{ id: string; name: string; branch_id?: string | null }>;
   branches: Array<{ id: string; name: string }>;
+  activeBranchId?: string | null;
 }
 
 function DepartmentModalForm({
@@ -28,19 +29,31 @@ function DepartmentModalForm({
   initialData,
   departments,
   branches,
+  activeBranchId,
 }: Omit<DepartmentModalProps, 'isOpen'>) {
   const isEditing = Boolean(initialData);
 
   const [name, setName] = useState(initialData?.name || '');
   const [code, setCode] = useState(initialData?.code || '');
   const [departmentType, setDepartmentType] = useState(initialData?.department_type || 'operations');
-  const [branchId, setBranchId] = useState<string>(initialData?.branch_id || 'corporate');
+  const [branchId, setBranchId] = useState<string>(
+    initialData?.branch_id ?? activeBranchId ?? 'corporate'
+  );
   const [parentDepartmentId, setParentDepartmentId] = useState<string>(initialData?.parent_department_id || '');
   const [sortOrder, setSortOrder] = useState(String(initialData?.sort_order ?? 0));
   const [isActive, setIsActive] = useState(initialData?.is_active ?? true);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Filter available parents based on the selected branch scope:
+  // corporate  -> only corporate departments (branch_id IS NULL)
+  // <uuid>     -> corporate departments + departments belonging to this specific branch
+  const availableParents = departments.filter((d) => {
+    if (initialData && d.id === initialData.id) return false;
+    if (branchId === 'corporate') return !d.branch_id;
+    return !d.branch_id || d.branch_id === branchId;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,8 +106,6 @@ function DepartmentModalForm({
     }
   };
 
-  const availableParents = departments.filter((d) => !initialData || d.id !== initialData.id);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="w-full max-w-lg rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-6">
@@ -131,7 +142,19 @@ function DepartmentModalForm({
             </label>
             <select
               value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
+              onChange={(e) => {
+                const newBranch = e.target.value;
+                setBranchId(newBranch);
+                // Clear parent department if it is not valid in the new branch scope
+                const validInNewScope = departments.some((d) => {
+                  if (initialData && d.id === initialData.id) return false;
+                  if (newBranch === 'corporate') return !d.branch_id && d.id === parentDepartmentId;
+                  return (!d.branch_id || d.branch_id === newBranch) && d.id === parentDepartmentId;
+                });
+                if (!validInNewScope) {
+                  setParentDepartmentId('');
+                }
+              }}
               className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             >
               <option value="corporate">Corporate / Head Office (Multi-Branch)</option>

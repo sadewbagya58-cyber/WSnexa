@@ -990,7 +990,7 @@ async function runSuite() {
     });
 
     // Modifier 3: Targeted Scale Double Beef (only multiplies beef, not buns or sauce)
-    const { data: modOptDoubleBeef } = await admin.from('modifier_options').insert({
+    const { data: modOptDoubleBeef, error: modOptDoubleBeefErr } = await admin.from('modifier_options').insert({
       business_id: biz.id,
       branch_id: branch.id,
       modifier_group_id: modGroupPatty!.id,
@@ -999,12 +999,18 @@ async function runSuite() {
       is_active: true,
     }).select().single();
 
+    if (modOptDoubleBeefErr || !modOptDoubleBeef) {
+      throw new Error(`Failed to create modOptDoubleBeef: ${modOptDoubleBeefErr?.message || 'unknown'}`);
+    }
+
     await admin.from('inventory_modifier_overrides').insert({
       business_id: biz.id,
-      modifier_option_id: modOptDoubleBeef!.id,
+      modifier_option_id: modOptDoubleBeef.id,
       effect_type: 'scale',
       item_id: itemBeef!.id, // Targeted explicitly at beef
       quantity: 2.0,
+      unit: 'pcs',
+      quantity_base: 2.0,
     });
 
     // 8.2 Create Authoritative Inventory Settings (deduction_timing = preparing)
@@ -2307,9 +2313,9 @@ async function runSuite() {
     assert(itemTuna !== null, 'Test item Yellowfin Tuna created');
 
     // Step A: Fresh Foods posts $7.00/kg
-    await PurchasingService.upsertSupplierItem(
+    const resA = await PurchasingService.upsertSupplierItem(
       {
-        supplierId: supGamma.id, // USD Supplier: Gamma Fresh Foods
+        supplierId: supGamma!.id, // USD Supplier: Gamma Fresh Foods
         itemId: itemTuna.id,
         purchasingUnit: 'kg',
         conversionToBase: 1.0,
@@ -2319,11 +2325,12 @@ async function runSuite() {
       },
       { businessId: biz.id }
     );
+    if (!resA.success) throw new Error(`upsertSupplierItem A failed: ${resA.message}`);
 
     // Step B: Budget Foods posts $6.50/kg (interleaved)
-    await PurchasingService.upsertSupplierItem(
+    const resB = await PurchasingService.upsertSupplierItem(
       {
-        supplierId: supDelta.id, // USD Supplier: Delta Budget Foods
+        supplierId: supDelta!.id, // USD Supplier: Delta Budget Foods
         itemId: itemTuna.id,
         purchasingUnit: 'kg',
         conversionToBase: 1.0,
@@ -2333,11 +2340,12 @@ async function runSuite() {
       },
       { businessId: biz.id }
     );
+    if (!resB.success) throw new Error(`upsertSupplierItem B failed: ${resB.message}`);
 
     // Step C: Fresh Foods updates price to $7.50/kg
-    await PurchasingService.upsertSupplierItem(
+    const resC = await PurchasingService.upsertSupplierItem(
       {
-        supplierId: supGamma.id,
+        supplierId: supGamma!.id,
         itemId: itemTuna.id,
         purchasingUnit: 'kg',
         conversionToBase: 1.0,
@@ -2347,6 +2355,7 @@ async function runSuite() {
       },
       { businessId: biz.id }
     );
+    if (!resC.success) throw new Error(`upsertSupplierItem C failed: ${resC.message}`);
 
     // Verify Tuna history
     const tunaAllVendorsHistory = await PurchasingService.getItemPriceHistory(biz.id, itemTuna.id, {

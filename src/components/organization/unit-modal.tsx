@@ -20,7 +20,7 @@ interface UnitModalProps {
     is_active?: boolean;
   } | null;
   departments: Array<{ id: string; name: string; branch_id?: string | null }>;
-  units: Array<{ id: string; name: string; department_id: string }>;
+  units: Array<{ id: string; name: string; department_id: string; branch_id?: string | null }>;
   branches: Array<{ id: string; name: string }>;
   defaultDepartmentId?: string;
   activeBranchId?: string | null;
@@ -41,18 +41,9 @@ function UnitModalForm({
   const [name, setName] = useState(initialData?.name || '');
   const [code, setCode] = useState(initialData?.code || '');
   const [unitType, setUnitType] = useState(initialData?.unit_type || 'section');
-  const [departmentId, setDepartmentId] = useState(
-    initialData?.department_id || defaultDepartmentId || departments[0]?.id || ''
-  );
-  const [parentUnitId, setParentUnitId] = useState(initialData?.parent_unit_id || '');
   const [branchId, setBranchId] = useState<string>(
     initialData?.branch_id ?? activeBranchId ?? 'corporate'
   );
-  const [sortOrder, setSortOrder] = useState(String(initialData?.sort_order ?? 0));
-  const [isActive, setIsActive] = useState(initialData?.is_active ?? true);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Scope department dropdown to the selected branch:
   // corporate  → only corporate (branch_id IS NULL) departments
@@ -62,9 +53,26 @@ function UnitModalForm({
     return !d.branch_id || d.branch_id === branchId;
   });
 
-  const availableParents = units.filter(
-    (u) => (!initialData || u.id !== initialData.id) && (!departmentId || u.department_id === departmentId)
+  const initialDeptCandidate = initialData?.department_id || defaultDepartmentId || '';
+  const initialDeptValid = filteredDepartments.some((d) => d.id === initialDeptCandidate);
+
+  const [departmentId, setDepartmentId] = useState(
+    initialDeptValid ? initialDeptCandidate : (filteredDepartments[0]?.id || '')
   );
+  const [parentUnitId, setParentUnitId] = useState(initialData?.parent_unit_id || '');
+  const [sortOrder, setSortOrder] = useState(String(initialData?.sort_order ?? 0));
+  const [isActive, setIsActive] = useState(initialData?.is_active ?? true);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Parent units must match department (if selected) and must be branch-compatible
+  const availableParents = units.filter((u) => {
+    if (initialData && u.id === initialData.id) return false;
+    if (departmentId && u.department_id !== departmentId) return false;
+    if (branchId === 'corporate') return !u.branch_id;
+    return !u.branch_id || u.branch_id === branchId;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,10 +164,28 @@ function UnitModalForm({
             <select
               value={branchId}
               onChange={(e) => {
-                setBranchId(e.target.value);
-                // Reset department when scope changes so an invalid dept isn't submitted
-                setDepartmentId('');
-                setParentUnitId('');
+                const newBranch = e.target.value;
+                setBranchId(newBranch);
+                // Check if current department is valid in the new branch scope
+                const isDeptValid = departments.some((d) => {
+                  if (newBranch === 'corporate') return !d.branch_id && d.id === departmentId;
+                  return (!d.branch_id || d.branch_id === newBranch) && d.id === departmentId;
+                });
+                if (!isDeptValid) {
+                  setDepartmentId('');
+                  setParentUnitId('');
+                } else {
+                  // If department is still valid, check if parent unit is still valid
+                  const isParentValid = units.some((u) => {
+                    if (initialData && u.id === initialData.id) return false;
+                    if (departmentId && u.department_id !== departmentId) return false;
+                    if (newBranch === 'corporate') return !u.branch_id && u.id === parentUnitId;
+                    return (!u.branch_id || u.branch_id === newBranch) && u.id === parentUnitId;
+                  });
+                  if (!isParentValid) {
+                    setParentUnitId('');
+                  }
+                }
               }}
               className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             >
@@ -181,8 +207,17 @@ function UnitModalForm({
               required
               value={departmentId}
               onChange={(e) => {
-                setDepartmentId(e.target.value);
-                setParentUnitId('');
+                const newDept = e.target.value;
+                setDepartmentId(newDept);
+                const isParentValid = units.some((u) => {
+                  if (initialData && u.id === initialData.id) return false;
+                  if (newDept && u.department_id !== newDept) return false;
+                  if (branchId === 'corporate') return !u.branch_id && u.id === parentUnitId;
+                  return (!u.branch_id || u.branch_id === branchId) && u.id === parentUnitId;
+                });
+                if (!isParentValid) {
+                  setParentUnitId('');
+                }
               }}
               className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
             >

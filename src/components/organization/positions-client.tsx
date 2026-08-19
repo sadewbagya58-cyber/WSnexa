@@ -50,7 +50,7 @@ interface PositionsClientProps {
   jobTitles: Array<{ id: string; name: string; is_management: boolean }>;
   branches: Array<{ id: string; name: string }>;
   departments: Array<{ id: string; name: string; branch_id?: string | null }>;
-  units: Array<{ id: string; name: string; department_id: string }>;
+  units: Array<{ id: string; name: string; department_id: string; branch_id?: string | null }>;
   canManage: boolean;
   activeBranchId?: string | null;
 }

@@ -321,6 +321,7 @@ export function StructureManagementClient({
         initialData={editingDept}
         departments={departments}
         branches={branches}
+        activeBranchId={activeBranchId}
       />
 
       <UnitModal

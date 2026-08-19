@@ -22,7 +22,7 @@ interface PositionModalProps {
   jobTitles: Array<{ id: string; name: string }>;
   branches: Array<{ id: string; name: string }>;
   departments: Array<{ id: string; name: string; branch_id?: string | null }>;
-  units: Array<{ id: string; name: string; department_id: string }>;
+  units: Array<{ id: string; name: string; department_id: string; branch_id?: string | null }>;
   activeBranchId?: string | null;
 }
 
@@ -71,7 +71,11 @@ function PositionModalForm({
     return !d.branch_id || d.branch_id === branchId;
   });
 
-  const filteredUnits = units.filter((u) => !departmentId || u.department_id === departmentId);
+  const filteredUnits = units.filter((u) => {
+    if (departmentId && u.department_id !== departmentId) return false;
+    if (branchId === 'corporate') return !u.branch_id;
+    return !u.branch_id || u.branch_id === branchId;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +87,50 @@ function PositionModalForm({
       const payloadDeptId = departmentId || null;
       const payloadUnitId = unitId || null;
       const limit = Number(headcountLimit) || 1;
+
+      // Pre-submit consistency validation
+      if (payloadUnitId) {
+        const selectedUnit = units.find((u) => u.id === payloadUnitId);
+        if (!selectedUnit) {
+          setErrorMsg('Selected unit does not exist.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!payloadBranchId && selectedUnit.branch_id) {
+          setErrorMsg('Cannot assign a property-scoped unit to a Corporate position.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (payloadBranchId && selectedUnit.branch_id && selectedUnit.branch_id !== payloadBranchId) {
+          setErrorMsg('Selected unit belongs to a different branch than the position placement.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (payloadDeptId && selectedUnit.department_id !== payloadDeptId) {
+          setErrorMsg('Selected unit does not belong to the selected department.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      if (payloadDeptId) {
+        const selectedDept = departments.find((d) => d.id === payloadDeptId);
+        if (!selectedDept) {
+          setErrorMsg('Selected department does not exist.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!payloadBranchId && selectedDept.branch_id) {
+          setErrorMsg('Cannot assign a property-scoped department to a Corporate position.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (payloadBranchId && selectedDept.branch_id && selectedDept.branch_id !== payloadBranchId) {
+          setErrorMsg('Selected department belongs to a different branch than the position placement.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       if (isEditing && initialData) {
         const res = await updatePositionAction({
@@ -184,9 +232,21 @@ function PositionModalForm({
               <select
                 value={branchId}
                 onChange={(e) => {
-                  setBranchId(e.target.value);
-                  setDepartmentId('');
-                  setUnitId('');
+                  const newBranch = e.target.value;
+                  setBranchId(newBranch);
+                  const isDeptValid = departments.some((d) => {
+                    if (newBranch === 'corporate') return !d.branch_id && d.id === departmentId;
+                    return (!d.branch_id || d.branch_id === newBranch) && d.id === departmentId;
+                  });
+                  const updatedDept = isDeptValid ? departmentId : '';
+                  if (!isDeptValid) setDepartmentId('');
+
+                  const isUnitValid = units.some((u) => {
+                    if (updatedDept && u.department_id !== updatedDept) return false;
+                    if (newBranch === 'corporate') return !u.branch_id && u.id === unitId;
+                    return (!u.branch_id || u.branch_id === newBranch) && u.id === unitId;
+                  });
+                  if (!isUnitValid) setUnitId('');
                 }}
                 className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
               >
@@ -205,8 +265,14 @@ function PositionModalForm({
               <select
                 value={departmentId}
                 onChange={(e) => {
-                  setDepartmentId(e.target.value);
-                  setUnitId('');
+                  const newDept = e.target.value;
+                  setDepartmentId(newDept);
+                  const isUnitValid = units.some((u) => {
+                    if (newDept && u.department_id !== newDept) return false;
+                    if (branchId === 'corporate') return !u.branch_id && u.id === unitId;
+                    return (!u.branch_id || u.branch_id === branchId) && u.id === unitId;
+                  });
+                  if (!isUnitValid) setUnitId('');
                 }}
                 className="w-full rounded-lg bg-white border border-zinc-200 px-3.5 py-2 text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
               >

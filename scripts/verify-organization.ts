@@ -126,9 +126,21 @@ async function runSuite() {
         email: `test_org_${label}_${uSuffix}@wsnexa.test`,
         password: `StaffPassword_${uSuffix}!@#`,
         email_confirm: true,
+        user_metadata: {
+          first_name: label,
+          last_name: 'Test',
+        },
       });
       if (uErr || !u?.user) throw new Error(`Failed to create user ${label}: ${uErr?.message}`);
       cleanupUserIds.push(u.user.id);
+
+      await admin.from('user_profiles').upsert({
+        id: u.user.id,
+        first_name: label,
+        last_name: 'Test',
+        account_status: 'active',
+        onboarding_status: 'completed',
+      });
 
       const { data: m, error: mErr } = await admin
         .from('business_memberships')
@@ -1774,6 +1786,165 @@ async function runSuite() {
     assert(
       allStaff.length > 0,
       '101. listOrganizationStaff(all) returns non-empty result for a business with active memberships'
+    );
+
+    console.log('\n--- 22. Phase 29 Manual Test Bug-Fix Pass Regressions ---');
+
+    // Setup: Create branch-scoped department and unit in branch1A, and a unit in branch1B
+    const deptBranch1A = await OrganizationService.createDepartment({
+      businessId: biz1.id,
+      name: 'Front Office Main',
+      branchId: branch1A!.id,
+    });
+
+    const unitBranch1A = await OrganizationService.createOrganizationUnit({
+      businessId: biz1.id,
+      departmentId: deptBranch1A.id,
+      branchId: branch1A!.id,
+      name: 'Front Desk Team Main',
+      unitType: 'team',
+    });
+
+    const deptBranch1B = await OrganizationService.createDepartment({
+      businessId: biz1.id,
+      name: 'F&B Galle',
+      branchId: branch1B!.id,
+    });
+
+    const unitBranch1B = await OrganizationService.createOrganizationUnit({
+      businessId: biz1.id,
+      departmentId: deptBranch1B.id,
+      branchId: branch1B!.id,
+      name: 'Service Team Galle',
+      unitType: 'team',
+    });
+
+    // 102. Position creation with matching branch, department, and unit succeeds
+    const validPos = await OrganizationService.createPosition({
+      businessId: biz1.id,
+      jobTitleId: gmTitle.id,
+      branchId: branch1A!.id,
+      departmentId: deptBranch1A.id,
+      unitId: unitBranch1A.id,
+      headcountLimit: 2,
+    });
+    assert(
+      validPos !== null && validPos.branch_id === branch1A!.id && validPos.unit_id === unitBranch1A.id,
+      '102. Position creation succeeds with matching branch, department, and unit'
+    );
+
+    // 103. Position creation with mismatched branch and unit is rejected
+    let mismatchPosError = false;
+    try {
+      await OrganizationService.createPosition({
+        businessId: biz1.id,
+        jobTitleId: gmTitle.id,
+        branchId: branch1A!.id,
+        departmentId: deptBranch1A.id,
+        unitId: unitBranch1B.id, // branch1B unit assigned to branch1A position
+      });
+    } catch {
+      mismatchPosError = true;
+    }
+    assert(
+      mismatchPosError,
+      '103. Position creation with mismatched branch and unit is rejected'
+    );
+
+    // 104. Corporate position cannot be assigned to property-scoped unit
+    let corpMismatchError = false;
+    try {
+      await OrganizationService.createPosition({
+        businessId: biz1.id,
+        jobTitleId: gmTitle.id,
+        branchId: undefined, // Corporate
+        unitId: unitBranch1A.id, // Property-scoped unit
+      });
+    } catch {
+      corpMismatchError = true;
+    }
+    assert(
+      corpMismatchError,
+      '104. Corporate position cannot be assigned to property-scoped unit'
+    );
+
+    // 105. Position update preventing mutation to incompatible branch/unit
+    let updateMismatchError = false;
+    try {
+      await OrganizationService.updatePosition({
+        id: validPos.id,
+        unitId: unitBranch1B.id, // Try changing to unit in branch1B while position is in branch1A
+      });
+    } catch {
+      updateMismatchError = true;
+    }
+    assert(
+      updateMismatchError,
+      '105. Position update rejects incompatible unit from another branch'
+    );
+
+    // 106. getDirectReports resolves and populates member user_profiles with actual name
+    const directReports = await OrganizationService.getDirectReports(personA_GM.id);
+    assert(
+      directReports.length > 0 &&
+        directReports.some((dr) => {
+          const mem = dr.membership as { user_profiles?: { first_name?: string; last_name?: string } } | undefined;
+          return Boolean(mem?.user_profiles && typeof mem.user_profiles.first_name === 'string');
+        }),
+      '106. getDirectReports returns direct reports with resolved user_profiles containing member first_name/last_name'
+    );
+
+    // 107. getEffectiveDirectReports resolves and populates member user_profiles
+    const effDirectReports = await OrganizationService.getEffectiveDirectReports(personA_GM.id);
+    assert(
+      effDirectReports.length > 0 &&
+        effDirectReports.some((dr) => {
+          const mem = dr.membership as { user_profiles?: { first_name?: string; last_name?: string } } | undefined;
+          return Boolean(mem?.user_profiles && typeof mem.user_profiles.first_name === 'string');
+        }),
+      '107. getEffectiveDirectReports returns effective direct reports with resolved user_profiles'
+    );
+
+    // 108. getStaffAssignmentById populates reports_to.membership.user_profiles with manager profile
+    const subordinateAssign = await OrganizationService.getStaffAssignmentById(personB_OpsMgr.id);
+    const rawSubReportsTo = subordinateAssign?.reports_to;
+    const subReportsTo = Array.isArray(rawSubReportsTo) ? rawSubReportsTo[0] : rawSubReportsTo;
+    const subReportsToMem = (Array.isArray(subReportsTo?.membership) ? subReportsTo?.membership[0] : subReportsTo?.membership) as { user_profiles?: { first_name?: string; last_name?: string } } | undefined;
+    assert(
+      subReportsToMem?.user_profiles !== undefined && subReportsToMem?.user_profiles !== null,
+      '108. getStaffAssignmentById populates reports_to.membership.user_profiles with manager user profile'
+    );
+
+    // 109. resolveEffectiveManager populates effectiveManager.membership.user_profiles
+    const effMgrResult = await OrganizationService.resolveEffectiveManager(personB_OpsMgr.id);
+    const effMgrMem = effMgrResult.effectiveManager?.membership as { user_profiles?: unknown } | undefined;
+    assert(
+      effMgrResult.effectiveManager !== null && Boolean(effMgrMem?.user_profiles),
+      '109. resolveEffectiveManager returns effectiveManager with populated user_profiles'
+    );
+
+    // 110. listOrganizationStaff normalizes reports_to and attaches manager user_profiles
+    const staffListWithMgr = await OrganizationService.listOrganizationStaff(biz1.id);
+    const personBRow = staffListWithMgr.find((s) => s.membershipId === personB.membership.id);
+    const rawPReportsTo = personBRow?.primaryAssignment?.reports_to;
+    const pReportsTo = Array.isArray(rawPReportsTo) ? rawPReportsTo[0] : rawPReportsTo;
+    const pReportsToMem = (Array.isArray(pReportsTo?.membership) ? pReportsTo?.membership[0] : pReportsTo?.membership) as { user_profiles?: { first_name?: string; last_name?: string } } | undefined;
+    assert(
+      pReportsToMem?.user_profiles !== undefined && pReportsToMem?.user_profiles !== null,
+      '110. listOrganizationStaff populates primaryAssignment.reports_to.membership.user_profiles'
+    );
+
+    // 111. Reporting relationship is never unassigned when reports_to_assignment_id is set
+    assert(
+      personBRow?.primaryAssignment?.reports_to !== null && personBRow?.primaryAssignment?.reports_to !== undefined,
+      '111. Directory read model authoritative reports_to is populated when reports_to_assignment_id is set'
+    );
+
+    // 112. getOrganizationUnits with branchId returns only units compatible with that branch
+    const branch1AUnits = await OrganizationService.getOrganizationUnits(biz1.id, { branchId: branch1A!.id });
+    assert(
+      branch1AUnits.every((u) => u.branch_id === branch1A!.id),
+      '112. getOrganizationUnits(branchId) returns only units belonging to that specific branch'
     );
 
   } finally {

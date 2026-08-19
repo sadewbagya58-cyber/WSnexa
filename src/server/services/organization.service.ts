@@ -560,11 +560,44 @@ export class OrganizationService {
     if (parsed.departmentId) {
       const validDept = await this.validateDepartmentBelongsToBusiness(parsed.departmentId, parsed.businessId);
       if (!validDept) throw new Error('Department does not belong to the specified business');
+
+      const { data: dept } = await admin
+        .from('organization_departments')
+        .select('branch_id')
+        .eq('id', parsed.departmentId)
+        .maybeSingle();
+
+      if (dept) {
+        if (!parsed.branchId && dept.branch_id) {
+          throw new Error('Corporate position cannot be assigned to property-scoped department');
+        }
+        if (parsed.branchId && dept.branch_id && dept.branch_id !== parsed.branchId) {
+          throw new Error(`Position branch ${parsed.branchId} does not match department branch ${dept.branch_id}`);
+        }
+      }
     }
 
     if (parsed.unitId) {
       const validUnit = await this.validateUnitBelongsToBusiness(parsed.unitId, parsed.businessId);
       if (!validUnit) throw new Error('Unit does not belong to the specified business');
+
+      const { data: unit } = await admin
+        .from('organization_units')
+        .select('branch_id, department_id')
+        .eq('id', parsed.unitId)
+        .maybeSingle();
+
+      if (unit) {
+        if (!parsed.branchId && unit.branch_id) {
+          throw new Error('Corporate position cannot be assigned to property-scoped unit');
+        }
+        if (parsed.branchId && unit.branch_id && unit.branch_id !== parsed.branchId) {
+          throw new Error(`Position branch ${parsed.branchId} does not match unit branch ${unit.branch_id}`);
+        }
+        if (parsed.departmentId && unit.department_id !== parsed.departmentId) {
+          throw new Error(`Position unit ${parsed.unitId} department ${unit.department_id} does not match position department ${parsed.departmentId}`);
+        }
+      }
     }
 
     const { data, error } = await admin
@@ -591,6 +624,56 @@ export class OrganizationService {
   static async updatePosition(input: UpdatePositionInput) {
     const parsed = updatePositionSchema.parse(input);
     const admin = createAdminClient();
+
+    // If changing branch, department, or unit, validate consistency
+    if (parsed.branchId !== undefined || parsed.departmentId !== undefined || parsed.unitId !== undefined) {
+      const { data: currentPos } = await admin
+        .from('organization_positions')
+        .select('branch_id, department_id, unit_id')
+        .eq('id', parsed.id)
+        .maybeSingle();
+
+      const effectiveBranchId = parsed.branchId !== undefined ? parsed.branchId : (currentPos?.branch_id || null);
+      const effectiveDeptId = parsed.departmentId !== undefined ? parsed.departmentId : (currentPos?.department_id || null);
+      const effectiveUnitId = parsed.unitId !== undefined ? parsed.unitId : (currentPos?.unit_id || null);
+
+      if (effectiveDeptId) {
+        const { data: dept } = await admin
+          .from('organization_departments')
+          .select('branch_id')
+          .eq('id', effectiveDeptId)
+          .maybeSingle();
+
+        if (dept) {
+          if (!effectiveBranchId && dept.branch_id) {
+            throw new Error('Corporate position cannot be assigned to property-scoped department');
+          }
+          if (effectiveBranchId && dept.branch_id && dept.branch_id !== effectiveBranchId) {
+            throw new Error(`Position branch ${effectiveBranchId} does not match department branch ${dept.branch_id}`);
+          }
+        }
+      }
+
+      if (effectiveUnitId) {
+        const { data: unit } = await admin
+          .from('organization_units')
+          .select('branch_id, department_id')
+          .eq('id', effectiveUnitId)
+          .maybeSingle();
+
+        if (unit) {
+          if (!effectiveBranchId && unit.branch_id) {
+            throw new Error('Corporate position cannot be assigned to property-scoped unit');
+          }
+          if (effectiveBranchId && unit.branch_id && unit.branch_id !== effectiveBranchId) {
+            throw new Error(`Position branch ${effectiveBranchId} does not match unit branch ${unit.branch_id}`);
+          }
+          if (effectiveDeptId && unit.department_id !== effectiveDeptId) {
+            throw new Error(`Position unit ${effectiveUnitId} department ${unit.department_id} does not match position department ${effectiveDeptId}`);
+          }
+        }
+      }
+    }
 
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -1837,31 +1920,85 @@ export class OrganizationService {
       .from('staff_assignments')
       .select(`
         *,
+        membership:business_memberships(id, user_id, role, membership_status),
         job_title:organization_job_titles(id, name, code, is_management, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
         position:organization_positions(id, position_code, name_override, headcount_limit),
         department:organization_departments(id, name, code),
         unit:organization_units(id, name, code),
-        branch:branches(id, name, code),
-        reports_to:staff_assignments!reports_to_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name, code),
-          membership:business_memberships(id, user_id, role)
-        ),
-        acting_for:staff_assignments!acting_for_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name, code),
-          membership:business_memberships(id, user_id, role)
-        ),
-        source_assignment:staff_assignments!source_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name, code),
-          membership:business_memberships(id, user_id, role)
-        )
+        branch:branches(id, name, code)
       `)
       .eq('id', id)
       .maybeSingle();
 
     if (error) throw new Error(`Failed to fetch staff assignment: ${error.message}`);
+    if (!data) return null;
+
+    // Normalize joined relations if returned as arrays by postgREST
+    if (Array.isArray(data.membership)) data.membership = data.membership[0] || null;
+    if (Array.isArray(data.job_title)) data.job_title = data.job_title[0] || null;
+    if (Array.isArray(data.position)) data.position = data.position[0] || null;
+    if (Array.isArray(data.department)) data.department = data.department[0] || null;
+    if (Array.isArray(data.unit)) data.unit = data.unit[0] || null;
+    if (Array.isArray(data.branch)) data.branch = data.branch[0] || null;
+
+    // Deterministically fetch related assignments (reports_to, acting_for, source_assignment)
+    const relatedIds = [
+      data.reports_to_assignment_id,
+      data.acting_for_assignment_id,
+      data.source_assignment_id,
+    ].filter(Boolean) as string[];
+
+    const relatedMap = new Map<string, Record<string, unknown>>();
+    if (relatedIds.length > 0) {
+      const { data: relData } = await admin
+        .from('staff_assignments')
+        .select(`
+          id,
+          job_title:organization_job_titles(id, name, code),
+          membership:business_memberships(id, user_id, role),
+          branch:branches(id, name, code)
+        `)
+        .in('id', relatedIds);
+
+      for (const rel of (relData || []) as Record<string, unknown>[]) {
+        if (Array.isArray(rel.membership)) rel.membership = rel.membership[0] || null;
+        if (Array.isArray(rel.job_title)) rel.job_title = rel.job_title[0] || null;
+        if (Array.isArray(rel.branch)) rel.branch = rel.branch[0] || null;
+        relatedMap.set(rel.id as string, rel);
+      }
+    }
+
+    data.reports_to = data.reports_to_assignment_id ? (relatedMap.get(data.reports_to_assignment_id) || null) : null;
+    data.acting_for = data.acting_for_assignment_id ? (relatedMap.get(data.acting_for_assignment_id) || null) : null;
+    data.source_assignment = data.source_assignment_id ? (relatedMap.get(data.source_assignment_id) || null) : null;
+
+    // Batch resolve user_profiles for all referenced memberships
+    const userIds = new Set<string>();
+    const selfMem = data.membership as { user_id?: string } | null;
+    if (selfMem?.user_id) userIds.add(selfMem.user_id);
+
+    const repAssign = data.reports_to as { membership?: { user_id?: string } } | null;
+    if (repAssign?.membership?.user_id) userIds.add(repAssign.membership.user_id);
+
+    const actAssign = data.acting_for as { membership?: { user_id?: string } } | null;
+    if (actAssign?.membership?.user_id) userIds.add(actAssign.membership.user_id);
+
+    const srcAssign = data.source_assignment as { membership?: { user_id?: string } } | null;
+    if (srcAssign?.membership?.user_id) userIds.add(srcAssign.membership.user_id);
+
+    if (userIds.size > 0) {
+      const { data: profiles } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name')
+        .in('id', Array.from(userIds));
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+      if (selfMem?.user_id) (selfMem as { user_profiles?: unknown }).user_profiles = profileMap.get(selfMem.user_id) || null;
+      if (repAssign?.membership?.user_id) (repAssign.membership as { user_profiles?: unknown }).user_profiles = profileMap.get(repAssign.membership.user_id) || null;
+      if (actAssign?.membership?.user_id) (actAssign.membership as { user_profiles?: unknown }).user_profiles = profileMap.get(actAssign.membership.user_id) || null;
+      if (srcAssign?.membership?.user_id) (srcAssign.membership as { user_profiles?: unknown }).user_profiles = profileMap.get(srcAssign.membership.user_id) || null;
+    }
+
     return data;
   }
 
@@ -1897,6 +2034,27 @@ export class OrganizationService {
       .is('archived_at', null);
 
     if (error) throw new Error(`Failed to fetch direct reports: ${error.message}`);
+
+    const userIds = new Set<string>();
+    for (const r of (data || []) as Array<{ membership?: { user_id?: string; user_profiles?: unknown } | null }>) {
+      const mem = Array.isArray(r.membership) ? r.membership[0] : r.membership;
+      if (mem?.user_id) userIds.add(mem.user_id);
+    }
+
+    if (userIds.size > 0) {
+      const { data: profiles } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name')
+        .in('id', Array.from(userIds));
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+      for (const r of (data || []) as Array<{ membership?: { user_id?: string; user_profiles?: unknown } | null }>) {
+        const mem = Array.isArray(r.membership) ? r.membership[0] : r.membership;
+        if (mem?.user_id) {
+          mem.user_profiles = profileMap.get(mem.user_id) || null;
+        }
+      }
+    }
 
     if (options?.effectiveOnly) {
       return (data || []).filter((r) => this.isAssignmentEffective(r, refDate));
@@ -2032,9 +2190,20 @@ export class OrganizationService {
       .limit(1);
 
     if (actingCoverage && actingCoverage.length > 0) {
+      const actCoverageNode = actingCoverage[0];
+      const actMem = Array.isArray(actCoverageNode.membership) ? actCoverageNode.membership[0] : actCoverageNode.membership;
+      if (actMem?.user_id) {
+        const { data: prof } = await admin
+          .from('user_profiles')
+          .select('id, first_name, last_name')
+          .eq('id', actMem.user_id)
+          .maybeSingle();
+        (actMem as { user_profiles?: unknown }).user_profiles = prof || null;
+      }
+
       return {
         substantiveManager,
-        effectiveManager: actingCoverage[0],
+        effectiveManager: actCoverageNode,
         isActingCoverage: true,
       };
     }
@@ -2081,6 +2250,28 @@ export class OrganizationService {
       .is('archived_at', null);
 
     if (error) throw new Error(`Failed to fetch effective direct reports: ${error.message}`);
+
+    const userIds = new Set<string>();
+    for (const r of (directReports || []) as Array<{ membership?: { user_id?: string; user_profiles?: unknown } | null }>) {
+      const mem = Array.isArray(r.membership) ? r.membership[0] : r.membership;
+      if (mem?.user_id) userIds.add(mem.user_id);
+    }
+
+    if (userIds.size > 0) {
+      const { data: profiles } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name')
+        .in('id', Array.from(userIds));
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+      for (const r of (directReports || []) as Array<{ membership?: { user_id?: string; user_profiles?: unknown } | null }>) {
+        const mem = Array.isArray(r.membership) ? r.membership[0] : r.membership;
+        if (mem?.user_id) {
+          mem.user_profiles = profileMap.get(mem.user_id) || null;
+        }
+      }
+    }
+
     return directReports || [];
   }
 
@@ -2662,68 +2853,155 @@ export class OrganizationService {
   ) {
     const admin = createAdminClient();
 
-    // 1. Fetch active memberships
-    const { data: members, error: memErr } = await admin
-      .from('business_memberships')
-      .select(`
-        id,
-        business_id,
-        user_id,
-        role,
-        membership_status,
-        created_at
-      `)
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+    // 1. Fetch active memberships, assignments, and branch access in parallel
+    const [
+      { data: members, error: memErr },
+      { data: assignments, error: assignErr },
+      { data: branchAccessList },
+    ] = await Promise.all([
+      admin
+        .from('business_memberships')
+        .select(`
+          id,
+          business_id,
+          user_id,
+          role,
+          membership_status,
+          created_at
+        `)
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false }),
+      admin
+        .from('staff_assignments')
+        .select(`
+          id,
+          business_membership_id,
+          assignment_type,
+          is_primary,
+          status,
+          starts_at,
+          ends_at,
+          reports_to_assignment_id,
+          acting_for_assignment_id,
+          source_assignment_id,
+          branch:branches(id, name, code),
+          department:organization_departments(id, name, code),
+          unit:organization_units(id, name, code),
+          position:organization_positions(id, position_code),
+          job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank))
+        `)
+        .eq('business_id', businessId)
+        .eq('status', 'active'),
+      admin
+        .from('branch_assignments')
+        .select('business_membership_id, branch_id'),
+    ]);
 
     if (memErr) throw new Error(`Failed to list staff: ${memErr.message}`);
+    if (assignErr) throw new Error(`Failed to fetch assignments: ${assignErr.message}`);
 
-    // 2. Fetch profiles
-    const userIds = Array.from(new Set((members || []).map((m) => m.user_id).filter(Boolean)));
-    const { data: profiles, error: profErr } = userIds.length > 0
-      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', userIds)
+    // Map membership ID to membership object
+    const memberMap = new Map((members || []).map((m) => [m.id, m]));
+
+    // 2. Collect all user IDs across members
+    const userIds = new Set<string>();
+    for (const m of members || []) {
+      if (m.user_id) userIds.add(m.user_id);
+    }
+
+    // 3. Batch fetch profiles
+    const { data: profiles, error: profErr } = userIds.size > 0
+      ? await admin.from('user_profiles').select('id, first_name, last_name').in('id', Array.from(userIds))
       : { data: [], error: null };
 
     if (profErr) throw new Error(`Failed to fetch user profiles: ${profErr.message}`);
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
-    // 3. Fetch all active assignments for business
-    const { data: assignments, error: assignErr } = await admin
-      .from('staff_assignments')
-      .select(`
-        id,
-        business_membership_id,
-        assignment_type,
-        is_primary,
-        status,
-        starts_at,
-        ends_at,
-        branch:branches(id, name, code),
-        department:organization_departments(id, name, code),
-        unit:organization_units(id, name, code),
-        position:organization_positions(id, position_code),
-        job_title:organization_job_titles(id, name, code, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
-        reports_to:staff_assignments!reports_to_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name),
-          membership:business_memberships(id, user_id, role)
-        ),
-        acting_for:staff_assignments!acting_for_assignment_id(
-          id,
-          job_title:organization_job_titles(id, name),
-          membership:business_memberships(id, user_id, role)
-        )
-      `)
-      .eq('business_id', businessId)
-      .eq('status', 'active');
+    type AssignmentItem = NonNullable<typeof assignments>[number] & {
+      reports_to?: {
+        id: string;
+        job_title?: { id: string; name: string } | null;
+        branch?: { id: string; name: string; code: string } | null;
+        membership?: {
+          id: string;
+          user_id: string;
+          role: string;
+          user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null;
+        } | null;
+      } | null;
+      acting_for?: {
+        id: string;
+        job_title?: { id: string; name: string } | null;
+        branch?: { id: string; name: string; code: string } | null;
+        membership?: {
+          id: string;
+          user_id: string;
+          role: string;
+          user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null;
+        } | null;
+      } | null;
+    };
 
-    if (assignErr) throw new Error(`Failed to fetch assignments: ${assignErr.message}`);
+    // 4. Normalize assignments and index them by ID
+    const assignmentMap = new Map<string, AssignmentItem>();
+    for (const rawA of (assignments || []) as Record<string, unknown>[]) {
+      if (Array.isArray(rawA.branch)) rawA.branch = rawA.branch[0] || null;
+      if (Array.isArray(rawA.department)) rawA.department = rawA.department[0] || null;
+      if (Array.isArray(rawA.unit)) rawA.unit = rawA.unit[0] || null;
+      if (Array.isArray(rawA.job_title)) rawA.job_title = rawA.job_title[0] || null;
+      assignmentMap.set(rawA.id as string, rawA as AssignmentItem);
+    }
 
-    // 4. Fetch branch access mappings
-    const { data: branchAccessList } = await admin
-      .from('branch_assignments')
-      .select('business_membership_id, branch_id');
+    // 5. Deterministically resolve reports_to and acting_for links
+    for (const a of assignmentMap.values()) {
+      if (a.reports_to_assignment_id) {
+        const mgrAssign = assignmentMap.get(a.reports_to_assignment_id as string);
+        if (mgrAssign) {
+          const mgrMem = memberMap.get(mgrAssign.business_membership_id as string);
+          const mgrProf = mgrMem?.user_id ? profileMap.get(mgrMem.user_id) : null;
+          a.reports_to = {
+            id: mgrAssign.id,
+            job_title: mgrAssign.job_title as unknown as { id: string; name: string } | null,
+            branch: mgrAssign.branch as unknown as { id: string; name: string; code: string } | null,
+            membership: mgrMem ? {
+              id: mgrMem.id,
+              user_id: mgrMem.user_id,
+              role: mgrMem.role,
+              user_profiles: mgrProf || null,
+            } : null,
+          };
+        } else {
+          a.reports_to = null;
+        }
+      } else {
+        a.reports_to = null;
+      }
 
+      if (a.acting_for_assignment_id) {
+        const actAssign = assignmentMap.get(a.acting_for_assignment_id as string);
+        if (actAssign) {
+          const actMem = memberMap.get(actAssign.business_membership_id as string);
+          const actProf = actMem?.user_id ? profileMap.get(actMem.user_id) : null;
+          a.acting_for = {
+            id: actAssign.id,
+            job_title: actAssign.job_title as unknown as { id: string; name: string } | null,
+            branch: actAssign.branch as unknown as { id: string; name: string; code: string } | null,
+            membership: actMem ? {
+              id: actMem.id,
+              user_id: actMem.user_id,
+              role: actMem.role,
+              user_profiles: actProf || null,
+            } : null,
+          };
+        } else {
+          a.acting_for = null;
+        }
+      } else {
+        a.acting_for = null;
+      }
+    }
+
+    // 6. Fetch branch access mappings
     const branchAccessMap = new Map<string, Set<string>>();
     for (const ba of branchAccessList || []) {
       if (!branchAccessMap.has(ba.business_membership_id)) {
@@ -2732,27 +3010,8 @@ export class OrganizationService {
       branchAccessMap.get(ba.business_membership_id)!.add(ba.branch_id);
     }
 
-    // Enrich assignments with profiles
-    type RelStaffMember = { user_id?: string; user_profiles?: { id: string; first_name?: string | null; last_name?: string | null } | null };
-    type RelStaffAssignment = {
-      reports_to?: { membership?: RelStaffMember | null } | null;
-      acting_for?: { membership?: RelStaffMember | null } | null;
-    };
-
-    for (const a of (assignments || []) as RelStaffAssignment[]) {
-      const repMem = a.reports_to?.membership;
-      if (repMem?.user_id) {
-        repMem.user_profiles = profileMap.get(repMem.user_id) || null;
-      }
-      const actMem = a.acting_for?.membership;
-      if (actMem?.user_id) {
-        actMem.user_profiles = profileMap.get(actMem.user_id) || null;
-      }
-    }
-
-    type AssignmentItem = NonNullable<typeof assignments>[number];
     const memberAssignmentsMap = new Map<string, AssignmentItem[]>();
-    for (const a of assignments || []) {
+    for (const a of (assignments || []) as AssignmentItem[]) {
       if (!memberAssignmentsMap.has(a.business_membership_id)) {
         memberAssignmentsMap.set(a.business_membership_id, []);
       }

@@ -271,9 +271,14 @@ export function PeopleDirectoryClient({
               <tbody className="divide-y divide-zinc-100">
                 {filteredStaff.map((s) => {
                   const pAssign = s.primaryAssignment;
-                  const mgrProfiles = pAssign?.reports_to?.membership?.user_profiles;
+                  const rawReportsTo = pAssign?.reports_to;
+                  const reportsTo = Array.isArray(rawReportsTo) ? rawReportsTo[0] : rawReportsTo;
+                  const repMembership = Array.isArray(reportsTo?.membership) ? reportsTo?.membership[0] : reportsTo?.membership;
+                  const mgrProfiles = repMembership?.user_profiles;
                   const mgrProf = Array.isArray(mgrProfiles) ? mgrProfiles[0] : mgrProfiles;
                   const mgrName = mgrProf ? `${mgrProf.first_name || ''} ${mgrProf.last_name || ''}`.trim() : null;
+                  const rawJobTitle = reportsTo?.job_title;
+                  const mgrJobTitle = (Array.isArray(rawJobTitle) ? rawJobTitle[0]?.name : rawJobTitle?.name) || null;
 
                   return (
                     <tr key={s.membershipId} className="hover:bg-zinc-50/70 transition-colors">
@@ -340,9 +345,14 @@ export function PeopleDirectoryClient({
                         {mgrName ? (
                           <div>
                             <div className="text-zinc-900 font-medium">👤 {mgrName}</div>
-                            {pAssign?.reports_to?.job_title?.name && (
-                              <div className="text-[10px] text-zinc-500">{pAssign.reports_to.job_title.name}</div>
+                            {mgrJobTitle && (
+                              <div className="text-[10px] text-zinc-500">{mgrJobTitle}</div>
                             )}
+                          </div>
+                        ) : reportsTo ? (
+                          <div>
+                            <div className="text-zinc-900 font-medium">👤 {mgrJobTitle || 'Manager'}</div>
+                            <div className="text-[10px] text-zinc-500 italic">(Assigned Manager)</div>
                           </div>
                         ) : (
                           <span className="text-zinc-400 italic">Direct to Board / Unassigned</span>

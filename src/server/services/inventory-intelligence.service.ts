@@ -58,6 +58,17 @@ export class InventoryIntelligenceService {
       return { items: [], averageUnitsSold: 0, averageMarginPercentage: 0, hasSufficientData: false };
     }
 
+    const { PermissionService } = await import('./permission.service');
+    const canView = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'inventory.menu_profitability.view'
+    );
+    if (!canView) {
+      return { items: [], averageUnitsSold: 0, averageMarginPercentage: 0, hasSufficientData: false };
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch menu items with recipe and category details
@@ -231,6 +242,17 @@ export class InventoryIntelligenceService {
         unexplainedVarianceCostCents: 0,
         currency: 'USD',
       };
+    }
+
+    const { PermissionService } = await import('./permission.service');
+    const canView = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'inventory.cogs.view'
+    );
+    if (!canView) {
+      throw new Error('Forbidden: Missing inventory.cogs.view permission.');
     }
 
     const admin = createAdminClient();

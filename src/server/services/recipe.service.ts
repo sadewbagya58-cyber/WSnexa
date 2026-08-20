@@ -171,6 +171,11 @@ export class RecipeService {
 
     const businessCurrency = context.business.defaultCurrency || 'USD';
 
+    const { PermissionService } = await import('./permission.service');
+    const canViewCosts =
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'recipes.costs.view')) ||
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'inventory.costs.view'));
+
     interface RawIngredientRow {
       id: string;
       recipe_id: string;
@@ -190,10 +195,12 @@ export class RecipeService {
     return data.map((r) => {
       let totalCostCents = 0;
       const ingredients: RecipeIngredientDetail[] = ((r.ingredients as unknown as RawIngredientRow[]) || []).map((ing) => {
-        const itemCost = ing.inventory_items?.cost_per_unit_cents || 0;
+        const itemCost = canViewCosts ? (ing.inventory_items?.cost_per_unit_cents || 0) : 0;
         const effectiveQty = ing.yield_factor > 0 ? ing.quantity_base / ing.yield_factor : ing.quantity_base;
-        const lineCost = Math.round(effectiveQty * itemCost);
-        totalCostCents += lineCost;
+        const lineCost = canViewCosts ? Math.round(effectiveQty * itemCost) : 0;
+        if (canViewCosts) {
+          totalCostCents += lineCost;
+        }
 
         return {
           id: ing.id,
@@ -215,17 +222,17 @@ export class RecipeService {
       });
 
       const yieldQty = Number(r.yield_quantity) || 1.0;
-      const costPerPortionCents = yieldQty > 0 ? Math.round(totalCostCents / yieldQty) : totalCostCents;
+      const costPerPortionCents = canViewCosts && yieldQty > 0 ? Math.round(totalCostCents / yieldQty) : 0;
       const sellingPriceCents = r.menu_items?.price_cents || 0;
 
       let foodCostPercentage = 0;
-      if (sellingPriceCents > 0) {
+      if (canViewCosts && sellingPriceCents > 0) {
         foodCostPercentage = Number(((costPerPortionCents / sellingPriceCents) * 100).toFixed(1));
       }
 
-      const grossProfitCents = Math.max(0, sellingPriceCents - costPerPortionCents);
+      const grossProfitCents = canViewCosts ? Math.max(0, sellingPriceCents - costPerPortionCents) : 0;
       let grossMarginPercentage = 0;
-      if (sellingPriceCents > 0) {
+      if (canViewCosts && sellingPriceCents > 0) {
         grossMarginPercentage = Number(((grossProfitCents / sellingPriceCents) * 100).toFixed(1));
       }
 
@@ -317,12 +324,20 @@ export class RecipeService {
     }
 
     const businessCurrency = context.business.defaultCurrency || 'USD';
+
+    const { PermissionService } = await import('./permission.service');
+    const canViewCosts =
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'recipes.costs.view')) ||
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'inventory.costs.view'));
+
     let totalCostCents = 0;
     const ingredients: RecipeIngredientDetail[] = ((r.ingredients as unknown as RawIngredientRow[]) || []).map((ing) => {
-      const itemCost = ing.inventory_items?.cost_per_unit_cents || 0;
+      const itemCost = canViewCosts ? (ing.inventory_items?.cost_per_unit_cents || 0) : 0;
       const effectiveQty = ing.yield_factor > 0 ? ing.quantity_base / ing.yield_factor : ing.quantity_base;
-      const lineCost = Math.round(effectiveQty * itemCost);
-      totalCostCents += lineCost;
+      const lineCost = canViewCosts ? Math.round(effectiveQty * itemCost) : 0;
+      if (canViewCosts) {
+        totalCostCents += lineCost;
+      }
 
       return {
         id: ing.id,
@@ -344,14 +359,14 @@ export class RecipeService {
     });
 
     const yieldQty = Number(r.yield_quantity) || 1.0;
-    const costPerPortionCents = yieldQty > 0 ? Math.round(totalCostCents / yieldQty) : totalCostCents;
+    const costPerPortionCents = canViewCosts && yieldQty > 0 ? Math.round(totalCostCents / yieldQty) : 0;
     const sellingPriceCents = r.menu_items?.price_cents || 0;
 
     let foodCostPercentage = 0;
     let grossProfitCents = 0;
     let grossMarginPercentage = 0;
 
-    if (sellingPriceCents > 0) {
+    if (canViewCosts && sellingPriceCents > 0) {
       foodCostPercentage = Number(((costPerPortionCents / sellingPriceCents) * 100).toFixed(1));
       grossProfitCents = Math.max(0, sellingPriceCents - costPerPortionCents);
       grossMarginPercentage = Number(((grossProfitCents / sellingPriceCents) * 100).toFixed(1));
@@ -393,6 +408,17 @@ export class RecipeService {
     const context = await resolveActiveBusinessContext();
     if (!context || !context.business) {
       return { success: false, message: 'Unauthorized.' };
+    }
+
+    const { PermissionService } = await import('./permission.service');
+    const canManage = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      input.branchId || context.activeBranch?.id || null,
+      'recipes.manage'
+    );
+    if (!canManage) {
+      return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
     }
 
     const admin = createAdminClient();
@@ -448,14 +474,12 @@ export class RecipeService {
     // 4. Normalize & Insert Ingredients
     const ingredientRows = input.ingredients.map((ing, idx) => {
       let quantityBase = ing.quantity;
-      if (ing.itemId) {
-        const itemDef = itemMap.get(ing.itemId);
-        if (itemDef) {
-          try {
-            quantityBase = UnitConverter.normalizeToBase(ing.quantity, ing.unit, itemDef.base_unit);
-          } catch {
-            quantityBase = ing.quantity;
-          }
+      const matchedItem = ing.itemId ? itemMap.get(ing.itemId) : null;
+      if (matchedItem && ing.unit) {
+        try {
+          quantityBase = UnitConverter.normalizeToBase(ing.quantity, ing.unit, matchedItem.base_unit);
+        } catch {
+          quantityBase = ing.quantity;
         }
       }
 
@@ -464,11 +488,11 @@ export class RecipeService {
         item_id: ing.itemId || null,
         sub_recipe_id: ing.subRecipeId || null,
         quantity: ing.quantity,
-        unit: ing.unit.trim().toLowerCase(),
+        unit: ing.unit,
         quantity_base: quantityBase,
-        yield_factor: ing.yieldFactor || 1.0,
+        yield_factor: ing.yieldFactor ?? 1.0,
         default_location_id: ing.defaultLocationId || null,
-        display_order: idx,
+        display_order: idx + 1,
         notes: ing.notes || null,
       };
     });
@@ -492,6 +516,17 @@ export class RecipeService {
     const context = await resolveActiveBusinessContext();
     if (!context || !context.business || !context.activeBranch) {
       return { success: false, message: 'Unauthorized.' };
+    }
+
+    const { PermissionService } = await import('./permission.service');
+    const canProduce = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'inventory.production.manage'
+    );
+    if (!canProduce) {
+      return { success: false, message: 'Forbidden: Missing inventory.production.manage permission.' };
     }
 
     const admin = createAdminClient();

@@ -1,11 +1,16 @@
 import { redirect } from 'next/navigation';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { BranchService } from '@/server/services/branch.service';
 import { checkBranchQuota } from '@/server/services/branch-limit.service';
 import { BranchManager } from '@/components/branch/branch-manager';
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
 
 export default async function BranchesPage() {
-  const tenantContext = await resolveActiveBusinessContext();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/branches');
+
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
+  }
 
   if (!tenantContext) {
     redirect('/login');

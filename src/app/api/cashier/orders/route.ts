@@ -8,8 +8,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { role } = context.membership;
-  if (!['business_owner', 'branch_manager', 'cashier'].includes(role)) {
+  const { PermissionService } = await import('@/server/services/permission.service');
+  const canAccess =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'cashier.access')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'orders.view'));
+
+  if (!canAccess) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

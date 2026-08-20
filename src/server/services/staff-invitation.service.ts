@@ -532,6 +532,25 @@ export class StaffInvitationService {
   }
 
   /**
+   * Helper to verify if an actor is authorized to manage staff invitations.
+   */
+  static async verifyStaffManagementAccess(
+    userId: string,
+    businessId: string
+  ): Promise<{ authorized: boolean; error?: string }> {
+    const { PermissionService } = await import('./permission.service');
+    const canManage =
+      (await PermissionService.hasPermission(userId, businessId, null, 'staff.manage')) ||
+      (await PermissionService.hasPermission(userId, businessId, null, 'staff.invite')) ||
+      (await PermissionService.hasPermission(userId, businessId, null, 'invitations.manage'));
+
+    if (!canManage) {
+      return { authorized: false, error: 'Forbidden: Missing permission to manage staff.' };
+    }
+    return { authorized: true };
+  }
+
+  /**
    * Revokes an existing pending invitation.
    */
   static async revokeInvitation(
@@ -539,20 +558,12 @@ export class StaffInvitationService {
     businessId: string,
     invitationId: string
   ): Promise<{ success: boolean; message?: string }> {
-    const admin = createAdminClient();
-
-    // Verify Business Owner
-    const { data: ownerMem } = await admin
-      .from('business_memberships')
-      .select('role')
-      .eq('business_id', businessId)
-      .eq('user_id', userId)
-      .eq('membership_status', 'active')
-      .single();
-
-    if (!ownerMem || ownerMem.role !== 'business_owner') {
-      return { success: false, message: 'Only Business Owners can revoke invitations.' };
+    const { authorized, error } = await this.verifyStaffManagementAccess(userId, businessId);
+    if (!authorized) {
+      return { success: false, message: error || 'Unauthorized to revoke invitations.' };
     }
+
+    const admin = createAdminClient();
 
     const now = new Date().toISOString();
     const { error: updateErr } = await admin
@@ -595,19 +606,12 @@ export class StaffInvitationService {
     rawCode?: string;
     tokenPrefix?: string;
   }> {
-    const admin = createAdminClient();
-
-    const { data: ownerMem } = await admin
-      .from('business_memberships')
-      .select('role')
-      .eq('business_id', businessId)
-      .eq('user_id', userId)
-      .eq('membership_status', 'active')
-      .single();
-
-    if (!ownerMem || ownerMem.role !== 'business_owner') {
-      return { success: false, message: 'Only Business Owners can regenerate invitations.' };
+    const { authorized, error } = await this.verifyStaffManagementAccess(userId, businessId);
+    if (!authorized) {
+      return { success: false, message: error || 'Unauthorized to regenerate invitations.' };
     }
+
+    const admin = createAdminClient();
 
     const { data: invite } = await admin
       .from('staff_invitations')

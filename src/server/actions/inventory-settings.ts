@@ -16,6 +16,17 @@ export async function updateInventorySettingsAction(input: UpdateInventorySettin
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const { PermissionService } = await import('@/server/services/permission.service');
+  const canManage = await PermissionService.hasPermission(
+    context.user.id,
+    context.business.id,
+    input.branchId || context.activeBranch?.id || null,
+    'inventory.settings.manage'
+  );
+  if (!canManage) {
+    return { success: false, message: 'Forbidden: Missing inventory.settings.manage permission.' };
+  }
+
   const admin = createAdminClient();
   const { error } = await admin
     .from('inventory_settings')

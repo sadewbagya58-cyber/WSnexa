@@ -195,3 +195,130 @@ export const updateMemberStatusSchema = z.object({
 });
 
 export type UpdateMemberStatusInput = z.infer<typeof updateMemberStatusSchema>;
+
+// ====================================================================
+// Phase 30 RBAC & Scope V2 Canonical Types and Schemas
+// ====================================================================
+
+export const scopeTypeEnum = z.enum([
+  'ORGANIZATION',
+  'PROPERTY',
+  'DEPARTMENT',
+  'AREA_TEAM',
+  'SELF',
+]);
+
+export type ScopeType = z.infer<typeof scopeTypeEnum>;
+
+export const grantEffectEnum = z.enum(['allow', 'deny']);
+export type GrantEffect = z.infer<typeof grantEffectEnum>;
+
+export const grantSourceEnum = z.enum([
+  'role_preset',
+  'custom_role',
+  'member_override',
+  'staff_assignment',
+  'acting_delegation',
+]);
+export type GrantSource = z.infer<typeof grantSourceEnum>;
+
+export const roleScopePresetSchema = z.object({
+  id: z.string().uuid().optional(),
+  businessId: z.string().uuid().nullable().optional(),
+  roleKey: z.string().nullable().optional(),
+  customRoleId: z.string().uuid().nullable().optional(),
+  defaultScope: scopeTypeEnum,
+  maxScope: scopeTypeEnum,
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export type RoleScopePreset = z.infer<typeof roleScopePresetSchema>;
+
+export const permissionScopeGrantSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    businessId: z.string().uuid().nullable().optional(),
+    roleKey: z.string().nullable().optional(),
+    customRoleId: z.string().uuid().nullable().optional(),
+    businessMembershipId: z.string().uuid().nullable().optional(),
+    permissionKey: permissionKeyEnum,
+    effect: grantEffectEnum.default('allow'),
+    scopeType: scopeTypeEnum,
+    branchId: z.string().uuid().nullable().optional(),
+    departmentId: z.string().uuid().nullable().optional(),
+    organizationUnitId: z.string().uuid().nullable().optional(),
+    serviceAreaId: z.string().uuid().nullable().optional(),
+    grantSource: grantSourceEnum.default('role_preset'),
+    sourceId: z.string().uuid().nullable().optional(),
+    createdBy: z.string().uuid().nullable().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scopeType === 'ORGANIZATION') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'PROPERTY') {
+        return Boolean(data.branchId) && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'DEPARTMENT') {
+        return Boolean(data.departmentId) && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'AREA_TEAM') {
+        const hasUnit = Boolean(data.organizationUnitId);
+        const hasArea = Boolean(data.serviceAreaId);
+        return ((hasUnit && !hasArea) || (hasArea && !hasUnit)) && !data.branchId && !data.departmentId;
+      }
+      if (data.scopeType === 'SELF') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      return false;
+    },
+    {
+      message: 'Scope target foreign keys must match scopeType (e.g. PROPERTY requires branchId, AREA_TEAM requires unit or service area, ORGANIZATION/SELF must have null targets)',
+      path: ['scopeType'],
+    }
+  );
+
+export type PermissionScopeGrant = z.infer<typeof permissionScopeGrantSchema>;
+
+export const scopedMemberOverrideSchema = memberOverrideSchema
+  .extend({
+    scopeType: scopeTypeEnum.optional().default('PROPERTY'),
+    branchId: z.string().uuid().nullable().optional(),
+    departmentId: z.string().uuid().nullable().optional(),
+    organizationUnitId: z.string().uuid().nullable().optional(),
+    serviceAreaId: z.string().uuid().nullable().optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.scopeType) return true;
+      if (data.scopeType === 'ORGANIZATION') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'PROPERTY') {
+        return Boolean(data.branchId) && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'DEPARTMENT') {
+        return Boolean(data.departmentId) && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'AREA_TEAM') {
+        const hasUnit = Boolean(data.organizationUnitId);
+        const hasArea = Boolean(data.serviceAreaId);
+        return ((hasUnit && !hasArea) || (hasArea && !hasUnit)) && !data.branchId && !data.departmentId;
+      }
+      if (data.scopeType === 'SELF') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      return false;
+    },
+    {
+      message: 'Scope target foreign keys must match scopeType for scoped member overrides',
+      path: ['scopeType'],
+    }
+  );
+
+export type ScopedMemberOverrideInput = z.infer<typeof scopedMemberOverrideSchema>;
+

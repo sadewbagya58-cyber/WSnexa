@@ -111,9 +111,13 @@ export class PaymentService {
       return { success: false, message: 'Unauthorized or branch context not found.' };
     }
 
-    const { role } = context.membership;
-    if (!['business_owner', 'branch_manager', 'cashier'].includes(role)) {
-      return { success: false, message: 'Forbidden. Cashier, Manager, or Owner role required.' };
+    const { PermissionService } = await import('./permission.service');
+    const canRecord =
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'payments.record')) ||
+      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'cashier.access'));
+
+    if (!canRecord) {
+      return { success: false, message: 'Forbidden. Missing payments.record permission.' };
     }
 
     const parsed = recordPaymentSchema.safeParse(input);
@@ -412,9 +416,16 @@ export class PaymentService {
       return { success: false, message: 'Unauthorized.' };
     }
 
-    const { role } = context.membership;
-    if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, message: 'Forbidden. Owner or Manager role required to void payment.' };
+    const { PermissionService } = await import('./permission.service');
+    const canVoid = await PermissionService.hasPermission(
+      context.user.id,
+      context.business.id,
+      context.activeBranch.id,
+      'payments.void'
+    );
+
+    if (!canVoid) {
+      return { success: false, message: 'Forbidden. Missing payments.void permission.' };
     }
 
     const parsed = voidPaymentSchema.safeParse(input);

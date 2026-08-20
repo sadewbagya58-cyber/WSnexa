@@ -161,10 +161,27 @@ export const resolveActiveBusinessContext = cache(
       table_pin_length: (b as unknown as { table_pin_length?: number }).table_pin_length ?? 4,
     }));
 
-    const defaultBranchInfo = formattedBranches.find((b) => b.isDefault) || formattedBranches[0] || null;
+    let userAssignedBranchIds: string[] | null = null;
+    if (activeMembership.role !== 'business_owner') {
+      const { data: assignments } = await supabase
+        .from('branch_assignments')
+        .select('branch_id')
+        .eq('business_membership_id', activeMembership.id);
+      userAssignedBranchIds = (assignments || []).map((a) => a.branch_id);
+    }
+
+    const userAccessibleBranches =
+      userAssignedBranchIds !== null
+        ? formattedBranches.filter((b) => userAssignedBranchIds!.includes(b.id))
+        : formattedBranches;
+
+    const defaultBranchInfo = userAccessibleBranches.find((b) => b.isDefault) || userAccessibleBranches[0] || null;
     const requestedBranchId = cookieStore.get(ACTIVE_BRANCH_COOKIE)?.value;
 
-    const activeBranchInfo = formattedBranches.find((b) => b.id === requestedBranchId) || defaultBranchInfo;
+    let activeBranchInfo = defaultBranchInfo;
+    if (requestedBranchId && userAccessibleBranches.some((b) => b.id === requestedBranchId)) {
+      activeBranchInfo = userAccessibleBranches.find((b) => b.id === requestedBranchId) || defaultBranchInfo;
+    }
 
     const duration = stopTimer(startTime);
     logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);
@@ -192,7 +209,7 @@ export const resolveActiveBusinessContext = cache(
       },
       defaultBranch: defaultBranchInfo,
       activeBranch: activeBranchInfo,
-      branches: formattedBranches,
+      branches: activeMembership.role === 'business_owner' ? formattedBranches : userAccessibleBranches,
       membership: {
         id: activeMembership.id,
         role: activeMembership.role,

@@ -45,7 +45,9 @@
     "verify:help-center": "tsx scripts/verify-help-center.ts",
     "verify:inventory": "tsx scripts/verify-inventory.ts",
     "verify:inventory-v2": "tsx scripts/verify-inventory-v2.ts",
-    "verify:organization": "tsx scripts/verify-organization.ts"
+    "verify:organization": "tsx scripts/verify-organization.ts",
+    "verify:phase30-security-baseline": "tsx scripts/verify-phase30-security-baseline.ts",
+    "verify:rbac-v2-schema": "tsx scripts/verify-rbac-v2-schema.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

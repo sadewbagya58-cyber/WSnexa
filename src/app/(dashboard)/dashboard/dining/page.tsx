@@ -1,9 +1,10 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { QrService } from '@/server/services/qr.service';
 import { DiningSetupWorkspace } from '@/components/dining/dining-setup-workspace';
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -12,7 +13,12 @@ export const metadata: Metadata = {
 };
 
 export default async function DiningSetupPage() {
-  const tenantContext = await resolveActiveBusinessContext();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/dining');
+
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
+  }
+
   if (!tenantContext || !tenantContext.activeBranch) redirect('/login');
 
   const supabase = await createClient();

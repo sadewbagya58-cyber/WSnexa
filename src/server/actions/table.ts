@@ -176,9 +176,12 @@ export async function createDiningTableAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canCreate =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.create')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+
+  if (!canCreate) {
+    return { success: false, message: 'Forbidden. Missing permission to create tables.' };
   }
 
   const parsed = createDiningTableSchema.safeParse(formData);
@@ -367,9 +370,12 @@ export async function bulkCreateDiningTablesAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canCreate =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.create')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+
+  if (!canCreate) {
+    return { success: false, message: 'Forbidden. Missing permission to create tables.' };
   }
 
   const parsed = bulkCreateDiningTablesSchema.safeParse(formData);
@@ -488,9 +494,13 @@ export async function generateTablePinAction(tableId: string): Promise<ActionRes
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  const canManagePins =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+
+  if (!canManagePins) {
+    return { success: false, message: 'Forbidden: Missing permission to generate table PIN.' };
   }
 
   const pinLength = context.activeBranch.table_pin_length || 4;
@@ -534,9 +544,13 @@ export async function updateTablePinAction(
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  const canManagePins =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+
+  if (!canManagePins) {
+    return { success: false, message: 'Forbidden: Missing permission to update table PIN.' };
   }
 
   const pinLength = context.activeBranch.table_pin_length || 4;
@@ -581,9 +595,13 @@ export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = t
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden: Owner or Branch Manager role required.' };
+  const canManagePins =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+
+  if (!canManagePins) {
+    return { success: false, message: 'Forbidden: Missing permission to bulk generate table PINs.' };
   }
 
   const supabase = await createClient();

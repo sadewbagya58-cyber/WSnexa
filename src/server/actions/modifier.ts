@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { PermissionService } from '@/server/services/permission.service';
 import { parseDecimalToMinorUnits } from '@/lib/utils/money';
 import {
   createModifierGroupSchema,
@@ -27,9 +28,12 @@ export async function createModifierGroupAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canManage =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.modifiers.manage')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Missing permission to manage modifiers.' };
   }
 
   const parsed = createModifierGroupSchema.safeParse(formData);
@@ -198,9 +202,12 @@ export async function createModifierOptionAction(
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const { role } = context.membership;
-  if (role !== 'business_owner' && role !== 'branch_manager') {
-    return { success: false, message: 'Forbidden. Owner or Branch Manager role required.' };
+  const canManage =
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.modifiers.manage')) ||
+    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Missing permission to manage modifiers.' };
   }
 
   const parsed = createModifierOptionSchema.safeParse(formData);

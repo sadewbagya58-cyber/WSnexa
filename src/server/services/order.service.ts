@@ -558,9 +558,31 @@ export class OrderService {
     }
 
     const admin = createAdminClient();
-    const { data: order } = await admin.from('orders').select('id, status, branch_id').eq('id', orderId).single();
-    if (!order || order.branch_id !== context.activeBranch.id) {
+    const { data: order } = await admin.from('orders').select('id, status, branch_id, business_id').eq('id', orderId).single();
+    if (!order || order.business_id !== context.business.id || order.branch_id !== context.activeBranch.id) {
       return { success: false, message: 'Order not found in active branch.' };
+    }
+
+    const { PermissionService } = await import('./permission.service');
+    let hasPermission = false;
+
+    if (nextStatus === 'cancelled') {
+      hasPermission = await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.cancel');
+    } else if (nextStatus === 'preparing' || nextStatus === 'ready') {
+      hasPermission =
+        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'kitchen.update')) ||
+        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status'));
+    } else if (nextStatus === 'completed') {
+      hasPermission =
+        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status')) ||
+        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'cashier.access')) ||
+        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'payments.record'));
+    } else {
+      hasPermission = await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status');
+    }
+
+    if (!hasPermission) {
+      return { success: false, message: `Forbidden: Missing permission to transition order to ${nextStatus}.` };
     }
 
     const previousStatus = order.status;

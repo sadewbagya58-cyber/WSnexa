@@ -1,21 +1,20 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { PageHeader } from '@/components/ui/page-header';
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+import { AccessDenied } from '@/components/auth/access-denied';
 
 export default async function BusinessProfilePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/business');
 
-  if (!user) {
-    redirect('/login');
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
   }
 
-  const tenantContext = await resolveActiveBusinessContext();
+  if (!tenantContext) {
+    redirect('/login');
+  }
 
   return (
     <div className="space-y-6">

@@ -1,9 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { ActionResponse } from './auth';
-import { PermissionService } from '@/server/services/permission.service';
 import { OrganizationService } from '@/server/services/organization.service';
 import {
   CreateDepartmentInput,
@@ -61,17 +60,15 @@ export async function createStaffAssignmentAction(
   formData: Omit<CreateStaffAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage staff assignments.' };
@@ -79,7 +76,7 @@ export async function createStaffAssignmentAction(
 
     const parsed = createStaffAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -90,7 +87,7 @@ export async function createStaffAssignmentAction(
       };
     }
 
-    const created = await OrganizationService.createStaffAssignment(parsed.data, context.user.id);
+    const created = await OrganizationService.createStaffAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -113,17 +110,15 @@ export async function createAdditionalAssignmentAction(
   formData: Omit<CreateAdditionalAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage staff assignments.' };
@@ -131,7 +126,7 @@ export async function createAdditionalAssignmentAction(
 
     const parsed = createAdditionalAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -142,7 +137,7 @@ export async function createAdditionalAssignmentAction(
       };
     }
 
-    const created = await OrganizationService.createAdditionalAssignment(parsed.data, context.user.id);
+    const created = await OrganizationService.createAdditionalAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -165,17 +160,15 @@ export async function updateStaffAssignmentAction(
   formData: UpdateStaffAssignmentInput
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage staff assignments.' };
@@ -214,17 +207,15 @@ export async function endStaffAssignmentAction(
   formData: EndStaffAssignmentInput
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage staff assignments.' };
@@ -239,7 +230,7 @@ export async function endStaffAssignmentAction(
       };
     }
 
-    const ended = await OrganizationService.endStaffAssignment(parsed.data, context.user.id);
+    const ended = await OrganizationService.endStaffAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -262,17 +253,15 @@ export async function transitionPrimaryAssignmentAction(
   formData: Omit<TransitionPrimaryAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ newAssignmentId: string; endedAssignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to transition staff.' };
@@ -280,7 +269,7 @@ export async function transitionPrimaryAssignmentAction(
 
     const parsed = transitionPrimaryAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -291,7 +280,7 @@ export async function transitionPrimaryAssignmentAction(
       };
     }
 
-    const res = await OrganizationService.transitionPrimaryAssignment(parsed.data, context.user.id);
+    const res = await OrganizationService.transitionPrimaryAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -317,17 +306,15 @@ export async function setReportingManagerAction(
   formData: Omit<SetReportingManagerInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to update reporting managers.' };
@@ -335,7 +322,7 @@ export async function setReportingManagerAction(
 
     const parsed = setReportingManagerSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -346,7 +333,7 @@ export async function setReportingManagerAction(
       };
     }
 
-    await OrganizationService.setReportingManager(parsed.data, context.user.id);
+    await OrganizationService.setReportingManager(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -369,17 +356,15 @@ export async function createActingAssignmentAction(
   formData: Omit<CreateActingAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to create acting assignments.' };
@@ -387,7 +372,7 @@ export async function createActingAssignmentAction(
 
     const parsed = createActingAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -398,7 +383,7 @@ export async function createActingAssignmentAction(
       };
     }
 
-    const created = await OrganizationService.createActingAssignment(parsed.data, context.user.id);
+    const created = await OrganizationService.createActingAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people/acting');
     revalidatePath('/dashboard/people');
@@ -422,17 +407,15 @@ export async function extendActingAssignmentAction(
   formData: Omit<ExtendActingAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to extend acting assignments.' };
@@ -440,7 +423,7 @@ export async function extendActingAssignmentAction(
 
     const parsed = extendActingAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -451,7 +434,7 @@ export async function extendActingAssignmentAction(
       };
     }
 
-    await OrganizationService.extendActingAssignment(parsed.data, context.user.id);
+    await OrganizationService.extendActingAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people/acting');
     revalidatePath('/dashboard/people');
@@ -475,17 +458,15 @@ export async function endActingAssignmentAction(
   formData: Omit<EndActingAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to end acting assignments.' };
@@ -493,7 +474,7 @@ export async function endActingAssignmentAction(
 
     const parsed = endActingAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -504,7 +485,7 @@ export async function endActingAssignmentAction(
       };
     }
 
-    await OrganizationService.endActingAssignment(parsed.data, context.user.id);
+    await OrganizationService.endActingAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people/acting');
     revalidatePath('/dashboard/people');
@@ -528,17 +509,15 @@ export async function createSecondmentAction(
   formData: Omit<CreateSecondmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to create secondments.' };
@@ -546,7 +525,7 @@ export async function createSecondmentAction(
 
     const parsed = createSecondmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -557,7 +536,7 @@ export async function createSecondmentAction(
       };
     }
 
-    const created = await OrganizationService.createSecondment(parsed.data, context.user.id);
+    const created = await OrganizationService.createSecondment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people/secondments');
     revalidatePath('/dashboard/people');
@@ -581,17 +560,15 @@ export async function endSecondmentAction(
   formData: Omit<EndSecondmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to end secondments.' };
@@ -599,7 +576,7 @@ export async function endSecondmentAction(
 
     const parsed = endSecondmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -610,7 +587,7 @@ export async function endSecondmentAction(
       };
     }
 
-    await OrganizationService.endSecondment(parsed.data, context.user.id);
+    await OrganizationService.endSecondment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people/secondments');
     revalidatePath('/dashboard/people');
@@ -634,17 +611,15 @@ export async function createAssignmentAbsenceAction(
   formData: Omit<CreateAssignmentAbsenceInput, 'businessId'>
 ): Promise<ActionResponse<{ absenceId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to record absences.' };
@@ -652,7 +627,7 @@ export async function createAssignmentAbsenceAction(
 
     const parsed = createAssignmentAbsenceSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -663,7 +638,7 @@ export async function createAssignmentAbsenceAction(
       };
     }
 
-    const created = await OrganizationService.createAssignmentAbsence(parsed.data, context.user.id);
+    const created = await OrganizationService.createAssignmentAbsence(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/acting');
@@ -687,17 +662,15 @@ export async function endAssignmentAbsenceAction(
   formData: EndAssignmentAbsenceInput
 ): Promise<ActionResponse<{ absenceId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to update absences.' };
@@ -736,17 +709,15 @@ export async function createTemporaryAssignmentAction(
   formData: Omit<CreateTemporaryAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage temporary assignments.' };
@@ -754,7 +725,7 @@ export async function createTemporaryAssignmentAction(
 
     const parsed = createTemporaryAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -765,7 +736,7 @@ export async function createTemporaryAssignmentAction(
       };
     }
 
-    const assignment = await OrganizationService.createTemporaryAssignment(parsed.data, context.user.id);
+    const assignment = await OrganizationService.createTemporaryAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -788,17 +759,15 @@ export async function endTemporaryAssignmentAction(
   formData: Omit<EndTemporaryAssignmentInput, 'businessId'>
 ): Promise<ActionResponse<{ assignmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'people.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage temporary assignments.' };
@@ -806,7 +775,7 @@ export async function endTemporaryAssignmentAction(
 
     const parsed = endTemporaryAssignmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -817,7 +786,7 @@ export async function endTemporaryAssignmentAction(
       };
     }
 
-    const ended = await OrganizationService.endTemporaryAssignment(parsed.data, context.user.id);
+    const ended = await OrganizationService.endTemporaryAssignment(parsed.data, authContext.userId);
 
     revalidatePath('/dashboard/people');
     revalidatePath('/dashboard/people/[membershipId]', 'page');
@@ -840,17 +809,15 @@ export async function createDepartmentAction(
   formData: Omit<CreateDepartmentInput, 'businessId'>
 ): Promise<ActionResponse<{ departmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage organization structure.' };
@@ -858,7 +825,7 @@ export async function createDepartmentAction(
 
     const parsed = createDepartmentSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -892,17 +859,15 @@ export async function updateDepartmentAction(
   formData: UpdateDepartmentInput
 ): Promise<ActionResponse<{ departmentId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage organization structure.' };
@@ -941,17 +906,15 @@ export async function createOrganizationUnitAction(
   formData: Omit<CreateOrganizationUnitInput, 'businessId'>
 ): Promise<ActionResponse<{ unitId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage organization structure.' };
@@ -959,7 +922,7 @@ export async function createOrganizationUnitAction(
 
     const parsed = createOrganizationUnitSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -993,17 +956,15 @@ export async function updateOrganizationUnitAction(
   formData: UpdateOrganizationUnitInput
 ): Promise<ActionResponse<{ unitId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage organization structure.' };
@@ -1042,17 +1003,15 @@ export async function createJobTitleAction(
   formData: Omit<CreateJobTitleInput, 'businessId'>
 ): Promise<ActionResponse<{ jobTitleId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage job titles.' };
@@ -1060,7 +1019,7 @@ export async function createJobTitleAction(
 
     const parsed = createJobTitleSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -1094,17 +1053,15 @@ export async function updateJobTitleAction(
   formData: UpdateJobTitleInput
 ): Promise<ActionResponse<{ jobTitleId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage job titles.' };
@@ -1143,17 +1100,15 @@ export async function createPositionAction(
   formData: Omit<CreatePositionInput, 'businessId'>
 ): Promise<ActionResponse<{ positionId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'positions.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'positions.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage positions.' };
@@ -1161,7 +1116,7 @@ export async function createPositionAction(
 
     const parsed = createPositionSchema.safeParse({
       ...formData,
-      businessId: context.business.id,
+      businessId: authContext.businessId,
     });
 
     if (!parsed.success) {
@@ -1195,17 +1150,15 @@ export async function updatePositionAction(
   formData: UpdatePositionInput
 ): Promise<ActionResponse<{ positionId: string }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'positions.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'positions.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to manage positions.' };
@@ -1242,23 +1195,21 @@ export async function updatePositionAction(
  */
 export async function reconcileAssignmentLifecycleAction(): Promise<ActionResponse<{ activatedCount: number; endedCount: number }>> {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized. Please sign in.' };
     }
 
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch?.id || null,
-      'organization.manage'
-    );
+    const canManage = await can({
+      context: authContext,
+      permission: 'organization.manage',
+    });
 
     if (!canManage) {
       return { success: false, message: 'Forbidden. You do not have permission to reconcile organization lifecycle.' };
     }
 
-    const res = await OrganizationService.reconcileAssignmentLifecycle(context.business.id);
+    const res = await OrganizationService.reconcileAssignmentLifecycle(authContext.businessId);
 
     revalidatePath('/dashboard/organization');
     revalidatePath('/dashboard/people');

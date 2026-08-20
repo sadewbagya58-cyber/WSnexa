@@ -552,36 +552,43 @@ export class OrderService {
    * Updates order status with audit log.
    */
   static async updateOrderStatus(orderId: string, nextStatus: OrderStatus, notes?: string | null) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized.' };
     }
 
     const admin = createAdminClient();
     const { data: order } = await admin.from('orders').select('id, status, branch_id, business_id').eq('id', orderId).single();
-    if (!order || order.business_id !== context.business.id || order.branch_id !== context.activeBranch.id) {
-      return { success: false, message: 'Order not found in active branch.' };
+    if (!order || order.business_id !== authContext.businessId) {
+      return { success: false, message: 'Order not found in active business.' };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    let hasPermission = false;
+    let isAuthorized = false;
+    const resource = { type: 'order' as const, id: orderId };
 
     if (nextStatus === 'cancelled') {
-      hasPermission = await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.cancel');
+      isAuthorized = await can({ context: authContext, permission: 'orders.cancel', resource });
     } else if (nextStatus === 'preparing' || nextStatus === 'ready') {
-      hasPermission =
-        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'kitchen.update')) ||
-        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status'));
+      isAuthorized =
+        (await can({ context: authContext, permission: 'kitchen.update', resource })) ||
+        (await can({ context: authContext, permission: 'orders.update_status', resource }));
     } else if (nextStatus === 'completed') {
-      hasPermission =
-        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status')) ||
-        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'cashier.access')) ||
-        (await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'payments.record'));
+      isAuthorized =
+        (await can({ context: authContext, permission: 'orders.update_status', resource })) ||
+        (await can({ context: authContext, permission: 'cashier.access', resource })) ||
+        (await can({ context: authContext, permission: 'payments.record', resource }));
     } else {
-      hasPermission = await PermissionService.hasPermission(context.user.id, context.business.id, order.branch_id, 'orders.update_status');
+      isAuthorized = await can({ context: authContext, permission: 'orders.update_status', resource });
     }
 
-    if (!hasPermission) {
+    if (!isAuthorized) {
       return { success: false, message: `Forbidden: Missing permission to transition order to ${nextStatus}.` };
     }
 
@@ -605,14 +612,14 @@ export class OrderService {
       order_id: orderId,
       previous_status: previousStatus,
       new_status: nextStatus,
-      changed_by: context.user.id,
+      changed_by: authContext.userId,
       notes: notes || `Status updated to ${nextStatus}`,
     });
 
     // Automated Inventory Consumption Trigger (Phase 28)
     try {
       const { ConsumptionService } = await import('@/server/services/consumption.service');
-      await ConsumptionService.processOrderStageConsumption(orderId, nextStatus, context.user.id);
+      await ConsumptionService.processOrderStageConsumption(orderId, nextStatus, authContext.userId);
     } catch (err: unknown) {
       console.error('Failed to trigger order ingredient consumption:', err);
     }

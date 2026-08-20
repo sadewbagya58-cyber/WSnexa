@@ -1,8 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { InventoryService } from '@/server/services/inventory.service';
 import {
   createInventoryCategorySchema,
@@ -20,17 +19,17 @@ import {
  * Creates an inventory category.
  */
 export async function createInventoryCategoryAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.items.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.items.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Item management permission required.' };
   }
@@ -40,7 +39,7 @@ export async function createInventoryCategoryAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
-  const res = await InventoryService.createCategory(context.business.id, parsed.data);
+  const res = await InventoryService.createCategory(authContext.businessId, parsed.data);
   if (res.success) {
     revalidatePath('/dashboard/inventory');
     revalidatePath('/dashboard/inventory/items');
@@ -52,17 +51,17 @@ export async function createInventoryCategoryAction(rawInput: unknown) {
  * Creates a storage location.
  */
 export async function createStorageLocationAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.locations.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.locations.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Location management permission required.' };
   }
@@ -72,7 +71,7 @@ export async function createStorageLocationAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
-  const res = await InventoryService.createLocation(context.business.id, parsed.data);
+  const res = await InventoryService.createLocation(authContext.businessId, parsed.data);
   if (res.success) {
     revalidatePath('/dashboard/inventory/locations');
     revalidatePath('/dashboard/inventory');
@@ -84,17 +83,17 @@ export async function createStorageLocationAction(rawInput: unknown) {
  * Creates a new inventory item.
  */
 export async function createInventoryItemAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.items.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.items.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Item management permission required.' };
   }
@@ -105,10 +104,10 @@ export async function createInventoryItemAction(rawInput: unknown) {
   }
 
   const res = await InventoryService.createInventoryItem(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
-    context.business.defaultCurrency || 'USD',
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
+    'USD',
     parsed.data
   );
 
@@ -126,19 +125,9 @@ export async function createInventoryItemAction(rawInput: unknown) {
  * Records manual stock adjustment.
  */
 export async function recordStockAdjustmentAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
-  }
-
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.adjust'
-  );
-  if (!hasPerm) {
-    return { success: false, message: 'Forbidden. Stock adjustment permission required.' };
   }
 
   const parsed = stockAdjustmentSchema.safeParse(rawInput);
@@ -146,10 +135,20 @@ export async function recordStockAdjustmentAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const locResource = { type: 'inventory_location' as const, id: parsed.data.locationId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.adjust',
+    resource: locResource,
+  });
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Stock adjustment permission required.' };
+  }
+
   const res = await InventoryService.recordStockAdjustment(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
     parsed.data
   );
 
@@ -165,19 +164,9 @@ export async function recordStockAdjustmentAction(rawInput: unknown) {
  * Records food & beverage waste.
  */
 export async function recordWasteAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
-  }
-
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.waste.record'
-  );
-  if (!hasPerm) {
-    return { success: false, message: 'Forbidden. Waste recording permission required.' };
   }
 
   const parsed = recordWasteSchema.safeParse(rawInput);
@@ -185,10 +174,20 @@ export async function recordWasteAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const locResource = { type: 'inventory_location' as const, id: parsed.data.locationId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.waste.record',
+    resource: locResource,
+  });
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Waste recording permission required.' };
+  }
+
   const res = await InventoryService.recordWaste(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
     parsed.data
   );
 
@@ -204,17 +203,17 @@ export async function recordWasteAction(rawInput: unknown) {
  * Creates physical stock count.
  */
 export async function createStockCountAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.counts.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.counts.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Stock count management permission required.' };
   }
@@ -225,10 +224,10 @@ export async function createStockCountAction(rawInput: unknown) {
   }
 
   const res = await InventoryService.createStockCount(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
-    context.business.defaultCurrency || 'USD',
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
+    'USD',
     parsed.data
   );
 
@@ -242,19 +241,9 @@ export async function createStockCountAction(rawInput: unknown) {
  * Submits physical stock count entries.
  */
 export async function submitStockCountAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
-  }
-
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.counts.manage'
-  );
-  if (!hasPerm) {
-    return { success: false, message: 'Forbidden. Stock count management permission required.' };
   }
 
   const parsed = submitStockCountSchema.safeParse(rawInput);
@@ -262,10 +251,20 @@ export async function submitStockCountAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const countResource = { type: 'inventory_count' as const, id: parsed.data.countId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.counts.manage',
+    resource: countResource,
+  });
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Stock count management permission required.' };
+  }
+
   const res = await InventoryService.submitStockCount(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
     parsed.data
   );
 
@@ -280,25 +279,25 @@ export async function submitStockCountAction(rawInput: unknown) {
  * Approves physical stock count and commits balance reconciliations.
  */
 export async function approveStockCountAction(countId: string) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.counts.approve'
-  );
+  const countResource = { type: 'inventory_count' as const, id: countId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.counts.approve',
+    resource: countResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Stock count approval permission required.' };
   }
 
   const res = await InventoryService.approveStockCount(
-    context.business.id,
-    context.activeBranch.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.activeBranchId,
+    authContext.userId,
     countId
   );
 
@@ -315,17 +314,17 @@ export async function approveStockCountAction(countId: string) {
  * Creates draft stock transfer.
  */
 export async function createStockTransferAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.transfers.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.transfers.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Transfer management permission required.' };
   }
@@ -336,9 +335,9 @@ export async function createStockTransferAction(rawInput: unknown) {
   }
 
   const res = await InventoryService.createStockTransfer(
-    context.business.id,
-    context.user.id,
-    context.business.defaultCurrency || 'USD',
+    authContext.businessId,
+    authContext.userId,
+    'USD',
     parsed.data
   );
 
@@ -352,24 +351,24 @@ export async function createStockTransferAction(rawInput: unknown) {
  * Dispatches stock transfer.
  */
 export async function sendStockTransferAction(transferId: string) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.transfers.manage'
-  );
+  const transferResource = { type: 'inventory_transaction' as const, id: transferId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.transfers.manage',
+    resource: transferResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Transfer management permission required.' };
   }
 
   const res = await InventoryService.sendStockTransfer(
-    context.business.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.userId,
     transferId
   );
 
@@ -385,19 +384,9 @@ export async function sendStockTransferAction(transferId: string) {
  * Receives stock transfer.
  */
 export async function receiveStockTransferAction(rawInput: unknown) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
-  }
-
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.transfers.receive'
-  );
-  if (!hasPerm) {
-    return { success: false, message: 'Forbidden. Transfer receipt permission required.' };
   }
 
   const parsed = receiveStockTransferSchema.safeParse(rawInput);
@@ -405,9 +394,19 @@ export async function receiveStockTransferAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const transferResource = { type: 'inventory_transaction' as const, id: parsed.data.transferId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'inventory.transfers.receive',
+    resource: transferResource,
+  });
+  if (!hasPerm) {
+    return { success: false, message: 'Forbidden. Transfer receipt permission required.' };
+  }
+
   const res = await InventoryService.receiveStockTransfer(
-    context.business.id,
-    context.user.id,
+    authContext.businessId,
+    authContext.userId,
     parsed.data
   );
 

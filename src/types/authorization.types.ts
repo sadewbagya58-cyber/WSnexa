@@ -164,7 +164,12 @@ export type SupportedResourceType =
   | 'service_area'
   | 'recipe'
   | 'modifier_group'
-  | 'menu_item';
+  | 'menu_item'
+  | 'branch'
+  | 'department'
+  | 'organization_unit'
+  | 'supplier'
+  | 'payment';
 
 export interface ResourceScope {
   resourceType: SupportedResourceType;

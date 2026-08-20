@@ -23,6 +23,9 @@ export class AuthorizationContextError extends Error {
       case 'MEMBERSHIP_INACTIVE':
       case 'TENANT_MISMATCH':
       case 'BRANCH_ACCESS_DENIED':
+      case 'PERMISSION_DENIED':
+      case 'OUTSIDE_SCOPE':
+      case 'EXPLICIT_DENY':
         this.statusCode = 403;
         break;
       case 'RESOURCE_NOT_FOUND':

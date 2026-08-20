@@ -106,18 +106,16 @@ export class PaymentService {
    * Records payment settlement for an order via private service-role RPC.
    */
   static async recordPayment(input: RecordPaymentInput) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
-      return { success: false, message: 'Unauthorized or branch context not found.' };
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized or session context not found.' };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canRecord =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'payments.record')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'cashier.access'));
-
-    if (!canRecord) {
-      return { success: false, message: 'Forbidden. Missing payments.record permission.' };
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized or session context not found.' };
     }
 
     const parsed = recordPaymentSchema.safeParse(input);
@@ -130,17 +128,27 @@ export class PaymentService {
     }
 
     const { orderId, amountCents, paymentMethod, externalReference, notes, idempotencyKey } = parsed.data;
+    const orderResource = { type: 'order' as const, id: orderId };
+
+    const canRecord =
+      (await can({ context: authContext, permission: 'payments.record', resource: orderResource })) ||
+      (await can({ context: authContext, permission: 'cashier.access', resource: orderResource }));
+
+    if (!canRecord) {
+      return { success: false, message: 'Forbidden. Missing payments.record permission.' };
+    }
+
     const admin = createAdminClient();
 
-    // Verify order belongs to active branch
+    // Verify order belongs to active business
     const { data: order } = await admin
       .from('orders')
-      .select('id, branch_id, status')
+      .select('id, branch_id, business_id, status')
       .eq('id', orderId)
       .single();
 
-    if (!order || order.branch_id !== context.activeBranch.id) {
-      return { success: false, message: 'Order not found in active branch.' };
+    if (!order || order.business_id !== authContext.businessId) {
+      return { success: false, message: 'Order not found in active business.' };
     }
 
     if (order.status === 'cancelled') {
@@ -152,30 +160,30 @@ export class PaymentService {
       p_order_id: orderId,
       p_amount_cents: amountCents,
       p_payment_method: paymentMethod,
+      p_received_by: authContext.userId,
       p_external_reference: externalReference || null,
       p_notes: notes || null,
       p_idempotency_key: idempotencyKey,
-      p_actor_id: context.user.id,
     });
 
     if (error || !data) {
       return {
         success: false,
-        message: error?.message || 'Failed to record payment.',
+        message: error?.message || 'Failed to execute payment RPC.',
       };
     }
 
     const payload = data as {
       success: boolean;
       error?: string;
-      is_duplicate?: boolean;
       payment_id?: string;
       payment_reference?: string;
       total_cents?: number;
       paid_cents?: number;
       balance_due_cents?: number;
-      payment_status?: PaymentStatus;
+      payment_status?: string;
       currency?: string;
+      is_duplicate?: boolean;
     };
 
     if (!payload.success) {
@@ -220,8 +228,21 @@ export class PaymentService {
    * Fetches active branch orders with payment history, derived balances, and bill requests for Cashier POS.
    */
   static async getCashierOrders(): Promise<CashierOrderRecord[]> {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) return [];
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return [];
+    }
+    if (!authContext || !authContext.activeBranchId) return [];
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const canAccess =
+      (await can({ context: authContext, permission: 'cashier.access', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'orders.view', resource: branchResource }));
+
+    if (!canAccess) return [];
 
     const admin = createAdminClient();
 
@@ -247,7 +268,7 @@ export class PaymentService {
           )
         )
       `)
-      .eq('branch_id', context.activeBranch.id)
+      .eq('branch_id', authContext.activeBranchId)
       .order('created_at', { ascending: false });
 
     if (ordersErr || !orders) return [];
@@ -275,7 +296,7 @@ export class PaymentService {
     const { data: billRequests } = await admin
       .from('waiter_requests')
       .select('id, order_id')
-      .eq('branch_id', context.activeBranch.id)
+      .eq('branch_id', authContext.activeBranchId)
       .eq('request_type', 'need_bill')
       .eq('status', 'pending');
 
@@ -411,21 +432,16 @@ export class PaymentService {
    * Void payment record (Manager / Owner authorization required).
    */
   static async voidPayment(input: VoidPaymentInput) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized.' };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canVoid = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'payments.void'
-    );
-
-    if (!canVoid) {
-      return { success: false, message: 'Forbidden. Missing payments.void permission.' };
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized.' };
     }
 
     const parsed = voidPaymentSchema.safeParse(input);
@@ -434,6 +450,18 @@ export class PaymentService {
     }
 
     const { paymentId, orderId, reason } = parsed.data;
+    const orderResource = { type: 'order' as const, id: orderId };
+
+    const canVoid = await can({
+      context: authContext,
+      permission: 'payments.void',
+      resource: orderResource,
+    });
+
+    if (!canVoid) {
+      return { success: false, message: 'Forbidden. Missing payments.void permission.' };
+    }
+
     const admin = createAdminClient();
 
     const { data: payment } = await admin
@@ -443,7 +471,7 @@ export class PaymentService {
       .eq('order_id', orderId)
       .single();
 
-    if (!payment || payment.branch_id !== context.activeBranch.id) {
+    if (!payment || payment.business_id !== authContext.businessId) {
       return { success: false, message: 'Payment record not found.' };
     }
 
@@ -496,8 +524,8 @@ export class PaymentService {
       previous_status: payment.payment_status,
       new_status: 'voided',
       amount_cents: payment.amount_cents,
-      actor_id: context.user.id,
-      metadata: { reason, voided_by: context.user.id },
+      actor_id: authContext.userId,
+      metadata: { reason, voided_by: authContext.userId },
     });
 
     return { success: true, message: 'Payment voided successfully.' };

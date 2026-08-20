@@ -272,7 +272,7 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
           resourceScope: null,
         });
       }
-    } else if ('resourceType' in resource && 'resourceId' in resource) {
+    } else if ('businessId' in resource) {
       resourceScope = resource as ResourceScope;
     }
   }
@@ -429,8 +429,8 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
     });
   }
 
-  // 9.2 Organization-level resource (branchId is null)
-  if (resourceScope.branchId === null) {
+  // 9.2 Organization-level resource (branchId is null or undefined)
+  if (!resourceScope.branchId) {
     if (context.roleScopePreset?.maxScope === 'ORGANIZATION') {
       return createDecision({
         allowed: true,
@@ -773,4 +773,17 @@ export async function requirePermission(
     decision,
     resourceScope: decision.resourceScope || null,
   };
+}
+
+/**
+ * Ergonomic alias for requirePermission in production business actions.
+ */
+export async function requireBusinessPermission(
+  options: RequirePermissionOptions
+): Promise<{
+  context: AuthorizationContext;
+  decision: AuthorizationDecision;
+  resourceScope: ResourceScope | null;
+}> {
+  return requirePermission(options);
 }

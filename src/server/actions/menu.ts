@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { generateSlug, appendSlugSuffix } from '@/lib/tenant/slug';
 import {
   createMenuCategorySchema,
@@ -17,22 +17,21 @@ import {
 import { parseDecimalToMinorUnits } from '@/lib/utils/money';
 import { ActionResponse } from './auth';
 
-import { PermissionService } from '@/server/services/permission.service';
-
 /**
  * Creates a new menu category for the active business & default branch.
  */
 export async function createMenuCategoryAction(
   formData: CreateMenuCategoryInput
 ): Promise<ActionResponse<{ categoryId: string; slug: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or active business branch not found.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManage =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.categories.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: branchResource }));
 
   if (!canManage) {
     return { success: false, message: 'Forbidden. Missing required permission to create category.' };
@@ -59,7 +58,7 @@ export async function createMenuCategoryAction(
     const { data: existing } = await supabase
       .from('menu_categories')
       .select('id')
-      .eq('branch_id', context.activeBranch.id)
+      .eq('branch_id', authContext.activeBranchId)
       .eq('slug', slug)
       .is('deleted_at', null)
       .single();
@@ -75,8 +74,8 @@ export async function createMenuCategoryAction(
   const { data: category, error } = await supabase
     .from('menu_categories')
     .insert({
-      business_id: context.business.id,
-      branch_id: context.activeBranch.id,
+      business_id: authContext.businessId,
+      branch_id: authContext.activeBranchId,
       name,
       slug,
       description: description || null,
@@ -93,11 +92,11 @@ export async function createMenuCategoryAction(
 
   // Record Audit Log
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'menu.category_created',
     target_type: 'menu_category',
     target_id: category.id,
-    payload: { name, slug, branch_id: context.activeBranch.id },
+    payload: { name, slug, branch_id: authContext.activeBranchId },
   });
 
   revalidatePath('/dashboard/menu');
@@ -114,14 +113,15 @@ export async function createMenuCategoryAction(
 export async function updateMenuCategoryAction(
   formData: UpdateMenuCategoryInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManage =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.categories.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: branchResource }));
 
   if (!canManage) return { success: false, message: 'Forbidden. Missing required category permission.' };
 
@@ -147,8 +147,8 @@ export async function updateMenuCategoryAction(
     .from('menu_categories')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) {
     return { success: false, message: error.message };
@@ -164,12 +164,13 @@ export async function updateMenuCategoryAction(
 export async function archiveMenuCategoryAction(
   categoryId: string
 ): Promise<ActionResponse<{ itemCount?: number }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManage =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.categories.manage')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.categories.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: branchResource }));
 
   if (!canManage) return { success: false, message: 'Forbidden. Missing required category permission.' };
 
@@ -180,8 +181,8 @@ export async function archiveMenuCategoryAction(
     .from('menu_items')
     .select('id', { count: 'exact', head: true })
     .eq('category_id', categoryId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id)
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
     .is('deleted_at', null);
 
   if (countError) {
@@ -200,13 +201,13 @@ export async function archiveMenuCategoryAction(
     .from('menu_categories')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', categoryId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'menu.category_archived',
     target_type: 'menu_category',
     target_id: categoryId,
@@ -225,14 +226,15 @@ export async function archiveMenuCategoryAction(
 export async function createMenuItemAction(
   formData: CreateMenuItemInput
 ): Promise<ActionResponse<{ itemId: string; slug: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canCreate =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.create')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.items.create', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: branchResource }));
 
   if (!canCreate) {
     return { success: false, message: 'Forbidden. Missing required permission menu.items.create.' };
@@ -267,8 +269,8 @@ export async function createMenuItemAction(
     .from('menu_categories')
     .select('id, deleted_at')
     .eq('id', categoryId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id)
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
     .single();
 
   if (!category || category.deleted_at !== null) {
@@ -284,7 +286,7 @@ export async function createMenuItemAction(
     const { data: existing } = await supabase
       .from('menu_items')
       .select('id')
-      .eq('branch_id', context.activeBranch.id)
+      .eq('branch_id', authContext.activeBranchId)
       .eq('slug', slug)
       .is('deleted_at', null)
       .single();
@@ -302,14 +304,14 @@ export async function createMenuItemAction(
   const { data: item, error } = await supabase
     .from('menu_items')
     .insert({
-      business_id: context.business.id,
-      branch_id: context.activeBranch.id,
+      business_id: authContext.businessId,
+      branch_id: authContext.activeBranchId,
       category_id: categoryId,
       name,
       slug,
       description: description || null,
       price_cents: priceCents,
-      currency: currency || context.business.defaultCurrency,
+      currency: currency || 'USD',
       preparation_time_minutes: preparationTimeMinutes || null,
       availability_status: availabilityStatus,
       is_featured: isFeatured,
@@ -325,7 +327,7 @@ export async function createMenuItemAction(
 
   // Audit log
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'menu.item_created',
     target_type: 'menu_item',
     target_id: item.id,
@@ -346,13 +348,14 @@ export async function createMenuItemAction(
 export async function updateMenuItemAction(
   formData: UpdateMenuItemInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
 
   const parsed = updateMenuItemSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
 
   const { id, price, ...rest } = parsed.data;
+  const itemResource = { type: 'menu_item' as const, id };
 
   const isPriceChanging = price !== undefined;
   const isAvailabilityChanging = rest.availabilityStatus !== undefined;
@@ -364,44 +367,40 @@ export async function updateMenuItemAction(
     rest.displayOrder !== undefined ||
     rest.primaryImageUrl !== undefined;
 
-  const hasMenuManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'menu.manage'
-  );
+  const hasMenuManage = await can({
+    context: authContext,
+    permission: 'menu.manage',
+    resource: itemResource,
+  });
 
   if (isPriceChanging && !hasMenuManage) {
-    const canPrice = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'menu.price.update'
-    );
+    const canPrice = await can({
+      context: authContext,
+      permission: 'menu.price.update',
+      resource: itemResource,
+    });
     if (!canPrice) {
       return { success: false, message: 'Forbidden. Missing required permission menu.price.update.' };
     }
   }
 
   if (isAvailabilityChanging && !hasMenuManage) {
-    const canAvail = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'menu.availability.update'
-    );
+    const canAvail = await can({
+      context: authContext,
+      permission: 'menu.availability.update',
+      resource: itemResource,
+    });
     if (!canAvail) {
       return { success: false, message: 'Forbidden. Missing required permission menu.availability.update.' };
     }
   }
 
   if (isGeneralChanging && !hasMenuManage) {
-    const canEdit = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'menu.items.edit'
-    );
+    const canEdit = await can({
+      context: authContext,
+      permission: 'menu.items.edit',
+      resource: itemResource,
+    });
     if (!canEdit) {
       return { success: false, message: 'Forbidden. Missing required permission menu.items.edit.' };
     }
@@ -426,8 +425,8 @@ export async function updateMenuItemAction(
     .from('menu_items')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
@@ -445,12 +444,13 @@ export async function updateMenuItemAvailabilityAction(
   itemId: string,
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden'
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
 
+  const itemResource = { type: 'menu_item' as const, id: itemId };
   const canUpdate =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.availability.update')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.availability.update', resource: itemResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: itemResource }));
 
   if (!canUpdate) {
     return { success: false, message: 'Forbidden. Missing permission menu.availability.update.' };
@@ -461,8 +461,8 @@ export async function updateMenuItemAvailabilityAction(
     .from('menu_items')
     .update({ availability_status: availabilityStatus, updated_at: new Date().toISOString() })
     .eq('id', itemId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
@@ -480,12 +480,13 @@ export async function toggleMenuItemFeaturedAction(
   itemId: string,
   isFeatured: boolean
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
 
+  const itemResource = { type: 'menu_item' as const, id: itemId };
   const canUpdate =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.edit')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.items.edit', resource: itemResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: itemResource }));
 
   if (!canUpdate) return { success: false, message: 'Forbidden.' };
 
@@ -494,8 +495,8 @@ export async function toggleMenuItemFeaturedAction(
     .from('menu_items')
     .update({ is_featured: isFeatured, updated_at: new Date().toISOString() })
     .eq('id', itemId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
@@ -510,12 +511,13 @@ export async function toggleMenuItemFeaturedAction(
  * Archives (soft deletes) a menu item.
  */
 export async function archiveMenuItemAction(itemId: string): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
 
+  const itemResource = { type: 'menu_item' as const, id: itemId };
   const canDelete =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.items.delete')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'menu.manage'));
+    (await can({ context: authContext, permission: 'menu.items.delete', resource: itemResource })) ||
+    (await can({ context: authContext, permission: 'menu.manage', resource: itemResource }));
 
   if (!canDelete) return { success: false, message: 'Forbidden. Missing permission menu.items.delete.' };
 
@@ -524,8 +526,8 @@ export async function archiveMenuItemAction(itemId: string): Promise<ActionRespo
     .from('menu_items')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', itemId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 

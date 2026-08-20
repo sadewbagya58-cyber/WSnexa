@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { generateTablePin, hashTablePin } from '@/lib/qr/security';
 import { createSignedTableAccessProof } from '@/lib/qr/table-access-proof';
 import {
@@ -19,7 +19,6 @@ import {
 } from '@/lib/validation/table';
 import { ActionResponse } from './auth';
 
-import { PermissionService } from '@/server/services/permission.service';
 
 /**
  * Creates a new service area for the active business & default branch.
@@ -27,17 +26,17 @@ import { PermissionService } from '@/server/services/permission.service';
 export async function createServiceAreaAction(
   formData: CreateServiceAreaInput
 ): Promise<ActionResponse<{ areaId: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'tables.manage'
-  );
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canManage = await can({
+    context: authContext,
+    permission: 'tables.manage',
+    resource: branchResource,
+  });
   if (!canManage) {
     return { success: false, message: 'Forbidden. Missing required tables.manage permission.' };
   }
@@ -57,8 +56,8 @@ export async function createServiceAreaAction(
   const { data: area, error } = await supabase
     .from('service_areas')
     .insert({
-      business_id: context.business.id,
-      branch_id: context.activeBranch.id,
+      business_id: authContext.businessId,
+      branch_id: authContext.activeBranchId,
       name,
       code,
       description: description || null,
@@ -74,11 +73,11 @@ export async function createServiceAreaAction(
 
   // Audit Log
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.area_created',
     target_type: 'service_area',
     target_id: area.id,
-    payload: { name, code, branch_id: context.activeBranch.id },
+    payload: { name, code, branch_id: authContext.activeBranchId },
   });
 
   revalidatePath('/dashboard/tables');
@@ -96,8 +95,16 @@ export async function createServiceAreaAction(
 export async function updateServiceAreaAction(
   formData: UpdateServiceAreaInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canManage = await can({
+    context: authContext,
+    permission: 'tables.manage',
+    resource: branchResource,
+  });
+  if (!canManage) return { success: false, message: 'Forbidden. Missing tables.manage permission.' };
 
   const parsed = updateServiceAreaSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -119,13 +126,13 @@ export async function updateServiceAreaAction(
     .from('service_areas')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.area_updated',
     target_type: 'service_area',
     target_id: id,
@@ -140,21 +147,29 @@ export async function updateServiceAreaAction(
  * Archives (soft deletes) a service area. Safely blocked by trigger if active tables exist.
  */
 export async function archiveServiceAreaAction(areaId: string): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canManage = await can({
+    context: authContext,
+    permission: 'tables.manage',
+    resource: branchResource,
+  });
+  if (!canManage) return { success: false, message: 'Forbidden. Missing tables.manage permission.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('service_areas')
     .update({ deleted_at: new Date().toISOString(), is_active: false })
     .eq('id', areaId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.area_archived',
     target_type: 'service_area',
     target_id: areaId,
@@ -171,14 +186,15 @@ export async function archiveServiceAreaAction(areaId: string): Promise<ActionRe
 export async function createDiningTableAction(
   formData: CreateDiningTableInput
 ): Promise<ActionResponse<{ tableId: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canCreate =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.create')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+    (await can({ context: authContext, permission: 'tables.create', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
 
   if (!canCreate) {
     return { success: false, message: 'Forbidden. Missing permission to create tables.' };
@@ -203,8 +219,8 @@ export async function createDiningTableAction(
     .from('service_areas')
     .select('id, deleted_at')
     .eq('id', serviceAreaId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id)
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
     .single();
 
   if (!area || area.deleted_at !== null) {
@@ -214,8 +230,8 @@ export async function createDiningTableAction(
   const { data: table, error } = await supabase
     .from('dining_tables')
     .insert({
-      business_id: context.business.id,
-      branch_id: context.activeBranch.id,
+      business_id: authContext.businessId,
+      branch_id: authContext.activeBranchId,
       service_area_id: serviceAreaId,
       name,
       code,
@@ -235,7 +251,7 @@ export async function createDiningTableAction(
 
   // Audit Log
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.created',
     target_type: 'dining_table',
     target_id: table.id,
@@ -256,8 +272,14 @@ export async function createDiningTableAction(
 export async function updateDiningTableAction(
   formData: UpdateDiningTableInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canEdit =
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
+  if (!canEdit) return { success: false, message: 'Forbidden. Missing tables.edit permission.' };
 
   const parsed = updateDiningTableSchema.safeParse(formData);
   if (!parsed.success) return { success: false, message: 'Validation failed.' };
@@ -283,13 +305,13 @@ export async function updateDiningTableAction(
     .from('dining_tables')
     .update(updateData)
     .eq('id', id)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.updated',
     target_type: 'dining_table',
     target_id: id,
@@ -306,21 +328,27 @@ export async function updateDiningTableStatusAction(
   tableId: string,
   status: 'available' | 'occupied' | 'reserved' | 'cleaning' | 'unavailable'
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canEdit =
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
+  if (!canEdit) return { success: false, message: 'Forbidden. Missing tables.edit permission.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('dining_tables')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', tableId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.status_changed',
     target_type: 'dining_table',
     target_id: tableId,
@@ -335,21 +363,27 @@ export async function updateDiningTableStatusAction(
  * Archives (soft deletes) a dining table.
  */
 export async function archiveDiningTableAction(tableId: string): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) return { success: false, message: 'Unauthorized.' };
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) return { success: false, message: 'Unauthorized.' };
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canDelete =
+    (await can({ context: authContext, permission: 'tables.delete', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
+  if (!canDelete) return { success: false, message: 'Forbidden. Missing tables.delete permission.' };
 
   const supabase = await createClient();
   const { error } = await supabase
     .from('dining_tables')
     .update({ deleted_at: new Date().toISOString(), is_active: false, status: 'unavailable' })
     .eq('id', tableId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) return { success: false, message: error.message };
 
   await supabase.from('audit_logs').insert({
-    business_id: context.business.id,
+    business_id: authContext.businessId,
     action: 'table.archived',
     target_type: 'dining_table',
     target_id: tableId,
@@ -365,14 +399,15 @@ export async function archiveDiningTableAction(tableId: string): Promise<ActionR
 export async function bulkCreateDiningTablesAction(
   formData: BulkCreateDiningTablesInput
 ): Promise<ActionResponse<{ count: number }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canCreate =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.create')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+    (await can({ context: authContext, permission: 'tables.create', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
 
   if (!canCreate) {
     return { success: false, message: 'Forbidden. Missing permission to create tables.' };
@@ -410,8 +445,8 @@ export async function bulkCreateDiningTablesAction(
   let query = supabase
     .from('dining_tables')
     .select('table_number, code')
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id)
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
     .is('deleted_at', null);
 
   if (serviceAreaId) {
@@ -450,8 +485,8 @@ export async function bulkCreateDiningTablesAction(
 
   // 3. Execute atomic bulk table creation via RPC
   const { data: rpcRes, error } = await supabase.rpc('bulk_create_dining_tables', {
-    p_business_id: context.business.id,
-    p_branch_id: context.activeBranch.id,
+    p_business_id: authContext.businessId,
+    p_branch_id: authContext.activeBranchId,
     p_service_area_id: serviceAreaId,
     p_prefix: prefix,
     p_start_number: startNumber,
@@ -489,21 +524,22 @@ export async function bulkCreateDiningTablesAction(
  * Returns the plain PIN ONCE in memory for immediate display/copy/print sticker.
  */
 export async function generateTablePinAction(tableId: string): Promise<ActionResponse<{ plainPin: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManagePins =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+    (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
 
   if (!canManagePins) {
     return { success: false, message: 'Forbidden: Missing permission to generate table PIN.' };
   }
 
-  const pinLength = context.activeBranch.table_pin_length || 4;
+  const pinLength = 4;
   const plainPin = generateTablePin(pinLength);
   const pinHash = hashTablePin(plainPin);
 
@@ -517,8 +553,8 @@ export async function generateTablePinAction(tableId: string): Promise<ActionRes
       updated_at: new Date().toISOString(),
     })
     .eq('id', tableId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) {
     return { success: false, message: error.message };
@@ -539,21 +575,22 @@ export async function updateTablePinAction(
   tableId: string,
   customPin: string
 ): Promise<ActionResponse<{ plainPin: string }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManagePins =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+    (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
 
   if (!canManagePins) {
     return { success: false, message: 'Forbidden: Missing permission to update table PIN.' };
   }
 
-  const pinLength = context.activeBranch.table_pin_length || 4;
+  const pinLength = 4;
   const trimmed = customPin.trim();
 
   if (!/^\d+$/.test(trimmed) || trimmed.length !== pinLength) {
@@ -571,8 +608,8 @@ export async function updateTablePinAction(
       updated_at: new Date().toISOString(),
     })
     .eq('id', tableId)
-    .eq('business_id', context.business.id)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) {
     return { success: false, message: error.message };
@@ -590,28 +627,29 @@ export async function updateTablePinAction(
  * Bulk generates PINs for missing or all tables in the branch.
  */
 export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = true): Promise<ActionResponse<{ count: number }>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManagePins =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'qr.security.reset')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.edit')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'tables.manage'));
+    (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
 
   if (!canManagePins) {
     return { success: false, message: 'Forbidden: Missing permission to bulk generate table PINs.' };
   }
 
   const supabase = await createClient();
-  const branchId = context.activeBranch.id;
-  const pinLength = context.activeBranch.table_pin_length || 4;
+  const branchId = authContext.activeBranchId;
+  const pinLength = 4;
 
   let query = supabase
     .from('dining_tables')
     .select('id, table_pin_hash')
-    .eq('business_id', context.business.id)
+    .eq('business_id', authContext.businessId)
     .eq('branch_id', branchId)
     .eq('is_active', true)
     .is('deleted_at', null);

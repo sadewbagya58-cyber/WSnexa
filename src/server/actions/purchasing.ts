@@ -2,8 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { PurchasingService } from '@/server/services/purchasing.service';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import {
   createSupplierSchema,
   updateSupplierSchema,
@@ -22,17 +21,17 @@ import {
 } from '@/lib/validation/purchasing';
 
 export async function createSupplierAction(input: CreateSupplierInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'suppliers.manage'
-  );
+  const branchResource = authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined;
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'suppliers.manage',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Supplier management permission required.' };
   }
@@ -51,17 +50,17 @@ export async function createSupplierAction(input: CreateSupplierInput) {
 }
 
 export async function updateSupplierAction(input: UpdateSupplierInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'suppliers.manage'
-  );
+  const supplierResource = { type: 'supplier' as const, id: input.id };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'suppliers.manage',
+    resource: supplierResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Supplier management permission required.' };
   }
@@ -81,17 +80,17 @@ export async function updateSupplierAction(input: UpdateSupplierInput) {
 }
 
 export async function upsertSupplierItemAction(input: SupplierItemInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'suppliers.manage'
-  );
+  const supplierResource = { type: 'supplier' as const, id: input.supplierId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'suppliers.manage',
+    resource: supplierResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Supplier management permission required.' };
   }
@@ -118,17 +117,17 @@ export async function removeSupplierItemAction(supplierId: string, itemId: strin
     return { success: false, message: 'Invalid supplier or item identifier.' };
   }
 
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'suppliers.manage'
-  );
+  const supplierResource = { type: 'supplier' as const, id: supplierId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'suppliers.manage',
+    resource: supplierResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Supplier management permission required.' };
   }
@@ -150,20 +149,20 @@ export async function getSupplierItemPriceHistoryAction(supplierId: string, item
     return { success: false, history: [] };
   }
 
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.business || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, history: [] };
   }
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  const supplierResource = { type: 'supplier' as const, id: supplierId };
+  const hasCostPermission = await can({
+    context: authContext,
+    permission: 'inventory.costs.view',
+    resource: supplierResource,
+  });
 
   const history = await PurchasingService.getSupplierItemPriceHistory(
-    context.business.id,
+    authContext.businessId,
     supplierId,
     itemId,
     { hasCostPermission }
@@ -173,17 +172,22 @@ export async function getSupplierItemPriceHistoryAction(supplierId: string, item
 }
 
 export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.create'
-  );
+  const branchResource = input.branchId
+    ? { type: 'branch' as const, id: input.branchId }
+    : authContext.activeBranchId
+      ? { type: 'branch' as const, id: authContext.activeBranchId }
+      : undefined;
+
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'purchasing.create',
+    resource: branchResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Purchasing creation permission required.' };
   }
@@ -202,17 +206,17 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
 }
 
 export async function approvePurchaseOrderAction(poId: string) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.approve'
-  );
+  const poResource = { type: 'purchase_order' as const, id: poId };
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'purchasing.approve',
+    resource: poResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Purchasing approval permission required.' };
   }
@@ -227,23 +231,22 @@ export async function approvePurchaseOrderAction(poId: string) {
 }
 
 export async function cancelPurchaseOrderAction(input: CancelPurchaseOrderInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasApprovePerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.approve'
-  );
-  const hasCreatePerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.create'
-  );
+  const poResource = { type: 'purchase_order' as const, id: input.poId };
+  const hasApprovePerm = await can({
+    context: authContext,
+    permission: 'purchasing.approve',
+    resource: poResource,
+  });
+  const hasCreatePerm = await can({
+    context: authContext,
+    permission: 'purchasing.create',
+    resource: poResource,
+  });
 
   if (!hasApprovePerm && !hasCreatePerm) {
     return { success: false, message: 'Forbidden. Purchasing cancellation permission required.' };
@@ -264,17 +267,22 @@ export async function cancelPurchaseOrderAction(input: CancelPurchaseOrderInput)
 }
 
 export async function recordGoodsReceiptAction(input: RecordGoodsReceiptInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.receive'
-  );
+  const targetResource = input.poId
+    ? { type: 'purchase_order' as const, id: input.poId }
+    : input.branchId
+      ? { type: 'branch' as const, id: input.branchId }
+      : undefined;
+
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'purchasing.receive',
+    resource: targetResource,
+  });
   if (!hasPerm) {
     return { success: false, message: 'Forbidden. Goods receipt permission required.' };
   }
@@ -295,29 +303,32 @@ export async function recordGoodsReceiptAction(input: RecordGoodsReceiptInput) {
 }
 
 export async function recordSupplierReturnAction(input: SupplierReturnInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized or active context not found.' };
   }
 
-  const hasSuppliersManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'suppliers.manage'
-  );
-  const hasWasteRecord = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.waste.record'
-  );
-  const hasReceiving = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'purchasing.receive'
-  );
+  const targetResource = input.supplierId
+    ? { type: 'supplier' as const, id: input.supplierId }
+    : input.branchId
+      ? { type: 'branch' as const, id: input.branchId }
+      : undefined;
+
+  const hasSuppliersManage = await can({
+    context: authContext,
+    permission: 'suppliers.manage',
+    resource: targetResource,
+  });
+  const hasWasteRecord = await can({
+    context: authContext,
+    permission: 'inventory.waste.record',
+    resource: targetResource,
+  });
+  const hasReceiving = await can({
+    context: authContext,
+    permission: 'purchasing.receive',
+    resource: targetResource,
+  });
 
   if (!hasSuppliersManage && !hasWasteRecord && !hasReceiving) {
     return { success: false, message: 'Forbidden. Supplier return permission required.' };

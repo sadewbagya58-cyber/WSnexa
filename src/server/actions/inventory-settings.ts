@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { updateInventorySettingsSchema, UpdateInventorySettingsInput } from '@/lib/validation/purchasing';
 
 export async function updateInventorySettingsAction(input: UpdateInventorySettingsInput) {
@@ -11,18 +10,27 @@ export async function updateInventorySettingsAction(input: UpdateInventorySettin
     return { success: false, message: parsed.error.issues[0]?.message || 'Invalid settings data.' };
   }
 
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.business) {
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const { PermissionService } = await import('@/server/services/permission.service');
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    input.branchId || context.activeBranch?.id || null,
-    'inventory.settings.manage'
-  );
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const targetBranchId = input.branchId || authContext.activeBranchId || null;
+  const targetResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
+
+  const canManage = await can({
+    context: authContext,
+    permission: 'inventory.settings.manage',
+    resource: targetResource,
+  });
+
   if (!canManage) {
     return { success: false, message: 'Forbidden: Missing inventory.settings.manage permission.' };
   }
@@ -31,7 +39,7 @@ export async function updateInventorySettingsAction(input: UpdateInventorySettin
   const { error } = await admin
     .from('inventory_settings')
     .upsert({
-      business_id: context.business.id,
+      business_id: authContext.businessId,
       branch_id: input.branchId || null,
       deduction_timing: input.deductionTiming,
       costing_method: input.costingMethod,

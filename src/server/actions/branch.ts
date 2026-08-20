@@ -1,26 +1,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { resolveActiveBusinessContext } from '../tenant/resolver';
-import { PermissionService } from '../services/permission.service';
+import { can, resolveAuthorizationContext } from '../auth';
 import { BranchService, CreateBranchInput, UpdateBranchInput } from '../services/branch.service';
 
 export async function createBranchAction(input: CreateBranchInput) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant) return { success: false, message: 'Unauthorized session' };
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) return { success: false, message: 'Unauthorized session' };
 
-    const canCreate = await PermissionService.hasPermission(
-      tenant.user.id,
-      tenant.business.id,
-      null,
-      'branches.manage'
-    );
+    const canCreate = await can({
+      context: authContext,
+      permission: 'branches.manage',
+    });
     if (!canCreate) {
       return { success: false, message: 'Forbidden: Missing permission to create branches.' };
     }
 
-    const newBranch = await BranchService.createBranch(tenant.business.id, tenant.user.id, input);
+    const newBranch = await BranchService.createBranch(authContext.businessId, authContext.userId, input);
 
     revalidatePath('/dashboard/branches');
     return { success: true, data: newBranch };
@@ -31,17 +28,13 @@ export async function createBranchAction(input: CreateBranchInput) {
 
 export async function updateBranchAction(branchId: string, input: UpdateBranchInput) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant) return { success: false, message: 'Unauthorized session' };
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) return { success: false, message: 'Unauthorized session' };
 
-    const branch = tenant.branches.find((b) => b.id === branchId);
-    if (!branch && tenant.membership.role !== 'business_owner') {
-      return { success: false, message: 'Branch not found or access denied.' };
-    }
-
+    const branchResource = { type: 'branch' as const, id: branchId };
     const canUpdate =
-      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, branchId, 'branches.operational.manage')) ||
-      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, branchId, 'branches.manage'));
+      (await can({ context: authContext, permission: 'branches.operational.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'branches.manage', resource: branchResource }));
 
     if (!canUpdate) {
       return { success: false, message: 'Forbidden: Missing permission to update this branch.' };
@@ -58,15 +51,15 @@ export async function updateBranchAction(branchId: string, input: UpdateBranchIn
 
 export async function archiveBranchAction(branchId: string) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant) return { success: false, message: 'Unauthorized session' };
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) return { success: false, message: 'Unauthorized session' };
 
-    const canArchive = await PermissionService.hasPermission(
-      tenant.user.id,
-      tenant.business.id,
-      null,
-      'branches.manage'
-    );
+    const branchResource = { type: 'branch' as const, id: branchId };
+    const canArchive = await can({
+      context: authContext,
+      permission: 'branches.manage',
+      resource: branchResource,
+    });
     if (!canArchive) {
       return { success: false, message: 'Forbidden: Missing permission to archive branches.' };
     }
@@ -82,15 +75,15 @@ export async function archiveBranchAction(branchId: string) {
 
 export async function restoreBranchAction(branchId: string) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant) return { success: false, message: 'Unauthorized session' };
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) return { success: false, message: 'Unauthorized session' };
 
-    const canRestore = await PermissionService.hasPermission(
-      tenant.user.id,
-      tenant.business.id,
-      null,
-      'branches.manage'
-    );
+    const branchResource = { type: 'branch' as const, id: branchId };
+    const canRestore = await can({
+      context: authContext,
+      permission: 'branches.manage',
+      resource: branchResource,
+    });
     if (!canRestore) {
       return { success: false, message: 'Forbidden: Missing permission to restore branches.' };
     }
@@ -106,15 +99,15 @@ export async function restoreBranchAction(branchId: string) {
 
 export async function deleteBranchAction(branchId: string) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant) return { success: false, message: 'Unauthorized session' };
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) return { success: false, message: 'Unauthorized session' };
 
-    const canDelete = await PermissionService.hasPermission(
-      tenant.user.id,
-      tenant.business.id,
-      null,
-      'branches.manage'
-    );
+    const branchResource = { type: 'branch' as const, id: branchId };
+    const canDelete = await can({
+      context: authContext,
+      permission: 'branches.manage',
+      resource: branchResource,
+    });
     if (!canDelete) {
       return { success: false, message: 'Forbidden: Missing permission to delete branches.' };
     }

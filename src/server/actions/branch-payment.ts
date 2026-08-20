@@ -2,12 +2,26 @@
 
 import { revalidatePath } from 'next/cache';
 import { BranchPaymentService } from '@/server/services/branch-payment.service';
-import { PermissionService } from '@/server/services/permission.service';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { ConfiguredPaymentMethodType } from '@/types/database.types';
 
 export async function getBranchPaymentMethodsAction(branchId: string) {
   try {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized session.' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: branchId };
+    const canView =
+      (await can({ context: authContext, permission: 'branches.operational.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'branches.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'cashier.access', resource: branchResource }));
+
+    if (!canView) {
+      return { success: false, message: 'Forbidden: Missing permission to view payment methods.' };
+    }
+
     const methods = await BranchPaymentService.getBranchPaymentMethods(branchId);
     return { success: true, methods };
   } catch (err: unknown) {
@@ -27,19 +41,15 @@ export async function updateBranchPaymentMethodAction(
   }
 ) {
   try {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.user || !context.business) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
       return { success: false, message: 'Unauthorized session.' };
     }
 
-    const branch = context.branches.find((b) => b.id === branchId);
-    if (!branch && context.membership.role !== 'business_owner') {
-      return { success: false, message: 'Branch not found or access denied.' };
-    }
-
+    const branchResource = { type: 'branch' as const, id: branchId };
     const canManage =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, branchId, 'branches.operational.manage')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, branchId, 'branches.manage'));
+      (await can({ context: authContext, permission: 'branches.operational.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'branches.manage', resource: branchResource }));
 
     if (!canManage) {
       return { success: false, message: 'Forbidden: Missing permission to configure branch payment methods.' };

@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { PaymentService } from '@/server/services/payment.service';
 
 export async function GET(req: NextRequest) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { PermissionService } = await import('@/server/services/permission.service');
+  if (!authContext || !authContext.activeBranchId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canAccess =
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'cashier.access')) ||
-    (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch.id, 'orders.view'));
+    (await can({ context: authContext, permission: 'cashier.access', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'orders.view', resource: branchResource }));
 
   if (!canAccess) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const requestedBranchId = req.nextUrl.searchParams.get('branchId');
-  if (requestedBranchId && requestedBranchId !== context.activeBranch.id) {
+  if (requestedBranchId && requestedBranchId !== authContext.activeBranchId) {
     return NextResponse.json({ error: 'Branch mismatch' }, { status: 403 });
   }
 

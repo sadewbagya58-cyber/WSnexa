@@ -196,10 +196,16 @@ The remaining Phase 30 work is structured into 11 discrete, test-driven steps:
     8. Custom role / built-in role scope grants.
   - Maintain full backward compatibility with `PermissionService.hasPermission`.
 
-### Step 5: Role Templates & Custom Role Scope Integration
-- **Files**: `src/server/services/permission.service.ts`, `src/lib/validation/permission.ts`
-- **Actions**:
-  - Update `createCustomRole` and `updateCustomRole` to write to both `role_permissions` and `permission_scope_grants`.
+### Step 5: Production Authorization Integration (COMPLETED)
+- **Files**: All 7 priority operational domains migrated to `can()` / `authorize()` / `requireBusinessPermission()`:
+  - Orders & Kitchen (`order.service.ts`, `waiter-approval.ts`)
+  - Payments & Cashier (`payment.service.ts`, `payment.ts`, `branch-payment.ts`, `/api/cashier/orders`)
+  - Inventory Core & Intelligence (`inventory.ts`, `inventory-settings.ts`, `inventory-intelligence.service.ts`)
+  - Purchasing & Suppliers (`purchasing.ts`)
+  - Staff & Organization (`staff-invitation.service.ts`, `organization.ts`, `permission.ts`)
+  - Menu, Modifiers, Tables & Recipes (`menu.ts`, `modifier.ts`, `table.ts`, `recipe.ts`)
+  - Business, Branch & Security (`order-security.ts`, `branch.ts`)
+- **Verification**: `scripts/verify-rbac-v2-integration.ts` (40/40 assertions passed)
 
 ### Step 6: Multi-Level Scope Grants Service
 - **Files**: `src/server/services/scope-grant.service.ts`

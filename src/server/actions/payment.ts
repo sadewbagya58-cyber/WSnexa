@@ -5,7 +5,6 @@ import { PaymentService, ReceiptData } from '@/server/services/payment.service';
 import { RecordPaymentInput, VoidPaymentInput } from '@/lib/validation/payment';
 import { ActionResponse } from './auth';
 import { createAdminClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 
 /**
  * Records payment settlement for an active branch order.
@@ -53,9 +52,25 @@ export async function getOrderReceiptAction(
 export async function acknowledgeBillRequestAction(
   requestId: string
 ): Promise<ActionResponse<undefined>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.activeBranch) {
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
     return { success: false, message: 'Unauthorized.' };
+  }
+
+  if (!authContext || !authContext.activeBranchId) {
+    return { success: false, message: 'Unauthorized or active branch context not found.' };
+  }
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canAcknowledge =
+    (await can({ context: authContext, permission: 'waiter.requests.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'cashier.access', resource: branchResource }));
+
+  if (!canAcknowledge) {
+    return { success: false, message: 'Forbidden: Missing permission to acknowledge bill requests.' };
   }
 
   const admin = createAdminClient();
@@ -64,10 +79,10 @@ export async function acknowledgeBillRequestAction(
     .update({
       status: 'completed',
       resolved_at: new Date().toISOString(),
-      resolved_by: context.user.id,
+      resolved_by: authContext.userId,
     })
     .eq('id', requestId)
-    .eq('branch_id', context.activeBranch.id);
+    .eq('branch_id', authContext.activeBranchId);
 
   if (error) {
     return { success: false, message: error.message };

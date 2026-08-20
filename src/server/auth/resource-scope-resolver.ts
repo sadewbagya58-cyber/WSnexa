@@ -281,7 +281,7 @@ export async function resolveResourceScope(
 
     case 'recipe': {
       const { data, error } = await admin
-        .from('recipes')
+        .from('inventory_recipes')
         .select('id, business_id, branch_id, created_by')
         .eq('id', resourceId)
         .maybeSingle();
@@ -347,6 +347,130 @@ export async function resolveResourceScope(
         organizationUnitId: null,
         serviceAreaId: null,
         ownerUserId: null,
+      };
+      break;
+    }
+
+    case 'branch': {
+      const { data, error } = await admin
+        .from('branches')
+        .select('id, business_id')
+        .eq('id', resourceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Branch not found: ${resourceId}`);
+      }
+
+      scope = {
+        resourceType: 'branch',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: data.id,
+        departmentId: null,
+        organizationUnitId: null,
+        serviceAreaId: null,
+        ownerUserId: null,
+      };
+      break;
+    }
+
+    case 'department': {
+      const { data, error } = await admin
+        .from('organization_departments')
+        .select('id, business_id, branch_id')
+        .eq('id', resourceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Department not found: ${resourceId}`);
+      }
+
+      scope = {
+        resourceType: 'department',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: data.branch_id || null,
+        departmentId: data.id,
+        organizationUnitId: null,
+        serviceAreaId: null,
+        ownerUserId: null,
+      };
+      break;
+    }
+
+    case 'organization_unit': {
+      const { data, error } = await admin
+        .from('organization_units')
+        .select('id, business_id, branch_id, department_id')
+        .eq('id', resourceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Organization unit not found: ${resourceId}`);
+      }
+
+      scope = {
+        resourceType: 'organization_unit',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: data.branch_id || null,
+        departmentId: data.department_id || null,
+        organizationUnitId: data.id,
+        serviceAreaId: null,
+        ownerUserId: null,
+      };
+      break;
+    }
+
+    case 'supplier': {
+      const { data, error } = await admin
+        .from('inventory_suppliers')
+        .select('id, business_id')
+        .eq('id', resourceId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Supplier not found: ${resourceId}`);
+      }
+
+      scope = {
+        resourceType: 'supplier',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: null,
+        departmentId: null,
+        organizationUnitId: null,
+        serviceAreaId: null,
+        ownerUserId: null,
+      };
+      break;
+    }
+
+    case 'payment': {
+      const { data, error } = await admin
+        .from('payments')
+        .select('id, business_id, branch_id, received_by')
+        .eq('id', resourceId)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Payment record not found: ${resourceId}`);
+      }
+
+      scope = {
+        resourceType: 'payment',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: data.branch_id || null,
+        departmentId: null,
+        organizationUnitId: null,
+        serviceAreaId: null,
+        ownerUserId: data.received_by || null,
       };
       break;
     }

@@ -1,6 +1,6 @@
 'use server';
 
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import {
   PermissionService,
   FormattedCustomRole,
@@ -31,9 +31,17 @@ export interface ActionResponse<T = unknown> {
 export async function createCustomRoleAction(
   formData: CreateCustomRoleInput
 ): Promise<ActionResponse<FormattedCustomRole>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized. Business context required.' };
+  }
+
+  const canManage = await can({
+    context: authContext,
+    permission: 'roles.manage',
+  });
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Role management permission required.' };
   }
 
   const parsed = createCustomRoleSchema.safeParse(formData);
@@ -46,8 +54,8 @@ export async function createCustomRoleAction(
   }
 
   const res = await PermissionService.createCustomRole(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     parsed.data
   );
 
@@ -65,9 +73,17 @@ export async function createCustomRoleAction(
 export async function updateCustomRoleAction(
   formData: UpdateCustomRoleInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
+  }
+
+  const canManage = await can({
+    context: authContext,
+    permission: 'roles.manage',
+  });
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Role management permission required.' };
   }
 
   const parsed = updateCustomRoleSchema.safeParse(formData);
@@ -80,8 +96,8 @@ export async function updateCustomRoleAction(
   }
 
   const res = await PermissionService.updateCustomRole(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     parsed.data
   );
 
@@ -89,25 +105,37 @@ export async function updateCustomRoleAction(
     return { success: false, message: res.message || 'Failed to update custom role.' };
   }
 
-  return { success: true, message: 'Custom role updated successfully.' };
+  return {
+    success: true,
+    message: 'Custom role updated successfully.',
+  };
 }
 
 export async function listCustomRolesAction(): Promise<ActionResponse<FormattedCustomRole[]>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const roles = await PermissionService.listCustomRoles(context.business.id);
+  const roles = await PermissionService.listCustomRoles(authContext.businessId);
   return { success: true, data: roles };
 }
 
 export async function setMemberOverrideAction(
   formData: MemberOverrideInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
+  }
+
+  const memberResource = { type: 'business_membership' as const, id: formData.membershipId };
+  const canManage =
+    (await can({ context: authContext, permission: 'roles.manage', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'staff.role.assign', resource: memberResource }));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Permission management permission required.' };
   }
 
   const parsed = memberOverrideSchema.safeParse(formData);
@@ -116,8 +144,8 @@ export async function setMemberOverrideAction(
   }
 
   const res = await PermissionService.setMemberOverride(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     parsed.data
   );
 
@@ -132,14 +160,23 @@ export async function removeMemberOverrideAction(
   membershipId: string,
   permissionKey: PermissionKey
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
+  const memberResource = { type: 'business_membership' as const, id: membershipId };
+  const canManage =
+    (await can({ context: authContext, permission: 'roles.manage', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'staff.role.assign', resource: memberResource }));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Permission management permission required.' };
+  }
+
   const res = await PermissionService.removeMemberOverride(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     membershipId,
     permissionKey
   );
@@ -154,9 +191,18 @@ export async function removeMemberOverrideAction(
 export async function updateMemberRoleAction(
   formData: UpdateMemberRoleInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
+  }
+
+  const memberResource = { type: 'business_membership' as const, id: formData.membershipId };
+  const canAssign =
+    (await can({ context: authContext, permission: 'staff.role.assign', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'roles.manage', resource: memberResource }));
+
+  if (!canAssign) {
+    return { success: false, message: 'Forbidden. Staff role assignment permission required.' };
   }
 
   const parsed = updateMemberRoleSchema.safeParse(formData);
@@ -165,8 +211,8 @@ export async function updateMemberRoleAction(
   }
 
   const res = await PermissionService.updateMemberRole(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     parsed.data
   );
 
@@ -180,9 +226,18 @@ export async function updateMemberRoleAction(
 export async function setMembershipStatusAction(
   formData: UpdateMemberStatusInput
 ): Promise<ActionResponse> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
+  }
+
+  const memberResource = { type: 'business_membership' as const, id: formData.membershipId };
+  const canManage =
+    (await can({ context: authContext, permission: 'staff.suspend', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'staff.manage', resource: memberResource }));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Staff management permission required.' };
   }
 
   const parsed = updateMemberStatusSchema.safeParse(formData);
@@ -191,8 +246,8 @@ export async function setMembershipStatusAction(
   }
 
   const res = await PermissionService.setMembershipStatus(
-    context.user.id,
-    context.business.id,
+    authContext.userId,
+    authContext.businessId,
     parsed.data
   );
 
@@ -204,12 +259,12 @@ export async function setMembershipStatusAction(
 }
 
 export async function listTeamMembersAction(): Promise<ActionResponse<FormattedMemberDetail[]>> {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const members = await PermissionService.listTeamMembers(context.business.id);
+  const members = await PermissionService.listTeamMembers(authContext.businessId);
   return { success: true, data: members };
 }
 

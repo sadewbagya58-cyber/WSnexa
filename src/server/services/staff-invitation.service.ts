@@ -42,20 +42,28 @@ export class StaffInvitationService {
     tokenPrefix?: string;
     invitation?: FormattedInvitation;
   }> {
-    const admin = createAdminClient();
-
-    // 1. Verify user is active Business Owner for businessId
-    const { data: ownerMem } = await admin
-      .from('business_memberships')
-      .select('id, role')
-      .eq('business_id', businessId)
-      .eq('user_id', userId)
-      .eq('membership_status', 'active')
-      .single();
-
-    if (!ownerMem || ownerMem.role !== 'business_owner') {
-      return { success: false, message: 'Only Business Owners can generate staff invitations.' };
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext({ overrideUserId: userId, requestedBusinessId: businessId });
+    } catch {
+      return { success: false, message: 'Unauthorized session.' };
     }
+
+    if (!authContext || authContext.businessId !== businessId) {
+      return { success: false, message: 'Unauthorized business context.' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: input.branchId };
+    const canInvite =
+      (await can({ context: authContext, permission: 'staff.invite', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'staff.manage', resource: branchResource }));
+
+    if (!canInvite) {
+      return { success: false, message: 'Forbidden. Staff invitation permission required.' };
+    }
+
+    const admin = createAdminClient();
 
     // 2. Verify branch belongs to the business
     const { data: branch } = await admin
@@ -87,7 +95,7 @@ export class StaffInvitationService {
           .is('deleted_at', null);
 
         if (existingAreas && existingAreas.length > 0) {
-          reqAreas = existingAreas.map((a) => a.id);
+          reqAreas = existingAreas.map((a: { id: string }) => a.id);
         } else {
           const { data: defaultArea } = await admin
             .from('service_areas')
@@ -183,7 +191,7 @@ export class StaffInvitationService {
         .from('service_areas')
         .select('name')
         .in('id', finalAreas);
-      assignedAreaNames = areaRows?.map((a) => a.name) || [];
+      assignedAreaNames = areaRows?.map((a: { name: string }) => a.name) || [];
     }
 
     // 7. Log audit event
@@ -538,11 +546,22 @@ export class StaffInvitationService {
     userId: string,
     businessId: string
   ): Promise<{ authorized: boolean; error?: string }> {
-    const { PermissionService } = await import('./permission.service');
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext({ overrideUserId: userId, requestedBusinessId: businessId });
+    } catch {
+      return { authorized: false, error: 'Unauthorized session.' };
+    }
+
+    if (!authContext || authContext.businessId !== businessId) {
+      return { authorized: false, error: 'Unauthorized business context.' };
+    }
+
     const canManage =
-      (await PermissionService.hasPermission(userId, businessId, null, 'staff.manage')) ||
-      (await PermissionService.hasPermission(userId, businessId, null, 'staff.invite')) ||
-      (await PermissionService.hasPermission(userId, businessId, null, 'invitations.manage'));
+      (await can({ context: authContext, permission: 'staff.manage' })) ||
+      (await can({ context: authContext, permission: 'staff.invite' })) ||
+      (await can({ context: authContext, permission: 'invitations.manage' }));
 
     if (!canManage) {
       return { authorized: false, error: 'Forbidden: Missing permission to manage staff.' };

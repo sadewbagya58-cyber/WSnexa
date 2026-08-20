@@ -2,8 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { RecipeService } from '@/server/services/recipe.service';
-import { PermissionService } from '@/server/services/permission.service';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import {
   createRecipeSchema,
   producePrepBatchSchema,
@@ -12,17 +11,17 @@ import {
 } from '@/lib/validation/recipe';
 
 export async function createRecipeAction(input: CreateRecipeInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized session.' };
   }
 
-  const canManage = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'recipes.manage'
-  );
+  const branchResource = authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined;
+  const canManage = await can({
+    context: authContext,
+    permission: 'recipes.manage',
+    resource: branchResource,
+  });
 
   if (!canManage) {
     return { success: false, message: 'Forbidden: Missing required recipes.manage permission.' };
@@ -42,17 +41,20 @@ export async function createRecipeAction(input: CreateRecipeInput) {
 }
 
 export async function producePrepBatchAction(input: ProducePrepBatchInput) {
-  const context = await resolveActiveBusinessContext();
-  if (!context || !context.user || !context.business) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized session.' };
   }
 
-  const canProduce = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'inventory.production.manage'
-  );
+  const branchResource = authContext.activeBranchId
+    ? { type: 'branch' as const, id: authContext.activeBranchId }
+    : undefined;
+
+  const canProduce = await can({
+    context: authContext,
+    permission: 'inventory.production.manage',
+    resource: branchResource,
+  });
 
   if (!canProduce) {
     return { success: false, message: 'Forbidden: Missing required inventory.production.manage permission.' };

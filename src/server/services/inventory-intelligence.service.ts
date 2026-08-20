@@ -1,5 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 
 export interface MenuEngineeringItem {
   itemId: string;
@@ -53,18 +52,24 @@ export class InventoryIntelligenceService {
     averageMarginPercentage: number;
     hasSufficientData: boolean;
   }> {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business || !context.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { items: [], averageUnitsSold: 0, averageMarginPercentage: 0, hasSufficientData: false };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canView = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'inventory.menu_profitability.view'
-    );
+    if (!authContext || !authContext.activeBranchId) {
+      return { items: [], averageUnitsSold: 0, averageMarginPercentage: 0, hasSufficientData: false };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const canView = await can({
+      context: authContext,
+      permission: 'inventory.menu_profitability.view',
+      resource: branchResource,
+    });
     if (!canView) {
       return { items: [], averageUnitsSold: 0, averageMarginPercentage: 0, hasSufficientData: false };
     }
@@ -89,14 +94,14 @@ export class InventoryIntelligenceService {
           )
         )
       `)
-      .eq('business_id', context.business.id)
+      .eq('business_id', authContext.businessId)
       .is('deleted_at', null);
 
     // 2. Fetch total sales per menu item for the branch
     const { data: salesRows } = await admin
       .from('order_items')
       .select('menu_item_id, quantity, line_subtotal_cents, orders!inner(branch_id)')
-      .eq('orders.branch_id', context.activeBranch.id);
+      .eq('orders.branch_id', authContext.activeBranchId);
 
     interface SalesRow {
       menu_item_id: string | null;
@@ -227,8 +232,11 @@ export class InventoryIntelligenceService {
    * Calculates COGS, Gross Profit, and Financial Ratios from Immutable Consumption Snapshots.
    */
   static async getCogsFinancialReport(dateRange?: { start?: string; end?: string }): Promise<CogsFinancialReport> {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business || !context.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return {
         grossRevenueCents: 0,
         taxCents: 0,
@@ -244,19 +252,34 @@ export class InventoryIntelligenceService {
       };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canView = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'inventory.cogs.view'
-    );
+    if (!authContext || !authContext.activeBranchId) {
+      return {
+        grossRevenueCents: 0,
+        taxCents: 0,
+        serviceChargeCents: 0,
+        netSalesCents: 0,
+        totalCogsCents: 0,
+        grossProfitCents: 0,
+        foodCostPercentage: 0,
+        grossMarginPercentage: 0,
+        totalWasteCostCents: 0,
+        unexplainedVarianceCostCents: 0,
+        currency: 'USD',
+      };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const canView = await can({
+      context: authContext,
+      permission: 'inventory.cogs.view',
+      resource: branchResource,
+    });
     if (!canView) {
       throw new Error('Forbidden: Missing inventory.cogs.view permission.');
     }
 
     const admin = createAdminClient();
-    const branchId = context.activeBranch.id;
+    const branchId = authContext.activeBranchId;
 
     // 1. Query Sales Orders
     let ordersQuery = admin
@@ -328,7 +351,7 @@ export class InventoryIntelligenceService {
       grossMarginPercentage,
       totalWasteCostCents,
       unexplainedVarianceCostCents: 0,
-      currency: context.business.defaultCurrency || 'USD',
+      currency: 'USD',
     };
   }
 }

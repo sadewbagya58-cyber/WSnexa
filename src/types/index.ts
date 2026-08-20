@@ -45,3 +45,6 @@ export interface ActiveTenantContext {
     status: string;
   };
 }
+
+export * from './authorization.types';
+

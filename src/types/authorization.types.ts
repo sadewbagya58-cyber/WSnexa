@@ -1,0 +1,202 @@
+import { ScopeType, GrantEffect, GrantSource } from '@/lib/validation/permission';
+
+export type { ScopeType, GrantEffect, GrantSource };
+
+export interface AuthorizedBranchAssignment {
+  id: string;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
+  isPrimary: boolean;
+  isDefault: boolean;
+  status: string;
+  assignedAt: string;
+}
+
+export interface EffectiveStaffAssignment {
+  id: string;
+  businessMembershipId: string;
+  assignmentType: 'primary' | 'additional' | 'cross_property' | 'temporary' | 'acting' | 'secondment';
+  status: 'active' | 'scheduled' | 'ended' | 'cancelled';
+  isPrimary: boolean;
+  branchId: string | null;
+  departmentId: string | null;
+  organizationUnitId: string | null;
+  positionId: string | null;
+  positionTitle?: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  sourceAssignmentId?: string | null;
+  actingForAssignmentId?: string | null;
+  coverageAbsenceId?: string | null;
+  isActing: boolean;
+  isSecondment: boolean;
+}
+
+export interface AuthorizedDepartment {
+  id: string;
+  name: string;
+  code?: string | null;
+  branchId: string | null;
+  source: 'staff_assignment' | 'acting' | 'secondment' | 'business_owner';
+}
+
+export interface AuthorizedOrganizationUnit {
+  id: string;
+  name: string;
+  unitType: string;
+  departmentId: string | null;
+  branchId: string | null;
+  source: 'staff_assignment' | 'acting' | 'secondment' | 'business_owner';
+}
+
+export interface AuthorizedServiceArea {
+  id: string;
+  name: string;
+  code?: string | null;
+  branchId: string;
+  source: 'staff_area_assignment' | 'business_owner';
+}
+
+export interface EffectivePermissionOverride {
+  id: string;
+  businessMembershipId: string;
+  permissionKey: string;
+  effect: 'allow' | 'deny';
+  scopeType: ScopeType | null; // null represents legacy membership-wide override
+  branchId: string | null;
+  departmentId: string | null;
+  organizationUnitId: string | null;
+  serviceAreaId: string | null;
+  createdAt: string;
+}
+
+export interface EffectiveScopeGrant {
+  id: string;
+  permissionKey: string;
+  effect: 'allow' | 'deny';
+  scopeType: ScopeType;
+  branchId: string | null;
+  departmentId: string | null;
+  organizationUnitId: string | null;
+  serviceAreaId: string | null;
+  grantSource: GrantSource;
+  sourceId: string | null;
+}
+
+export interface RoleScopePresetInfo {
+  roleKey: string | null;
+  customRoleId: string | null;
+  defaultScope: ScopeType;
+  maxScope: ScopeType;
+}
+
+export interface SelfIdentity {
+  userId: string;
+  membershipId: string;
+  staffAssignmentIds: string[];
+}
+
+export interface AuthorizationContextDiagnostics {
+  resolvedAt: string;
+  queryCount: number;
+  sources: {
+    membershipSource: string;
+    branchAssignmentCount: number;
+    staffAssignmentCount: number;
+    actingAssignmentCount: number;
+    secondmentCount: number;
+    rolePermissionCount: number;
+    overrideCount: number;
+    scopeGrantCount: number;
+  };
+}
+
+export interface AuthorizationContext {
+  userId: string;
+  userEmail: string;
+
+  businessId: string;
+  businessName: string;
+  businessSlug: string;
+
+  membershipId: string;
+  membershipRole: string;
+  customRoleId: string | null;
+  isBusinessOwner: boolean;
+
+  activeBranchId: string | null;
+  authorizedBranchIds: string[];
+  branchAssignments: AuthorizedBranchAssignment[];
+
+  departmentIds: string[];
+  departments: AuthorizedDepartment[];
+
+  organizationUnitIds: string[];
+  organizationUnits: AuthorizedOrganizationUnit[];
+
+  serviceAreaIds: string[];
+  serviceAreas: AuthorizedServiceArea[];
+
+  staffAssignments: EffectiveStaffAssignment[];
+  actingAssignments: EffectiveStaffAssignment[];
+  secondments: EffectiveStaffAssignment[];
+
+  rolePermissions: string[];
+  permissionOverrides: EffectivePermissionOverride[];
+  scopeGrants: EffectiveScopeGrant[];
+  roleScopePreset: RoleScopePresetInfo | null;
+
+  selfIdentity: SelfIdentity;
+  diagnostics: AuthorizationContextDiagnostics;
+}
+
+export type SupportedResourceType =
+  | 'order'
+  | 'inventory_item'
+  | 'inventory_location'
+  | 'inventory_count'
+  | 'inventory_transaction'
+  | 'purchase_order'
+  | 'business_membership'
+  | 'staff_assignment'
+  | 'dining_table'
+  | 'service_area'
+  | 'recipe'
+  | 'modifier_group'
+  | 'menu_item';
+
+export interface ResourceScope {
+  resourceType: SupportedResourceType;
+  resourceId: string;
+  businessId: string;
+  branchId: string | null;
+  departmentId: string | null;
+  organizationUnitId: string | null;
+  serviceAreaId: string | null;
+  ownerUserId: string | null;
+  additionalMetadata?: Record<string, unknown>;
+}
+
+export interface ResolveContextOptions {
+  requestedBusinessId?: string;
+  requestedBranchId?: string;
+  overrideUserId?: string; // For trusted server-side tests / background tasks
+  client?: unknown;
+}
+
+export interface ResolveResourceScopeOptions {
+  resourceType: SupportedResourceType;
+  resourceId: string;
+  expectedBusinessId?: string;
+  client?: unknown;
+}
+
+export type AuthorizationContextErrorCode =
+  | 'UNAUTHENTICATED'
+  | 'NO_ACTIVE_MEMBERSHIP'
+  | 'TENANT_MISMATCH'
+  | 'BRANCH_ACCESS_DENIED'
+  | 'MEMBERSHIP_INACTIVE'
+  | 'RESOURCE_NOT_FOUND'
+  | 'INVALID_RESOURCE_TYPE';

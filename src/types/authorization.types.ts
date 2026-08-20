@@ -199,4 +199,75 @@ export type AuthorizationContextErrorCode =
   | 'BRANCH_ACCESS_DENIED'
   | 'MEMBERSHIP_INACTIVE'
   | 'RESOURCE_NOT_FOUND'
-  | 'INVALID_RESOURCE_TYPE';
+  | 'INVALID_RESOURCE_TYPE'
+  | 'PERMISSION_DENIED'
+  | 'OUTSIDE_SCOPE'
+  | 'EXPLICIT_DENY'
+  | 'INVALID_PERMISSION';
+
+export type AuthorizationDecisionReason =
+  | 'ALLOWED'
+  | 'UNAUTHENTICATED'
+  | 'TENANT_MISMATCH'
+  | 'MEMBERSHIP_INACTIVE'
+  | 'PERMISSION_MISSING'
+  | 'EXPLICIT_DENY'
+  | 'OUTSIDE_SCOPE'
+  | 'ASSIGNMENT_INACTIVE'
+  | 'ACTING_EXPIRED'
+  | 'SECONDMENT_EXPIRED'
+  | 'RESOURCE_NOT_FOUND'
+  | 'INVALID_RESOURCE_TYPE'
+  | 'OWNER_POLICY_DENIED'
+  | 'INVALID_PERMISSION';
+
+export type AuthorizationDecisionSource =
+  | 'owner_policy'
+  | 'explicit_override'
+  | 'role_permission'
+  | 'scope_grant'
+  | 'legacy_override'
+  | 'acting_assignment'
+  | 'secondment'
+  | 'self_ownership'
+  | 'default_deny';
+
+export interface AuthorizationDecision {
+  allowed: boolean;
+  permission: string;
+  reason: AuthorizationDecisionReason;
+  matchedScope?: ScopeType | null;
+  source?: AuthorizationDecisionSource;
+  grantId?: string | null;
+  overrideId?: string | null;
+  assignmentId?: string | null;
+  resourceScope?: ResourceScope | null;
+  diagnostics?: {
+    evaluatedAt: string;
+    evaluationDurationMs: number;
+    details?: Record<string, unknown>;
+  };
+}
+
+export interface ResourceTarget {
+  type: SupportedResourceType;
+  id: string;
+}
+
+export interface AuthorizeOptions {
+  context: AuthorizationContext;
+  permission: string;
+  resource?: ResourceTarget | ResourceScope | null;
+}
+
+export interface CanOptions {
+  context: AuthorizationContext;
+  permission: string;
+  resource?: ResourceTarget | ResourceScope | null;
+}
+
+export interface RequirePermissionOptions {
+  context?: AuthorizationContext; // If omitted, resolved automatically server-side
+  permission: string;
+  resource?: ResourceTarget | ResourceScope | null;
+}

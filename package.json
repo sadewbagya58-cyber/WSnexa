@@ -48,7 +48,8 @@
     "verify:organization": "tsx scripts/verify-organization.ts",
     "verify:phase30-security-baseline": "tsx scripts/verify-phase30-security-baseline.ts",
     "verify:rbac-v2-schema": "tsx scripts/verify-rbac-v2-schema.ts",
-    "verify:rbac-v2-context": "tsx scripts/verify-rbac-v2-context.ts"
+    "verify:rbac-v2-context": "tsx scripts/verify-rbac-v2-context.ts",
+    "verify:rbac-v2-engine": "tsx scripts/verify-rbac-v2-engine.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

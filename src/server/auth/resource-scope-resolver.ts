@@ -28,7 +28,7 @@ export async function resolveResourceScope(
     case 'order': {
       const { data, error } = await admin
         .from('orders')
-        .select('id, business_id, branch_id, table_id, customer_user_id, dining_tables(service_area_id)')
+        .select('id, business_id, branch_id, table_id, customer_user_id')
         .eq('id', resourceId)
         .maybeSingle();
 
@@ -36,7 +36,15 @@ export async function resolveResourceScope(
         throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Order not found: ${resourceId}`);
       }
 
-      const diningTable = data.dining_tables as unknown as { service_area_id?: string | null } | null;
+      let serviceAreaId: string | null = null;
+      if (data.table_id) {
+        const { data: tableData } = await admin
+          .from('dining_tables')
+          .select('service_area_id')
+          .eq('id', data.table_id)
+          .maybeSingle();
+        serviceAreaId = tableData?.service_area_id || null;
+      }
 
       scope = {
         resourceType: 'order',
@@ -45,7 +53,7 @@ export async function resolveResourceScope(
         branchId: data.branch_id,
         departmentId: null,
         organizationUnitId: null,
-        serviceAreaId: diningTable?.service_area_id || null,
+        serviceAreaId,
         ownerUserId: data.customer_user_id || null,
       };
       break;

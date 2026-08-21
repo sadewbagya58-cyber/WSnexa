@@ -158,16 +158,49 @@ export const ownerOnlyPermissions: PermissionKey[] = [
   'permissions.override.manage',
 ];
 
+// ====================================================================
+// Phase 30 RBAC & Scope V2 Canonical Types and Schemas
+// ====================================================================
+
+export const scopeTypeEnum = z.enum([
+  'ORGANIZATION',
+  'PROPERTY',
+  'DEPARTMENT',
+  'AREA_TEAM',
+  'SELF',
+]);
+
+export type ScopeType = z.infer<typeof scopeTypeEnum>;
+
+export const grantEffectEnum = z.enum(['allow', 'deny']);
+export type GrantEffect = z.infer<typeof grantEffectEnum>;
+
+export const grantSourceEnum = z.enum([
+  'role_preset',
+  'custom_role',
+  'member_override',
+  'staff_assignment',
+  'acting_delegation',
+]);
+export type GrantSource = z.infer<typeof grantSourceEnum>;
+
 export const createCustomRoleSchema = z.object({
   name: z.string().min(2, 'Role name must be at least 2 characters').max(50, 'Role name too long'),
   description: z.string().max(200, 'Description too long').optional(),
   permissions: z.array(permissionKeyEnum),
+  defaultScope: scopeTypeEnum.optional(),
+  maxScope: scopeTypeEnum.optional(),
 });
 
 export type CreateCustomRoleInput = z.infer<typeof createCustomRoleSchema>;
 
-export const updateCustomRoleSchema = createCustomRoleSchema.extend({
+export const updateCustomRoleSchema = z.object({
   roleId: z.string().uuid('Invalid role ID'),
+  name: z.string().min(2, 'Role name must be at least 2 characters').max(50, 'Role name too long').optional(),
+  description: z.string().max(200, 'Description too long').optional().nullable(),
+  permissions: z.array(permissionKeyEnum).optional(),
+  defaultScope: scopeTypeEnum.optional(),
+  maxScope: scopeTypeEnum.optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -195,32 +228,6 @@ export const updateMemberStatusSchema = z.object({
 });
 
 export type UpdateMemberStatusInput = z.infer<typeof updateMemberStatusSchema>;
-
-// ====================================================================
-// Phase 30 RBAC & Scope V2 Canonical Types and Schemas
-// ====================================================================
-
-export const scopeTypeEnum = z.enum([
-  'ORGANIZATION',
-  'PROPERTY',
-  'DEPARTMENT',
-  'AREA_TEAM',
-  'SELF',
-]);
-
-export type ScopeType = z.infer<typeof scopeTypeEnum>;
-
-export const grantEffectEnum = z.enum(['allow', 'deny']);
-export type GrantEffect = z.infer<typeof grantEffectEnum>;
-
-export const grantSourceEnum = z.enum([
-  'role_preset',
-  'custom_role',
-  'member_override',
-  'staff_assignment',
-  'acting_delegation',
-]);
-export type GrantSource = z.infer<typeof grantSourceEnum>;
 
 export const roleScopePresetSchema = z.object({
   id: z.string().uuid().optional(),
@@ -437,4 +444,67 @@ export const convertLegacyOverrideSchema = z.object({
 });
 
 export type ConvertLegacyOverrideInput = z.infer<typeof convertLegacyOverrideSchema>;
+
+// ====================================================================
+// Phase 30 Step 7 Role Governance & Lifecycle Schemas
+// ====================================================================
+
+export const cloneRoleSchema = z.object({
+  sourceType: z.enum(['built_in', 'custom']),
+  sourceRoleKey: z.string().optional().nullable(),
+  sourceCustomRoleId: z.string().uuid('Invalid source custom role ID').optional().nullable(),
+  name: z.string().min(2, 'Role name must be at least 2 characters').max(50, 'Role name too long'),
+  description: z.string().max(200, 'Description too long').optional().nullable(),
+  defaultScope: scopeTypeEnum.optional(),
+  maxScope: scopeTypeEnum.optional(),
+}).refine(
+  (d) => (d.sourceType === 'built_in' ? Boolean(d.sourceRoleKey) : Boolean(d.sourceCustomRoleId)),
+  { message: 'Must provide sourceRoleKey for built_in or sourceCustomRoleId for custom' }
+);
+
+export type CloneRoleInput = z.infer<typeof cloneRoleSchema>;
+
+export const archiveCustomRoleSchema = z.object({
+  roleId: z.string().uuid('Invalid custom role ID'),
+  reassignToRoleKey: z.string().optional().nullable(),
+  reassignToCustomRoleId: z.string().uuid('Invalid target custom role ID').optional().nullable(),
+});
+
+export type ArchiveCustomRoleInput = z.infer<typeof archiveCustomRoleSchema>;
+
+export const restoreCustomRoleSchema = z.object({
+  roleId: z.string().uuid('Invalid custom role ID'),
+});
+
+export type RestoreCustomRoleInput = z.infer<typeof restoreCustomRoleSchema>;
+
+export const reassignRoleMembersSchema = z.object({
+  fromCustomRoleId: z.string().uuid('Invalid source custom role ID').optional().nullable(),
+  fromRoleKey: z.string().optional().nullable(),
+  toRoleKey: z.string().optional().nullable(),
+  toCustomRoleId: z.string().uuid('Invalid target custom role ID').optional().nullable(),
+}).refine(
+  (d) => (Boolean(d.fromCustomRoleId) || Boolean(d.fromRoleKey)) && (Boolean(d.toRoleKey) || Boolean(d.toCustomRoleId)),
+  { message: 'Must specify valid source and target role identifiers' }
+);
+
+export type ReassignRoleMembersInput = z.infer<typeof reassignRoleMembersSchema>;
+
+export const assignMemberRoleSchema = z.object({
+  membershipId: z.string().uuid('Invalid membership ID'),
+  builtInRole: z.enum(['business_owner', 'branch_manager', 'cashier', 'kitchen_staff', 'waiter']).optional(),
+  customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
+});
+
+export type AssignMemberRoleInput = z.infer<typeof assignMemberRoleSchema>;
+
+export const roleUsageQuerySchema = z.object({
+  roleKey: z.string().optional().nullable(),
+  customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
+}).refine(
+  (d) => Boolean(d.roleKey) !== Boolean(d.customRoleId),
+  { message: 'Must specify either roleKey or customRoleId (XOR)' }
+);
+
+export type RoleUsageQueryInput = z.infer<typeof roleUsageQuerySchema>;
 

@@ -19,6 +19,7 @@ export class AuthorizationContextError extends Error {
       case 'UNAUTHENTICATED':
         this.statusCode = 401;
         break;
+      case 'UNAUTHORIZED':
       case 'NO_ACTIVE_MEMBERSHIP':
       case 'MEMBERSHIP_INACTIVE':
       case 'TENANT_MISMATCH':
@@ -26,12 +27,26 @@ export class AuthorizationContextError extends Error {
       case 'PERMISSION_DENIED':
       case 'OUTSIDE_SCOPE':
       case 'EXPLICIT_DENY':
+      case 'OWNER_ROLE_PROTECTED':
+      case 'SELF_ESCALATION_DENIED':
+      case 'ROLE_SCOPE_EXCEEDED':
         this.statusCode = 403;
         break;
       case 'RESOURCE_NOT_FOUND':
+      case 'ROLE_NOT_FOUND':
         this.statusCode = 404;
         break;
+      case 'ROLE_NAME_DUPLICATE':
+      case 'ROLE_IN_USE':
+        this.statusCode = 409;
+        break;
+      case 'DATABASE_ERROR':
+        this.statusCode = 500;
+        break;
       case 'INVALID_RESOURCE_TYPE':
+      case 'ROLE_RESERVED':
+      case 'ROLE_ARCHIVED':
+      case 'INVALID_PERMISSION':
       default:
         this.statusCode = 400;
         break;

@@ -78,6 +78,24 @@ export class StaffInvitationService {
       return { success: false, message: 'Invalid or deleted branch selected.' };
     }
 
+    // 2b. If custom role specified, verify it belongs to this business and is active
+    if (input.customRoleId) {
+      const { data: customRole } = await admin
+        .from('custom_roles')
+        .select('id, is_active')
+        .eq('id', input.customRoleId)
+        .eq('business_id', businessId)
+        .maybeSingle();
+
+      if (!customRole) {
+        return { success: false, message: 'Custom role not found in this business.' };
+      }
+
+      if (!customRole.is_active) {
+        return { success: false, message: 'Cannot invite with an archived or inactive custom role.' };
+      }
+    }
+
     // 3. Service Area Validation
     let reqAreas = input.serviceAreaIds;
     if (input.assignedRole === 'waiter') {
@@ -157,6 +175,7 @@ export class StaffInvitationService {
         branch_id: input.branchId,
         invitation_type: invitationType,
         assigned_role: input.assignedRole,
+        custom_role_id: input.customRoleId || null,
         invited_email: invitedEmail,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
@@ -266,7 +285,7 @@ export class StaffInvitationService {
     // 1. Lookup invitation by SHA-256 token_hash
     const { data: invite, error: fetchErr } = await admin
       .from('staff_invitations')
-      .select('*, businesses(*), branches(*)')
+      .select('*')
       .eq('token_hash', tokenHash)
       .single();
 
@@ -352,6 +371,23 @@ export class StaffInvitationService {
             targetIntentNeeded: 'branch_manager',
           };
         }
+      }
+    }
+
+    // 5c. Revalidate Custom Role if invitation specifies one (Claim-time revalidation)
+    if (invite.custom_role_id) {
+      const { data: customRole } = await admin
+        .from('custom_roles')
+        .select('id, is_active, business_id')
+        .eq('id', invite.custom_role_id)
+        .eq('business_id', invite.business_id)
+        .maybeSingle();
+
+      if (!customRole || !customRole.is_active) {
+        return {
+          success: false,
+          message: 'The custom role associated with this invitation has been archived or is no longer available.',
+        };
       }
     }
 

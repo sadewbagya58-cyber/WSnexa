@@ -51,7 +51,8 @@
     "verify:rbac-v2-context": "tsx scripts/verify-rbac-v2-context.ts",
     "verify:rbac-v2-engine": "tsx scripts/verify-rbac-v2-engine.ts",
     "verify:rbac-v2-integration": "tsx scripts/verify-rbac-v2-integration.ts",
-    "verify:rbac-v2-management": "tsx scripts/verify-rbac-v2-management.ts"
+    "verify:rbac-v2-management": "tsx scripts/verify-rbac-v2-management.ts",
+    "verify:rbac-v2-roles": "tsx scripts/verify-rbac-v2-roles.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -16,6 +16,7 @@ export const createInvitationSchema = z
   .object({
     branchId: z.string().uuid('Invalid branch selected'),
     assignedRole: staffRoleEnum,
+    customRoleId: z.string().uuid('Invalid custom role ID').optional(),
     invitedEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
     expiryOption: expiryOptionEnum.default('48h'),
     serviceAreaIds: z.array(z.string().uuid('Invalid area ID')).optional(),

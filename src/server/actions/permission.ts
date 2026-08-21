@@ -3,16 +3,21 @@
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import {
   PermissionService,
-  FormattedCustomRole,
   FormattedMemberDetail,
   FormattedPermission,
 } from '@/server/services/permission.service';
+import { RoleGovernanceService } from '@/server/services/role-governance.service';
 import { ScopeGrantService } from '@/server/services/scope-grant.service';
 import {
   ScopeGrantDetail,
   RoleScopePresetDetail,
   EffectiveAccessPreview,
   ScopeType,
+  BuiltInRoleKey,
+  BuiltInRoleTemplate,
+  CustomRoleDetail,
+  RoleUsageInfo,
+  RoleEffectiveAccessSummary,
 } from '@/types/authorization.types';
 import {
   createCustomRoleSchema,
@@ -25,6 +30,12 @@ import {
   updateRoleScopePresetInputSchema,
   scopedMemberOverrideSchema,
   convertLegacyOverrideSchema,
+  cloneRoleSchema,
+  archiveCustomRoleSchema,
+  restoreCustomRoleSchema,
+  reassignRoleMembersSchema,
+  assignMemberRoleSchema,
+  roleUsageQuerySchema,
   CreateCustomRoleInput,
   UpdateCustomRoleInput,
   MemberOverrideInput,
@@ -35,6 +46,12 @@ import {
   UpdateRoleScopePresetInput,
   ScopedMemberOverrideInput,
   ConvertLegacyOverrideInput,
+  CloneRoleInput,
+  ArchiveCustomRoleInput,
+  RestoreCustomRoleInput,
+  ReassignRoleMembersInput,
+  AssignMemberRoleInput,
+  RoleUsageQueryInput,
   PermissionKey,
 } from '@/lib/validation/permission';
 
@@ -45,97 +62,311 @@ export interface ActionResponse<T = unknown> {
   errors?: Record<string, string[]>;
 }
 
+export async function listRoleTemplatesAction(): Promise<ActionResponse<BuiltInRoleTemplate[]>> {
+  try {
+    const templates = RoleGovernanceService.listBuiltInRoleTemplates();
+    return { success: true, data: templates };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to list role templates.';
+    return { success: false, message };
+  }
+}
+
+export async function getRoleTemplateAction(
+  roleKey: BuiltInRoleKey
+): Promise<ActionResponse<BuiltInRoleTemplate & { permissions: string[] }>> {
+  try {
+    const template = await RoleGovernanceService.getBuiltInRoleTemplate(roleKey);
+    if (!template) {
+      return { success: false, message: 'Role template not found.' };
+    }
+    return { success: true, data: template };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to get role template.';
+    return { success: false, message };
+  }
+}
+
 export async function createCustomRoleAction(
   formData: CreateCustomRoleInput
-): Promise<ActionResponse<FormattedCustomRole>> {
+): Promise<ActionResponse<CustomRoleDetail>> {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized. Business context required.' };
-  }
-
-  const canManage = await can({
-    context: authContext,
-    permission: 'roles.manage',
-  });
-  if (!canManage) {
-    return { success: false, message: 'Forbidden. Role management permission required.' };
   }
 
   const parsed = createCustomRoleSchema.safeParse(formData);
   if (!parsed.success) {
     return {
       success: false,
-      message: 'Invalid role payload format.',
+      message: parsed.error.issues[0]?.message || 'Invalid role payload format.',
       errors: parsed.error.flatten().fieldErrors,
     };
   }
 
-  const res = await PermissionService.createCustomRole(
-    authContext.userId,
-    authContext.businessId,
-    parsed.data
-  );
-
-  if (!res.success) {
-    return { success: false, message: res.message || 'Failed to create custom role.' };
+  try {
+    const res = await RoleGovernanceService.createCustomRole(authContext, parsed.data);
+    return {
+      success: true,
+      message: res.message || 'Custom role created successfully.',
+      data: res.role!,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to create custom role.';
+    return { success: false, message };
   }
-
-  return {
-    success: true,
-    message: 'Custom role created successfully.',
-    data: res.role!,
-  };
 }
 
 export async function updateCustomRoleAction(
   formData: UpdateCustomRoleInput
-): Promise<ActionResponse> {
+): Promise<ActionResponse<CustomRoleDetail>> {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
-  }
-
-  const canManage = await can({
-    context: authContext,
-    permission: 'roles.manage',
-  });
-  if (!canManage) {
-    return { success: false, message: 'Forbidden. Role management permission required.' };
   }
 
   const parsed = updateCustomRoleSchema.safeParse(formData);
   if (!parsed.success) {
     return {
       success: false,
-      message: 'Invalid role update format.',
+      message: parsed.error.issues[0]?.message || 'Invalid role update format.',
       errors: parsed.error.flatten().fieldErrors,
     };
   }
 
-  const res = await PermissionService.updateCustomRole(
-    authContext.userId,
-    authContext.businessId,
-    parsed.data
-  );
-
-  if (!res.success) {
-    return { success: false, message: res.message || 'Failed to update custom role.' };
+  try {
+    const res = await RoleGovernanceService.updateCustomRole(authContext, parsed.data);
+    return {
+      success: true,
+      message: res.message || 'Custom role updated successfully.',
+      data: res.role,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to update custom role.';
+    return { success: false, message };
   }
-
-  return {
-    success: true,
-    message: 'Custom role updated successfully.',
-  };
 }
 
-export async function listCustomRolesAction(): Promise<ActionResponse<FormattedCustomRole[]>> {
+export async function cloneRoleAction(
+  formData: CloneRoleInput
+): Promise<ActionResponse<CustomRoleDetail>> {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Unauthorized.' };
   }
 
-  const roles = await PermissionService.listCustomRoles(authContext.businessId);
-  return { success: true, data: roles };
+  const parsed = cloneRoleSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid clone payload.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const res = await RoleGovernanceService.cloneRole(authContext, parsed.data);
+    return {
+      success: true,
+      message: res.message || 'Role cloned successfully.',
+      data: res.role,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to clone role.';
+    return { success: false, message };
+  }
+}
+
+export async function archiveCustomRoleAction(
+  formData: ArchiveCustomRoleInput
+): Promise<ActionResponse<{ reassignedCount?: number }>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const parsed = archiveCustomRoleSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid archive request.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const res = await RoleGovernanceService.archiveCustomRole(authContext, parsed.data);
+    return {
+      success: true,
+      message: res.message,
+      data: { reassignedCount: res.reassignedCount },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to archive custom role.';
+    return { success: false, message };
+  }
+}
+
+export async function restoreCustomRoleAction(
+  formData: RestoreCustomRoleInput
+): Promise<ActionResponse> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const parsed = restoreCustomRoleSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid restore request.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const res = await RoleGovernanceService.restoreCustomRole(authContext, parsed.data);
+    return { success: true, message: res.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to restore custom role.';
+    return { success: false, message };
+  }
+}
+
+export async function listCustomRolesAction(
+  options?: { includeArchived?: boolean }
+): Promise<ActionResponse<CustomRoleDetail[]>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  try {
+    const roles = await RoleGovernanceService.listCustomRoles(authContext.businessId, options);
+    return { success: true, data: roles };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to list custom roles.';
+    return { success: false, message };
+  }
+}
+
+export async function getCustomRoleAction(
+  customRoleId: string
+): Promise<ActionResponse<CustomRoleDetail>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  try {
+    const role = await RoleGovernanceService.getCustomRoleById(authContext.businessId, customRoleId);
+    if (!role) {
+      return { success: false, message: 'Custom role not found.' };
+    }
+    return { success: true, data: role };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to get custom role.';
+    return { success: false, message };
+  }
+}
+
+export async function getRoleUsageAction(
+  query: RoleUsageQueryInput
+): Promise<ActionResponse<RoleUsageInfo>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const parsed = roleUsageQuerySchema.safeParse(query);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid role usage query.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const usage = await RoleGovernanceService.getRoleUsage(authContext, parsed.data);
+    return { success: true, data: usage };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to query role usage.';
+    return { success: false, message };
+  }
+}
+
+export async function reassignRoleMembersAction(
+  formData: ReassignRoleMembersInput
+): Promise<ActionResponse<{ reassignedCount: number }>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const parsed = reassignRoleMembersSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid reassignment payload.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const res = await RoleGovernanceService.reassignRoleMembers(authContext, parsed.data);
+    return {
+      success: true,
+      message: res.message,
+      data: { reassignedCount: res.reassignedCount },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to reassign members.';
+    return { success: false, message };
+  }
+}
+
+export async function assignMemberRoleAction(
+  formData: AssignMemberRoleInput
+): Promise<ActionResponse> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const parsed = assignMemberRoleSchema.safeParse(formData);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Invalid role assignment payload.',
+      errors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    const res = await RoleGovernanceService.assignMemberRole(authContext, parsed.data);
+    return { success: true, message: res.message };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to assign member role.';
+    return { success: false, message };
+  }
+}
+
+export async function previewRoleEffectiveAccessAction(
+  identifier: { roleKey?: string; customRoleId?: string }
+): Promise<ActionResponse<RoleEffectiveAccessSummary>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  try {
+    const preview = await RoleGovernanceService.previewRoleEffectiveAccess(authContext, identifier);
+    return { success: true, data: preview };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to generate effective access preview.';
+    return { success: false, message };
+  }
 }
 
 export async function setMemberOverrideAction(

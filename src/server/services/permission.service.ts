@@ -311,7 +311,15 @@ export class PermissionService {
       await admin.from('role_permissions').insert(inserts);
     }
 
-    // 3. Audit log
+    // 3. Insert role_scope_presets
+    await admin.from('role_scope_presets').insert({
+      business_id: businessId,
+      custom_role_id: roleRow.id,
+      default_scope: input.defaultScope || 'PROPERTY',
+      max_scope: input.maxScope || 'PROPERTY',
+    });
+
+    // 4. Audit log
     await admin.from('audit_logs').insert({
       business_id: businessId,
       actor_id: userId,
@@ -360,21 +368,22 @@ export class PermissionService {
       .single();
 
     const isOwner = creatorMem?.role === 'business_owner';
-    const safePermissions = isOwner
-      ? input.permissions
-      : input.permissions.filter((p) => !ownerOnlyPermissions.includes(p));
+    const safePermissions = input.permissions
+      ? (isOwner
+          ? input.permissions
+          : input.permissions.filter((p) => !ownerOnlyPermissions.includes(p)))
+      : undefined;
 
     const now = new Date().toISOString();
 
-    // 1. Update custom_roles
+    const updatePayload: Record<string, unknown> = { updated_at: now };
+    if (input.name !== undefined) updatePayload.name = input.name.trim();
+    if (input.description !== undefined) updatePayload.description = input.description?.trim() || null;
+    if (input.isActive !== undefined) updatePayload.is_active = input.isActive;
+
     const { error: updateErr } = await admin
       .from('custom_roles')
-      .update({
-        name: input.name.trim(),
-        description: input.description?.trim() || null,
-        is_active: input.isActive ?? true,
-        updated_at: now,
-      })
+      .update(updatePayload)
       .eq('id', input.roleId)
       .eq('business_id', businessId);
 
@@ -382,19 +391,47 @@ export class PermissionService {
       return { success: false, message: `Failed to update role: ${updateErr.message}` };
     }
 
-    // 2. Re-insert role_permissions
-    await admin.from('role_permissions').delete().eq('custom_role_id', input.roleId);
+    // 2. Re-insert role_permissions if provided
+    if (safePermissions) {
+      await admin.from('role_permissions').delete().eq('custom_role_id', input.roleId);
 
-    if (safePermissions.length > 0) {
-      const inserts = safePermissions.map((p) => ({
-        business_id: businessId,
-        custom_role_id: input.roleId,
-        permission_key: p,
-      }));
-      await admin.from('role_permissions').insert(inserts);
+      if (safePermissions.length > 0) {
+        const inserts = safePermissions.map((p) => ({
+          business_id: businessId,
+          custom_role_id: input.roleId,
+          permission_key: p,
+        }));
+        await admin.from('role_permissions').insert(inserts);
+      }
     }
 
-    // 3. Audit log
+    // 3. Update role_scope_presets if provided
+    if (input.defaultScope || input.maxScope) {
+      const { data: existingPreset } = await admin
+        .from('role_scope_presets')
+        .select('id, default_scope, max_scope')
+        .eq('custom_role_id', input.roleId)
+        .maybeSingle();
+
+      const newDefault = input.defaultScope || existingPreset?.default_scope || 'PROPERTY';
+      const newMax = input.maxScope || existingPreset?.max_scope || 'PROPERTY';
+
+      if (existingPreset) {
+        await admin
+          .from('role_scope_presets')
+          .update({ default_scope: newDefault, max_scope: newMax, updated_at: now })
+          .eq('id', existingPreset.id);
+      } else {
+        await admin.from('role_scope_presets').insert({
+          business_id: businessId,
+          custom_role_id: input.roleId,
+          default_scope: newDefault,
+          max_scope: newMax,
+        });
+      }
+    }
+
+    // 4. Audit log
     await admin.from('audit_logs').insert({
       business_id: businessId,
       actor_id: userId,

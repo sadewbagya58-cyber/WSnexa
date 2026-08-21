@@ -228,10 +228,25 @@ The remaining Phase 30 work is structured into 11 discrete, test-driven steps:
   - Full audit logging (`scope_grant.*`, `member_override.*`, `legacy_override.*`, `role_scope_preset.*`).
 - **Verification**: `scripts/verify-rbac-v2-management.ts` (44/44 assertions passed).
 
-### Step 7: Granular Member Permission Overrides with Scope Support
-- **Files**: `src/server/services/permission.service.ts`, `src/server/actions/permission.ts`
+### Step 7: Role Templates, Custom Roles & Role Assignment Governance (COMPLETED)
+- **Files**:
+  - `src/types/authorization.types.ts`
+  - `src/server/services/role-governance.service.ts`
+  - `src/server/services/permission.service.ts`
+  - `src/server/services/staff-invitation.service.ts`
+  - `src/server/actions/permission.ts`
+  - `src/server/auth/authorization-context.ts`
+  - `docs/phase-30-step-7-role-governance.md`
 - **Actions**:
-  - Allow member overrides to specify target `scope_type` and `scope_id`.
+  - Defined immutable canonical built-in templates (`business_owner`, `branch_manager`, `cashier`, `kitchen_staff`, `waiter`) protecting owner `ORGANIZATION` maxScope.
+  - Implemented custom role lifecycle management (`createCustomRole`, `updateCustomRole`, `archiveCustomRole`, `restoreCustomRole`, `reassignRoleMembers`, `assignMemberRole`, `cloneRole`, `getRoleUsage`, `previewRoleEffectiveAccess`).
+  - Added role cloning reach ceilings: non-owners capped at `PROPERTY` maxScope with owner-only permissions automatically stripped.
+  - Enforced privilege escalation ceilings (`OWNER_ROLE_PROTECTED`, `SELF_ESCALATION_DENIED`, `ROLE_ARCHIVED`, `ROLE_RESERVED`).
+  - Implemented invitation security with claim-time custom role revalidation (`ROLE_ARCHIVED`).
+  - Strict decoupling: Role (WHAT) vs Scope (WHERE) vs Position (WHO/ORG).
+  - Isolated Super Admin platform permissions (`super_admin.*`) from tenant custom roles.
+  - Comprehensive append-only audit logging for all role governance mutations.
+- **Verification**: `scripts/verify-rbac-v2-roles.ts` (68/68 assertions passed).
 
 ### Step 8: Acting Positions & Secondment Dynamic Scope Engine
 - **Files**: `src/server/auth/acting-scope-engine.ts`, `src/server/services/organization.service.ts`

@@ -199,6 +199,7 @@ export interface ResolveResourceScopeOptions {
 
 export type AuthorizationContextErrorCode =
   | 'UNAUTHENTICATED'
+  | 'UNAUTHORIZED'
   | 'NO_ACTIVE_MEMBERSHIP'
   | 'TENANT_MISMATCH'
   | 'BRANCH_ACCESS_DENIED'
@@ -208,7 +209,16 @@ export type AuthorizationContextErrorCode =
   | 'PERMISSION_DENIED'
   | 'OUTSIDE_SCOPE'
   | 'EXPLICIT_DENY'
-  | 'INVALID_PERMISSION';
+  | 'INVALID_PERMISSION'
+  | 'ROLE_NOT_FOUND'
+  | 'ROLE_RESERVED'
+  | 'ROLE_IN_USE'
+  | 'ROLE_ARCHIVED'
+  | 'ROLE_SCOPE_EXCEEDED'
+  | 'ROLE_NAME_DUPLICATE'
+  | 'OWNER_ROLE_PROTECTED'
+  | 'SELF_ESCALATION_DENIED'
+  | 'DATABASE_ERROR';
 
 export type AuthorizationDecisionReason =
   | 'ALLOWED'
@@ -377,3 +387,146 @@ export interface EffectiveAccessPreview {
     source: string;
   }>;
 }
+
+// ====================================================================
+// Phase 30 Step 7 Role Governance Types & Canonical Templates
+// ====================================================================
+
+export type BuiltInRoleKey =
+  | 'business_owner'
+  | 'branch_manager'
+  | 'kitchen_staff'
+  | 'cashier'
+  | 'waiter';
+
+export interface BuiltInRoleTemplate {
+  roleKey: BuiltInRoleKey;
+  displayName: string;
+  description: string;
+  defaultScope: ScopeType;
+  maxScope: ScopeType;
+  isSystemRole: boolean;
+  isOwnerRole: boolean;
+  isAssignable: boolean;
+  isProtected: boolean;
+  sortOrder: number;
+}
+
+export const BUILT_IN_ROLE_TEMPLATES: Record<BuiltInRoleKey, BuiltInRoleTemplate> = {
+  business_owner: {
+    roleKey: 'business_owner',
+    displayName: 'Business Owner',
+    description: 'Full organizational administrative and operational authority across all venues and modules.',
+    defaultScope: 'ORGANIZATION',
+    maxScope: 'ORGANIZATION',
+    isSystemRole: true,
+    isOwnerRole: true,
+    isAssignable: false,
+    isProtected: true,
+    sortOrder: 1,
+  },
+  branch_manager: {
+    roleKey: 'branch_manager',
+    displayName: 'Branch Manager',
+    description: 'Operational and staff management authority for assigned property location(s).',
+    defaultScope: 'PROPERTY',
+    maxScope: 'PROPERTY',
+    isSystemRole: true,
+    isOwnerRole: false,
+    isAssignable: true,
+    isProtected: true,
+    sortOrder: 2,
+  },
+  kitchen_staff: {
+    roleKey: 'kitchen_staff',
+    displayName: 'Kitchen Staff',
+    description: 'Kitchen display access, ticket progression, order item status, and recipe production.',
+    defaultScope: 'PROPERTY',
+    maxScope: 'PROPERTY',
+    isSystemRole: true,
+    isOwnerRole: false,
+    isAssignable: true,
+    isProtected: true,
+    sortOrder: 3,
+  },
+  cashier: {
+    roleKey: 'cashier',
+    displayName: 'Cashier',
+    description: 'Point of sale billing, payment collection, receipt generation, and dining table viewing.',
+    defaultScope: 'PROPERTY',
+    maxScope: 'PROPERTY',
+    isSystemRole: true,
+    isOwnerRole: false,
+    isAssignable: true,
+    isProtected: true,
+    sortOrder: 4,
+  },
+  waiter: {
+    roleKey: 'waiter',
+    displayName: 'Waiter',
+    description: 'Dining area table orders, guest assistance calls, and table service management.',
+    defaultScope: 'AREA_TEAM',
+    maxScope: 'PROPERTY',
+    isSystemRole: true,
+    isOwnerRole: false,
+    isAssignable: true,
+    isProtected: true,
+    sortOrder: 5,
+  },
+};
+
+export interface CustomRoleDetail {
+  id: string;
+  businessId: string;
+  name: string;
+  description: string | null;
+  roleKey: string;
+  isActive: boolean;
+  isArchived: boolean;
+  defaultScope: ScopeType;
+  maxScope: ScopeType;
+  permissions: string[];
+  assignedMembersCount?: number;
+  pendingInvitationsCount?: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleUsageInfo {
+  roleIdentifier: string; // roleKey or customRoleId
+  isCustomRole: boolean;
+  customRoleId?: string | null;
+  roleKey?: string | null;
+  name: string;
+  isActive: boolean;
+  activeMembers: number;
+  pendingInvitations: number;
+  scopeGrants: number;
+  canSafelyArchive: boolean;
+  canSafelyDelete: boolean;
+}
+
+export interface RoleEffectiveAccessSummary {
+  roleSource: 'built_in' | 'custom';
+  roleKey?: string | null;
+  customRoleId?: string | null;
+  displayName: string;
+  description?: string | null;
+  defaultScope: ScopeType;
+  maxScope: ScopeType;
+  isProtected: boolean;
+  isArchived: boolean;
+  permissions: Array<{
+    key: string;
+    name?: string;
+    category?: string;
+    riskLevel?: string;
+  }>;
+  scopePreset: {
+    defaultScope: ScopeType;
+    maxScope: ScopeType;
+  };
+  concreteGrantsCount: number;
+}
+

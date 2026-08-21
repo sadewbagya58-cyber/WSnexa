@@ -195,9 +195,11 @@ export async function resolveAuthorizationContext(
     // 3.5 Role permissions (custom or built-in)
     activeMembership.custom_role_id
       ? admin
-          .from('role_permissions')
-          .select('permission_key')
-          .eq('custom_role_id', activeMembership.custom_role_id)
+          .from('custom_roles')
+          .select('id, is_active, role_permissions(permission_key)')
+          .eq('id', activeMembership.custom_role_id)
+          .eq('business_id', business.id)
+          .maybeSingle()
       : admin
           .from('role_permissions')
           .select('permission_key')
@@ -480,8 +482,22 @@ export async function resolveAuthorizationContext(
   const serviceAreaIds = serviceAreas.map((sa) => sa.id);
 
   // 8. Role Permissions Resolution (Task 5)
-  const rolePermissionsRows = rolePermissionsRes.data || [];
-  const rolePermissions = Array.from(new Set(rolePermissionsRows.map((rp) => rp.permission_key)));
+  let rolePermissions: string[] = [];
+  if (activeMembership.custom_role_id) {
+    const customRoleRow = rolePermissionsRes.data as unknown as {
+      id: string;
+      is_active: boolean;
+      role_permissions?: Array<{ permission_key: string }>;
+    } | null;
+    if (customRoleRow && customRoleRow.is_active) {
+      rolePermissions = Array.from(
+        new Set((customRoleRow.role_permissions || []).map((rp) => rp.permission_key))
+      );
+    }
+  } else {
+    const rolePermissionsRows = (rolePermissionsRes.data || []) as Array<{ permission_key: string }>;
+    rolePermissions = Array.from(new Set(rolePermissionsRows.map((rp) => rp.permission_key)));
+  }
 
   // 9. Member Permission Overrides Resolution (Task 6)
   const rawOverrides = overridesRes.data || [];

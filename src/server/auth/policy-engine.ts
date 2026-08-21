@@ -526,12 +526,29 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
         });
       }
 
-      const isPropertyLevelRole =
-        context.membershipRole === 'branch_manager' ||
-        context.roleScopePreset?.defaultScope === 'PROPERTY' ||
-        context.roleScopePreset?.defaultScope === 'ORGANIZATION';
+      // Check active secondments for organization unit coverage
+      const matchingSecUnit = (context.secondments || []).find(
+        (s) => s.organizationUnitId === resourceScope!.organizationUnitId
+      );
+      if (matchingSecUnit) {
+        return createDecision({
+          allowed: true,
+          permission,
+          reason: 'ALLOWED',
+          source: 'secondment',
+          assignmentId: matchingSecUnit.id,
+          matchedScope: 'AREA_TEAM',
+          startTime,
+          resourceScope,
+        });
+      }
 
-      if (isPropertyLevelRole) {
+      const isPropertyLevelManager =
+        context.isBusinessOwner ||
+        context.membershipRole === 'branch_manager' ||
+        context.roleScopePreset?.maxScope === 'ORGANIZATION';
+
+      if (isPropertyLevelManager) {
         return createDecision({
           allowed: true,
           permission,
@@ -583,12 +600,29 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
         });
       }
 
-      const isPropertyLevelRole =
-        context.membershipRole === 'branch_manager' ||
-        context.roleScopePreset?.defaultScope === 'PROPERTY' ||
-        context.roleScopePreset?.defaultScope === 'ORGANIZATION';
+      // Check active secondments for department coverage
+      const matchingSecDept = (context.secondments || []).find(
+        (s) => s.departmentId === resourceScope!.departmentId
+      );
+      if (matchingSecDept) {
+        return createDecision({
+          allowed: true,
+          permission,
+          reason: 'ALLOWED',
+          source: 'secondment',
+          assignmentId: matchingSecDept.id,
+          matchedScope: 'DEPARTMENT',
+          startTime,
+          resourceScope,
+        });
+      }
 
-      if (isPropertyLevelRole) {
+      const isPropertyLevelManager =
+        context.isBusinessOwner ||
+        context.membershipRole === 'branch_manager' ||
+        context.roleScopePreset?.maxScope === 'ORGANIZATION';
+
+      if (isPropertyLevelManager) {
         return createDecision({
           allowed: true,
           permission,

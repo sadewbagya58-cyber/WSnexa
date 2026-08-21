@@ -1185,8 +1185,12 @@ async function verifyRbacV2Engine() {
     const actingExpiredDec = await authorize({
       context: {
         ...ctxB,
+        membershipRole: 'waiter',
+        roleScopePreset: ctxB.roleScopePreset ? { ...ctxB.roleScopePreset, defaultScope: 'AREA_TEAM', maxScope: 'PROPERTY' } : null,
         actingAssignments: [], // Expired acting assignment filtered out
+        secondments: [], // No secondment covering department
         departmentIds: [], // Substantively Bob has no department
+        scopeGrants: [], // No remaining scope grants after acting expired
       },
       permission: 'orders.view',
       resource: {

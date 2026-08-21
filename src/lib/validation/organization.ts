@@ -522,6 +522,14 @@ export const endSecondmentSchema = z.object({
 });
 export type EndSecondmentInput = z.input<typeof endSecondmentSchema>;
 
+export const extendSecondmentSchema = z.object({
+  businessId: z.string().uuid('Invalid business ID'),
+  assignmentId: z.string().uuid('Invalid secondment assignment ID'),
+  newEndsAt: z.union([z.string().datetime(), z.date()]),
+  reason: optionalNullableString,
+});
+export type ExtendSecondmentInput = z.input<typeof extendSecondmentSchema>;
+
 // ==========================================
 // 13. Temporary Assignments Validation
 // ==========================================

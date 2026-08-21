@@ -17,6 +17,7 @@ import {
   GrantSource,
 } from '@/types/authorization.types';
 import { AuthorizationContextError } from './errors';
+import { isTemporaryAssignmentEffective } from './temporary-assignment';
 
 export const ACTIVE_BUSINESS_COOKIE = 'wsnexa_active_business';
 export const ACTIVE_BRANCH_COOKIE = 'wsnexa_active_branch';
@@ -256,11 +257,17 @@ export async function resolveAuthorizationContext(
   const secondments: EffectiveStaffAssignment[] = [];
 
   for (const a of rawStaffAssignments) {
-    // Check temporal window against server/database time
-    const startsAtValid = !a.starts_at || new Date(a.starts_at) <= now;
-    const endsAtValid = !a.ends_at || new Date(a.ends_at) >= now;
+    // Check temporal window against server/database time using authoritative helper
+    const isEffective = isTemporaryAssignmentEffective(
+      {
+        status: a.status,
+        starts_at: a.starts_at,
+        ends_at: a.ends_at,
+      },
+      now
+    );
 
-    if (startsAtValid && endsAtValid) {
+    if (isEffective) {
       const isActing = a.assignment_type === 'acting';
       const isSecondment = a.assignment_type === 'secondment';
       const pos = a.organization_positions as unknown as { id: string; position_code?: string } | null;
@@ -345,6 +352,26 @@ export async function resolveAuthorizationContext(
             isDefault: Boolean(b.is_default),
             status: b.status,
             assignedAt: sec.startsAt || nowIso,
+          });
+        }
+      }
+    }
+
+    // Include branch reach for active acting assignments (Task 4)
+    for (const act of actingAssignments) {
+      if (act.branchId && branchMap.has(act.branchId)) {
+        authorizedBranchIdSet.add(act.branchId);
+        if (!branchAssignments.some((ba) => ba.branchId === act.branchId)) {
+          const b = branchMap.get(act.branchId)!;
+          branchAssignments.push({
+            id: `act-${act.id}`,
+            branchId: b.id,
+            branchName: b.name,
+            branchCode: b.code,
+            isPrimary: false,
+            isDefault: Boolean(b.is_default),
+            status: act.status,
+            assignedAt: act.startsAt || nowIso,
           });
         }
       }

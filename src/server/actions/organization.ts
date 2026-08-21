@@ -41,6 +41,8 @@ import {
   endActingAssignmentSchema,
   CreateSecondmentInput,
   createSecondmentSchema,
+  ExtendSecondmentInput,
+  extendSecondmentSchema,
   EndSecondmentInput,
   endSecondmentSchema,
   CreateTemporaryAssignmentInput,
@@ -600,6 +602,57 @@ export async function endSecondmentAction(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to end secondment.';
+    return { success: false, message };
+  }
+}
+
+/**
+ * Extends a secondment assignment.
+ */
+export async function extendSecondmentAction(
+  formData: Omit<ExtendSecondmentInput, 'businessId'>
+): Promise<ActionResponse<{ assignmentId: string }>> {
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized. Please sign in.' };
+    }
+
+    const canManage = await can({
+      context: authContext,
+      permission: 'people.manage',
+    });
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden. You do not have permission to extend secondments.' };
+    }
+
+    const parsed = extendSecondmentSchema.safeParse({
+      ...formData,
+      businessId: authContext.businessId,
+    });
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: 'Validation failed.',
+        errors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    await OrganizationService.extendSecondment(parsed.data, authContext.userId);
+
+    revalidatePath('/dashboard/people/secondments');
+    revalidatePath('/dashboard/people');
+    revalidatePath('/dashboard/people/[membershipId]', 'page');
+
+    return {
+      success: true,
+      message: 'Secondment extended successfully.',
+      data: { assignmentId: parsed.data.assignmentId },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to extend secondment.';
     return { success: false, message };
   }
 }

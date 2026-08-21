@@ -23,6 +23,7 @@ import {
   ExtendActingAssignmentInput,
   EndActingAssignmentInput,
   CreateSecondmentInput,
+  ExtendSecondmentInput,
   EndSecondmentInput,
   CreateTemporaryAssignmentInput,
   EndTemporaryAssignmentInput,
@@ -48,6 +49,7 @@ import {
   extendActingAssignmentSchema,
   endActingAssignmentSchema,
   createSecondmentSchema,
+  extendSecondmentSchema,
   endSecondmentSchema,
   createTemporaryAssignmentSchema,
   endTemporaryAssignmentSchema,
@@ -1543,6 +1545,58 @@ export class OrganizationService {
     });
 
     return data;
+  }
+
+  static async extendSecondment(input: ExtendSecondmentInput, actorId?: string) {
+    const parsed = extendSecondmentSchema.parse(input);
+    const admin = createAdminClient();
+
+    const newEndsAtStr = typeof parsed.newEndsAt === 'string' ? parsed.newEndsAt : parsed.newEndsAt.toISOString();
+
+    const { data: assign, error: findErr } = await admin
+      .from('staff_assignments')
+      .select('*')
+      .eq('id', parsed.assignmentId)
+      .eq('business_id', parsed.businessId)
+      .single();
+
+    if (findErr || !assign) throw new Error('Secondment assignment not found');
+    if (assign.assignment_type !== 'secondment') throw new Error('Assignment is not a secondment');
+    if (new Date(newEndsAtStr).getTime() <= new Date(assign.starts_at).getTime()) {
+      throw new Error('New end date must be strictly after start date');
+    }
+
+    const { error: updateErr } = await admin
+      .from('staff_assignments')
+      .update({
+        ends_at: newEndsAtStr,
+        reason: parsed.reason || assign.reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', parsed.assignmentId)
+      .select()
+      .single();
+
+    if (updateErr) throw new Error(`Failed to extend secondment: ${updateErr.message}`);
+
+    await this.logAssignmentEvent({
+      businessId: parsed.businessId,
+      assignmentId: parsed.assignmentId,
+      eventType: 'extended',
+      previousStatus: assign.status,
+      newStatus: assign.status,
+      relatedAssignmentId: assign.source_assignment_id,
+      metadata: { previous_ends_at: assign.ends_at, new_ends_at: newEndsAtStr },
+      reason: parsed.reason || 'Secondment extended',
+      changedBy: actorId,
+    });
+
+    return {
+      success: true,
+      assignment_id: parsed.assignmentId,
+      previous_ends_at: assign.ends_at,
+      new_ends_at: newEndsAtStr,
+    };
   }
 
   // ==========================================

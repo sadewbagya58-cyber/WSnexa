@@ -276,3 +276,104 @@ export interface RequirePermissionOptions {
   permission: string;
   resource?: ResourceTarget | ResourceScope | null;
 }
+
+// ====================================================================
+// Scope Management Domain Types (Phase 30 Step 6)
+// ====================================================================
+
+export const SCOPE_RANK: Record<ScopeType, number> = {
+  SELF: 1,
+  AREA_TEAM: 2,
+  DEPARTMENT: 3,
+  PROPERTY: 4,
+  ORGANIZATION: 5,
+};
+
+export type ScopeGrantPrincipal =
+  | { type: 'role'; roleKey: string }
+  | { type: 'custom_role'; customRoleId: string }
+  | { type: 'membership'; membershipId: string };
+
+export type ScopeTarget =
+  | { scopeType: 'ORGANIZATION' }
+  | { scopeType: 'PROPERTY'; branchId: string }
+  | { scopeType: 'DEPARTMENT'; departmentId: string }
+  | { scopeType: 'AREA_TEAM'; organizationUnitId?: string; serviceAreaId?: string }
+  | { scopeType: 'SELF' };
+
+export interface ScopeGrantDetail {
+  id: string;
+  businessId: string | null;
+  roleKey: string | null;
+  customRoleId: string | null;
+  customRoleName?: string | null;
+  businessMembershipId: string | null;
+  memberName?: string | null;
+  memberEmail?: string | null;
+  permissionKey: string;
+  permissionName?: string;
+  effect: GrantEffect;
+  scopeType: ScopeType;
+  branchId: string | null;
+  branchName?: string | null;
+  departmentId: string | null;
+  departmentName?: string | null;
+  organizationUnitId: string | null;
+  organizationUnitName?: string | null;
+  serviceAreaId: string | null;
+  serviceAreaName?: string | null;
+  grantSource: GrantSource;
+  sourceId: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoleScopePresetDetail {
+  id: string;
+  businessId: string | null;
+  roleKey: string | null;
+  roleName?: string | null;
+  customRoleId: string | null;
+  customRoleName?: string | null;
+  defaultScope: ScopeType;
+  maxScope: ScopeType;
+  createdAt: string;
+  updatedAt: string;
+  isSystemProtected?: boolean;
+}
+
+export interface EffectiveAccessPreview {
+  membershipId: string;
+  userId: string;
+  userEmail: string;
+  businessId: string;
+  role: string;
+  customRoleId: string | null;
+  customRoleName: string | null;
+  preset: RoleScopePresetInfo | null;
+  rolePermissions: string[];
+  scopeGrants: ScopeGrantDetail[];
+  scopedOverrides: Array<{
+    id: string;
+    permissionKey: string;
+    effect: GrantEffect;
+    scopeType: ScopeType | null;
+    branchId: string | null;
+    departmentId: string | null;
+    organizationUnitId: string | null;
+    serviceAreaId: string | null;
+    targetName?: string | null;
+  }>;
+  effectiveSummary: Array<{
+    permissionKey: string;
+    effect: GrantEffect;
+    scopeType: ScopeType;
+    scopeTargets: Array<{
+      type: ScopeType;
+      id?: string | null;
+      name?: string | null;
+    }>;
+    source: string;
+  }>;
+}

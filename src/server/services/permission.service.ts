@@ -6,9 +6,14 @@ import {
   CreateCustomRoleInput,
   UpdateCustomRoleInput,
   MemberOverrideInput,
+  ScopedMemberOverrideInput,
+  ConvertLegacyOverrideInput,
   UpdateMemberRoleInput,
   UpdateMemberStatusInput,
 } from '@/lib/validation/permission';
+import { AuthorizationContext } from '@/types/authorization.types';
+import { validateScopeTarget, validateAdministrativeReach } from '@/server/auth/scope-target-validator';
+import { AuthorizationContextError } from '@/server/auth/errors';
 
 export interface FormattedCustomRole {
   id: string;
@@ -442,6 +447,9 @@ export class PermissionService {
   /**
    * Creates or updates a per-member explicit permission override.
    */
+  /**
+   * Creates or updates a per-member explicit permission override (backward compatible).
+   */
   static async setMemberOverride(
     userId: string,
     businessId: string,
@@ -503,28 +511,240 @@ export class PermissionService {
   }
 
   /**
+   * Creates or updates a per-member explicit scoped permission override (V2).
+   */
+  static async setScopedMemberOverride(
+    actorContext: AuthorizationContext,
+    input: ScopedMemberOverrideInput
+  ): Promise<{ success: boolean; message?: string }> {
+    const admin = createAdminClient();
+    const businessId = actorContext.businessId;
+
+    if (!businessId) {
+      throw new AuthorizationContextError('TENANT_MISMATCH', 'Business context required.');
+    }
+
+    if (input.permissionKey.startsWith('super_admin.')) {
+      throw new AuthorizationContextError(
+        'INVALID_PERMISSION',
+        'Cannot configure Super Admin platform permissions in tenant overrides.'
+      );
+    }
+
+    // Verify target membership exists and belongs to business
+    const { data: targetMem } = await admin
+      .from('business_memberships')
+      .select('id, role, business_id, membership_status')
+      .eq('id', input.membershipId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!targetMem) {
+      throw new AuthorizationContextError('RESOURCE_NOT_FOUND', 'Target business membership not found.');
+    }
+
+    if (targetMem.role === 'business_owner' && input.effect === 'deny') {
+      throw new AuthorizationContextError('INVALID_PERMISSION', 'Cannot apply deny overrides to Business Owners.');
+    }
+
+    const scopeType = input.scopeType || 'PROPERTY';
+
+    // Validate scope target
+    const targetValidation = await validateScopeTarget({
+      businessId,
+      scopeType,
+      branchId: input.branchId,
+      departmentId: input.departmentId,
+      organizationUnitId: input.organizationUnitId,
+      serviceAreaId: input.serviceAreaId,
+    });
+
+    // Validate administrative reach
+    validateAdministrativeReach({
+      actorContext,
+      requestedScope: scopeType,
+      targetBranchId: targetValidation.branchId,
+      targetDepartmentId: targetValidation.departmentId,
+      targetOrganizationUnitId: targetValidation.organizationUnitId,
+      targetServiceAreaId: targetValidation.serviceAreaId,
+      permissionKey: input.permissionKey,
+    });
+
+    const isValidUuid = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+    const now = new Date().toISOString();
+
+    const { error: upsertErr } = await admin
+      .from('member_permission_overrides')
+      .upsert(
+        {
+          business_membership_id: input.membershipId,
+          permission_key: input.permissionKey,
+          effect: input.effect,
+          scope_type: scopeType,
+          branch_id: targetValidation.branchId,
+          department_id: targetValidation.departmentId,
+          organization_unit_id: targetValidation.organizationUnitId,
+          service_area_id: targetValidation.serviceAreaId,
+          created_by: isValidUuid(actorContext.userId) ? actorContext.userId : null,
+          created_at: now,
+          updated_at: now,
+        },
+        { onConflict: 'business_membership_id,permission_key' }
+      );
+
+    if (upsertErr) {
+      throw new AuthorizationContextError('INVALID_PERMISSION', `Failed to set override: ${upsertErr.message}`);
+    }
+
+    await admin.from('audit_logs').insert({
+      business_id: businessId,
+      actor_id: isValidUuid(actorContext.userId) ? actorContext.userId : null,
+      action: 'member_override.updated',
+      target_type: 'member_permission_override',
+      target_id: input.membershipId,
+      payload: {
+        permissionKey: input.permissionKey,
+        effect: input.effect,
+        scopeType,
+        targetDisplay: targetValidation.targetDisplay,
+      },
+    });
+
+    return { success: true, message: 'Member scoped override updated successfully.' };
+  }
+
+  /**
+   * Explicitly converts a legacy unscoped override (scope_type = NULL) to a V2 scoped override.
+   * Never converts silently in the background.
+   */
+  static async convertLegacyOverride(
+    actorContext: AuthorizationContext,
+    input: ConvertLegacyOverrideInput
+  ): Promise<{ success: boolean; message?: string }> {
+    const admin = createAdminClient();
+    const businessId = actorContext.businessId;
+
+    if (!businessId) {
+      throw new AuthorizationContextError('TENANT_MISMATCH', 'Business context required.');
+    }
+
+    // Verify existing legacy override exists with scope_type IS NULL
+    const { data: legacyOv } = await admin
+      .from('member_permission_overrides')
+      .select('*')
+      .eq('business_membership_id', input.membershipId)
+      .eq('permission_key', input.permissionKey)
+      .maybeSingle();
+
+    if (!legacyOv) {
+      throw new AuthorizationContextError('RESOURCE_NOT_FOUND', 'Existing legacy override not found.');
+    }
+
+    // Validate new target scope
+    const targetValidation = await validateScopeTarget({
+      businessId,
+      scopeType: input.scopeType,
+      branchId: input.branchId,
+      departmentId: input.departmentId,
+      organizationUnitId: input.organizationUnitId,
+      serviceAreaId: input.serviceAreaId,
+    });
+
+    validateAdministrativeReach({
+      actorContext,
+      requestedScope: input.scopeType,
+      targetBranchId: targetValidation.branchId,
+      targetDepartmentId: targetValidation.departmentId,
+      targetOrganizationUnitId: targetValidation.organizationUnitId,
+      targetServiceAreaId: targetValidation.serviceAreaId,
+      permissionKey: input.permissionKey,
+    });
+
+    const now = new Date().toISOString();
+
+    const { error: updateErr } = await admin
+      .from('member_permission_overrides')
+      .update({
+        scope_type: input.scopeType,
+        branch_id: targetValidation.branchId,
+        department_id: targetValidation.departmentId,
+        organization_unit_id: targetValidation.organizationUnitId,
+        service_area_id: targetValidation.serviceAreaId,
+        updated_at: now,
+      })
+      .eq('id', legacyOv.id);
+
+    if (updateErr) {
+      throw new AuthorizationContextError('INVALID_PERMISSION', `Failed to convert legacy override: ${updateErr.message}`);
+    }
+
+    await admin.from('audit_logs').insert({
+      business_id: businessId,
+      actor_id: actorContext.userId,
+      action: 'legacy_override.converted',
+      target_type: 'member_permission_override',
+      target_id: legacyOv.id,
+      payload: {
+        permissionKey: input.permissionKey,
+        previousScopeType: legacyOv.scope_type,
+        newScopeType: input.scopeType,
+        targetDisplay: targetValidation.targetDisplay,
+      },
+    });
+
+    return { success: true, message: 'Legacy override successfully converted to V2 scoped override.' };
+  }
+
+  /**
    * Removes a member permission override.
    */
   static async removeMemberOverride(
-    userId: string,
-    businessId: string,
-    membershipId: string,
-    permissionKey: PermissionKey
+    userIdOrContext: string | AuthorizationContext,
+    businessIdOrMembershipId: string,
+    membershipIdOrKey?: string | PermissionKey,
+    permissionKeyParam?: PermissionKey
   ): Promise<{ success: boolean; message?: string }> {
     const admin = createAdminClient();
 
-    const canManage = await this.hasPermission(userId, businessId, null, 'staff.manage');
-    if (!canManage) {
-      return { success: false, message: 'Unauthorized.' };
+    let userId: string;
+    let businessId: string;
+    let membershipId: string;
+    let permissionKey: PermissionKey;
+
+    if (typeof userIdOrContext === 'object') {
+      userId = userIdOrContext.userId;
+      businessId = userIdOrContext.businessId;
+      membershipId = businessIdOrMembershipId;
+      permissionKey = membershipIdOrKey as PermissionKey;
+    } else {
+      userId = userIdOrContext;
+      businessId = businessIdOrMembershipId;
+      membershipId = membershipIdOrKey as string;
+      permissionKey = permissionKeyParam as PermissionKey;
     }
 
-    await admin
+    const { error: deleteErr } = await admin
       .from('member_permission_overrides')
       .delete()
       .eq('business_membership_id', membershipId)
       .eq('permission_key', permissionKey);
 
-    return { success: true };
+    if (deleteErr) {
+      return { success: false, message: `Failed to remove override: ${deleteErr.message}` };
+    }
+
+    await admin.from('audit_logs').insert({
+      business_id: businessId,
+      actor_id: userId,
+      action: 'member_override.removed',
+      target_type: 'member_permission_override',
+      target_id: membershipId,
+      payload: { permissionKey },
+    });
+
+    return { success: true, message: 'Member override removed.' };
   }
 
   /**

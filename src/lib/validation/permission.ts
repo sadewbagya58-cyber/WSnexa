@@ -322,3 +322,119 @@ export const scopedMemberOverrideSchema = memberOverrideSchema
 
 export type ScopedMemberOverrideInput = z.infer<typeof scopedMemberOverrideSchema>;
 
+export const scopeTargetSchema = z.discriminatedUnion('scopeType', [
+  z.object({
+    scopeType: z.literal('ORGANIZATION'),
+  }),
+  z.object({
+    scopeType: z.literal('PROPERTY'),
+    branchId: z.string().uuid('Invalid branch ID'),
+  }),
+  z.object({
+    scopeType: z.literal('DEPARTMENT'),
+    departmentId: z.string().uuid('Invalid department ID'),
+  }),
+  z.object({
+    scopeType: z.literal('AREA_TEAM'),
+    organizationUnitId: z.string().uuid('Invalid organization unit ID').optional(),
+    serviceAreaId: z.string().uuid('Invalid service area ID').optional(),
+  }).refine(
+    (d) => (Boolean(d.organizationUnitId) !== Boolean(d.serviceAreaId)),
+    { message: 'AREA_TEAM requires exactly one of organizationUnitId or serviceAreaId', path: ['organizationUnitId'] }
+  ),
+  z.object({
+    scopeType: z.literal('SELF'),
+  }),
+]);
+
+export type ScopeTargetInput = z.infer<typeof scopeTargetSchema>;
+
+export const createScopeGrantInputSchema = z
+  .object({
+    roleKey: z.string().optional().nullable(),
+    customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
+    businessMembershipId: z.string().uuid('Invalid membership ID').optional().nullable(),
+    permissionKey: permissionKeyEnum,
+    effect: grantEffectEnum.default('allow'),
+    scopeType: scopeTypeEnum,
+    branchId: z.string().uuid('Invalid branch ID').optional().nullable(),
+    departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
+    organizationUnitId: z.string().uuid('Invalid organization unit ID').optional().nullable(),
+    serviceAreaId: z.string().uuid('Invalid service area ID').optional().nullable(),
+    grantSource: grantSourceEnum.default('role_preset'),
+    sourceId: z.string().uuid('Invalid source ID').optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      const hasRole = Boolean(data.roleKey);
+      const hasCustomRole = Boolean(data.customRoleId);
+      const hasMembership = Boolean(data.businessMembershipId);
+      const count = (hasRole ? 1 : 0) + (hasCustomRole ? 1 : 0) + (hasMembership ? 1 : 0);
+      return count === 1;
+    },
+    { message: 'Scope grant must target exactly one principal: roleKey, customRoleId, or businessMembershipId', path: ['roleKey'] }
+  )
+  .refine(
+    (data) => {
+      if (data.scopeType === 'ORGANIZATION') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'PROPERTY') {
+        return Boolean(data.branchId) && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'DEPARTMENT') {
+        return Boolean(data.departmentId) && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      if (data.scopeType === 'AREA_TEAM') {
+        const hasUnit = Boolean(data.organizationUnitId);
+        const hasArea = Boolean(data.serviceAreaId);
+        return ((hasUnit && !hasArea) || (hasArea && !hasUnit)) && !data.branchId && !data.departmentId;
+      }
+      if (data.scopeType === 'SELF') {
+        return !data.branchId && !data.departmentId && !data.organizationUnitId && !data.serviceAreaId;
+      }
+      return false;
+    },
+    { message: 'Scope target foreign keys must match scopeType', path: ['scopeType'] }
+  );
+
+export type CreateScopeGrantInput = z.infer<typeof createScopeGrantInputSchema>;
+
+export const updateScopeGrantInputSchema = z.object({
+  grantId: z.string().uuid('Invalid grant ID'),
+  effect: grantEffectEnum.optional(),
+  scopeType: scopeTypeEnum.optional(),
+  branchId: z.string().uuid('Invalid branch ID').optional().nullable(),
+  departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
+  organizationUnitId: z.string().uuid('Invalid organization unit ID').optional().nullable(),
+  serviceAreaId: z.string().uuid('Invalid service area ID').optional().nullable(),
+});
+
+export type UpdateScopeGrantInput = z.infer<typeof updateScopeGrantInputSchema>;
+
+export const updateRoleScopePresetInputSchema = z
+  .object({
+    roleKey: z.string().optional().nullable(),
+    customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
+    defaultScope: scopeTypeEnum,
+    maxScope: scopeTypeEnum,
+  })
+  .refine(
+    (d) => Boolean(d.roleKey) !== Boolean(d.customRoleId),
+    { message: 'Preset must target either roleKey or customRoleId (XOR)' }
+  );
+
+export type UpdateRoleScopePresetInput = z.infer<typeof updateRoleScopePresetInputSchema>;
+
+export const convertLegacyOverrideSchema = z.object({
+  membershipId: z.string().uuid('Invalid membership ID'),
+  permissionKey: permissionKeyEnum,
+  scopeType: scopeTypeEnum,
+  branchId: z.string().uuid('Invalid branch ID').optional().nullable(),
+  departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
+  organizationUnitId: z.string().uuid('Invalid organization unit ID').optional().nullable(),
+  serviceAreaId: z.string().uuid('Invalid service area ID').optional().nullable(),
+});
+
+export type ConvertLegacyOverrideInput = z.infer<typeof convertLegacyOverrideSchema>;
+

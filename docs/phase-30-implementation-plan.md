@@ -207,10 +207,26 @@ The remaining Phase 30 work is structured into 11 discrete, test-driven steps:
   - Business, Branch & Security (`order-security.ts`, `branch.ts`)
 - **Verification**: `scripts/verify-rbac-v2-integration.ts` (40/40 assertions passed)
 
-### Step 6: Multi-Level Scope Grants Service
-- **Files**: `src/server/services/scope-grant.service.ts`
+### Step 6: Scope Grants & Permission Overrides Management Layer (COMPLETED)
+- **Files**:
+  - `src/server/auth/scope-target-validator.ts`
+  - `src/server/services/scope-grant.service.ts`
+  - `src/server/services/permission.service.ts`
+  - `src/server/actions/permission.ts`
+  - `src/types/authorization.types.ts`
+  - `src/lib/validation/permission.ts`
+  - `supabase/migrations/20260821000000_phase30_step6_rls_hardening.sql`
+  - `docs/phase-30-step-6-scope-grant-management.md`
 - **Actions**:
-  - Add administrative methods to grant/revoke permissions at specific scopes (`department_id`, `unit_id`, `branch_id`).
+  - Implemented `validateScopeTarget`, `validateMaxScope`, and `validateAdministrativeReach` with check constraint alignment.
+  - Implemented `ScopeGrantService` CRUD (`listScopeGrants`, `getScopeGrantById`, `createScopeGrant`, `updateScopeGrant`, `revokeScopeGrant`).
+  - Implemented `RoleScopePreset` management (`listRoleScopePresets`, `updateRoleScopePreset`) protecting built-in owner/global templates.
+  - Implemented `previewMemberEffectiveAccess` aggregated permissions engine.
+  - Implemented scoped member overrides (`setScopedMemberOverride`) and explicit legacy conversion path (`convertLegacyOverride`).
+  - Implemented 10 Next.js Server Actions with trusted authorization context enforcement.
+  - Implemented RLS write policy hardening migration.
+  - Full audit logging (`scope_grant.*`, `member_override.*`, `legacy_override.*`, `role_scope_preset.*`).
+- **Verification**: `scripts/verify-rbac-v2-management.ts` (44/44 assertions passed).
 
 ### Step 7: Granular Member Permission Overrides with Scope Support
 - **Files**: `src/server/services/permission.service.ts`, `src/server/actions/permission.ts`

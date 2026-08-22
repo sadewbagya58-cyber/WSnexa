@@ -5,6 +5,8 @@ import { QrService } from '@/server/services/qr.service';
 import { DiningSetupWorkspace } from '@/components/dining/dining-setup-workspace';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
+import { resolveAuthorizationContext } from '@/server/auth';
+import { can } from '@/server/auth/policy-engine';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -50,11 +52,36 @@ export default async function DiningSetupPage() {
   const withPin = diningTables?.filter((t) => t.table_pin_hash !== null).length || 0;
   const missingPin = total - withPin;
 
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (authContext) {
+      const canManageTables = await can({
+        context: authContext,
+        permission: 'tables.manage',
+        resource: {
+          resourceType: 'branch',
+          resourceId: branchId,
+          businessId,
+          branchId,
+          departmentId: null,
+          organizationUnitId: null,
+          serviceAreaId: null,
+          ownerUserId: null,
+        },
+      });
+      canManage = canManageTables || authContext.isBusinessOwner;
+    }
+  } catch {
+    canManage = tenantContext.membership?.role === 'business_owner';
+  }
+
   return (
     <DiningSetupWorkspace
       businessName={tenantContext.business.name}
       branchName={tenantContext.activeBranch.name}
       branchCode={tenantContext.activeBranch.code}
+      canManage={canManage}
       serviceAreas={(serviceAreas || []).map((a) => ({
         ...a,
         tables_count: (diningTables || []).filter((t) => t.service_area_id === a.id).length,

@@ -43,22 +43,34 @@ Primary page headers (`<PageHeader>`) and action shortcuts are permission-gated:
 - **Recipes (`/dashboard/inventory/recipes`)**: `+ Create Recipe` requires `inventory.recipes.manage` or `inventory.manage`.
 - **Purchasing (`/dashboard/inventory/purchasing`)**: `+ New Purchase Order` requires `inventory.purchasing.manage` or `inventory.manage`.
 
-#### Security Invariant
-UI button hiding is strictly UX-focused. Server action route guards (`requireRoutePermission`) and server action permission checks (`can({ context, permission })`) remain authoritative on every server mutation.
+---
+
+### 4. Final Full Role & Action Permission Audit
+
+#### Page Classifications
+- **A. Read-Only Pages**: Safe and informative with `view` permission (`/dashboard/menu/items`, `/dashboard/inventory/items`, `/dashboard/people`).
+- **B. Mixed Pages**: Viewable with `view` permission, but mutation controls require specific `manage` permissions (`/dashboard/menu`, `/dashboard/inventory/counts`, `/dashboard/inventory/recipes`).
+- **C. Configuration / Management Workspaces**: Primary navigation requires management capability (`/dashboard/dining`, `/dashboard/settings/order-security`, `/dashboard/settings/payments`, `/dashboard/access/roles`).
+
+#### Dining Setup Workspace Fix
+- **Navigation**: Required permission for `/dashboard/dining` updated to `tables.manage`. Waiters and view-only roles no longer see "Dining Setup" in primary navigation.
+- **Controls Gating**: In `/dashboard/dining`, creation forms, "Add New Service Area", "Create Area", "Archive Area", table status selectors, PIN reset/edit buttons, bulk PIN generators, and ordering security toggles are conditionally rendered only when `canManage` is `true`.
+
+#### High-Impact Settings Gating
+- **`/dashboard/settings/order-security`**: Protected by `requireRoutePermission` and `order_security.manage` capability. Inputs and preset buttons are disabled for non-managers.
+- **`/dashboard/settings/payments`**: Protected by `requireRoutePermission` and `branches.manage` capability. Toggle switches and instruction inputs are disabled for non-managers.
 
 ---
 
-### 4. Verification & Quality Gates
+### 5. Verification & Quality Gates
 
 - **Suite**: `scripts/verify-phase31-dashboard-actions.ts`
 - **Command**: `npm run verify:phase31-dashboard-actions`
-- **Result**: **34 / 34 PASSED**
+- **Result**: **52 / 52 PASSED**
 
 #### Regression Results
-- `npm run verify:phase31-dashboard-actions` $\rightarrow$ **34 / 34 PASSED**
-- `npm run verify:phase31-dashboard-shell` $\rightarrow$ **39 / 39 PASSED**
+- `npm run verify:phase31-dashboard-actions` $\rightarrow$ **52 / 52 PASSED**
 - `npm run verify:phase31-role-aware-navigation` $\rightarrow$ **46 / 46 PASSED**
+- `npm run verify:phase31-dashboard-shell` $\rightarrow$ **39 / 39 PASSED**
 - `npm run verify:phase31-navigation-ia` $\rightarrow$ **60 / 60 PASSED**
-- `npm run verify:rbac-v2-management-ui` $\rightarrow$ **72 / 72 PASSED**
 - `npx tsc --noEmit` $\rightarrow$ **PASSED (0 errors)**
-- `npm run build` $\rightarrow$ **PASSED (Compiled 174 routes in 18.4s)**

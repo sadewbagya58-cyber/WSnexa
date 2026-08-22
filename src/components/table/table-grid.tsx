@@ -34,6 +34,7 @@ interface TableGridProps {
   tablePinLength: number;
   initialTables: DiningTableItem[];
   areas: { id: string; name: string; code: string }[];
+  canManage?: boolean;
 }
 
 export const TableGrid: React.FC<TableGridProps> = ({
@@ -42,6 +43,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
   tablePinLength,
   initialTables,
   areas,
+  canManage = true,
 }) => {
   const [tables, setTables] = useState<DiningTableItem[]>(initialTables);
   const [selectedArea, setSelectedArea] = useState<string>('all');
@@ -287,11 +289,13 @@ export const TableGrid: React.FC<TableGridProps> = ({
             </Button>
           )}
 
-          <Link href="/dashboard/tables/qr">
-            <Button variant="outline" size="sm">
-              📱 Branch QR & Settings
-            </Button>
-          </Link>
+          {canManage && (
+            <Link href="/dashboard/tables/qr">
+              <Button variant="outline" size="sm">
+                📱 Branch QR & Settings
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -335,50 +339,58 @@ export const TableGrid: React.FC<TableGridProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={pinLoading}
-                      onClick={() => handleGeneratePin(table)}
-                      className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
-                    >
-                      {hasPin ? '🔄 Reset' : '✨ Set'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pinLoading}
-                      onClick={() => setCustomPinModal({ tableId: table.id, tableName: table.name, inputPin: '' })}
-                      className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
-                    >
-                      ✏️ Edit
-                    </button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={pinLoading}
+                        onClick={() => handleGeneratePin(table)}
+                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
+                      >
+                        {hasPin ? '🔄 Reset' : '✨ Set'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pinLoading}
+                        onClick={() => setCustomPinModal({ tableId: table.id, tableName: table.name, inputPin: '' })}
+                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
+                      >
+                        ✏️ Edit
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Status Change Selector & Archive */}
               <div className="mt-4 flex items-center justify-between border-t border-zinc-100 pt-3">
-                <select
-                  value={table.status}
-                  disabled={isPending}
-                  onChange={(e) => handleStatusChange(table.id, e.target.value as TableStatus)}
-                  className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900 focus:outline-none touch-manipulation disabled:opacity-50"
-                >
-                  <option value="available">Set Available</option>
-                  <option value="occupied">Set Occupied</option>
-                  <option value="reserved">Set Reserved</option>
-                  <option value="cleaning">Set Cleaning</option>
-                  <option value="unavailable">Set Unavailable</option>
-                </select>
+                {canManage ? (
+                  <select
+                    value={table.status}
+                    disabled={isPending}
+                    onChange={(e) => handleStatusChange(table.id, e.target.value as TableStatus)}
+                    className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-900 focus:outline-none touch-manipulation disabled:opacity-50"
+                  >
+                    <option value="available">Set Available</option>
+                    <option value="occupied">Set Occupied</option>
+                    <option value="reserved">Set Reserved</option>
+                    <option value="cleaning">Set Cleaning</option>
+                    <option value="unavailable">Set Unavailable</option>
+                  </select>
+                ) : (
+                  <span className="text-xs text-zinc-500 font-medium">Status: {table.status}</span>
+                )}
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isPending}
-                  onClick={() => handleArchive(table.id)}
-                >
-                  Archive
-                </Button>
+                {canManage && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => handleArchive(table.id)}
+                  >
+                    Archive
+                  </Button>
+                )}
               </div>
             </Card>
           );

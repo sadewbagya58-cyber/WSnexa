@@ -47,6 +47,7 @@ interface DiningSetupWorkspaceProps {
   businessName: string;
   branchName: string;
   branchCode: string;
+  canManage?: boolean;
   serviceAreas: WorkspaceServiceArea[];
   tables: WorkspaceDiningTable[];
   branchQr: WorkspaceBranchQr | null;
@@ -60,6 +61,7 @@ export function DiningSetupWorkspace({
   businessName,
   branchName,
   branchCode,
+  canManage = true,
   serviceAreas,
   tables,
   branchQr,
@@ -116,16 +118,20 @@ export function DiningSetupWorkspace({
         {/* Quick Route Links & Contextual Help */}
         <div className="flex flex-wrap items-center gap-2">
           <ContextualHelpButton explicitSlug="creating-service-areas-and-tables" />
-          <Link href="/dashboard/tables/bulk">
-            <Button variant="outline" size="sm" className="text-xs font-bold min-h-[44px]">
-              ⚡ Bulk Generator
-            </Button>
-          </Link>
-          <Link href="/dashboard/tables/qr">
-            <Button variant="outline" size="sm" className="text-xs font-bold min-h-[44px]">
-              📱 QR Codes
-            </Button>
-          </Link>
+          {canManage && (
+            <>
+              <Link href="/dashboard/tables/bulk">
+                <Button variant="outline" size="sm" className="text-xs font-bold min-h-[44px]">
+                  ⚡ Bulk Generator
+                </Button>
+              </Link>
+              <Link href="/dashboard/tables/qr">
+                <Button variant="outline" size="sm" className="text-xs font-bold min-h-[44px]">
+                  📱 QR Codes
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -203,7 +209,7 @@ export function DiningSetupWorkspace({
               </p>
             </Card>
 
-            <AreaManager initialAreas={mappedAreas} />
+            <AreaManager initialAreas={mappedAreas} canManage={canManage} />
 
             <div className="flex justify-end pt-4">
               <Button
@@ -232,6 +238,7 @@ export function DiningSetupWorkspace({
               tablePinLength={tablePinLength}
               initialTables={mappedTables}
               areas={mappedAreas}
+              canManage={canManage}
             />
 
             <div className="flex justify-between pt-4">
@@ -271,6 +278,7 @@ export function DiningSetupWorkspace({
               tablePinLength={tablePinLength}
               tablesSummary={tablesSummary}
               initialQr={branchQr}
+              canManage={canManage}
             />
 
             <div className="flex justify-start pt-4">

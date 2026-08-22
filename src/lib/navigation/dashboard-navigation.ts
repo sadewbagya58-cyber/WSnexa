@@ -54,7 +54,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
       { id: 'business', label: 'Business Profile', href: '/dashboard/business', requiredPermission: 'business.settings.manage', context: 'ORGANIZATION' },
       { id: 'venue-profile', label: 'Public Venue Profile', href: '/dashboard/venue-profile', requiredPermission: 'venue_profile.manage', context: 'ORGANIZATION' },
       { id: 'branches', label: 'Branches', href: '/dashboard/branches', requiredPermission: 'branches.manage', custom: true, context: 'ORGANIZATION' },
-      { id: 'dining', label: 'Dining Setup', href: '/dashboard/dining', requiredPermission: 'tables.view', context: 'PROPERTY' },
+      { id: 'dining', label: 'Dining Setup', href: '/dashboard/dining', requiredPermission: 'tables.manage', context: 'PROPERTY' },
       { id: 'team', label: 'Team & Members', href: '/dashboard/team', requiredPermission: 'staff.view', context: 'ORGANIZATION' },
       { id: 'team-invites', label: 'Staff Invitations', href: '/dashboard/team/invites', requiredPermission: 'staff.invite', context: 'ORGANIZATION' },
     ],
@@ -130,7 +130,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
     id: 'settings',
     title: 'SETTINGS',
     items: [
-      { id: 'order-security', label: 'Order Security', href: '/dashboard/settings/order-security', requiredPermission: 'order_security.view', context: 'ORGANIZATION' },
+      { id: 'order-security', label: 'Order Security', href: '/dashboard/settings/order-security', requiredPermission: 'order_security.manage', context: 'ORGANIZATION' },
       { id: 'payments', label: 'Payment Methods', href: '/dashboard/settings/payments', requiredPermission: 'branches.manage', context: 'PROPERTY' },
     ],
   },

@@ -19,9 +19,10 @@ interface ServiceAreaItem {
 
 interface AreaManagerProps {
   initialAreas: ServiceAreaItem[];
+  canManage?: boolean;
 }
 
-export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
+export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas, canManage = true }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [areas, setAreas] = useState<ServiceAreaItem[]>(initialAreas);
@@ -33,7 +34,7 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
 
   const handleCreateArea = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !code.trim()) return;
+    if (!name.trim() || !code.trim() || !canManage) return;
 
     setLoading(true);
     setErrorMsg(null);
@@ -59,63 +60,70 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
     setLoading(false);
   };
 
-  const handleArchiveArea = async (areaId: string) => {
+  const handleArchiveArea = async (id: string) => {
+    if (!canManage) return;
     if (!confirm('Are you sure you want to archive this service area? Active tables must be moved or archived first.')) return;
-    const res = await archiveServiceAreaAction(areaId);
-    if (res.success) {
-      setAreas(areas.filter((a) => a.id !== areaId));
+    setLoading(true);
+    setErrorMsg(null);
+
+    const res = await archiveServiceAreaAction(id);
+    if (!res.success) {
+      setErrorMsg(res.message || 'Failed to archive service area.');
+    } else {
+      setAreas((prev) => prev.filter((a) => a.id !== id));
       startTransition(() => {
         router.refresh();
       });
-    } else {
-      alert(res.message);
     }
+    setLoading(false);
   };
 
   return (
     <div className="space-y-6">
-      {/* Create Area Card */}
-      <Card className="p-6">
-        <h2 className="text-base font-semibold text-zinc-950">Add New Service Area</h2>
-        <p className="text-xs text-zinc-500">
-          Examples: Main Hall, Outdoor Terrace, VIP Section, Rooftop, Poolside Bar.
-        </p>
+      {/* Create New Area Form Card (Hidden when view-only) */}
+      {canManage && (
+        <Card className="p-6">
+          <h2 className="text-base font-bold text-zinc-950">Add New Service Area</h2>
+          <p className="text-xs text-zinc-500">
+            Examples: Main Hall, Outdoor Terrace, VIP Section, Rooftop, Poolside Bar.
+          </p>
 
-        {errorMsg && (
-          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-            {errorMsg}
-          </div>
-        )}
+          {errorMsg && (
+            <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+              {errorMsg}
+            </div>
+          )}
 
-        <form onSubmit={handleCreateArea} className="mt-4 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="text"
-            required
-            placeholder="Area Name (e.g. Main Hall)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
-          />
-          <input
-            type="text"
-            required
-            placeholder="Area Code (e.g. HALL)"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="w-full sm:w-36 rounded-md border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
-          />
-          <input
-            type="text"
-            placeholder="Description (Optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
-          />
-          <LoadingButton type="submit" loading={loading || isPending} loadingText="Creating Area...">
-            + Create Area
-          </LoadingButton>
-        </form>
-      </Card>
+          <form onSubmit={handleCreateArea} className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <input
+              type="text"
+              required
+              placeholder="Area Name (e.g. Main Hall)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Area Code (e.g. HALL)"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full sm:w-36 rounded-md border border-zinc-300 px-3 py-2 text-sm uppercase text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+            />
+            <input
+              type="text"
+              placeholder="Description (Optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+            />
+            <LoadingButton type="submit" loading={loading || isPending} loadingText="Creating Area...">
+              + Create Area
+            </LoadingButton>
+          </form>
+        </Card>
+      )}
 
       {/* Areas List */}
       <div className="space-y-3">
@@ -134,9 +142,11 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas }) => {
               )}
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => handleArchiveArea(area.id)}>
-              Archive
-            </Button>
+            {canManage && (
+              <Button variant="outline" size="sm" onClick={() => handleArchiveArea(area.id)}>
+                Archive
+              </Button>
+            )}
           </Card>
         ))}
 

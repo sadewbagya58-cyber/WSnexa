@@ -10,12 +10,14 @@ interface OrderSecuritySettingsProps {
   branchId: string;
   branchName: string;
   initialSettings: BranchOrderSecuritySettings;
+  canManage?: boolean;
 }
 
 export function OrderSecuritySettings({
   branchId,
   branchName,
   initialSettings,
+  canManage = true,
 }: OrderSecuritySettingsProps) {
   const [settings, setSettings] = useState<BranchOrderSecuritySettings>(initialSettings);
   const [activePreset, setActivePreset] = useState<SecurityPresetLevel>('custom');
@@ -23,6 +25,7 @@ export function OrderSecuritySettings({
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleToggle = (key: keyof BranchOrderSecuritySettings) => {
+    if (!canManage) return;
     setSettings((prev) => ({
       ...prev,
       [key]: !prev[key],
@@ -31,6 +34,7 @@ export function OrderSecuritySettings({
   };
 
   const handleApplyPreset = async (preset: SecurityPresetLevel) => {
+    if (!canManage) return;
     setIsSaving(true);
     setFeedbackMsg(null);
     setActivePreset(preset);
@@ -75,6 +79,7 @@ export function OrderSecuritySettings({
   };
 
   const handleSaveCustom = async () => {
+    if (!canManage) return;
     setIsSaving(true);
     setFeedbackMsg(null);
 
@@ -327,11 +332,12 @@ export function OrderSecuritySettings({
               type="number"
               min={10}
               max={10000}
+              disabled={!canManage || isSaving}
               value={settings.location_radius_meters}
               onChange={(e) =>
                 setSettings({ ...settings, location_radius_meters: parseInt(e.target.value) || 150 })
               }
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
             />
           </div>
 
@@ -343,27 +349,30 @@ export function OrderSecuritySettings({
               type="number"
               min={5}
               max={1440}
+              disabled={!canManage || isSaving}
               value={settings.qr_session_duration_minutes}
               onChange={(e) =>
                 setSettings({ ...settings, qr_session_duration_minutes: parseInt(e.target.value) || 120 })
               }
-              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
+              className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
             />
           </div>
         </div>
 
         {/* Submit */}
-        <div className="pt-4 flex justify-end">
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleSaveCustom}
-            disabled={isSaving}
-            className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-6 min-h-[44px]"
-          >
-            {isSaving ? 'Saving...' : '💾 Save Security Settings'}
-          </Button>
-        </div>
+        {canManage && (
+          <div className="pt-4 flex justify-end">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleSaveCustom}
+              disabled={isSaving}
+              className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-6 min-h-[44px]"
+            >
+              {isSaving ? 'Saving...' : '💾 Save Security Settings'}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -257,6 +257,26 @@ async function runVerification() {
   const menuPageCode = fs.readFileSync(menuPagePath, 'utf8');
   assert(menuPageCode.includes('canManageMenu'), 'Menu overview page evaluates canManageMenu permission for + Add Menu Item action');
 
+  // Dining Setup & High-Impact Settings Gating
+  const diningPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'dining', 'page.tsx');
+  const diningPageCode = fs.readFileSync(diningPagePath, 'utf8');
+  assert(diningPageCode.includes('canManageTables'), 'Dining setup page evaluates canManageTables permission');
+  assert(diningPageCode.includes('canManage={canManage}'), 'Dining setup page passes canManage prop to DiningSetupWorkspace');
+
+  const diningWorkspacePath = path.join(process.cwd(), 'src', 'components', 'dining', 'dining-setup-workspace.tsx');
+  const diningWorkspaceCode = fs.readFileSync(diningWorkspacePath, 'utf8');
+  assert(diningWorkspaceCode.includes('canManage={canManage}'), 'DiningSetupWorkspace passes canManage prop to AreaManager, TableGrid, and BranchQrManager');
+
+  const orderSecurityPagePath = path.join(process.cwd(), 'src', 'app', 'dashboard', 'settings', 'order-security', 'page.tsx');
+  const orderSecurityPageCode = fs.readFileSync(orderSecurityPagePath, 'utf8');
+  assert(orderSecurityPageCode.includes('requireRoutePermission'), 'Order security page uses requireRoutePermission route guard');
+  assert(orderSecurityPageCode.includes('canManageOrderSecurity'), 'Order security page evaluates order_security.manage permission');
+
+  const paymentsPagePath = path.join(process.cwd(), 'src', 'app', 'dashboard', 'settings', 'payments', 'page.tsx');
+  const paymentsPageCode = fs.readFileSync(paymentsPagePath, 'utf8');
+  assert(paymentsPageCode.includes('requireRoutePermission'), 'Branch payments page uses requireRoutePermission route guard');
+  assert(paymentsPageCode.includes('canManageBranchPayments'), 'Branch payments page evaluates branches.manage permission');
+
   // --- C. Explicit DENY & Scope Invariants ---
   console.log('\n--- C. Explicit DENY & Scope Invariants ---');
 

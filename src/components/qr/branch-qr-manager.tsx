@@ -33,6 +33,7 @@ interface BranchQrManagerProps {
     is_active: boolean;
     generated_at: string;
   } | null;
+  canManage?: boolean;
 }
 
 export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
@@ -44,6 +45,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
   tablePinLength: initialLength,
   tablesSummary: initialSummary,
   initialQr,
+  canManage = true,
 }) => {
   const [qr, setQr] = useState(initialQr);
   const [rawToken, setRawToken] = useState<string | null>(initialQr?.rawToken || null);
@@ -236,7 +238,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
                 <input
                   type="checkbox"
                   checked={requireTableSelection}
-                  disabled={settingsLoading}
+                  disabled={!canManage || settingsLoading}
                   onChange={(e) => handleSettingChange({ require_table_selection: e.target.checked })}
                   className="sr-only peer"
                 />
@@ -265,7 +267,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
                 <input
                   type="checkbox"
                   checked={requireTablePin}
-                  disabled={settingsLoading || !requireTableSelection}
+                  disabled={!canManage || settingsLoading || !requireTableSelection}
                   onChange={(e) => handleSettingChange({ require_table_pin: e.target.checked })}
                   className="sr-only peer"
                 />
@@ -281,7 +283,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
               </div>
               <select
                 value={tablePinLength}
-                disabled={settingsLoading}
+                disabled={!canManage || settingsLoading}
                 onChange={(e) => handleSettingChange({ table_pin_length: Number(e.target.value) })}
                 className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-bold text-zinc-900 focus:outline-none"
               >
@@ -315,7 +317,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
             </div>
           </div>
 
-          {tablesSummary.missingPin > 0 && (
+          {canManage && tablesSummary.missingPin > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -349,13 +351,15 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
 
           <div className="space-y-3">
             {!qr?.is_active ? (
-              <Button
-                className="w-full"
-                disabled={loading}
-                onClick={handleGenerate}
-              >
-                {loading ? 'Generating...' : '✨ Generate Branch QR Code'}
-              </Button>
+              canManage && (
+                <Button
+                  className="w-full"
+                  disabled={loading}
+                  onClick={handleGenerate}
+                >
+                  {loading ? 'Generating...' : '✨ Generate Branch QR Code'}
+                </Button>
+              )
             ) : (
               <>
                 <Button
@@ -382,23 +386,27 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
                   💾 Download High-Res PNG
                 </Button>
 
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  disabled={loading}
-                  onClick={handleRegenerate}
-                >
-                  🔄 Regenerate QR (Invalidate Old)
-                </Button>
+                {canManage && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={loading}
+                      onClick={handleRegenerate}
+                    >
+                      🔄 Regenerate QR (Invalidate Old)
+                    </Button>
 
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  disabled={loading}
-                  onClick={handleDisable}
-                >
-                  🚫 Revoke / Disable QR
-                </Button>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      disabled={loading}
+                      onClick={handleDisable}
+                    >
+                      🚫 Revoke / Disable QR
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </div>

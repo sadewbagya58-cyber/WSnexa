@@ -1,24 +1,58 @@
 import React from 'react';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { redirect } from 'next/navigation';
+import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { OrderSecurityService } from '@/server/services/order-security.service';
 import { OrderSecuritySettings } from '@/components/settings/order-security-settings';
-import { redirect } from 'next/navigation';
+import { AccessDenied } from '@/components/auth/access-denied';
+import { resolveAuthorizationContext } from '@/server/auth';
+import { can } from '@/server/auth/policy-engine';
 
 export default async function OrderSecurityPage() {
-  const tenantContext = await resolveActiveBusinessContext();
+  const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/settings/order-security');
+
+  if (!allowed) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(tenantContext?.membership?.role)} />;
+  }
+
   if (!tenantContext || !tenantContext.activeBranch) {
     redirect('/login');
   }
 
-  const initialSettings = await OrderSecurityService.getBranchSecuritySettings(
-    tenantContext.activeBranch.id
-  );
+  const businessId = tenantContext.business.id;
+  const branchId = tenantContext.activeBranch.id;
+
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (authContext) {
+      const canManageOrderSecurity = await can({
+        context: authContext,
+        permission: 'order_security.manage',
+        resource: {
+          resourceType: 'branch',
+          resourceId: branchId,
+          businessId,
+          branchId,
+          departmentId: null,
+          organizationUnitId: null,
+          serviceAreaId: null,
+          ownerUserId: null,
+        },
+      });
+      canManage = canManageOrderSecurity || authContext.isBusinessOwner;
+    }
+  } catch {
+    canManage = tenantContext.membership?.role === 'business_owner';
+  }
+
+  const initialSettings = await OrderSecurityService.getBranchSecuritySettings(branchId);
 
   return (
     <OrderSecuritySettings
-      branchId={tenantContext.activeBranch.id}
+      branchId={branchId}
       branchName={tenantContext.activeBranch.name}
       initialSettings={initialSettings}
+      canManage={canManage}
     />
   );
 }

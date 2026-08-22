@@ -9,18 +9,21 @@ interface BranchPaymentSettingsProps {
   branchId: string;
   branchName: string;
   initialMethods: BranchPaymentMethod[];
+  canManage?: boolean;
 }
 
 export function BranchPaymentSettings({
   branchId,
   branchName,
   initialMethods,
+  canManage = true,
 }: BranchPaymentSettingsProps) {
   const [methods, setMethods] = useState<BranchPaymentMethod[]>(initialMethods);
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleToggle = async (m: BranchPaymentMethod) => {
+    if (!canManage) return;
     const newStatus = !m.is_enabled;
     setMethods((prev) =>
       prev.map((item) => (item.id === m.id ? { ...item, is_enabled: newStatus } : item))
@@ -53,12 +56,14 @@ export function BranchPaymentSettings({
     field: 'display_name' | 'instructions',
     val: string
   ) => {
+    if (!canManage) return;
     setMethods((prev) =>
       prev.map((item) => (item.method === methodType ? { ...item, [field]: val } : item))
     );
   };
 
   const handleSaveDetails = async (m: BranchPaymentMethod) => {
+    if (!canManage) return;
     setIsSaving(true);
     setFeedbackMsg(null);
 
@@ -129,12 +134,12 @@ export function BranchPaymentSettings({
               <button
                 type="button"
                 onClick={() => handleToggle(m)}
-                disabled={isSaving}
+                disabled={!canManage || isSaving}
                 className={`px-4 py-1.5 rounded-full text-xs font-black transition-all min-h-[44px] touch-manipulation border ${
                   m.is_enabled
                     ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
                     : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
-                }`}
+                } disabled:opacity-50`}
               >
                 {m.is_enabled ? 'ENABLED' : 'DISABLED'}
               </button>
@@ -149,9 +154,10 @@ export function BranchPaymentSettings({
                     </label>
                     <input
                       type="text"
+                      disabled={!canManage || isSaving}
                       value={m.display_name || ''}
                       onChange={(e) => handleUpdateText(m.method, 'display_name', e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
                     />
                   </div>
 
@@ -161,25 +167,28 @@ export function BranchPaymentSettings({
                     </label>
                     <input
                       type="text"
+                      disabled={!canManage || isSaving}
                       value={m.instructions || ''}
                       onChange={(e) => handleUpdateText(m.method, 'instructions', e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px]"
+                      className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSaveDetails(m)}
-                    disabled={isSaving}
-                    className="text-xs font-bold min-h-[44px]"
-                  >
-                    Save Method Labels
-                  </Button>
-                </div>
+                {canManage && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSaveDetails(m)}
+                      disabled={isSaving}
+                      className="text-xs font-bold min-h-[44px]"
+                    >
+                      Save Method Labels
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

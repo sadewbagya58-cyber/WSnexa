@@ -258,7 +258,7 @@ export default async function DashboardOverviewPage() {
                 </div>
                 <p className="mt-2 text-3xl font-extrabold text-zinc-950">{categoriesCount || 0}</p>
                 <Link href="/dashboard/menu/categories" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-                  Manage Categories →
+                  {model.canManageMenu || model.isBusinessOwner ? 'Manage Categories →' : 'View Categories →'}
                 </Link>
               </Card>
             )}
@@ -271,7 +271,7 @@ export default async function DashboardOverviewPage() {
                 </div>
                 <p className="mt-2 text-3xl font-extrabold text-zinc-950">{itemsCount || 0}</p>
                 <Link href="/dashboard/menu/items" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-                  Manage Items →
+                  {model.canManageMenu || model.isBusinessOwner ? 'Manage Items →' : 'View Items →'}
                 </Link>
               </Card>
             )}
@@ -284,7 +284,7 @@ export default async function DashboardOverviewPage() {
                 </div>
                 <p className="mt-2 text-3xl font-extrabold text-zinc-950">{areasCount || 0}</p>
                 <Link href="/dashboard/tables/areas" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-                  Manage Service Areas →
+                  {model.canManageTables || model.isBusinessOwner ? 'Manage Service Areas →' : 'View Service Areas →'}
                 </Link>
               </Card>
             )}
@@ -300,6 +300,9 @@ export default async function DashboardOverviewPage() {
                   <span>🔴 {occupiedTablesCount} Occupied</span>
                   <span>🟡 {reservedTablesCount} Reserved</span>
                 </div>
+                <Link href="/dashboard/dining" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
+                  {model.canManageTables || model.isBusinessOwner ? 'Manage Tables →' : 'View Tables →'}
+                </Link>
               </Card>
             )}
 
@@ -311,7 +314,7 @@ export default async function DashboardOverviewPage() {
                 </div>
                 <p className="mt-2 text-3xl font-extrabold text-zinc-950">{stockItemsCount || 0}</p>
                 <Link href="/dashboard/inventory/items" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-                  Inspect Stock Catalog →
+                  {model.canManageInventory || model.isBusinessOwner ? 'Manage Stock Catalog →' : 'View Stock Catalog →'}
                 </Link>
               </Card>
             )}
@@ -324,7 +327,7 @@ export default async function DashboardOverviewPage() {
                 </div>
                 <p className="mt-2 text-xs font-extrabold text-zinc-950">Access Control Hub</p>
                 <Link href="/dashboard/access" className="mt-2 block text-xs font-semibold text-zinc-600 hover:text-zinc-950">
-                  Manage Roles & Scope Grants →
+                  {model.canManageAccess || model.isBusinessOwner ? 'Manage Roles & Scope Grants →' : 'View Access Control Hub →'}
                 </Link>
               </Card>
             )}

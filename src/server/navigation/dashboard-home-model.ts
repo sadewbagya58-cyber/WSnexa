@@ -168,7 +168,7 @@ export async function resolveDashboardHomeModel(
     },
     {
       action: { id: 'access-control', label: '🛡️ Access Control', href: '/dashboard/access' },
-      condition: canViewAccess || isBusinessOwner,
+      condition: canManageAccess || isBusinessOwner,
     },
   ];
 

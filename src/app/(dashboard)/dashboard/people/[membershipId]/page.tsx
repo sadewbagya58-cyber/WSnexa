@@ -10,6 +10,9 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { previewMemberEffectiveAccessAction } from '@/server/actions/permission';
 import { StaffAccessSummaryWidget } from '@/components/access/staff-access-summary-widget';
 
+import Link from 'next/link';
+import { PageHeader } from '@/components/layout/page-header';
+
 export const metadata: Metadata = {
   title: 'Member Organization Profile | WSNexa',
   description: 'Comprehensive staff profile, assignment history, reporting chains, and temporary deployments',
@@ -158,7 +161,24 @@ export default async function MemberProfilePage({
   const accessPreviewRes = await previewMemberEffectiveAccessAction(membershipId);
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title={fullName}
+        description={`Employee record, primary placement, position assignments, and reporting history.`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'People Directory', href: '/dashboard/people' },
+          { label: fullName },
+        ]}
+        secondaryActions={
+          <Link
+            href="/dashboard/people"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            ← Back to Directory
+          </Link>
+        }
+      />
       {accessPreviewRes.success && accessPreviewRes.data && (
         <StaffAccessSummaryWidget preview={accessPreviewRes.data} />
       )}

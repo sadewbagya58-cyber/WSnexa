@@ -10,7 +10,6 @@ import { MemberAccessDetailClient } from '@/components/access/member-access-deta
 import { BranchService } from '@/server/services/branch.service';
 import { OrganizationService } from '@/server/services/organization.service';
 import Link from 'next/link';
-import { IconArrowLeft } from '@/components/access/access-icons';
 import { notFound } from 'next/navigation';
 
 export const metadata = {
@@ -21,6 +20,8 @@ export const metadata = {
 interface MemberAccessInspectorPageProps {
   params: Promise<{ membershipId: string }>;
 }
+
+import { PageHeader } from '@/components/layout/page-header';
 
 export default async function MemberAccessInspectorPage({ params }: MemberAccessInspectorPageProps) {
   const { membershipId } = await params;
@@ -59,15 +60,24 @@ export default async function MemberAccessInspectorPage({ params }: MemberAccess
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access/members"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowLeft className="w-4 h-4" /> Back to Staff Access Directory
-        </Link>
-      </div>
+      <PageHeader
+        title={preview.memberName || 'Member Access Profile'}
+        description={`Effective permission breakdown and scope grants for ${preview.userEmail || 'staff member'}.`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Staff Members', href: '/dashboard/access/members' },
+          { label: preview.memberName || 'Member Profile' },
+        ]}
+        secondaryActions={
+          <Link
+            href="/dashboard/access/members"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            ← Back to Members
+          </Link>
+        }
+      />
 
       <MemberAccessDetailClient
         preview={preview}

@@ -5,18 +5,9 @@ import {
   listPermissionCatalogAction,
   previewRoleEffectiveAccessAction,
   getRoleUsageAction,
-  listRoleTemplatesAction,
 } from '@/server/actions/permission';
 import Link from 'next/link';
-import {
-  IconArrowRight,
-  IconShield,
-  IconBuildingSkyscraper,
-  IconBuildingStore,
-  IconUsers,
-  IconMapPin,
-  IconCircleCheck,
-} from '@/components/access/access-icons';
+import { IconShield, IconCircleCheck } from '@/components/access/access-icons';
 import { notFound } from 'next/navigation';
 
 export const metadata = {
@@ -27,6 +18,9 @@ export const metadata = {
 interface RoleDetailPageProps {
   params: Promise<{ roleId: string }>;
 }
+
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
 
 export default async function RoleDetailPage({ params }: RoleDetailPageProps) {
   const { roleId } = await params;
@@ -60,15 +54,25 @@ export default async function RoleDetailPage({ params }: RoleDetailPageProps) {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access/roles"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowRight className="w-4 h-4" /> Back to Custom Roles List
-        </Link>
-      </div>
+      <PageHeader
+        title={role.name}
+        description={role.description || 'Custom role capability bundle and scope boundaries.'}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Roles & Templates', href: '/dashboard/access/roles' },
+          { label: role.name },
+        ]}
+        badge={role.isArchived ? <Badge variant="neutral">Archived</Badge> : <Badge variant="neutral">Custom Role</Badge>}
+        secondaryActions={
+          <Link
+            href="/dashboard/access/roles"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            ← Back to Roles
+          </Link>
+        }
+      />
 
       {/* Role Header Card */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

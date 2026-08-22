@@ -11,6 +11,7 @@ import {
   CANONICAL_DASHBOARD_NAV_SECTIONS,
   isNavItemActive,
 } from '@/lib/navigation/dashboard-navigation';
+import { getPageMetadata } from '@/lib/navigation/dashboard-page-metadata';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo } from '@/types';
 
@@ -329,9 +330,23 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         )}
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          {children}
-        </main>
+        {(() => {
+          const meta = getPageMetadata(pathname);
+          const layoutVariant = meta.layoutVariant || 'standard';
+          let mainClasses = 'flex-1 min-w-0 w-full';
+          if (layoutVariant === 'workspace') {
+            mainClasses += ' p-2 sm:p-4 lg:p-6 max-w-full';
+          } else if (layoutVariant === 'wide') {
+            mainClasses += ' p-4 sm:p-6 lg:p-8 max-w-full';
+          } else {
+            mainClasses += ' p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto';
+          }
+          return (
+            <main className={mainClasses}>
+              {children}
+            </main>
+          );
+        })()}
       </div>
     </div>
   );

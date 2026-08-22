@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { RecipeService } from '@/server/services/recipe.service';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+
 interface RecipeDetailPageProps {
   params: Promise<{ id: string }>;
 }
@@ -24,34 +27,25 @@ export default async function RecipeDetailPage({ params }: RecipeDetailPageProps
 
   return (
     <div className="space-y-6">
-      {/* Header Navigation */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={recipe.name}
+        description={`Version ${recipe.version} • Yield: ${recipe.yieldQuantity} ${recipe.yieldUnit}`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Inventory Hub', href: '/dashboard/inventory' },
+          { label: 'Recipes & Costing', href: '/dashboard/inventory/recipes' },
+          { label: recipe.name },
+        ]}
+        badge={<Badge variant="neutral">{recipe.recipeType === 'prep_recipe' ? 'Prep Formula' : 'Menu Item'}</Badge>}
+        secondaryActions={
           <Link
             href="/dashboard/inventory/recipes"
-            className="px-3 py-1.5 text-sm font-medium border border-zinc-200 rounded-xl hover:bg-zinc-50 transition"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
           >
-            ← Back
+            ← Back to Recipes
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-                {recipe.name}
-              </h1>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                recipe.recipeType === 'prep_recipe'
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-indigo-100 text-indigo-800'
-              }`}>
-                {recipe.recipeType === 'prep_recipe' ? 'Prep Formula' : 'Menu Item'}
-              </span>
-            </div>
-            <p className="text-sm text-zinc-500 mt-1">
-              Version {recipe.version} • Yield: {recipe.yieldQuantity} {recipe.yieldUnit}
-            </p>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Financial Rollup Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

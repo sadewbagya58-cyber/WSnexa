@@ -1,7 +1,7 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';

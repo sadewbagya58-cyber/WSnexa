@@ -6,6 +6,9 @@ import { PurchasingService } from '@/server/services/purchasing.service';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { Badge } from '@/components/ui/badge';
+
 interface PurchaseOrderDetailPageProps {
   params: Promise<{ id: string }>;
 }
@@ -25,47 +28,33 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
 
   return (
     <div className="space-y-6">
-      {/* Header Navigation */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-200 pb-4">
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title={po.poNumber}
+        description={`Created on ${new Date(po.createdAt).toLocaleDateString()}`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Inventory Hub', href: '/dashboard/inventory' },
+          { label: 'Purchasing & Suppliers', href: '/dashboard/inventory/purchasing' },
+          { label: po.poNumber },
+        ]}
+        badge={<Badge variant="neutral">{po.status.replace('_', ' ').toUpperCase()}</Badge>}
+        secondaryActions={
           <Link
             href="/dashboard/inventory/purchasing"
-            className="px-3 py-1.5 text-sm font-medium border border-zinc-200 rounded-xl hover:bg-zinc-50 transition"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
           >
-            ← Back
+            ← Back to POs
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
-                {po.poNumber}
-              </h1>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase ${
-                po.status === 'received'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : po.status === 'partially_received'
-                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                  : po.status === 'approved'
-                  ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                  : po.status === 'cancelled'
-                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                  : 'bg-zinc-100 text-zinc-800 border border-zinc-200'
-              }`}>
-                {po.status.replace('_', ' ')}
-              </span>
-            </div>
-            <p className="text-sm text-zinc-500 mt-1">
-              Created on {new Date(po.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-
-        <PurchaseOrderActions
-          poId={po.id}
-          poNumber={po.poNumber}
-          status={po.status}
-          variant="detail"
-        />
-      </div>
+        }
+        primaryAction={
+          <PurchaseOrderActions
+            poId={po.id}
+            poNumber={po.poNumber}
+            status={po.status}
+            variant="detail"
+          />
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

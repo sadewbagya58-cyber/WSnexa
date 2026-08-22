@@ -1,9 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
 import { VenueReviewService } from '@/server/services/venue-review.service';
 import { OwnerReviewList } from '@/components/dashboard/owner-review-list';
 
@@ -13,35 +10,31 @@ export const metadata: Metadata = {
 };
 
 export default async function ReviewsDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
 
-  if (!user) redirect('/login');
+  if (!authContext) redirect('/onboarding/account-type');
 
-  const context = await resolveActiveBusinessContext();
-  if (!context) redirect('/onboarding/account-type');
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'reviews.view'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'reviews.view',
+  });
 
   if (!hasPerm) {
     redirect('/dashboard');
   }
 
-  const canRespond = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'reviews.respond'
-  );
+  const canRespond = await can({
+    context: authContext,
+    permission: 'reviews.respond',
+  });
 
-  const reviews = await VenueReviewService.getBusinessReviews(context.business.id);
+  const reviews = await VenueReviewService.getBusinessReviews(authContext.businessId);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">

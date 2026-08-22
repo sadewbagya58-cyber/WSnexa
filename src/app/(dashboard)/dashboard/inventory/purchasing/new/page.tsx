@@ -4,9 +4,9 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { createAdminClient } from '@/lib/supabase/server';
 import { PurchaseOrderBuilder } from '@/components/inventory/purchase-order-builder';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 interface NewPurchaseOrderPageProps {
   searchParams: Promise<{ supplierId?: string; itemId?: string; quantity?: string }>;
@@ -30,12 +30,13 @@ export default async function NewPurchaseOrderPage({ searchParams }: NewPurchase
   const { supplierId: querySupplierId, itemId: queryItemId, quantity: queryQuantity } = await searchParams;
   const initialQuantity = queryQuantity && !isNaN(Number(queryQuantity)) ? Number(queryQuantity) : undefined;
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  let hasCostPermission = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+  } catch {
+    hasCostPermission = false;
+  }
 
   const admin = createAdminClient();
 

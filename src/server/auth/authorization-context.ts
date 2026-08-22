@@ -501,6 +501,14 @@ export async function resolveAuthorizationContext(
           branchId: area.branch_id,
           source: 'staff_area_assignment',
         });
+      } else if (item.service_area_id) {
+        authorizedServiceAreaMap.set(item.service_area_id, {
+          id: item.service_area_id,
+          name: 'Assigned Area',
+          code: null,
+          branchId: '',
+          source: 'staff_area_assignment',
+        });
       }
     }
   }

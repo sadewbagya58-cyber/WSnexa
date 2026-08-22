@@ -4,7 +4,6 @@ import { notFound, redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { InventoryService } from '@/server/services/inventory.service';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { InventoryMovementTimeline } from '@/components/inventory/inventory-movement-timeline';
@@ -12,6 +11,7 @@ import { ItemBatchesCard } from '@/components/inventory/item-batches-card';
 import { ItemSupplierPricingCard } from '@/components/inventory/item-supplier-pricing-card';
 import { ItemPriceHistoryCard } from '@/components/inventory/item-price-history-card';
 import { ItemForecastCard } from '@/components/inventory/item-forecast-card';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 interface ItemDetailPageProps {
   params: Promise<{ id: string }>;
@@ -33,12 +33,13 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     redirect('/login');
   }
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  let hasCostPermission = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+  } catch {
+    hasCostPermission = false;
+  }
 
   const [item, movements, batches, supplierComparison, priceHistoryPayload, forecast] = await Promise.all([
     InventoryService.getInventoryItemById(context.business.id, context.activeBranch.id, id, hasCostPermission),

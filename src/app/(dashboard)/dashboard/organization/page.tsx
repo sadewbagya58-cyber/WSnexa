@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { OrganizationOverviewClient } from '@/components/organization/organization-overview-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Organization Overview | WSNexa',
@@ -21,12 +21,19 @@ export default async function OrganizationOverviewPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch } = context;
+  const { business } = context;
 
-  const [summary, issues, canManage] = await Promise.all([
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    canManage = await can({ context: authContext, permission: 'organization.manage' });
+  } catch {
+    canManage = false;
+  }
+
+  const [summary, issues] = await Promise.all([
     OrganizationService.getOrganizationSummary(business.id),
     OrganizationService.getOrganizationIntegrityIssues(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'organization.manage'),
   ]);
 
   return (

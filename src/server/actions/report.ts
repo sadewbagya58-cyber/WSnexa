@@ -7,7 +7,30 @@ import { formatCurrency } from '@/features/cart/cart-calculations';
 
 export async function fetchAnalyticsAction(rawInput: ReportFilterInput) {
   try {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized session' };
+    }
+
+    if (!authContext) {
+      return { success: false, message: 'Unauthorized session' };
+    }
+
     const validated = reportFilterSchema.parse(rawInput);
+    const targetBranchId = validated.branchId || authContext.activeBranchId;
+    const branchResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
+
+    const canView =
+      (await can({ context: authContext, permission: 'reports.view', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'reports.financial.view', resource: branchResource }));
+
+    if (!canView) {
+      return { success: false, message: 'Forbidden: Missing report view permission.' };
+    }
+
     return await ReportService.getAnalyticsPayload(validated);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Invalid reporting parameters';
@@ -17,7 +40,29 @@ export async function fetchAnalyticsAction(rawInput: ReportFilterInput) {
 
 export async function exportReportAction(rawInput: ReportExportInput) {
   try {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized session' };
+    }
+
+    if (!authContext) {
+      return { success: false, message: 'Unauthorized session' };
+    }
+
     const validated = reportExportInputSchema.parse(rawInput);
+    const targetBranchId = validated.branchId || authContext.activeBranchId;
+    const branchResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
+
+    const canExport =
+      (await can({ context: authContext, permission: 'reports.export', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'reports.view', resource: branchResource }));
+
+    if (!canExport) {
+      return { success: false, message: 'Forbidden: Missing report export permission.' };
+    }
 
     const analyticsRes = await ReportService.getAnalyticsPayload({
       preset: validated.preset,

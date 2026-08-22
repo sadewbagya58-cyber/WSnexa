@@ -4,10 +4,10 @@ import { notFound, redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { createAdminClient } from '@/lib/supabase/server';
 import { SupplierDetailClient } from '@/components/inventory/supplier-detail-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 interface SupplierDetailPageProps {
   params: Promise<{ id: string }>;
@@ -29,12 +29,13 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
     redirect('/login');
   }
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  let hasCostPermission = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+  } catch {
+    hasCostPermission = false;
+  }
 
   const supplier = await PurchasingService.getSupplierById(context.business.id, id, {
     hasCostPermission,

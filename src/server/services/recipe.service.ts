@@ -171,10 +171,18 @@ export class RecipeService {
 
     const businessCurrency = context.business.defaultCurrency || 'USD';
 
-    const { PermissionService } = await import('./permission.service');
-    const canViewCosts =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'recipes.costs.view')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'inventory.costs.view'));
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let canViewCosts = false;
+    try {
+      const authContext = await resolveAuthorizationContext();
+      if (authContext) {
+        canViewCosts =
+          (await can({ context: authContext, permission: 'recipes.costs.view' })) ||
+          (await can({ context: authContext, permission: 'inventory.costs.view' }));
+      }
+    } catch {
+      canViewCosts = false;
+    }
 
     interface RawIngredientRow {
       id: string;
@@ -325,10 +333,18 @@ export class RecipeService {
 
     const businessCurrency = context.business.defaultCurrency || 'USD';
 
-    const { PermissionService } = await import('./permission.service');
-    const canViewCosts =
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'recipes.costs.view')) ||
-      (await PermissionService.hasPermission(context.user.id, context.business.id, context.activeBranch?.id || null, 'inventory.costs.view'));
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let canViewCosts = false;
+    try {
+      const authContext = await resolveAuthorizationContext();
+      if (authContext) {
+        canViewCosts =
+          (await can({ context: authContext, permission: 'recipes.costs.view' })) ||
+          (await can({ context: authContext, permission: 'inventory.costs.view' }));
+      }
+    } catch {
+      canViewCosts = false;
+    }
 
     let totalCostCents = 0;
     const ingredients: RecipeIngredientDetail[] = ((r.ingredients as unknown as RawIngredientRow[]) || []).map((ing) => {
@@ -401,22 +417,27 @@ export class RecipeService {
     };
   }
 
-  /**
-   * Creates a new recipe with unit normalization, cycle validation and ingredient linking.
-   */
   static async createRecipe(input: CreateRecipeInput) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized.' };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canManage = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      input.branchId || context.activeBranch?.id || null,
-      'recipes.manage'
-    );
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const branchResource = input.branchId
+      ? { type: 'branch' as const, id: input.branchId }
+      : (authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined);
+
+    const canManage =
+      (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+
     if (!canManage) {
       return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
     }
@@ -428,7 +449,7 @@ export class RecipeService {
       .filter((i) => !!i.subRecipeId)
       .map((i) => i.subRecipeId as string);
 
-    const cycleCheck = await this.validateNoCycles(context.business.id, null, subRecipeIds);
+    const cycleCheck = await this.validateNoCycles(authContext.businessId, null, subRecipeIds);
     if (!cycleCheck.valid) {
       return {
         success: false,
@@ -450,7 +471,7 @@ export class RecipeService {
     const { data: recipe, error: recipeErr } = await admin
       .from('inventory_recipes')
       .insert({
-        business_id: context.business.id,
+        business_id: authContext.businessId,
         menu_item_id: input.menuItemId || null,
         name: input.name.trim(),
         recipe_type: input.recipeType,
@@ -462,7 +483,7 @@ export class RecipeService {
         preparation_instructions: input.preparationInstructions || null,
         is_active: true,
         branch_id: input.branchId || null,
-        created_by: context.user.id,
+        created_by: authContext.userId,
       })
       .select()
       .single();
@@ -513,33 +534,38 @@ export class RecipeService {
    * Produces a batch of prepared sub-recipe atomically.
    */
   static async producePrepBatch(input: ProducePrepBatchInput) {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.business || !context.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized.' };
     }
 
-    const { PermissionService } = await import('./permission.service');
-    const canProduce = await PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'inventory.production.manage'
-    );
+    if (!authContext || !authContext.activeBranchId) {
+      return { success: false, message: 'Unauthorized or active branch required.' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const canProduce =
+      (await can({ context: authContext, permission: 'recipes.produce', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource }));
+
     if (!canProduce) {
-      return { success: false, message: 'Forbidden: Missing inventory.production.manage permission.' };
+      return { success: false, message: 'Forbidden: Missing production permission.' };
     }
 
     const admin = createAdminClient();
     const { data, error } = await admin.rpc('produce_prep_recipe_batch', {
-      p_business_id: context.business.id,
-      p_branch_id: context.activeBranch.id,
+      p_business_id: authContext.businessId,
+      p_branch_id: authContext.activeBranchId,
       p_recipe_id: input.recipeId,
       p_batch_number: input.batchNumber.trim(),
       p_source_location_id: input.sourceLocationId,
       p_target_location_id: input.targetLocationId,
       p_scale: input.scale,
       p_actual_quantity: input.actualQuantity,
-      p_actor_id: context.user.id,
+      p_actor_id: authContext.userId,
       p_notes: input.notes || null,
     });
 

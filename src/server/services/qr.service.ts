@@ -15,18 +15,30 @@ export class QrService {
    * Generates a new active Branch QR code for the current branch.
    */
   static async generateBranchQr(): Promise<BranchQrResult> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized or invalid business context' };
     }
 
-    const role = tenantContext.membership.role;
-    if (role !== 'business_owner' && role !== 'branch_manager') {
+    if (!authContext || !authContext.activeBranchId) {
+      return { success: false, message: 'Unauthorized or invalid business context' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const isAuthorized =
+      (await can({ context: authContext, permission: 'qr.generate', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'qr.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
+
+    if (!isAuthorized) {
       return { success: false, message: 'Forbidden: Insufficient permissions to generate Branch QR code' };
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.activeBranch.id;
+    const branchId = authContext.activeBranchId;
 
     // Generate secure token pair
     const { rawToken, tokenHash, tokenPrefix, encryptedToken } = generateSecureQrToken();
@@ -37,7 +49,7 @@ export class QrService {
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
-        revoked_by: tenantContext.user.id,
+        revoked_by: authContext.userId,
       })
       .eq('branch_id', branchId)
       .eq('is_active', true);
@@ -46,14 +58,14 @@ export class QrService {
     const { data: qr, error: qrErr } = await supabase
       .from('branch_qr_codes')
       .insert({
-        business_id: tenantContext.business.id,
+        business_id: authContext.businessId,
         branch_id: branchId,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
         encrypted_token: encryptedToken,
         version: 1,
         is_active: true,
-        generated_by: tenantContext.user.id,
+        generated_by: authContext.userId,
         generated_at: new Date().toISOString(),
       })
       .select()
@@ -65,8 +77,8 @@ export class QrService {
 
     // Write Audit Log
     await supabase.from('audit_logs').insert({
-      business_id: tenantContext.business.id,
-      actor_id: tenantContext.user.id,
+      business_id: authContext.businessId,
+      actor_id: authContext.userId,
       action: 'branch_qr.generated',
       target_type: 'branch_qr_code',
       target_id: qr.id,
@@ -88,18 +100,30 @@ export class QrService {
    * Regenerates a new Branch QR code, invalidating the previous version.
    */
   static async regenerateBranchQr(): Promise<BranchQrResult> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized or invalid business context' };
     }
 
-    const role = tenantContext.membership.role;
-    if (role !== 'business_owner' && role !== 'branch_manager') {
+    if (!authContext || !authContext.activeBranchId) {
+      return { success: false, message: 'Unauthorized or invalid business context' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const isAuthorized =
+      (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'qr.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'tables.manage', resource: branchResource }));
+
+    if (!isAuthorized) {
       return { success: false, message: 'Forbidden: Insufficient permissions to regenerate Branch QR code' };
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.activeBranch.id;
+    const branchId = authContext.activeBranchId;
 
     // Fetch existing QR record for version increment
     const { data: existingQr } = await supabase
@@ -117,7 +141,7 @@ export class QrService {
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
-        revoked_by: tenantContext.user.id,
+        revoked_by: authContext.userId,
       })
       .eq('branch_id', branchId)
       .eq('is_active', true);
@@ -128,14 +152,14 @@ export class QrService {
     const { data: qr, error: qrErr } = await supabase
       .from('branch_qr_codes')
       .insert({
-        business_id: tenantContext.business.id,
+        business_id: authContext.businessId,
         branch_id: branchId,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
         encrypted_token: encryptedToken,
         version: newVersion,
         is_active: true,
-        generated_by: tenantContext.user.id,
+        generated_by: authContext.userId,
         generated_at: new Date().toISOString(),
         last_regenerated_at: new Date().toISOString(),
       })
@@ -148,8 +172,8 @@ export class QrService {
 
     // Write Audit Log
     await supabase.from('audit_logs').insert({
-      business_id: tenantContext.business.id,
-      actor_id: tenantContext.user.id,
+      business_id: authContext.businessId,
+      actor_id: authContext.userId,
       action: 'branch_qr.regenerated',
       target_type: 'branch_qr_code',
       target_id: qr.id,
@@ -171,25 +195,37 @@ export class QrService {
    * Revokes/disables the active Branch QR code.
    */
   static async disableBranchQr(): Promise<{ success: boolean; message?: string }> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized' };
     }
 
-    const role = tenantContext.membership.role;
-    if (role !== 'business_owner' && role !== 'branch_manager') {
+    if (!authContext || !authContext.activeBranchId) {
+      return { success: false, message: 'Unauthorized' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const isAuthorized =
+      (await can({ context: authContext, permission: 'qr.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'tables.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'business.settings.manage' }));
+
+    if (!isAuthorized) {
       return { success: false, message: 'Forbidden' };
     }
 
     const supabase = await createClient();
-    const branchId = tenantContext.activeBranch.id;
+    const branchId = authContext.activeBranchId;
 
     const { data: updated, error } = await supabase
       .from('branch_qr_codes')
       .update({
         is_active: false,
         revoked_at: new Date().toISOString(),
-        revoked_by: tenantContext.user.id,
+        revoked_by: authContext.userId,
       })
       .eq('branch_id', branchId)
       .eq('is_active', true)
@@ -201,8 +237,8 @@ export class QrService {
 
     if (updated && updated.length > 0) {
       await supabase.from('audit_logs').insert({
-        business_id: tenantContext.business.id,
-        actor_id: tenantContext.user.id,
+        business_id: authContext.businessId,
+        actor_id: authContext.userId,
         action: 'branch_qr.disabled',
         target_type: 'branch_qr_code',
         target_id: updated[0].id,
@@ -221,20 +257,41 @@ export class QrService {
     require_table_pin?: boolean;
     table_pin_length?: number;
   }): Promise<{ success: boolean; message?: string }> {
-    const tenantContext = await resolveActiveBusinessContext();
-    if (!tenantContext || !tenantContext.activeBranch) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
       return { success: false, message: 'Unauthorized' };
     }
 
-    const role = tenantContext.membership.role;
-    if (role !== 'business_owner' && role !== 'branch_manager') {
-      return { success: false, message: 'Forbidden: Owner or Branch Manager role required' };
+    if (!authContext || !authContext.activeBranchId) {
+      return { success: false, message: 'Unauthorized' };
     }
 
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+    const isAuthorized =
+      (await can({ context: authContext, permission: 'branches.operational.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'branches.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'business.settings.manage' }));
+
+    if (!isAuthorized) {
+      return { success: false, message: 'Forbidden: Insufficient permissions to update branch ordering settings' };
+    }
+
+    const supabase = await createClient();
+
+    // Fetch existing branch config
+    const { data: currentBranch } = await supabase
+      .from('branches')
+      .select('require_table_selection, require_table_pin, table_pin_length')
+      .eq('id', authContext.activeBranchId)
+      .single();
+
     // Rule: require_table_pin cannot be enabled if require_table_selection is disabled
-    const nextSelection = settings.require_table_selection ?? tenantContext.activeBranch.require_table_selection ?? true;
-    let nextPin = settings.require_table_pin ?? tenantContext.activeBranch.require_table_pin ?? false;
-    let nextLength = settings.table_pin_length ?? tenantContext.activeBranch.table_pin_length ?? 4;
+    const nextSelection = settings.require_table_selection ?? currentBranch?.require_table_selection ?? true;
+    let nextPin = settings.require_table_pin ?? currentBranch?.require_table_pin ?? false;
+    let nextLength = settings.table_pin_length ?? currentBranch?.table_pin_length ?? 4;
 
     if (!nextSelection) {
       nextPin = false; // Bypass PIN if table selection is OFF
@@ -244,8 +301,6 @@ export class QrService {
       nextLength = 4;
     }
 
-    const supabase = await createClient();
-
     const { error } = await supabase
       .from('branches')
       .update({
@@ -254,18 +309,18 @@ export class QrService {
         table_pin_length: nextLength,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', tenantContext.activeBranch.id);
+      .eq('id', authContext.activeBranchId);
 
     if (error) {
       return { success: false, message: error.message };
     }
 
     await supabase.from('audit_logs').insert({
-      business_id: tenantContext.business.id,
-      actor_id: tenantContext.user.id,
+      business_id: authContext.businessId,
+      actor_id: authContext.userId,
       action: 'branch.settings_updated',
       target_type: 'branch',
-      target_id: tenantContext.activeBranch.id,
+      target_id: authContext.activeBranchId,
       payload: { require_table_selection: nextSelection, require_table_pin: nextPin, table_pin_length: nextLength },
     });
 

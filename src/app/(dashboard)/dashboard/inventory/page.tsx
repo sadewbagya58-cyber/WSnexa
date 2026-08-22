@@ -5,13 +5,13 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { InventoryService } from '@/server/services/inventory.service';
 import { InventoryKpiSummary } from '@/components/inventory/inventory-kpi-summary';
 import { InventoryHealthCard } from '@/components/inventory/inventory-health-card';
 import { InventoryNeedsAttention } from '@/components/inventory/inventory-needs-attention';
 import { InventoryExpiryAlerts } from '@/components/inventory/inventory-expiry-alerts';
 import { InventoryReorderSuggestions } from '@/components/inventory/inventory-reorder-suggestions';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Inventory Hub | WSNexa Hospitality',
@@ -28,12 +28,13 @@ export default async function InventoryHubPage() {
     redirect('/login');
   }
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  let hasCostPermission = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+  } catch {
+    hasCostPermission = false;
+  }
 
   const [overview, expiringSummary, reorderOverview] = await Promise.all([
     InventoryService.getInventoryOverview(

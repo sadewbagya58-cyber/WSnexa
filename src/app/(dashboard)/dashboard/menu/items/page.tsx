@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ItemList } from '@/components/menu/item-list';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
 import { PageHeader } from '@/components/ui/page-header';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export default async function MenuItemsPage() {
   const tenantContext = await resolveActiveBusinessContext();
@@ -31,19 +31,16 @@ export default async function MenuItemsPage() {
       .order('display_order', { ascending: true }),
 
     (async () => {
-      const hasPrice = await PermissionService.hasPermission(
-        tenantContext.user.id,
-        tenantContext.business.id,
-        activeBranch.id,
-        'menu.price.update'
-      );
-      const hasManage = await PermissionService.hasPermission(
-        tenantContext.user.id,
-        tenantContext.business.id,
-        activeBranch.id,
-        'menu.manage'
-      );
-      return hasPrice || hasManage || tenantContext.membership?.role === 'business_owner';
+      try {
+        const authContext = await resolveAuthorizationContext();
+        const branchResource = { type: 'branch' as const, id: activeBranch.id };
+        const hasPrice = await can({ context: authContext, permission: 'menu.price.update', resource: branchResource });
+        const hasManage = await can({ context: authContext, permission: 'menu.manage', resource: branchResource });
+        const hasItemsCreate = await can({ context: authContext, permission: 'menu.items.create', resource: branchResource });
+        return hasPrice || hasManage || hasItemsCreate || authContext.isBusinessOwner;
+      } catch {
+        return false;
+      }
     })(),
   ]);
 

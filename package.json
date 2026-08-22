@@ -53,7 +53,8 @@
     "verify:rbac-v2-integration": "tsx scripts/verify-rbac-v2-integration.ts",
     "verify:rbac-v2-management": "tsx scripts/verify-rbac-v2-management.ts",
     "verify:rbac-v2-roles": "tsx scripts/verify-rbac-v2-roles.ts",
-    "verify:rbac-v2-temporary-authority": "tsx scripts/verify-rbac-v2-temporary-authority.ts"
+    "verify:rbac-v2-temporary-authority": "tsx scripts/verify-rbac-v2-temporary-authority.ts",
+    "verify:rbac-v2-legacy-cleanup": "tsx scripts/verify-rbac-v2-legacy-cleanup.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

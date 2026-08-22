@@ -35,10 +35,14 @@ export default async function DashboardLayout({
     ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
     : '';
 
-  const { PermissionService } = await import('@/server/services/permission.service');
-  const userPermissions = membership.role === 'business_owner'
-    ? undefined
-    : await PermissionService.getMemberEffectivePermissions(user.id, business.id, activeBranch?.id || null);
+  const { resolveAuthorizationContext } = await import('@/server/auth');
+  let userPermissions: string[] | undefined = undefined;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    userPermissions = authContext.isBusinessOwner ? undefined : authContext.rolePermissions;
+  } catch {
+    userPermissions = undefined;
+  }
 
   return (
     <DashboardShell

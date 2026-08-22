@@ -1,0 +1,778 @@
+{
+  "total": 94,
+  "countsByPattern": {
+    "PermissionService.hasPermission": 0,
+    "PermissionService.requirePermission": 0,
+    "verifyBranchBoundary": 3,
+    "role ===": 17,
+    "role !==": 14,
+    "membership.role ===": 5,
+    "membership.role !==": 0,
+    "isBusinessOwner": 29,
+    "isOwner": 9,
+    "isSuperAdmin": 17
+  },
+  "countsByCategory": {
+    "A": 12,
+    "B": 20,
+    "C": 0,
+    "D": 28,
+    "E": 0,
+    "F": 17,
+    "G": 17
+  },
+  "findings": [
+    {
+      "file": "src/server/actions/launch-readiness.ts",
+      "line": 25,
+      "pattern": "isSuperAdmin",
+      "content": "const isSuperAdmin = await SuperAdminVenueService.verifySuperAdminAuthority(user.id);",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/launch-readiness.ts",
+      "line": 26,
+      "pattern": "isSuperAdmin",
+      "content": "if (!isSuperAdmin) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/launch-readiness.ts",
+      "line": 51,
+      "pattern": "isSuperAdmin",
+      "content": "const isSuperAdmin = await SuperAdminVenueService.verifySuperAdminAuthority(user.id);",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/launch-readiness.ts",
+      "line": 52,
+      "pattern": "isSuperAdmin",
+      "content": "if (!isSuperAdmin) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/super-admin-venue.ts",
+      "line": 15,
+      "pattern": "isSuperAdmin",
+      "content": "const isSuperAdmin = await SuperAdminVenueService.verifySuperAdminAuthority(user.id);",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/super-admin-venue.ts",
+      "line": 16,
+      "pattern": "isSuperAdmin",
+      "content": "if (!isSuperAdmin) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/actions/super-admin.ts",
+      "line": 156,
+      "pattern": "isSuperAdmin",
+      "content": "export async function listAdminUsersAction(params: { query?: string; status?: string; isSuperAdminOnly?: boolean; page?: number; limit?: number } = {}) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/account.service.ts",
+      "line": 46,
+      "pattern": "role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/server/services/account.service.ts",
+      "line": 46,
+      "pattern": "membership.role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 83,
+      "pattern": "role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 83,
+      "pattern": "membership.role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 103,
+      "pattern": "verifyBranchBoundary",
+      "content": "return this.verifyBranchBoundary(membership.id, branchId, admin);",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 139,
+      "pattern": "verifyBranchBoundary",
+      "content": "return this.verifyBranchBoundary(membership.id, branchId, admin);",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 201,
+      "pattern": "verifyBranchBoundary",
+      "content": "private static async verifyBranchBoundary(",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 280,
+      "pattern": "role ===",
+      "content": "const isOwner = creatorMem?.role === 'business_owner';",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 280,
+      "pattern": "isOwner",
+      "content": "const isOwner = creatorMem?.role === 'business_owner';",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 281,
+      "pattern": "isOwner",
+      "content": "const safePermissions = isOwner",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 373,
+      "pattern": "role ===",
+      "content": "const isOwner = creatorMem?.role === 'business_owner';",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 373,
+      "pattern": "isOwner",
+      "content": "const isOwner = creatorMem?.role === 'business_owner';",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 375,
+      "pattern": "isOwner",
+      "content": "? (isOwner",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 517,
+      "pattern": "role ===",
+      "content": "if (targetMem.role === 'business_owner' && input.effect === 'deny') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 586,
+      "pattern": "role ===",
+      "content": "if (targetMem.role === 'business_owner' && input.effect === 'deny') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 816,
+      "pattern": "role ===",
+      "content": "if (targetMem.role === 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 873,
+      "pattern": "role ===",
+      "content": "if (targetMem.role === 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 1023,
+      "pattern": "role !==",
+      "content": "if (branchId && m.role !== 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/permission.service.ts",
+      "line": 1057,
+      "pattern": "role ===",
+      "content": "if (m.role === 'business_owner') {",
+      "category": "G",
+      "reason": "Legacy PermissionService facade implementation"
+    },
+    {
+      "file": "src/server/services/report.service.ts",
+      "line": 257,
+      "pattern": "isBusinessOwner",
+      "content": "if (canViewAllBranches && authContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain data scope filtering or owner fallback"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 221,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 242,
+      "pattern": "isBusinessOwner",
+      "content": "const safePermissions = actorContext.isBusinessOwner",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 410,
+      "pattern": "isBusinessOwner",
+      "content": "safePermissions = actorContext.isBusinessOwner",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 442,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner && newMax === 'ORGANIZATION') {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 533,
+      "pattern": "isBusinessOwner",
+      "content": "const safePermissions = actorContext.isBusinessOwner",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 614,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 624,
+      "pattern": "isBusinessOwner",
+      "content": "const safePermissions = actorContext.isBusinessOwner",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 907,
+      "pattern": "isBusinessOwner",
+      "content": "if (targetBuiltInRole === 'business_owner' && !actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 931,
+      "pattern": "role !==",
+      "content": "const safeMembers = membersToMove.filter((m) => m.role !== 'business_owner');",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1009,
+      "pattern": "role ===",
+      "content": "if (targetMem.role === 'business_owner') {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1010,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1036,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1045,
+      "pattern": "isBusinessOwner",
+      "content": "if (targetMem.user_id === actorContext.userId && !actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1066,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/role-governance.service.ts",
+      "line": 1080,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner && template.maxScope === 'ORGANIZATION') {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/scope-grant.service.ts",
+      "line": 236,
+      "pattern": "role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/scope-grant.service.ts",
+      "line": 236,
+      "pattern": "membership.role ===",
+      "content": "if (membership.role === 'business_owner') {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/scope-grant.service.ts",
+      "line": 623,
+      "pattern": "isBusinessOwner",
+      "content": "if (!actorContext.isBusinessOwner && !actorContext.rolePermissions.includes('roles.manage')) {",
+      "category": "B",
+      "reason": "Domain business governance invariant (role/permission hierarchy enforcement)"
+    },
+    {
+      "file": "src/server/services/super-admin-venue.service.ts",
+      "line": 118,
+      "pattern": "isSuperAdmin",
+      "content": "const isSuperAdmin = await this.verifySuperAdminAuthority(adminUserId);",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin-venue.service.ts",
+      "line": 119,
+      "pattern": "isSuperAdmin",
+      "content": "if (!isSuperAdmin) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin-venue.service.ts",
+      "line": 258,
+      "pattern": "isSuperAdmin",
+      "content": "const isSuperAdmin = await this.verifySuperAdminAuthority(adminUserId);",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin-venue.service.ts",
+      "line": 259,
+      "pattern": "isSuperAdmin",
+      "content": "if (!isSuperAdmin) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin.service.ts",
+      "line": 1067,
+      "pattern": "isSuperAdmin",
+      "content": "static async listUsers(params: { query?: string; status?: string; isSuperAdminOnly?: boolean; page?: number; limit?: number } = {}) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin.service.ts",
+      "line": 1084,
+      "pattern": "isSuperAdmin",
+      "content": "if (params.isSuperAdminOnly) {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/super-admin.service.ts",
+      "line": 1112,
+      "pattern": "isSuperAdmin",
+      "content": "isSuperAdmin: Boolean(p.is_super_admin),",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/services/waiter.service.ts",
+      "line": 196,
+      "pattern": "role !==",
+      "content": "if (mem && mem.role !== 'business_owner' && mem.role !== 'branch_manager') {",
+      "category": "B",
+      "reason": "Domain data scope filtering or owner fallback"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 150,
+      "pattern": "role ===",
+      "content": "const isBusinessOwner = activeMembership.role === 'business_owner';",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 150,
+      "pattern": "isBusinessOwner",
+      "content": "const isBusinessOwner = activeMembership.role === 'business_owner';",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 306,
+      "pattern": "isBusinessOwner",
+      "content": "if (isBusinessOwner) {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 407,
+      "pattern": "isBusinessOwner",
+      "content": "if (isBusinessOwner) {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 441,
+      "pattern": "isBusinessOwner",
+      "content": "if (isBusinessOwner) {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 476,
+      "pattern": "isBusinessOwner",
+      "content": "if (isBusinessOwner) {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 589,
+      "pattern": "isBusinessOwner",
+      "content": "queryCount: isBusinessOwner ? 11 : 10,",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/authorization-context.ts",
+      "line": 611,
+      "pattern": "isBusinessOwner",
+      "content": "isBusinessOwner,",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/policy-engine.ts",
+      "line": 336,
+      "pattern": "isBusinessOwner",
+      "content": "if (context.isBusinessOwner || context.membershipRole === 'business_owner') {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/policy-engine.ts",
+      "line": 547,
+      "pattern": "isBusinessOwner",
+      "content": "context.isBusinessOwner ||",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/policy-engine.ts",
+      "line": 621,
+      "pattern": "isBusinessOwner",
+      "content": "context.isBusinessOwner ||",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/scope-target-validator.ts",
+      "line": 315,
+      "pattern": "isBusinessOwner",
+      "content": "if (actorContext.isBusinessOwner || actorContext.membershipRole === 'business_owner') {",
+      "category": "A",
+      "reason": "RBAC V2 Policy Engine core architecture"
+    },
+    {
+      "file": "src/server/auth/super-admin.ts",
+      "line": 12,
+      "pattern": "isSuperAdmin",
+      "content": "isSuperAdmin: boolean;",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/auth/super-admin.ts",
+      "line": 70,
+      "pattern": "isSuperAdmin",
+      "content": "isSuperAdmin: Boolean(profile.is_super_admin),",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/auth/super-admin.ts",
+      "line": 80,
+      "pattern": "isSuperAdmin",
+      "content": "export const isSuperAdmin = cache(async function isSuperAdmin(userId: string): Promise<boolean> {",
+      "category": "F",
+      "reason": "Platform Super Admin boundary"
+    },
+    {
+      "file": "src/server/tenant/resolver.ts",
+      "line": 165,
+      "pattern": "role !==",
+      "content": "if (activeMembership.role !== 'business_owner') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/server/tenant/resolver.ts",
+      "line": 212,
+      "pattern": "role ===",
+      "content": "branches: activeMembership.role === 'business_owner' ? formattedBranches : userAccessibleBranches,",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/branches/page.tsx",
+      "line": 20,
+      "pattern": "role ===",
+      "content": "const isOwner = membership.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/branches/page.tsx",
+      "line": 20,
+      "pattern": "membership.role ===",
+      "content": "const isOwner = membership.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/branches/page.tsx",
+      "line": 20,
+      "pattern": "isOwner",
+      "content": "const isOwner = membership.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/branches/page.tsx",
+      "line": 55,
+      "pattern": "isOwner",
+      "content": "isOwner={isOwner}",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/kitchen/page.tsx",
+      "line": 15,
+      "pattern": "role !==",
+      "content": "role !== 'business_owner' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/kitchen/page.tsx",
+      "line": 16,
+      "pattern": "role !==",
+      "content": "role !== 'branch_manager' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/kitchen/page.tsx",
+      "line": 17,
+      "pattern": "role !==",
+      "content": "role !== 'kitchen_staff' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/kitchen/page.tsx",
+      "line": 18,
+      "pattern": "role !==",
+      "content": "role !== 'cashier' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/kitchen/page.tsx",
+      "line": 19,
+      "pattern": "role !==",
+      "content": "role !== 'waiter'",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/menu/items/page.tsx",
+      "line": 40,
+      "pattern": "isBusinessOwner",
+      "content": "return hasPrice || hasManage || hasItemsCreate || authContext.isBusinessOwner;",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/people/page.tsx",
+      "line": 45,
+      "pattern": "role ===",
+      "content": "const isOwner = authContext ? authContext.isBusinessOwner : membership?.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/people/page.tsx",
+      "line": 45,
+      "pattern": "isBusinessOwner",
+      "content": "const isOwner = authContext ? authContext.isBusinessOwner : membership?.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/people/page.tsx",
+      "line": 45,
+      "pattern": "isOwner",
+      "content": "const isOwner = authContext ? authContext.isBusinessOwner : membership?.role === 'business_owner';",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/people/page.tsx",
+      "line": 47,
+      "pattern": "isOwner",
+      "content": "let canViewAllProperties = isOwner;",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/people/page.tsx",
+      "line": 49,
+      "pattern": "isOwner",
+      "content": "if (!isOwner) {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/order/page.tsx",
+      "line": 26,
+      "pattern": "role ===",
+      "content": "if (context.membership.role === 'waiter') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/order/page.tsx",
+      "line": 26,
+      "pattern": "membership.role ===",
+      "content": "if (context.membership.role === 'waiter') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 15,
+      "pattern": "role !==",
+      "content": "role !== 'business_owner' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 16,
+      "pattern": "role !==",
+      "content": "role !== 'branch_manager' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 17,
+      "pattern": "role !==",
+      "content": "role !== 'kitchen_staff' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 18,
+      "pattern": "role !==",
+      "content": "role !== 'cashier' &&",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 19,
+      "pattern": "role !==",
+      "content": "role !== 'waiter'",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/waiter/page.tsx",
+      "line": 27,
+      "pattern": "role ===",
+      "content": "if (role === 'waiter') {",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    },
+    {
+      "file": "src/app/(dashboard)/layout.tsx",
+      "line": 42,
+      "pattern": "isBusinessOwner",
+      "content": "userPermissions = authContext.isBusinessOwner ? undefined : authContext.rolePermissions;",
+      "category": "D",
+      "reason": "UI / UX navigation or workspace route mapping"
+    }
+  ]
+}

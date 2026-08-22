@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { ActiveTenantContext } from '@/types';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
-import { PermissionService } from '@/server/services/permission.service';
 import { PermissionKey } from '@/lib/validation/permission';
 
 export interface RouteGuardResult {
@@ -44,12 +43,19 @@ export async function requireRoutePermission(pathname: string): Promise<RouteGua
     return { allowed: true, context, requiredPermission: null };
   }
 
-  const allowed = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    requiredPermission
-  );
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let allowed = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (authContext) {
+      const branchResource = authContext.activeBranchId
+        ? { type: 'branch' as const, id: authContext.activeBranchId }
+        : undefined;
+      allowed = await can({ context: authContext, permission: requiredPermission, resource: branchResource });
+    }
+  } catch {
+    allowed = false;
+  }
 
   return { allowed, context, requiredPermission };
 }

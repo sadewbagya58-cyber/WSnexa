@@ -2,8 +2,6 @@ import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
 import { VenueProfileService } from '@/server/services/venue-profile.service';
 import { VenueProfileForm } from '@/components/dashboard/venue-profile-form';
 import { ContextualHelpButton } from '@/components/help/contextual-help-button';
@@ -14,34 +12,34 @@ export const metadata: Metadata = {
 };
 
 export default async function VenueProfileDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
 
-  if (!user) redirect('/login');
+  if (!authContext) redirect('/onboarding/account-type');
 
-  const context = await resolveActiveBusinessContext();
-  if (!context) redirect('/onboarding/account-type');
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'venue_profile.manage'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'venue_profile.manage',
+  });
 
   if (!hasPerm) {
     redirect('/dashboard');
   }
 
-  const profile = await VenueProfileService.getProfileByBusinessId(context.business.id);
+  const profile = await VenueProfileService.getProfileByBusinessId(authContext.businessId);
+
+  const supabase = await createClient();
 
   // Fetch active branches for featured branch selector
   const { data: branches } = await supabase
     .from('branches')
     .select('id, name')
-    .eq('business_id', context.business.id)
+    .eq('business_id', authContext.businessId)
     .eq('status', 'active');
 
   return (
@@ -59,7 +57,7 @@ export default async function VenueProfileDashboardPage() {
       </div>
 
       <VenueProfileForm
-        businessId={context.business.id}
+        businessId={authContext.businessId}
         initialProfile={profile}
         branches={branches || []}
       />

@@ -1,9 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { resolveActiveBusinessContext } from '../tenant/resolver';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { createAdminClient } from '@/lib/supabase/server';
-import { PermissionService } from '../services/permission.service';
 
 export interface WaiterOrderItemInput {
   menuItemId: string;
@@ -25,8 +24,8 @@ export interface CreateWaiterOrderInput {
 
 export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
   try {
-    const tenant = await resolveActiveBusinessContext();
-    if (!tenant || !tenant.activeBranch) {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.activeBranchId) {
       return { success: false, message: "You don't have permission to place orders for this branch." };
     }
 
@@ -34,11 +33,13 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       return { success: false, message: 'Table selection and at least one item are required.' };
     }
 
-    // 1. Permission authorization check
+    const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+
+    // 1. Permission authorization check via RBAC V2
     const hasCreatePerm =
-      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'waiter.orders.create')) ||
-      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'orders.create')) ||
-      (await PermissionService.hasPermission(tenant.user.id, tenant.business.id, tenant.activeBranch.id, 'orders.view'));
+      (await can({ context: authContext, permission: 'waiter.orders.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'orders.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'orders.view', resource: branchResource }));
 
     if (!hasCreatePerm) {
       return { success: false, message: "You don't have permission to place orders for this branch." };
@@ -49,8 +50,8 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     // 2. Verify branch ordering_mode allows waiter ordering
     const { data: branch } = await admin
       .from('branches')
-      .select('ordering_mode')
-      .eq('id', tenant.activeBranch.id)
+      .select('ordering_mode, currency, businesses(default_currency)')
+      .eq('id', authContext.activeBranchId)
       .single();
 
     const orderingMode = branch?.ordering_mode || 'qr_and_waiter';
@@ -63,8 +64,8 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       .from('dining_tables')
       .select('id, name, table_number, service_area_id, service_areas(id, name)')
       .eq('id', input.tableId)
-      .eq('business_id', tenant.business.id)
-      .eq('branch_id', tenant.activeBranch.id)
+      .eq('business_id', authContext.businessId)
+      .eq('branch_id', authContext.activeBranchId)
       .single();
 
     if (tableErr || !table) {
@@ -72,21 +73,11 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     }
 
     // 4. Verify waiter service area authorization if user has area restrictions
-    if (
-      tenant.membership.role !== 'business_owner' &&
-      tenant.membership.role !== 'branch_manager' &&
-      table.service_area_id
-    ) {
-      const { data: areaAssigns } = await admin
-        .from('staff_service_areas')
-        .select('service_area_id')
-        .eq('business_membership_id', tenant.membership.id);
-
-      if (areaAssigns && areaAssigns.length > 0) {
-        const assignedIds = areaAssigns.map((a) => a.service_area_id);
-        if (!assignedIds.includes(table.service_area_id)) {
-          return { success: false, message: 'You are not assigned to this service area.' };
-        }
+    if (table.service_area_id) {
+      const tableResource = { type: 'dining_table' as const, id: input.tableId };
+      const canAccessTable = await can({ context: authContext, permission: 'waiter.orders.create', resource: tableResource });
+      if (!canAccessTable) {
+        return { success: false, message: 'You are not assigned to this service area.' };
       }
     }
 
@@ -96,8 +87,8 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       .from('menu_items')
       .select('id, name, price_cents, availability_status, branch_id, business_id')
       .in('id', uniqueItemIds)
-      .eq('business_id', tenant.business.id)
-      .eq('branch_id', tenant.activeBranch.id)
+      .eq('business_id', authContext.businessId)
+      .eq('branch_id', authContext.activeBranchId)
       .is('deleted_at', null);
 
     const itemMap = new Map((menuItems || []).map((m) => [m.id, m]));
@@ -107,7 +98,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
         '[createWaiterOrderAction] Item validation failed. Submitted IDs:',
         uniqueItemIds,
         'Active branch:',
-        tenant.activeBranch.id
+        authContext.activeBranchId
       );
       return {
         success: false,
@@ -198,7 +189,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
             !opt ||
             opt.modifier_group_id !== mod.groupId ||
             opt.menu_item_id !== itemInput.menuItemId ||
-            opt.branch_id !== tenant.activeBranch.id
+            opt.branch_id !== authContext.activeBranchId
           ) {
             return {
               success: false,
@@ -229,18 +220,20 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
 
     // 7. Generate sequential order number
     const { data: seqData } = await admin.rpc('generate_next_order_number', {
-      p_branch_id: tenant.activeBranch.id,
+      p_branch_id: authContext.activeBranchId,
     });
 
     const orderNumber = seqData || Math.floor(1000 + Math.random() * 9000);
     const totalCents = totalSubtotalCents;
 
+    const bizCurrency = (branch?.businesses as unknown as { default_currency?: string })?.default_currency || (branch as { currency?: string })?.currency || 'LKR';
+
     // 8. Atomic Order Creation
     const { data: newOrder, error: orderErr } = await admin
       .from('orders')
       .insert({
-        business_id: tenant.business.id,
-        branch_id: tenant.activeBranch.id,
+        business_id: authContext.businessId,
+        branch_id: authContext.activeBranchId,
         table_id: table.id,
         service_area_id: table.service_area_id,
         service_area_name_snapshot: areaName,
@@ -252,9 +245,9 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
         payment_method: 'pay_at_counter',
         subtotal_cents: totalCents,
         total_cents: totalCents,
-        currency: tenant.business.defaultCurrency || 'LKR',
+        currency: bizCurrency,
         order_source: 'waiter',
-        created_by_user_id: tenant.user.id,
+        created_by_user_id: authContext.userId,
         guest_notes: input.notes || null,
       })
       .select('*')

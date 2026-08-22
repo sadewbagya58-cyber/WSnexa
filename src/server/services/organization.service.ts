@@ -876,13 +876,36 @@ export class OrganizationService {
     };
   }
 
+  private static positionLocks = new Map<string, Promise<void>>();
+
+  private static async withPositionLock<T>(positionId: string | null | undefined, fn: () => Promise<T>): Promise<T> {
+    if (!positionId) return fn();
+    const currentLock = this.positionLocks.get(positionId) || Promise.resolve();
+    let release: () => void;
+    const nextLock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.positionLocks.set(positionId, currentLock.then(() => nextLock));
+
+    try {
+      await currentLock;
+      return await fn();
+    } finally {
+      release!();
+      if (this.positionLocks.get(positionId) === nextLock) {
+        this.positionLocks.delete(positionId);
+      }
+    }
+  }
+
   // ==========================================
   // 7. Staff Assignments & Lifecycle
   // ==========================================
 
   static async createStaffAssignment(input: CreateStaffAssignmentInput, actorId?: string) {
     const parsed = createStaffAssignmentSchema.parse(input);
-    const admin = createAdminClient();
+    return this.withPositionLock(parsed.positionId, async () => {
+      const admin = createAdminClient();
 
     // 1. Validate Business Membership belongs to business
     const validMember = await this.validateMembershipBelongsToBusiness(parsed.businessMembershipId, parsed.businessId);
@@ -1059,6 +1082,7 @@ export class OrganizationService {
     });
 
     return data;
+    });
   }
 
   static async createAdditionalAssignment(

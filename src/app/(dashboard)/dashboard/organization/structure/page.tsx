@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { StructureManagementClient } from '@/components/organization/structure-management-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Organization Structure & Units | WSNexa',
@@ -21,12 +21,19 @@ export default async function OrganizationStructurePage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch, branches } = context;
+  const { business, activeBranch, branches } = context;
 
-  const [departments, units, canManage] = await Promise.all([
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    canManage = await can({ context: authContext, permission: 'organization.manage' });
+  } catch {
+    canManage = false;
+  }
+
+  const [departments, units] = await Promise.all([
     OrganizationService.getDepartments(business.id),
     OrganizationService.getOrganizationUnits(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'organization.manage'),
   ]);
 
   return (

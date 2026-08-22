@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { VenueRankingService } from '@/server/services/venue-ranking.service';
 import { RankingMode, VenueRankingMetrics } from '@/lib/validation/ranking';
-import { PermissionService } from '@/server/services/permission.service';
 
 /**
  * Public action: Fetch ranked venues by mode.
@@ -41,31 +40,27 @@ export async function getCustomerRetentionInsightsAction() {
  * B2B action: Fetch business reputation metrics (`/dashboard/reputation`).
  */
 export async function getBusinessReputationAction() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    return { success: false, message: 'Unauthorized.' };
+  }
 
-  if (!user) return { success: false, message: 'Unauthorized.' };
-
-  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
-  const context = await resolveActiveBusinessContext();
-
-  if (!context) {
+  if (!authContext || !authContext.businessId) {
     return { success: false, message: 'Active business context required.' };
   }
 
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'reputation.view'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'reputation.view',
+  });
 
   if (!hasPerm) {
     return { success: false, message: 'Forbidden: You do not have permission to view business reputation.' };
   }
 
-  const metrics = await VenueRankingService.getBusinessReputationMetrics(context.business.id);
+  const metrics = await VenueRankingService.getBusinessReputationMetrics(authContext.businessId);
   return { success: true, metrics };
 }

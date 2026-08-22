@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { IntegrityCenterClient } from '@/components/organization/integrity-center-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Organization Integrity Center | WSNexa',
@@ -21,12 +21,17 @@ export default async function OrganizationIntegrityPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch } = context;
+  const { business } = context;
 
-  const [issues, canManage] = await Promise.all([
-    OrganizationService.getOrganizationIntegrityIssues(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'organization.manage'),
-  ]);
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    canManage = await can({ context: authContext, permission: 'organization.manage' });
+  } catch {
+    canManage = false;
+  }
+
+  const issues = await OrganizationService.getOrganizationIntegrityIssues(business.id);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">

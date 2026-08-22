@@ -1,9 +1,6 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
-import { PermissionService } from '@/server/services/permission.service';
 import { VenueRankingService } from '@/server/services/venue-ranking.service';
 import { Badge } from '@/components/ui/badge';
 
@@ -13,22 +10,20 @@ export const metadata: Metadata = {
 };
 
 export default async function ReputationDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
 
-  if (!user) redirect('/login');
+  if (!authContext) redirect('/dashboard');
 
-  const context = await resolveActiveBusinessContext();
-  if (!context) redirect('/dashboard');
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'reputation.view'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'reputation.view',
+  });
 
   if (!hasPerm) {
     return (
@@ -41,7 +36,7 @@ export default async function ReputationDashboardPage() {
     );
   }
 
-  const metrics = await VenueRankingService.getBusinessReputationMetrics(context.business.id);
+  const metrics = await VenueRankingService.getBusinessReputationMetrics(authContext.businessId);
 
   return (
     <div className="space-y-6">

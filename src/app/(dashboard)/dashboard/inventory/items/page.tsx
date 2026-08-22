@@ -4,9 +4,9 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { InventoryService } from '@/server/services/inventory.service';
 import { InventoryItemsTable } from '@/components/inventory/inventory-items-table';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Stock Items | WSNexa Inventory',
@@ -23,12 +23,13 @@ export default async function InventoryItemsPage() {
     redirect('/login');
   }
 
-  const hasCostPermission = await PermissionService.hasPermission(
-    context.user.id,
-    context.business.id,
-    context.activeBranch.id,
-    'inventory.costs.view'
-  );
+  let hasCostPermission = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+  } catch {
+    hasCostPermission = false;
+  }
 
   const [items, categories, locations] = await Promise.all([
     InventoryService.getInventoryItems(context.business.id, context.activeBranch.id, { hasCostPermission }),

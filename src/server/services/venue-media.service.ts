@@ -1,8 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { PermissionService } from '@/server/services/permission.service';
 
 export interface UploadVenueImageParams {
-  userId: string;
+  userId?: string;
   businessId: string;
   imageType: 'logo' | 'cover';
   fileBuffer: Buffer;
@@ -30,7 +29,6 @@ export class VenueMediaService {
    * Upload logo or cover photo to Supabase Storage with strict tenant and permission validation.
    */
   static async uploadImage({
-    userId,
     businessId,
     imageType,
     fileBuffer,
@@ -57,12 +55,28 @@ export class VenueMediaService {
       }
 
       // 3. Server-side permission validation
-      const hasPerm = await PermissionService.hasPermission(
-        userId,
-        businessId,
-        null,
-        'venue_profile.manage'
-      );
+      const { can, resolveAuthorizationContext } = await import('@/server/auth');
+      let authContext;
+      try {
+        authContext = await resolveAuthorizationContext();
+      } catch {
+        return {
+          success: false,
+          message: 'Unauthorized session.',
+        };
+      }
+
+      if (!authContext || authContext.businessId !== businessId) {
+        return {
+          success: false,
+          message: 'Tenant mismatch or unauthorized business context.',
+        };
+      }
+
+      const hasPerm = await can({
+        context: authContext,
+        permission: 'venue_profile.manage',
+      });
 
       if (!hasPerm) {
         return {
@@ -155,12 +169,28 @@ export class VenueMediaService {
     imageType: 'logo' | 'cover'
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const hasPerm = await PermissionService.hasPermission(
-        userId,
-        businessId,
-        null,
-        'venue_profile.manage'
-      );
+      const { can, resolveAuthorizationContext } = await import('@/server/auth');
+      let authContext;
+      try {
+        authContext = await resolveAuthorizationContext();
+      } catch {
+        return {
+          success: false,
+          message: 'Unauthorized session.',
+        };
+      }
+
+      if (!authContext || authContext.businessId !== businessId) {
+        return {
+          success: false,
+          message: 'Tenant mismatch or unauthorized business context.',
+        };
+      }
+
+      const hasPerm = await can({
+        context: authContext,
+        permission: 'venue_profile.manage',
+      });
 
       if (!hasPerm) {
         return {

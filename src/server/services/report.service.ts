@@ -1,5 +1,4 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { ReportFilterInput, ReportPreset } from '@/lib/validation/report';
 
 export interface SalesSummaryData {
@@ -163,21 +162,31 @@ export class ReportService {
     message?: string;
     data?: CompleteAnalyticsPayload;
   }> {
-    const context = await resolveActiveBusinessContext();
-    if (!context || !context.activeBranch) {
-      return { success: false, message: 'Unauthorized or active branch context missing.' };
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized or invalid session.' };
     }
 
-    const { role } = context.membership;
-    if (!['business_owner', 'branch_manager', 'cashier', 'kitchen_staff', 'waiter'].includes(role)) {
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized or active business context missing.' };
+    }
+
+    const targetBranchId = input.branchId || authContext.activeBranchId;
+    if (!targetBranchId) {
+      return { success: false, message: 'Branch context required for analytics.' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: targetBranchId };
+
+    const canViewReports =
+      (await can({ context: authContext, permission: 'reports.view', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'reports.financial.view', resource: branchResource }));
+
+    if (!canViewReports) {
       return { success: false, message: 'Forbidden. Reporting permissions required.' };
-    }
-
-    const targetBranchId = input.branchId || context.activeBranch.id;
-
-    // Enforce Branch Manager branch isolation
-    if (role !== 'business_owner' && targetBranchId !== context.activeBranch.id) {
-      return { success: false, message: 'Forbidden. Cannot request cross-branch analytics.' };
     }
 
     const bounds = this.resolveDateBounds(input.preset, input.startDate, input.endDate);
@@ -242,11 +251,12 @@ export class ReportService {
       p_end_date: bounds.endDate,
     });
 
-    // 9. Fetch Cross-Branch Comparison (Business Owner Only)
+    // 9. Fetch Cross-Branch Comparison (Business-wide reporting authorized)
     let branchComparisonData: BranchComparisonItem[] | undefined = undefined;
-    if (role === 'business_owner') {
+    const canViewAllBranches = await can({ context: authContext, permission: 'reports.view' });
+    if (canViewAllBranches && authContext.isBusinessOwner) {
       const { data: compRes } = await admin.rpc('get_branch_comparison', {
-        p_business_id: context.business.id,
+        p_business_id: authContext.businessId,
         p_start_date: bounds.startDate,
         p_end_date: bounds.endDate,
       });
@@ -274,6 +284,11 @@ export class ReportService {
       avg_prep_seconds: 0,
     };
 
+    const activeBranchAssignment = authContext.branchAssignments.find(
+      (b) => b.branchId === targetBranchId
+    );
+    const branchName = activeBranchAssignment?.branchName || 'Branch';
+
     return {
       success: true,
       data: {
@@ -291,9 +306,9 @@ export class ReportService {
         },
         tables: (tableData as { tables?: TablePerformance[] })?.tables || [],
         branchComparison: branchComparisonData,
-        currency: context.business.defaultCurrency || 'LKR',
-        branchName: context.activeBranch.name,
-        businessName: context.business.name,
+        currency: 'LKR',
+        branchName,
+        businessName: authContext.businessName,
         dateRangeLabel: bounds.label,
       },
     };

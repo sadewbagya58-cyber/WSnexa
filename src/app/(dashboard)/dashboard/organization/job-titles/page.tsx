@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { JobTitlesClient, JobTitleData } from '@/components/organization/job-titles-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Job Titles & Hierarchy | WSNexa',
@@ -21,12 +21,19 @@ export default async function JobTitlesPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch } = context;
+  const { business } = context;
 
-  const [hierarchyLevels, jobTitles, canManage] = await Promise.all([
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    canManage = await can({ context: authContext, permission: 'organization.manage' });
+  } catch {
+    canManage = false;
+  }
+
+  const [hierarchyLevels, jobTitles] = await Promise.all([
     OrganizationService.getHierarchyLevels(business.id),
     OrganizationService.getJobTitles(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'organization.manage'),
   ]);
 
   return (

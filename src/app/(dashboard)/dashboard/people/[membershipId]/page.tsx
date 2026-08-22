@@ -4,7 +4,6 @@ import { notFound, redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { MemberProfileClient } from '@/components/organization/member-profile-client';
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -28,7 +27,7 @@ export default async function MemberProfilePage({
     redirect('/login');
   }
 
-  const { business, user, activeBranch, branches } = context;
+  const { business, branches } = context;
   const admin = createAdminClient();
 
   // 1. Fetch business membership
@@ -102,7 +101,11 @@ export default async function MemberProfilePage({
     OrganizationService.getJobTitles(business.id),
     OrganizationService.getPositions(business.id),
     OrganizationService.listOrganizationStaff(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'people.manage'),
+    (async () => {
+      const { can, resolveAuthorizationContext } = await import('@/server/auth');
+      const authContext = await resolveAuthorizationContext();
+      return authContext ? can({ context: authContext, permission: 'people.manage' }) : false;
+    })(),
   ]);
 
   const potentialManagers = allStaff

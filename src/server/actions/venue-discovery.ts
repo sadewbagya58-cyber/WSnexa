@@ -7,7 +7,6 @@ import { VenueDiscoveryService } from '@/server/services/venue-discovery.service
 import { VenueProfileService } from '@/server/services/venue-profile.service';
 import { VenueFavoriteService } from '@/server/services/venue-favorite.service';
 import { VenueReviewService } from '@/server/services/venue-review.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { ActionResponse } from './auth';
 import {
   VenueProfileInput,
@@ -38,29 +37,28 @@ export async function getVenueBySlugAction(slug: string) {
 export async function upsertVenueProfileAction(
   input: VenueProfileInput
 ): Promise<ActionResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    return { success: false, message: 'Unauthorized.' };
+  }
 
-  if (!user) return { success: false, message: 'Unauthorized.' };
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Active business workspace required.' };
+  }
 
-  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
-  const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Active business workspace required.' };
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'venue_profile.manage'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'venue_profile.manage',
+  });
 
   if (!hasPerm) {
     return { success: false, message: 'Forbidden: You do not have permission to manage the venue profile.' };
   }
 
-  const result = await VenueProfileService.upsertProfile(context.business.id, input);
+  const result = await VenueProfileService.upsertProfile(authContext.businessId, input);
 
   if (result.success) {
     revalidatePath('/dashboard/venue-profile');
@@ -75,29 +73,28 @@ export async function upsertVenueProfileAction(
  * Toggle Publish / Unpublish Status.
  */
 export async function toggleVenuePublishedStatusAction(isPublished: boolean): Promise<ActionResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    return { success: false, message: 'Unauthorized.' };
+  }
 
-  if (!user) return { success: false, message: 'Unauthorized.' };
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Active business workspace required.' };
+  }
 
-  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
-  const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Active business workspace required.' };
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'venue_profile.manage'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'venue_profile.manage',
+  });
 
   if (!hasPerm) {
     return { success: false, message: 'Forbidden: You do not have permission to manage venue publication.' };
   }
 
-  const result = await VenueProfileService.setPublishedStatus(context.business.id, isPublished);
+  const result = await VenueProfileService.setPublishedStatus(authContext.businessId, isPublished);
 
   if (result.success) {
     revalidatePath('/dashboard/venue-profile');
@@ -285,29 +282,28 @@ export async function deleteReviewAction(reviewId: string): Promise<ActionRespon
  * Owner / Manager Response to Review (`/dashboard/reviews`).
  */
 export async function respondToReviewAction(input: OwnerReviewResponseInput): Promise<ActionResponse> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  let authContext;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    return { success: false, message: 'Unauthorized.' };
+  }
 
-  if (!user) return { success: false, message: 'Unauthorized.' };
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Active business workspace required.' };
+  }
 
-  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
-  const context = await resolveActiveBusinessContext();
-  if (!context) return { success: false, message: 'Active business workspace required.' };
-
-  const hasPerm = await PermissionService.hasPermission(
-    user.id,
-    context.business.id,
-    context.activeBranch?.id || null,
-    'reviews.respond'
-  );
+  const hasPerm = await can({
+    context: authContext,
+    permission: 'reviews.respond',
+  });
 
   if (!hasPerm) {
     return { success: false, message: 'Forbidden: You do not have permission to respond to reviews.' };
   }
 
-  const result = await VenueReviewService.respondToReview(context.business.id, user.id, input);
+  const result = await VenueReviewService.respondToReview(authContext.businessId, authContext.userId, input);
 
   if (result.success) {
     revalidatePath('/dashboard/reviews');

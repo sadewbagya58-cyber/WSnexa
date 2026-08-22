@@ -55,9 +55,9 @@ export interface FormattedMemberDetail {
 
 export class PermissionService {
   /**
-   * Core authorization check method.
-   * Evaluates authentication, membership status, Business Owner un-deniable authority,
-   * member overrides, role defaults, custom roles, and branch boundaries.
+   * @deprecated for security-sensitive production mutations and reads.
+   * Use authoritative Phase 30 RBAC V2: resolveAuthorizationContext() + can() / authorize() / requireBusinessPermission().
+   * Retained for legacy test compatibility and non-critical UI presets.
    */
   static async hasPermission(
     userId: string,
@@ -140,7 +140,8 @@ export class PermissionService {
   }
 
   /**
-   * Helper to verify service area scope boundary for area-sensitive operations.
+   * @deprecated for security-sensitive production mutations.
+   * Service area scope is now verified authoritatively in the Phase 30 Policy Engine.
    */
   static async verifyServiceAreaBoundary(
     membershipId: string,
@@ -194,7 +195,8 @@ export class PermissionService {
   }
 
   /**
-   * Helper to verify if a membership has assignment to a given branch.
+   * @deprecated for security-sensitive authorization.
+   * Use Phase 30 Policy Engine scope evaluation.
    */
   private static async verifyBranchBoundary(
     membershipId: string,
@@ -214,7 +216,8 @@ export class PermissionService {
   }
 
   /**
-   * Asserts permission and throws an exception if check fails.
+   * @deprecated for security-sensitive authorization.
+   * Use requireBusinessPermission() or authorize().
    */
   static async requirePermission(
     userId: string,

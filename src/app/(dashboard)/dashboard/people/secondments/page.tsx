@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { SecondmentsHubClient, SecondmentRow } from '@/components/organization/secondments-hub-client';
 
 export const metadata: Metadata = {
@@ -21,11 +20,13 @@ export default async function SecondmentsPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch } = context;
+  const { business } = context;
+  const { can, resolveAuthorizationContext } = await import('@/server/auth');
+  const authContext = await resolveAuthorizationContext();
 
   const [secondments, canManage] = await Promise.all([
     OrganizationService.listSecondments(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'people.manage'),
+    authContext ? can({ context: authContext, permission: 'people.manage' }) : Promise.resolve(false),
   ]);
 
   return (

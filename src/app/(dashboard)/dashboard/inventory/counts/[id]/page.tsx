@@ -4,9 +4,9 @@ import { notFound, redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { PermissionService } from '@/server/services/permission.service';
 import { InventoryService } from '@/server/services/inventory.service';
 import { StockCountMobileSheet } from '@/components/inventory/stock-count-mobile-sheet';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 interface StockCountDetailPageProps {
   params: Promise<{ id: string }>;
@@ -28,20 +28,16 @@ export default async function StockCountDetailPage({ params }: StockCountDetailP
     redirect('/login');
   }
 
-  const [hasCostPermission, canApprove] = await Promise.all([
-    PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'inventory.costs.view'
-    ),
-    PermissionService.hasPermission(
-      context.user.id,
-      context.business.id,
-      context.activeBranch.id,
-      'inventory.counts.approve'
-    ),
-  ]);
+  let hasCostPermission = false;
+  let canApprove = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+    canApprove = await can({ context: authContext, permission: 'inventory.counts.approve' });
+  } catch {
+    hasCostPermission = false;
+    canApprove = false;
+  }
 
   const count = await InventoryService.getStockCountById(
     context.business.id,

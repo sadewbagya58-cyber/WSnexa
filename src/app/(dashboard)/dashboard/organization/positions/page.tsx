@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { OrganizationService } from '@/server/services/organization.service';
-import { PermissionService } from '@/server/services/permission.service';
 import { PositionsClient, PositionRow } from '@/components/organization/positions-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Positions & Headcount | WSNexa',
@@ -21,14 +21,21 @@ export default async function PositionsPage() {
     redirect('/login');
   }
 
-  const { business, user, activeBranch, branches } = context;
+  const { business, branches, activeBranch } = context;
 
-  const [positionsWithCoverage, jobTitles, departments, units, canManage] = await Promise.all([
+  let canManage = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    canManage = await can({ context: authContext, permission: 'positions.manage' });
+  } catch {
+    canManage = false;
+  }
+
+  const [positionsWithCoverage, jobTitles, departments, units] = await Promise.all([
     OrganizationService.listAllPositionsWithCoverage(business.id),
     OrganizationService.getJobTitles(business.id),
     OrganizationService.getDepartments(business.id),
     OrganizationService.getOrganizationUnits(business.id),
-    PermissionService.hasPermission(user.id, business.id, activeBranch?.id || null, 'positions.manage'),
   ]);
 
   return (

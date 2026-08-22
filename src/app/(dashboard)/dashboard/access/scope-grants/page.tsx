@@ -9,14 +9,13 @@ import {
 import { ScopeGrantManager } from '@/components/access/scope-grant-manager';
 import { BranchService } from '@/server/services/branch.service';
 import { OrganizationService } from '@/server/services/organization.service';
-import Link from 'next/link';
-
-import { IconArrowLeft } from '@/components/access/access-icons';
 
 export const metadata = {
   title: 'Scoped Permission Grants | WSNexa',
   description: 'Manage fine-grained permission scope grants across properties and departments.',
 };
+
+import { PageHeader } from '@/components/layout/page-header';
 
 export default async function ScopeGrantsPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/access/scope-grants');
@@ -50,15 +49,15 @@ export default async function ScopeGrantsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowLeft className="w-4 h-4" /> Back to Access Control Hub
-        </Link>
-      </div>
+      <PageHeader
+        title="Scope Grants Manager"
+        description="Manage explicit scope grants across properties, departments, and service areas."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Scope Grants' },
+        ]}
+      />
 
       <ScopeGrantManager
         grants={grants}

@@ -7,13 +7,13 @@ import {
 import { BranchService } from '@/server/services/branch.service';
 import { OrganizationService } from '@/server/services/organization.service';
 import { AccessDiagnosticsClient } from '@/components/access/access-diagnostics-client';
-import Link from 'next/link';
-import { IconArrowLeft } from '@/components/access/access-icons';
 
 export const metadata = {
   title: 'Access Diagnostics | Policy Engine | WSNexa',
   description: 'Interactive "Why Can / Can\'t This User?" Policy Engine evaluation tool.',
 };
+
+import { PageHeader } from '@/components/layout/page-header';
 
 export default async function AccessDiagnosticsPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/access/diagnostics');
@@ -43,15 +43,15 @@ export default async function AccessDiagnosticsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowLeft className="w-4 h-4" /> Back to Access Control Hub
-        </Link>
-      </div>
+      <PageHeader
+        title="Access Diagnostics Engine"
+        description="Interactive Policy Engine evaluation tracer, provenance breakdown, and permission simulation."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Diagnostics' },
+        ]}
+      />
 
       <AccessDiagnosticsClient
         members={members}

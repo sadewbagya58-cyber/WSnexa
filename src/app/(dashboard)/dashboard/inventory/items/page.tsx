@@ -1,7 +1,8 @@
 import React from 'react';
 import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
+import Link from 'next/link';
+import { PageHeader } from '@/components/layout/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
@@ -48,14 +49,22 @@ export default async function InventoryItemsPage() {
           { label: 'Stock Items' },
         ]}
         helpSlug="adding-inventory-items-and-units"
-        primaryAction={{
-          label: '+ Add Ingredient',
-          href: '/dashboard/inventory/items/new',
-        }}
-        secondaryAction={{
-          label: '📦 Manage Locations',
-          href: '/dashboard/inventory/locations',
-        }}
+        primaryAction={
+          <Link
+            href="/dashboard/inventory/items/new"
+            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+          >
+            + Add Ingredient
+          </Link>
+        }
+        secondaryActions={
+          <Link
+            href="/dashboard/inventory/locations"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            📦 Manage Locations
+          </Link>
+        }
       />
 
       <InventoryItemsTable

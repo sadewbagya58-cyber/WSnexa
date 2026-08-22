@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { CategoryManager } from '@/components/menu/category-manager';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
@@ -26,9 +26,12 @@ export default async function MenuCategoriesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Menu Categories"
-        description={`Organize food, beverage, and item categories for ${tenantContext.activeBranch.name}.`}
-        breadcrumbs={[{ label: 'Menu Catalog', href: '/dashboard/menu' }, { label: 'Categories' }]}
-        backHref="/dashboard/menu"
+        description={`Organize food, beverage, and item categories for ${tenantContext.activeBranch.name}`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Menu Overview', href: '/dashboard/menu' },
+          { label: 'Categories' },
+        ]}
       />
 
       <CategoryManager initialCategories={categories || []} />

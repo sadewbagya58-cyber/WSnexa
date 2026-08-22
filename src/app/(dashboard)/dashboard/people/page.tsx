@@ -8,6 +8,8 @@ import { PeopleDirectoryClient, StaffRow } from '@/components/organization/peopl
 import { createAdminClient } from '@/lib/supabase/admin';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
+import { PageHeader } from '@/components/layout/page-header';
+
 export const metadata: Metadata = {
   title: 'People Directory | WSNexa',
   description: 'Enterprise staff directory, primary assignments, reporting relationships, and coverage',
@@ -94,7 +96,16 @@ export default async function PeopleDirectoryPage({ searchParams }: PeopleDirect
   ]);
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title="People Directory"
+        description="Employee records, primary department placements, job titles, and position assignments."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'People Directory' },
+        ]}
+      />
+
       <PeopleDirectoryClient
         staff={staffList as unknown as StaffRow[]}
         branches={branches}

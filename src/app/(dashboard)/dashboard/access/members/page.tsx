@@ -1,13 +1,14 @@
-import React from 'react';
+import Link from 'next/link';
 import { requireRoutePermission } from '@/server/tenant/guard';
 import { listTeamMembersAction } from '@/server/actions/permission';
-import Link from 'next/link';
-import { IconArrowRight, IconEye, IconUsers } from '@/components/access/access-icons';
+import { IconEye } from '@/components/access/access-icons';
 
 export const metadata = {
   title: 'Member Access Management | WSNexa',
   description: 'Inspect staff access profiles, roles, and permission overrides.',
 };
+
+import { PageHeader } from '@/components/layout/page-header';
 
 export default async function MemberAccessDirectoryPage() {
   const { allowed } = await requireRoutePermission('/dashboard/access/members');
@@ -28,22 +29,15 @@ export default async function MemberAccessDirectoryPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowRight className="w-4 h-4" /> Back to Access Control Hub
-        </Link>
-      </div>
-
-      <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-1">
-        <h1 className="text-lg font-bold text-zinc-900">Member Access Profiles & Overrides</h1>
-        <p className="text-xs text-zinc-500">
-          Inspect authorization capability profiles for staff members, reassign roles, configure explicit permission overrides, and inspect temporary authority.
-        </p>
-      </div>
+      <PageHeader
+        title="Member Access Directory"
+        description="Inspect authorization capability profiles for staff members, reassign roles, and configure explicit overrides."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Staff Members' },
+        ]}
+      />
 
       {/* Staff Members List */}
       <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-2xs">

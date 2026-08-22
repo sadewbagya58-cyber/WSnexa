@@ -7,13 +7,14 @@ import {
 } from '@/server/actions/permission';
 import { BuiltInRolesView } from '@/components/access/built-in-roles-view';
 import { CustomRolesList } from '@/components/access/custom-roles-list';
-import Link from 'next/link';
-import { IconArrowLeft, IconShieldCheck, IconSliders } from '@/components/access/access-icons';
+import { IconShieldCheck, IconSliders } from '@/components/access/access-icons';
 
 export const metadata = {
   title: 'Roles & Templates | Access Control | WSNexa',
   description: 'Manage built-in templates and custom tenant roles.',
 };
+
+import { PageHeader } from '@/components/layout/page-header';
 
 export default async function RolesManagementPage() {
   const { allowed } = await requireRoutePermission('/dashboard/access/roles');
@@ -41,22 +42,15 @@ export default async function RolesManagementPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/access"
-          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
-        >
-          <IconArrowLeft className="w-4 h-4" /> Back to Access Control Hub
-        </Link>
-      </div>
-
-      <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-1">
-        <h1 className="text-lg font-bold text-zinc-900">Role Capabilities & Governance</h1>
-        <p className="text-xs text-zinc-500">
-          Roles encapsulate WHAT staff capabilities are granted. System built-in templates provide standard baseline roles, while custom roles can be defined per business tenant.
-        </p>
-      </div>
+      <PageHeader
+        title="Roles & Templates"
+        description="Manage built-in role templates and custom capability permission bundles."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Roles & Templates' },
+        ]}
+      />
 
       {/* Built-In Templates Section */}
       <div className="space-y-3">

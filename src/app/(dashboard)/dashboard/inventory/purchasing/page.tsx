@@ -2,7 +2,7 @@ import React from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
@@ -30,22 +30,30 @@ export default async function PurchasingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Purchase Orders"
+        title="Purchasing & Suppliers"
         description={`Track vendor orders, procurement approvals, and incoming shipments for ${context.activeBranch.name}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Inventory', href: '/dashboard/inventory' },
-          { label: 'Purchasing' },
+          { label: 'Inventory Hub', href: '/dashboard/inventory' },
+          { label: 'Purchasing & Suppliers' },
         ]}
         helpSlug="creating-purchase-orders"
-        primaryAction={{
-          label: '+ New Purchase Order',
-          href: '/dashboard/inventory/purchasing/new',
-        }}
-        secondaryAction={{
-          label: '📥 Receive Deliveries',
-          href: '/dashboard/inventory/receiving',
-        }}
+        primaryAction={
+          <Link
+            href="/dashboard/inventory/purchasing/new"
+            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+          >
+            + New Purchase Order
+          </Link>
+        }
+        secondaryActions={
+          <Link
+            href="/dashboard/inventory/receiving"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            📥 Receive Deliveries
+          </Link>
+        }
       />
 
       {purchaseOrders.length === 0 ? (

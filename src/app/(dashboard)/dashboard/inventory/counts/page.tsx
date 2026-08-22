@@ -2,7 +2,7 @@ import React from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
@@ -49,10 +49,14 @@ export default async function StockCountsPage() {
           { label: 'Stock Counts' },
         ]}
         helpSlug="performing-physical-stock-counts"
-        primaryAction={{
-          label: '+ Start New Count',
-          href: '/dashboard/inventory/counts/new',
-        }}
+        primaryAction={
+          <Link
+            href="/dashboard/inventory/counts/new"
+            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+          >
+            + Start New Count
+          </Link>
+        }
       />
 
       {counts.length === 0 ? (

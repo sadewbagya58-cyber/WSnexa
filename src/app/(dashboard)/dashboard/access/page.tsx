@@ -13,6 +13,8 @@ export const metadata = {
   description: 'RBAC & Scope V2 authorization management and diagnostics hub.',
 };
 
+import { PageHeader } from '@/components/layout/page-header';
+
 export default async function AccessHubPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/access');
 
@@ -41,6 +43,15 @@ export default async function AccessHubPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title="Access Control Hub"
+        description="RBAC & Scope V2 authorization management, custom role bundles, scope grants, and policy diagnostics."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Access Control Hub' },
+        ]}
+      />
+
       <AccessHubOverview
         builtInTemplates={builtInTemplates}
         customRoles={customRoles}

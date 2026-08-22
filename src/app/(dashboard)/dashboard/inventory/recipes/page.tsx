@@ -2,7 +2,7 @@ import React from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { RecipeService } from '@/server/services/recipe.service';
@@ -33,18 +33,26 @@ export default async function RecipesPage() {
         description="Configure recipe formulas, ingredient portioning, yield factors, and track real-time food cost margins"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Inventory', href: '/dashboard/inventory' },
+          { label: 'Inventory Hub', href: '/dashboard/inventory' },
           { label: 'Recipes' },
         ]}
         helpSlug="creating-recipes-and-bom"
-        primaryAction={{
-          label: '+ Create Recipe',
-          href: '/dashboard/inventory/recipes/new',
-        }}
-        secondaryAction={{
-          label: '🍲 Batch Production',
-          href: '/dashboard/inventory/production',
-        }}
+        primaryAction={
+          <Link
+            href="/dashboard/inventory/recipes/new"
+            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+          >
+            + Create Recipe
+          </Link>
+        }
+        secondaryActions={
+          <Link
+            href="/dashboard/inventory/production"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            🍲 Batch Production
+          </Link>
+        }
       />
 
       {/* Overview Filter Tabs */}

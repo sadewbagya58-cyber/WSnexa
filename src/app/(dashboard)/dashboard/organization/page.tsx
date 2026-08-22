@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: 'Enterprise organizational hierarchy, departments, positions, and leadership coverage',
 };
 
+import { PageHeader } from '@/components/layout/page-header';
+
 export default async function OrganizationOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/organization');
   if (!allowed) {
@@ -37,7 +39,16 @@ export default async function OrganizationOverviewPage() {
   ]);
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title="Organization Hub"
+        description="Multi-branch organizational architecture, department hierarchy, and headcount hub."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Organization Hub' },
+        ]}
+      />
+
       <OrganizationOverviewClient
         summary={summary}
         recentIssues={issues}

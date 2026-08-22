@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader } from '@/components/layout/page-header';
 
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
@@ -37,18 +37,29 @@ export default async function MenuDashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${tenantContext.business.name} Menu Catalog`}
-        description={`Branch: ${tenantContext.activeBranch.name} (${tenantContext.activeBranch.code})`}
-        breadcrumbs={[{ label: 'Menu Catalog' }]}
-        primaryAction={{
-          label: '+ Add Menu Item',
-          href: '/dashboard/menu/items/new',
-        }}
-        secondaryAction={{
-          label: 'Manage Categories',
-          href: '/dashboard/menu/categories',
-        }}
+        title="Menu Overview"
+        description={`Manage active food and beverage offerings, categories, items, and pricing for ${tenantContext.activeBranch.name}`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Menu Overview' },
+        ]}
         helpSlug="creating-menu-categories"
+        primaryAction={
+          <Link
+            href="/dashboard/menu/items/new"
+            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+          >
+            + Add Menu Item
+          </Link>
+        }
+        secondaryActions={
+          <Link
+            href="/dashboard/menu/categories"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            Manage Categories
+          </Link>
+        }
       />
 
       {/* Navigation Sub-Tabs */}

@@ -1,7 +1,8 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
-import { BuiltInRoleTemplate, CustomRoleDetail, ScopeGrantDetail } from '@/types/authorization.types';
-import { FormattedMemberDetail } from '@/server/services/permission.service';
+import { BuiltInRoleTemplate, CustomRoleDetail, ScopeGrantDetail, FormattedMemberDetail } from '@/types/authorization.types';
 import {
   IconShieldCheck,
   IconUsers,

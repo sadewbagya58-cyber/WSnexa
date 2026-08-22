@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { EffectiveAccessPreview, BuiltInRoleTemplate, CustomRoleDetail } from '@/types/authorization.types';
-import { FormattedPermission } from '@/server/services/permission.service';
+import { EffectiveAccessPreview, BuiltInRoleTemplate, CustomRoleDetail, FormattedPermission } from '@/types/authorization.types';
 import { MemberOverrideModal } from '@/components/access/member-override-modal';
 import {
   IconUser,

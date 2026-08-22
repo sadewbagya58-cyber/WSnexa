@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useState, useMemo } from 'react';
-import { FormattedPermission } from '@/server/services/permission.service';
+import { FormattedPermission } from '@/types/authorization.types';
 import { IconShieldAlert, IconCircleCheck, IconCircleX } from './access-icons';
 
 interface PermissionMatrixProps {

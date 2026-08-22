@@ -550,3 +550,35 @@ export interface RoleEffectiveAccessSummary {
   concreteGrantsCount: number;
 }
 
+export interface FormattedPermission {
+  key: PermissionKey;
+  name: string;
+  description: string | null;
+  category: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+}
+
+export interface FormattedMemberDetail {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: string;
+  customRoleId: string | null;
+  customRoleName: string | null;
+  membershipStatus: string;
+  branchId: string | null;
+  branchName: string | null;
+  joinedAt: string;
+  assignedAreaIds?: string[];
+  assignedAreaNames?: string[];
+  overrides: Array<{ permissionKey: PermissionKey; effect: 'allow' | 'deny' }>;
+  effectivePermissions: PermissionKey[];
+  memberName?: string;
+  position?: string;
+  primaryBranchId?: string;
+  departmentId?: string;
+  secondments?: Array<{ branchId: string; branchName?: string }>;
+  isAllowed?: boolean;
+}
+

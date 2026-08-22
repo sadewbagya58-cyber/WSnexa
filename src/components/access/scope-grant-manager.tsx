@@ -1,6 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
-import { ScopeGrantDetail, ScopeType, BuiltInRoleTemplate, CustomRoleDetail } from '@/types/authorization.types';
-import { FormattedPermission } from '@/server/services/permission.service';
+import { ScopeGrantDetail, ScopeType, BuiltInRoleTemplate, CustomRoleDetail, FormattedPermission } from '@/types/authorization.types';
 import { ScopePresetSelector } from '@/components/access/scope-preset-selector';
 import {
   IconShieldAlert,

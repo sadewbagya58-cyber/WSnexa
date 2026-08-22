@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FormattedMemberDetail, FormattedPermission } from '@/server/services/permission.service';
+import { FormattedMemberDetail, FormattedPermission } from '@/types/authorization.types';
 import { DiagnosticResultData, diagnoseAccessAction } from '@/server/actions/permission';
 import {
   IconShieldCheck,

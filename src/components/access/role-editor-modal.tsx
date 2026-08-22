@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CustomRoleDetail, ScopeType } from '@/types/authorization.types';
-import { FormattedPermission } from '@/server/services/permission.service';
+import { CustomRoleDetail, ScopeType, FormattedPermission } from '@/types/authorization.types';
 import { ScopePresetSelector } from '@/components/access/scope-preset-selector';
 import { PermissionMatrix } from '@/components/access/permission-matrix';
 import { IconShield, IconSparkles, IconAlertCircle } from './access-icons';

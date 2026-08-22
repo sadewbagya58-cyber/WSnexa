@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CustomRoleDetail, BuiltInRoleTemplate } from '@/types/authorization.types';
-import { FormattedPermission } from '@/server/services/permission.service';
+import { CustomRoleDetail, BuiltInRoleTemplate, FormattedPermission } from '@/types/authorization.types';
 import { RoleEditorModal } from '@/components/access/role-editor-modal';
 import { RoleArchiveModal } from '@/components/access/role-archive-modal';
 import {

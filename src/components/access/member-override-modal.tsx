@@ -1,6 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
-import { FormattedPermission } from '@/server/services/permission.service';
-import { ScopeType } from '@/types/authorization.types';
+import { FormattedPermission, ScopeType } from '@/types/authorization.types';
 import { IconShieldAlert, IconAlertTriangle } from './access-icons';
 import { setScopedMemberOverrideAction } from '@/server/actions/permission';
 

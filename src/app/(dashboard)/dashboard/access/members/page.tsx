@@ -55,7 +55,12 @@ export default async function MemberAccessDirectoryPage() {
           <div className="divide-y divide-zinc-100">
             {members.map((m) => {
               const isOwner = m.role === 'business_owner';
-              const name = m.userName || m.userEmail;
+              const name = m.userName || m.userEmail || 'Staff Member';
+              const nameParts = name.trim().split(' ');
+              const initials = nameParts.length >= 2
+                ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+                : name.slice(0, 2).toUpperCase();
+              const roleDisplay = m.customRoleName || m.role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
               return (
                 <div
@@ -64,7 +69,7 @@ export default async function MemberAccessDirectoryPage() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shrink-0">
-                      {name.charAt(0).toUpperCase()}
+                      {initials}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -77,19 +82,25 @@ export default async function MemberAccessDirectoryPage() {
                           </span>
                         )}
                       </div>
-                      <span className="block text-xs text-zinc-500 font-mono">
-                        {m.userEmail}
-                      </span>
+                      {m.userEmail ? (
+                        <span className="block text-xs text-zinc-500 font-mono">
+                          {m.userEmail}
+                        </span>
+                      ) : (
+                        <span className="block text-xs text-zinc-400 italic">
+                          Email not available
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4 text-xs w-full sm:w-auto justify-between sm:justify-end">
                     <div className="text-right">
-                      <span className="block font-bold text-zinc-900 capitalize">
-                        {m.customRoleName || m.role}
+                      <span className="block font-bold text-zinc-900">
+                        {roleDisplay}
                       </span>
-                      <span className="text-[10px] font-mono text-zinc-500">
-                        Status: {m.membershipStatus}
+                      <span className="text-[10px] font-mono text-zinc-500 capitalize">
+                        {m.membershipStatus}
                       </span>
                     </div>
 

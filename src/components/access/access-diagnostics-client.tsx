@@ -48,7 +48,7 @@ export const AccessDiagnosticsClient: React.FC<AccessDiagnosticsClientProps> = (
 
     const res = await diagnoseAccessAction({
       membershipId: selectedMembershipId,
-      permission: selectedPermission as any,
+      permission: selectedPermission,
       resourceType,
       branchId: resourceType === 'branch' ? branchId : undefined,
       departmentId: resourceType === 'department' ? departmentId : undefined,
@@ -230,37 +230,36 @@ export const AccessDiagnosticsClient: React.FC<AccessDiagnosticsClientProps> = (
               {/* Provenance Metadata Table */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Target Member</span>
+                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Staff Member</span>
                   <span className="font-semibold text-zinc-900">{result.memberName}</span>
-                  <span className="block text-[11px] text-zinc-500 capitalize">{result.memberRole}</span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Tested Permission Key</span>
-                  <span className="font-mono font-semibold text-zinc-900 break-all">{selectedPermission}</span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Decision Reason Code</span>
-                  <span className="font-mono font-bold text-zinc-800">{result.decision.reason}</span>
-                </div>
-
-                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Authority Source</span>
-                  <span className="font-mono font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
-                    {result.decision.source || 'default_deny'}
+                  <span className="block text-[11px] text-zinc-500">
+                    {(result.memberCustomRoleName || result.memberRole).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                   </span>
                 </div>
 
                 <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Matched Scope Level</span>
-                  <span className="font-mono font-semibold text-zinc-900">{result.decision.matchedScope || 'NONE'}</span>
+                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Permission Tested</span>
+                  <span className="font-mono font-semibold text-zinc-900 break-all">{selectedPermission}</span>
                 </div>
 
                 <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Evaluated Timestamp</span>
+                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">How Was It Decided?</span>
+                  <span className="font-semibold text-zinc-800 capitalize">
+                    {result.decision.source ? result.decision.source.replace(/_/g, ' ') : 'Default deny'}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 font-mono mt-0.5">{result.decision.reason}</span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
+                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Location Scope Matched</span>
+                  <span className="font-mono font-semibold text-zinc-900">{result.decision.matchedScope || 'None'}</span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 sm:col-span-2">
+                  <span className="block text-[10px] text-zinc-400 font-medium uppercase">Evaluated At</span>
                   <span className="font-mono text-zinc-700 text-[11px]">
                     {result.decision.diagnostics?.evaluatedAt ? new Date(result.decision.diagnostics.evaluatedAt).toLocaleTimeString() : 'Just now'}
+                    {' · '}{result.decision.diagnostics?.evaluationDurationMs || 0} ms
                   </span>
                 </div>
               </div>

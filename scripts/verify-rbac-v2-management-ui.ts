@@ -668,6 +668,113 @@ async function runVerification() {
     'Route permissions map includes /dashboard/access registered with roles.view'
   );
 
+  // ====================================================================
+  // SECTION 12 — Post-Manual-Test Hardening Regression Coverage
+  // ====================================================================
+  console.log('\n--- 12. Post-Manual-Test Hardening Regression Coverage ---');
+
+  // 12a. Canonical scope invariants (also asserted in Section 0, re-confirmed here)
+  assert(
+    JSON.stringify(scopeTypeEnum.options) === JSON.stringify(['ORGANIZATION', 'PROPERTY', 'DEPARTMENT', 'AREA_TEAM', 'SELF']),
+    'Hardening: Canonical scopes remain exactly ORGANIZATION, PROPERTY, DEPARTMENT, AREA_TEAM, SELF'
+  );
+  assert(
+    !scopeTypeEnum.options.includes('REGION' as any),
+    'Hardening: REGION is NOT an RBAC scope'
+  );
+  assert(
+    !scopeTypeEnum.options.includes('SERVICE_AREA' as any),
+    'Hardening: SERVICE_AREA is NOT a canonical RBAC scope'
+  );
+  assert(
+    scopeTypeEnum.options.includes('SELF'),
+    'Hardening: SELF scope remains supported'
+  );
+
+  // 12b. Built-in role permission bundles exposed via listRoleTemplatesAction
+  const hardeningTemplatesRes = await listRoleTemplatesAction();
+  assert(hardeningTemplatesRes.success && Array.isArray(hardeningTemplatesRes.data), 'Hardening: listRoleTemplatesAction returns successfully');
+
+  const branchMgrTemplate = hardeningTemplatesRes.data?.find((t) => t.roleKey === 'branch_manager');
+  assert(
+    Array.isArray(branchMgrTemplate?.permissions) && branchMgrTemplate!.permissions.length > 0,
+    'Hardening: branch_manager template exposes a non-empty permissions array (not 0 keys)'
+  );
+
+  const hardeningOwnerTemplate = hardeningTemplatesRes.data?.find((t) => t.roleKey === 'business_owner');
+  assert(
+    Array.isArray(hardeningOwnerTemplate?.permissions) && hardeningOwnerTemplate!.permissions.length > 0,
+    'Hardening: business_owner template exposes a non-empty permissions array'
+  );
+
+  // 12c. UI-facing template permission count matches canonical preset registry
+  const { getPermissionsForPreset } = await import('../src/lib/validation/permission-presets');
+  const canonicalBranchMgrPerms = getPermissionsForPreset('branch_manager');
+  assert(
+    branchMgrTemplate?.permissions?.length === canonicalBranchMgrPerms.length,
+    `Hardening: UI-facing branch_manager permission count (${branchMgrTemplate?.permissions?.length}) matches canonical preset (${canonicalBranchMgrPerms.length})`
+  );
+
+  // 12d. Clone role receives correct permission bundle (static check via server action)
+  const { permissionKeyEnum } = await import('../src/lib/validation/permission');
+  const allPermKeys = permissionKeyEnum.options;
+  assert(
+    hardeningOwnerTemplate?.permissions?.length === allPermKeys.length,
+    `Hardening: business_owner template permissions cover all canonical keys (${hardeningOwnerTemplate?.permissions?.length} === ${allPermKeys.length})`
+  );
+
+  // 12e. Diagnostics action resource id derivation — static code analysis
+  assert(
+    permissionActionsContent.includes('derivedResourceId') &&
+    permissionActionsContent.includes("input.resourceType === 'branch' ? input.branchId"),
+    'Hardening: diagnoseAccessAction derives resource ID from branchId when resourceId is absent'
+  );
+
+  // 12f. Diagnostics explanation for RESOURCE_NOT_FOUND is user-friendly
+  assert(
+    permissionActionsContent.includes("couldn't verify the selected location or resource"),
+    'Hardening: RESOURCE_NOT_FOUND explanation uses user-friendly language'
+  );
+
+  // 12g. EXPLICIT_DENY explanation is user-friendly
+  assert(
+    permissionActionsContent.includes('specifically blocked from this action'),
+    'Hardening: EXPLICIT_DENY explanation uses user-friendly language'
+  );
+
+  // 12h. Member identity: fake email placeholder removed
+  const permissionServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/permission.service.ts'),
+    'utf-8'
+  );
+  assert(
+    !permissionServiceContent.includes('staff@wsnexa.internal'),
+    'Hardening: Fake staff@wsnexa.internal placeholder email is not used in member identity resolution'
+  );
+
+  // 12i. Security invariants — no authorization bypass introduced
+  assert(
+    permissionActionsContent.includes('resolveAuthorizationContext') &&
+    !permissionActionsContent.includes('skipAuthorization'),
+    'Hardening: No authorization bypass introduced in server actions'
+  );
+  assert(
+    permissionActionsContent.includes('mem.business_id !== authContext.businessId'),
+    'Hardening: Cross-tenant member access still blocked in diagnoseAccessAction'
+  );
+
+  // 12j. Scope grant manager has per-grant revoke loading state
+  const scopeGrantManagerContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/scope-grant-manager.tsx'),
+    'utf-8'
+  );
+  assert(
+    scopeGrantManagerContent.includes('revokingGrantId'),
+    'Hardening: ScopeGrantManager has per-grant revoking loading state'
+  );
+
+  console.log('\n✅ All hardening regression assertions completed.');
+
   // Clean up Test Fixtures
   console.log('\n--- Cleaning up test fixtures ---');
   await admin.from('permission_scope_grants').delete().in('business_id', [businessAId, businessBId]);

@@ -79,8 +79,8 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-900 flex items-start gap-2.5">
             <IconAlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold block mb-0.5">Explicit DENY Precedence Rule:</span>
-              Explicit DENY has absolute precedence over role permissions, scope grants, and Business Owner policy when the deny matches the evaluated resource scope.
+              <span className="font-bold block mb-0.5">This will block this staff member from this action.</span>
+              This restriction overrides the staff member's normal role and applies regardless of other permissions. It takes immediate effect for the selected location.
             </div>
           </div>
         )}

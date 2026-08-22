@@ -19,6 +19,8 @@ import {
   CustomRoleDetail,
   RoleUsageInfo,
   RoleEffectiveAccessSummary,
+  SupportedResourceType,
+  ResourceTarget,
 } from '@/types/authorization.types';
 import {
   createCustomRoleSchema,
@@ -54,7 +56,9 @@ import {
   AssignMemberRoleInput,
   RoleUsageQueryInput,
   PermissionKey,
+  permissionKeyEnum,
 } from '@/lib/validation/permission';
+import { getPermissionsForPreset } from '@/lib/validation/permission-presets';
 
 export interface ActionResponse<T = unknown> {
   success: boolean;
@@ -65,7 +69,16 @@ export interface ActionResponse<T = unknown> {
 
 export async function listRoleTemplatesAction(): Promise<ActionResponse<BuiltInRoleTemplate[]>> {
   try {
-    const templates = RoleGovernanceService.listBuiltInRoleTemplates();
+    const allPermKeys = permissionKeyEnum.options as PermissionKey[];
+    const templates = RoleGovernanceService.listBuiltInRoleTemplates().map((t) => ({
+      ...t,
+      // Populate canonical permission bundle from the authoritative preset registry.
+      // business_owner holds the full permission set; other roles use getPermissionsForPreset.
+      permissions:
+        t.roleKey === 'business_owner'
+          ? [...allPermKeys]
+          : getPermissionsForPreset(t.roleKey),
+    }));
     return { success: true, data: templates };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to list role templates.';
@@ -852,20 +865,25 @@ export async function diagnoseAccessAction(
 
     let resource: import('@/types/authorization.types').AuthorizeOptions['resource'];
     if (input.resourceType && input.resourceType !== 'none') {
-      resource = {
-        type: input.resourceType as any,
-        id: input.resourceId || undefined,
-        branchId: input.branchId || undefined,
-        departmentId: input.departmentId || undefined,
-        organizationUnitId: input.organizationUnitId || undefined,
-        serviceAreaId: input.serviceAreaId || undefined,
-        ownerUserId: input.ownerUserId || undefined,
-      } as any;
+      // Derive the authoritative resource ID from the correct scope field.
+      // The client sends branchId/departmentId separately; resourceId may be omitted.
+      const derivedResourceId =
+        input.resourceId ||
+        (input.resourceType === 'branch' ? input.branchId : undefined) ||
+        (input.resourceType === 'department' ? input.departmentId : undefined) ||
+        (input.resourceType === 'organization_unit' ? input.organizationUnitId : undefined) ||
+        (input.resourceType === 'service_area' ? input.serviceAreaId : undefined);
+
+      if (derivedResourceId) {
+        resource = {
+          type: input.resourceType as SupportedResourceType,
+          id: derivedResourceId,
+        } as ResourceTarget;
+      }
     } else if (input.branchId) {
       resource = {
-        type: 'branch' as any,
+        type: 'branch' as SupportedResourceType,
         id: input.branchId,
-        branchId: input.branchId,
       };
     }
 
@@ -880,54 +898,54 @@ export async function diagnoseAccessAction(
     if (decision.allowed) {
       switch (decision.source) {
         case 'owner_policy':
-          explanation = `Business Owner has organization-wide reach across all business resources.`;
+          explanation = `The Business Owner account has full access across all locations and features by default.`;
           break;
         case 'explicit_override':
-          explanation = `An explicit ALLOW member permission override was matched.`;
+          explanation = `This staff member has a specific permission grant that directly allows this action — it overrides their base role.`;
           break;
         case 'scope_grant':
-          explanation = `A concrete permission scope grant matching scope ${decision.matchedScope || ''} granted access.`;
+          explanation = `A location-specific permission grant allows this action at the ${decision.matchedScope || 'assigned'} level.`;
           break;
         case 'role_permission':
-          explanation = `The member's active role includes permission '${input.permission}' within scope '${decision.matchedScope || 'ASSIGNED'}'.`;
+          explanation = `The staff member's role includes this permission, and their assignment covers the requested location.`;
           break;
         case 'acting_assignment':
-          explanation = `An active acting assignment dynamically expanded the member's scope reach.`;
+          explanation = `This staff member is temporarily acting in a higher-authority role that grants them access to this action.`;
           break;
         case 'secondment':
-          explanation = `An active secondment dynamically expanded the member's property reach to host branch.`;
+          explanation = `This staff member is on secondment to this location, which temporarily extends their access rights here.`;
           break;
         case 'self_ownership':
-          explanation = `The resource matches the member's self ownership (${decision.resourceScope?.ownerUserId}).`;
+          explanation = `This action is permitted because the target resource belongs to the staff member themselves.`;
           break;
         default:
-          explanation = `Access granted based on valid role and assignment scope.`;
+          explanation = `Access is permitted based on the staff member's current role and location assignment.`;
       }
     } else {
       switch (decision.reason) {
         case 'EXPLICIT_DENY':
-          explanation = `An explicit DENY member override or scope grant takes absolute precedence and denied access.`;
+          explanation = `This staff member has been specifically blocked from this action for the selected location. A direct restriction takes priority over their role.`;
           break;
         case 'PERMISSION_MISSING':
-          explanation = `The member's role does not contain permission '${input.permission}'.`;
+          explanation = `This staff member's role does not include the '${input.permission}' capability. Contact your manager to adjust their role if needed.`;
           break;
         case 'OUTSIDE_SCOPE':
-          explanation = `The member holds permission '${input.permission}', but target resource is outside their authorized scope.`;
+          explanation = `The staff member has this permission for their assigned location, but the selected location is outside their authorized area.`;
           break;
         case 'TENANT_MISMATCH':
-          explanation = `Target resource belongs to a different business tenant.`;
+          explanation = `The selected resource belongs to a different business account. Cross-business access is not permitted.`;
           break;
         case 'RESOURCE_NOT_FOUND':
-          explanation = `Target resource could not be found or verified in database.`;
+          explanation = `We couldn't verify the selected location or resource. It may have changed or may no longer be available. Refresh the page and try again.`;
           break;
         case 'INVALID_PERMISSION':
-          explanation = `Permission key '${input.permission}' is invalid or uncataloged.`;
+          explanation = `The permission key '${input.permission}' is not recognized. Please select a valid permission from the catalog.`;
           break;
         case 'MEMBERSHIP_INACTIVE':
-          explanation = `Member's business membership status is inactive or suspended.`;
+          explanation = `This staff member's account is currently inactive or suspended. Active membership is required to evaluate access.`;
           break;
         default:
-          explanation = `Access denied by Policy Engine default deny rule.`;
+          explanation = `Access is denied. The staff member does not meet the requirements for this action at the selected location.`;
       }
     }
 

@@ -54,6 +54,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
   const [departmentId, setDepartmentId] = useState<string>(departments[0]?.id || '');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleOpenCreate = () => {
@@ -90,9 +91,13 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
 
   const handleRevoke = async (grantId: string) => {
     if (!confirm('Are you sure you want to revoke this scoped permission grant?')) return;
-    setIsSubmitting(true);
-    await revokePermissionScopeGrantAction(grantId);
-    setIsSubmitting(false);
+    setRevokingGrantId(grantId);
+    const res = await revokePermissionScopeGrantAction(grantId);
+    setRevokingGrantId(null);
+    if (!res.success) {
+      setErrorMsg(res.message || 'Failed to revoke grant. Please try again.');
+      return;
+    }
     router.refresh();
   };
 
@@ -239,17 +244,20 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                 <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
                   <button
                     type="button"
+                    disabled={isSubmitting || revokingGrantId !== null}
                     onClick={() => handleOpenEdit(g)}
-                    className="flex-1 py-1.5 px-2 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors flex items-center justify-center gap-1"
+                    className="flex-1 py-1.5 px-2 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
                   >
                     <IconEdit className="w-3.5 h-3.5" /> Edit
                   </button>
                   <button
                     type="button"
+                    disabled={revokingGrantId !== null || isSubmitting}
                     onClick={() => handleRevoke(g.id)}
-                    className="py-1.5 px-2 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center gap-1"
+                    className="py-1.5 px-2 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
                   >
-                    <IconTrash className="w-3.5 h-3.5" /> Revoke
+                    <IconTrash className="w-3.5 h-3.5" />
+                    {revokingGrantId === g.id ? 'Revoking…' : 'Revoke'}
                   </button>
                 </div>
               </div>

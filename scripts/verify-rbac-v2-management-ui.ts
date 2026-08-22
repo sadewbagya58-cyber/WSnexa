@@ -69,6 +69,7 @@ async function runVerification() {
   const { PermissionService } = await import('../src/server/services/permission.service');
   const { resolveAuthorizationContext, can, authorize } = await import('../src/server/auth');
   const { getRequiredPermissionForRoute } = await import('../src/lib/security/route-permissions');
+  const { scopeTypeEnum } = await import('../src/lib/validation/permission');
 
   console.log('\n================================================================');
   console.log('    WSNexa Phase 30 Step 10 — Access Management UI & Diagnostics');

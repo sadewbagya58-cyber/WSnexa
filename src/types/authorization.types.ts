@@ -1,6 +1,6 @@
-import { ScopeType, GrantEffect, GrantSource } from '@/lib/validation/permission';
+import { ScopeType, GrantEffect, GrantSource, PermissionKey } from '@/lib/validation/permission';
 
-export type { ScopeType, GrantEffect, GrantSource };
+export type { ScopeType, GrantEffect, GrantSource, PermissionKey };
 
 export interface AuthorizedBranchAssignment {
   id: string;

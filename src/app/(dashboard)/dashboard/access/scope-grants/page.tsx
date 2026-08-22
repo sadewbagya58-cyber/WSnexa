@@ -1,0 +1,73 @@
+import React from 'react';
+import { requireRoutePermission } from '@/server/tenant/guard';
+import {
+  listPermissionScopeGrantsAction,
+  listPermissionCatalogAction,
+  listRoleTemplatesAction,
+  listCustomRolesAction,
+} from '@/server/actions/permission';
+import { ScopeGrantManager } from '@/components/access/scope-grant-manager';
+import { BranchService } from '@/server/services/branch.service';
+import { OrganizationService } from '@/server/services/organization.service';
+import Link from 'next/link';
+
+import { IconArrowLeft } from '@/components/access/access-icons';
+
+export const metadata = {
+  title: 'Scoped Permission Grants | WSNexa',
+  description: 'Manage fine-grained permission scope grants across properties and departments.',
+};
+
+export default async function ScopeGrantsPage() {
+  const { allowed, context } = await requireRoutePermission('/dashboard/access/scope-grants');
+
+  if (!allowed) {
+    return (
+      <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl max-w-lg mx-auto my-12 shadow-2xs">
+        <h2 className="text-base font-bold text-zinc-900 mb-2">Access Restricted</h2>
+        <p className="text-xs text-zinc-500">
+          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800">roles.view</code> permission required to access Scope Grants Management.
+        </p>
+      </div>
+    );
+  }
+
+  const [grantsRes, catalogRes, templatesRes, customRolesRes, branchesRes, deptsRes] = await Promise.all([
+    listPermissionScopeGrantsAction(),
+    listPermissionCatalogAction(),
+    listRoleTemplatesAction(),
+    listCustomRolesAction({ includeArchived: false }),
+    BranchService.getBusinessBranches(context.business.id),
+    OrganizationService.getDepartments(context.business.id),
+  ]);
+
+  const grants = grantsRes.success && grantsRes.data ? grantsRes.data : [];
+  const catalog = catalogRes.success && catalogRes.data ? catalogRes.data : [];
+  const builtInTemplates = templatesRes.success && templatesRes.data ? templatesRes.data : [];
+  const customRoles = customRolesRes.success && customRolesRes.data ? customRolesRes.data : [];
+  const branches = branchesRes || [];
+  const departments = deptsRes || [];
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Navigation Breadcrumb */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/dashboard/access"
+          className="text-xs font-semibold text-zinc-600 hover:text-zinc-900 flex items-center gap-1.5 transition-colors"
+        >
+          <IconArrowLeft className="w-4 h-4" /> Back to Access Control Hub
+        </Link>
+      </div>
+
+      <ScopeGrantManager
+        grants={grants}
+        catalog={catalog}
+        builtInTemplates={builtInTemplates}
+        customRoles={customRoles}
+        branches={branches}
+        departments={departments}
+      />
+    </div>
+  );
+}

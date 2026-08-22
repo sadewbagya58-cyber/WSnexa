@@ -70,6 +70,15 @@ const rawNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'ACCESS & GOVERNANCE',
+    items: [
+      { label: 'Access Control Hub', href: '/dashboard/access' },
+      { label: 'Roles & Templates', href: '/dashboard/access/roles' },
+      { label: 'Scope Grants', href: '/dashboard/access/scope-grants' },
+      { label: 'Access Diagnostics', href: '/dashboard/access/diagnostics' },
+    ],
+  },
+  {
     title: 'MENU',
     items: [
       { label: 'Menu Overview', href: '/dashboard/menu' },

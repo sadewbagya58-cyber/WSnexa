@@ -583,7 +583,11 @@ export class PermissionService {
       throw new AuthorizationContextError('RESOURCE_NOT_FOUND', 'Target business membership not found.');
     }
 
-    if (targetMem.role === 'business_owner' && input.effect === 'deny') {
+    const effectVal: 'allow' | 'deny' = (
+      input.effect ? String(input.effect).toLowerCase() : 'allow'
+    ) as 'allow' | 'deny';
+
+    if (targetMem.role === 'business_owner' && effectVal === 'deny') {
       throw new AuthorizationContextError('INVALID_PERMISSION', 'Cannot apply deny overrides to Business Owners.');
     }
 
@@ -621,7 +625,7 @@ export class PermissionService {
         {
           business_membership_id: input.membershipId,
           permission_key: input.permissionKey,
-          effect: input.effect,
+          effect: effectVal,
           scope_type: scopeType,
           branch_id: targetValidation.branchId,
           department_id: targetValidation.departmentId,

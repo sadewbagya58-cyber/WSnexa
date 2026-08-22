@@ -1,6 +1,7 @@
 'use server';
 
-import { can, resolveAuthorizationContext } from '@/server/auth';
+import { can, resolveAuthorizationContext, authorize } from '@/server/auth';
+import { createAdminClient } from '@/lib/supabase/server';
 import {
   PermissionService,
   FormattedMemberDetail,
@@ -765,4 +766,185 @@ export async function previewMemberEffectiveAccessAction(
 
   return { success: true, data: preview };
 }
+
+export interface DiagnosticQueryInput {
+  membershipId: string;
+  permission: string;
+  resourceType?: string;
+  resourceId?: string;
+  branchId?: string;
+  departmentId?: string;
+  organizationUnitId?: string;
+  serviceAreaId?: string;
+  ownerUserId?: string;
+}
+
+export interface DiagnosticResultData {
+  decision: import('@/types/authorization.types').AuthorizationDecision;
+  memberName: string;
+  memberRole: string;
+  memberCustomRoleName?: string;
+  explanation: string;
+}
+
+export async function diagnoseAccessAction(
+  input: DiagnosticQueryInput,
+  options?: { overrideUserId?: string; requestedBusinessId?: string }
+): Promise<ActionResponse<DiagnosticResultData>> {
+  const authContext = await resolveAuthorizationContext({
+    overrideUserId: options?.overrideUserId,
+    requestedBusinessId: options?.requestedBusinessId,
+  });
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const canView =
+    (await can({ context: authContext, permission: 'roles.view' })) ||
+    (await can({ context: authContext, permission: 'staff.view' }));
+
+  if (!canView) {
+    return { success: false, message: 'Forbidden. roles.view or staff.view required.' };
+  }
+
+  const admin = createAdminClient();
+  const { data: mem, error: memErr } = await admin
+    .from('business_memberships')
+    .select('id, user_id, business_id, role, custom_role_id')
+    .eq('id', input.membershipId)
+    .maybeSingle();
+
+  if (memErr || !mem) {
+    return { success: false, message: `Target member not found: ${memErr?.message || 'No row'}` };
+  }
+
+  if (mem.business_id !== authContext.businessId) {
+    return { success: false, message: 'Forbidden. Member belongs to a different business.' };
+  }
+
+  let memberName = 'Staff Member';
+  const { data: userProf } = await admin
+    .from('user_profiles')
+    .select('first_name, last_name')
+    .eq('id', mem.user_id)
+    .maybeSingle();
+
+  if (userProf) {
+    memberName = `${userProf.first_name || ''} ${userProf.last_name || ''}`.trim() || 'Staff Member';
+  }
+
+  let customRoleName: string | undefined;
+  if (mem.custom_role_id) {
+    const { data: custRole } = await admin
+      .from('custom_roles')
+      .select('name')
+      .eq('id', mem.custom_role_id)
+      .maybeSingle();
+    customRoleName = custRole?.name;
+  }
+
+  try {
+    // Resolve target member's trusted authorization context
+    const targetAuthContext = await resolveAuthorizationContext({
+      overrideUserId: mem.user_id,
+      requestedBusinessId: authContext.businessId,
+    });
+
+    let resource: import('@/types/authorization.types').AuthorizeOptions['resource'];
+    if (input.resourceType && input.resourceType !== 'none') {
+      resource = {
+        type: input.resourceType as any,
+        id: input.resourceId || undefined,
+        branchId: input.branchId || undefined,
+        departmentId: input.departmentId || undefined,
+        organizationUnitId: input.organizationUnitId || undefined,
+        serviceAreaId: input.serviceAreaId || undefined,
+        ownerUserId: input.ownerUserId || undefined,
+      } as any;
+    } else if (input.branchId) {
+      resource = {
+        type: 'branch' as any,
+        id: input.branchId,
+        branchId: input.branchId,
+      };
+    }
+
+    const decision = await authorize({
+      context: targetAuthContext,
+      permission: input.permission,
+      resource,
+    });
+
+    // Generate human-friendly explanation
+    let explanation = '';
+    if (decision.allowed) {
+      switch (decision.source) {
+        case 'owner_policy':
+          explanation = `Business Owner has organization-wide reach across all business resources.`;
+          break;
+        case 'explicit_override':
+          explanation = `An explicit ALLOW member permission override was matched.`;
+          break;
+        case 'scope_grant':
+          explanation = `A concrete permission scope grant matching scope ${decision.matchedScope || ''} granted access.`;
+          break;
+        case 'role_permission':
+          explanation = `The member's active role includes permission '${input.permission}' within scope '${decision.matchedScope || 'ASSIGNED'}'.`;
+          break;
+        case 'acting_assignment':
+          explanation = `An active acting assignment dynamically expanded the member's scope reach.`;
+          break;
+        case 'secondment':
+          explanation = `An active secondment dynamically expanded the member's property reach to host branch.`;
+          break;
+        case 'self_ownership':
+          explanation = `The resource matches the member's self ownership (${decision.resourceScope?.ownerUserId}).`;
+          break;
+        default:
+          explanation = `Access granted based on valid role and assignment scope.`;
+      }
+    } else {
+      switch (decision.reason) {
+        case 'EXPLICIT_DENY':
+          explanation = `An explicit DENY member override or scope grant takes absolute precedence and denied access.`;
+          break;
+        case 'PERMISSION_MISSING':
+          explanation = `The member's role does not contain permission '${input.permission}'.`;
+          break;
+        case 'OUTSIDE_SCOPE':
+          explanation = `The member holds permission '${input.permission}', but target resource is outside their authorized scope.`;
+          break;
+        case 'TENANT_MISMATCH':
+          explanation = `Target resource belongs to a different business tenant.`;
+          break;
+        case 'RESOURCE_NOT_FOUND':
+          explanation = `Target resource could not be found or verified in database.`;
+          break;
+        case 'INVALID_PERMISSION':
+          explanation = `Permission key '${input.permission}' is invalid or uncataloged.`;
+          break;
+        case 'MEMBERSHIP_INACTIVE':
+          explanation = `Member's business membership status is inactive or suspended.`;
+          break;
+        default:
+          explanation = `Access denied by Policy Engine default deny rule.`;
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        decision,
+        memberName,
+        memberRole: mem.role,
+        memberCustomRoleName: customRoleName,
+        explanation,
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Diagnostic evaluation failed.';
+    return { success: false, message };
+  }
+}
+
 

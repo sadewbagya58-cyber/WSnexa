@@ -198,8 +198,9 @@ export class RoleGovernanceService {
 
     // 2. Validate Reserved Role Names
     const normalizedName = input.name.trim();
-    const reservedNames = ['business_owner', 'owner', 'branch_manager', 'manager', 'cashier', 'kitchen_staff', 'kitchen', 'waiter', 'super_admin', 'admin'];
-    if (reservedNames.includes(normalizedName.toLowerCase())) {
+    const normalizedLower = normalizedName.toLowerCase().replace(/[\s_-]+/g, '');
+    const reservedTokens = ['businessowner', 'owner', 'branchmanager', 'manager', 'cashier', 'kitchenstaff', 'kitchen', 'waiter', 'superadmin', 'admin'];
+    if (reservedTokens.includes(normalizedLower)) {
       throw new AuthorizationContextError(
         'ROLE_RESERVED',
         `Role name "${normalizedName}" is reserved for built-in system roles.`

@@ -357,6 +357,10 @@ export interface EffectiveAccessPreview {
   membershipId: string;
   userId: string;
   userEmail: string;
+  memberName?: string | null;
+  position?: string | null;
+  primaryBranchId?: string | null;
+  departmentId?: string | null;
   businessId: string;
   role: string;
   customRoleId: string | null;
@@ -368,12 +372,21 @@ export interface EffectiveAccessPreview {
     id: string;
     permissionKey: string;
     effect: GrantEffect;
-    scopeType: ScopeType | null;
-    branchId: string | null;
-    departmentId: string | null;
-    organizationUnitId: string | null;
-    serviceAreaId: string | null;
+    scopeType?: ScopeType | null;
+    branchId?: string | null;
+    departmentId?: string | null;
+    organizationUnitId?: string | null;
+    serviceAreaId?: string | null;
     targetName?: string | null;
+    isAllowed?: boolean;
+  }>;
+  overrides?: Array<{
+    id: string;
+    permissionKey: string;
+    effect: GrantEffect;
+    scopeType?: ScopeType | null;
+    branchId?: string | null;
+    isAllowed?: boolean;
   }>;
   effectiveSummary: Array<{
     permissionKey: string;
@@ -386,6 +399,12 @@ export interface EffectiveAccessPreview {
     }>;
     source: string;
   }>;
+  defaultScope?: ScopeType;
+  temporaryAuthority?: {
+    actingAssignments: any[];
+    secondmentAssignments: any[];
+    secondments?: any[];
+  };
 }
 
 // ====================================================================
@@ -410,6 +429,7 @@ export interface BuiltInRoleTemplate {
   isAssignable: boolean;
   isProtected: boolean;
   sortOrder: number;
+  permissions?: string[];
 }
 
 export const BUILT_IN_ROLE_TEMPLATES: Record<BuiltInRoleKey, BuiltInRoleTemplate> = {

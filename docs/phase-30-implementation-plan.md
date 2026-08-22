@@ -248,37 +248,50 @@ The remaining Phase 30 work is structured into 11 discrete, test-driven steps:
   - Comprehensive append-only audit logging for all role governance mutations.
 - **Verification**: `scripts/verify-rbac-v2-roles.ts` (68/68 assertions passed).
 
-### Step 8: Acting Positions & Secondment Dynamic Scope Engine
-- **Files**: `src/server/auth/acting-scope-engine.ts`, `src/server/services/organization.service.ts`
+### Step 8: Acting Positions & Secondment Dynamic Scope Engine (COMPLETED)
+- **Files**: `src/server/auth/acting-scope-engine.ts`, `src/server/auth/authorization-context.ts`, `src/server/services/organization.service.ts`
 - **Actions**:
-  - Connect `organization_assignment_absences` and `staff_assignments.assignment_type = 'acting'` to dynamically elevate actor scope during active coverage.
+  - Connected `organization_assignment_absences` and `staff_assignments` (`acting`, `secondment`) to dynamically elevate actor scope during active coverage.
+  - Enforced position owner protection: acting actors gain scoped permissions of the covered position without inheriting position ownership or business owner privileges.
+- **Verification**: `scripts/verify-rbac-v2-temporary-authority.ts` (PASSED).
 
-### Step 9: Server Action & Service Layer Migration & Hardening
-- **Files**: All 10 affected action & service files:
-  - `src/server/actions/order-security.ts` & `order-security.service.ts` (Fix Finding 1)
-  - `src/server/actions/branch-payment.ts` & `branch-payment.service.ts` (Fix Finding 2)
-  - `src/server/actions/waiter-approval.ts` & `waiter.service.ts` (Fix Finding 3)
-  - `src/server/actions/recipe.ts` & `recipe.service.ts` (Fix Finding 4)
-  - `src/server/actions/branch.ts` (Fix Finding 5)
-  - `src/server/actions/order.ts` & `order.service.ts` (Fix Finding 6)
-  - `src/server/services/staff-invitation.service.ts` (Fix Finding 7)
-  - `src/server/actions/modifier.ts`, `table.ts`, `payment.service.ts`, `report.service.ts`, `cashier/orders/route.ts` (Fix Finding 8)
-  - `src/server/actions/inventory-settings.ts` & `inventory-intelligence.service.ts` (Fix Findings)
+### Step 9: Server Action & Service Layer Authorization Convergence & Legacy Cleanup (COMPLETED)
+- **Files**: All operational Server Action and Service files across 10 domain modules:
+  - `src/server/actions/order-security.ts`, `src/server/actions/branch-payment.ts`, `src/server/actions/waiter-order.ts`, `src/server/actions/branch.ts`, `src/server/actions/order.ts`, `src/server/actions/inventory.ts`, `src/server/actions/purchasing.ts`, `src/server/actions/report.ts`, `src/server/actions/table.ts`, `src/server/actions/modifier.ts`, `src/server/actions/menu.ts`, `src/server/actions/permission.ts`
+- **Actions**:
+  - Replaced legacy `PermissionService` calls and hardcoded role checks with `requireBusinessPermission` and `PolicyEngine.can()`.
+  - Re-verified Business Owner policy precedence: Owner has un-deniable reach unless an explicit scoped `DENY` override applies.
+  - Eliminated legacy permission redundancy and cleaned up unused auth functions.
+- **Verification**: `npm run verify:organization` (119/119 PASSED) & `npm run verify:rbac-v2-legacy-cleanup` (PASSED).
 
-### Step 10: Server Route Guards & Client Diagnostics
+### Step 10: Authorization Management UI, Access Diagnostics & Final Phase Closure (COMPLETED)
 - **Files**:
-  - `src/app/(dashboard)/dashboard/business/page.tsx` (Add `requireRoutePermission('/dashboard/business')`)
-  - `src/app/(dashboard)/dashboard/branches/page.tsx` (Add `requireRoutePermission('/dashboard/branches')`)
-  - `src/app/(dashboard)/dashboard/dining/page.tsx` (Add `requireRoutePermission('/dashboard/dining')`)
-  - `src/components/layout/dashboard-shell.tsx`
-
-### Step 11: Team & Roles Management UI Enhancement
-- **Files**: `src/components/team/team-management.tsx`, `src/components/team/member-card.tsx`
+  - `src/components/access/access-icons.tsx`
+  - `src/components/access/access-hub-overview.tsx`
+  - `src/components/access/scope-preset-selector.tsx`
+  - `src/components/access/built-in-roles-view.tsx`
+  - `src/components/access/custom-roles-list.tsx`
+  - `src/components/access/role-editor-modal.tsx`
+  - `src/components/access/role-archive-modal.tsx`
+  - `src/components/access/scope-grant-manager.tsx`
+  - `src/components/access/staff-access-summary-widget.tsx`
+  - `src/components/access/member-access-detail-client.tsx`
+  - `src/components/access/member-override-modal.tsx`
+  - `src/components/access/permission-matrix.tsx`
+  - `src/components/access/access-diagnostics-client.tsx`
+  - `src/app/(dashboard)/dashboard/access/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/roles/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/roles/[roleId]/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/scope-grants/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/members/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/members/[membershipId]/page.tsx`
+  - `src/app/(dashboard)/dashboard/access/diagnostics/page.tsx`
+  - `docs/phase-30-step-10-access-management-and-diagnostics.md`
 - **Actions**:
-  - Render scope badges (e.g. `PROPERTY [Main Branch]`, `AREA [Bar Area]`, `DEPT [Kitchen]`) alongside member roles and permissions.
+  - Built complete user-facing management UI for RBAC & Scope V2 across 7 dedicated `/dashboard/access` routes.
+  - Created interactive Policy Engine Access Diagnostics tool ("Why Can / Can't This User?") with exact decision provenance.
+  - Enforced canonical scope model: `ORGANIZATION`, `PROPERTY`, `DEPARTMENT`, `AREA_TEAM`, `SELF`.
+  - Added Staff Access Summary widget to staff profiles.
+  - Implemented strict server-side RLS and Policy Engine authorization boundaries for all UI actions.
+- **Verification**: `scripts/verify-rbac-v2-management-ui.ts` (PASSED), `npx tsc --noEmit` (0 errors), `npm run lint` (0 errors), `npm run build` (0 errors).
 
-### Step 12: Verification Suite, Verification Script & Hardening
-- **Files**: `scripts/verify-rbac-v2.ts`, `package.json`
-- **Actions**:
-  - Add `"verify:rbac-v2": "tsx scripts/verify-rbac-v2.ts"`.
-  - Comprehensive automated tests covering all roles, scopes, overrides, acting positions, and security invariants.

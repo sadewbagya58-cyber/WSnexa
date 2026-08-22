@@ -7,6 +7,9 @@ import { OrganizationService } from '@/server/services/organization.service';
 import { MemberProfileClient } from '@/components/organization/member-profile-client';
 import { createAdminClient } from '@/lib/supabase/server';
 
+import { previewMemberEffectiveAccessAction } from '@/server/actions/permission';
+import { StaffAccessSummaryWidget } from '@/components/access/staff-access-summary-widget';
+
 export const metadata: Metadata = {
   title: 'Member Organization Profile | WSNexa',
   description: 'Comprehensive staff profile, assignment history, reporting chains, and temporary deployments',
@@ -152,8 +155,13 @@ export default async function MemberProfilePage({
       : [],
   };
 
+  const accessPreviewRes = await previewMemberEffectiveAccessAction(membershipId);
+
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+      {accessPreviewRes.success && accessPreviewRes.data && (
+        <StaffAccessSummaryWidget preview={accessPreviewRes.data} />
+      )}
       <MemberProfileClient
         membershipId={membershipId}
         member={{

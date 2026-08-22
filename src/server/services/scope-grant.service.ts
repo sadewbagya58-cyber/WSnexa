@@ -369,7 +369,7 @@ export class ScopeGrantService {
         custom_role_id: input.customRoleId || null,
         business_membership_id: input.businessMembershipId || null,
         permission_key: input.permissionKey,
-        effect: input.effect || 'allow',
+        effect: (input.effect ? String(input.effect).toLowerCase() : 'allow') as GrantEffect,
         scope_type: input.scopeType,
         branch_id: targetValidation.branchId,
         department_id: targetValidation.departmentId,
@@ -464,7 +464,7 @@ export class ScopeGrantService {
     const { error: updateErr } = await admin
       .from('permission_scope_grants')
       .update({
-        effect: input.effect || existing.effect,
+        effect: (input.effect ? String(input.effect).toLowerCase() : existing.effect) as GrantEffect,
         scope_type: targetScopeType,
         branch_id: targetValidation.branchId,
         department_id: targetValidation.departmentId,
@@ -919,6 +919,10 @@ export class ScopeGrantService {
       scopeGrants,
       scopedOverrides,
       effectiveSummary,
+      temporaryAuthority: {
+        actingAssignments: [],
+        secondmentAssignments: [],
+      },
     };
   }
 }

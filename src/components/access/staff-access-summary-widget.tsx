@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { EffectiveAccessPreview } from '@/types/authorization.types';
-import { IconShieldCheck, IconZap, IconShieldAlert, IconArrowRight, IconEye } from './access-icons';
+import { IconShieldCheck, IconArrowRight, IconEye } from './access-icons';
 
 interface StaffAccessSummaryWidgetProps {
   preview: EffectiveAccessPreview;

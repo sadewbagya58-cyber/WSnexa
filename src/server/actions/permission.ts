@@ -835,16 +835,9 @@ export async function diagnoseAccessAction(
     return { success: false, message: 'Forbidden. Member belongs to a different business.' };
   }
 
-  let memberName = 'Staff Member';
-  const { data: userProf } = await admin
-    .from('user_profiles')
-    .select('first_name, last_name')
-    .eq('id', mem.user_id)
-    .maybeSingle();
-
-  if (userProf) {
-    memberName = `${userProf.first_name || ''} ${userProf.last_name || ''}`.trim() || 'Staff Member';
-  }
+  const identityMap = await PermissionService.resolveCanonicalMemberIdentities([mem.user_id]);
+  const identity = identityMap.get(mem.user_id);
+  const memberName = identity?.displayName || 'Staff Member';
 
   let customRoleName: string | undefined;
   if (mem.custom_role_id) {

@@ -20,6 +20,7 @@ import {
   validateAdministrativeReach,
 } from '@/server/auth/scope-target-validator';
 import { AuthorizationContextError } from '@/server/auth/errors';
+import { PermissionService } from './permission.service';
 
 export class ScopeGrantService {
   /**
@@ -741,11 +742,8 @@ export class ScopeGrantService {
       return null;
     }
 
-    const { data: userProfile } = await admin
-      .from('user_profiles')
-      .select('email, full_name')
-      .eq('id', mem.user_id)
-      .maybeSingle();
+    const identityMap = await PermissionService.resolveCanonicalMemberIdentities([mem.user_id]);
+    const identity = identityMap.get(mem.user_id);
 
     interface MembershipPreviewRow {
       id: string;
@@ -902,7 +900,8 @@ export class ScopeGrantService {
     return {
       membershipId,
       userId: membership.user_id,
-      userEmail: userProfile?.email || '',
+      memberName: identity?.displayName || 'Staff Member',
+      userEmail: identity?.email || '',
       businessId,
       role: membership.role,
       customRoleId: membership.custom_role_id,

@@ -114,10 +114,10 @@ async function runVerification() {
   const tenantBUserId = uTenantB!.user!.id;
 
   await admin.from('user_profiles').upsert([
-    { id: ownerUserId, first_name: 'Owner', last_name: 'User', is_super_admin: false },
-    { id: managerUserId, first_name: 'Manager', last_name: 'User', is_super_admin: false },
-    { id: waiterUserId, first_name: 'Waiter', last_name: 'User', is_super_admin: false },
-    { id: tenantBUserId, first_name: 'TenantB', last_name: 'User', is_super_admin: false },
+    { id: ownerUserId, first_name: 'Owner', last_name: 'User', email: ownerEmail, is_super_admin: false },
+    { id: managerUserId, first_name: 'Manager', last_name: 'User', email: managerEmail, is_super_admin: false },
+    { id: waiterUserId, first_name: 'Waiter', last_name: 'User', email: waiterEmail, is_super_admin: false },
+    { id: tenantBUserId, first_name: 'TenantB', last_name: 'User', email: tenantBEmail, is_super_admin: false },
   ]);
 
   // Create Business Tenant A
@@ -774,6 +774,75 @@ async function runVerification() {
   );
 
   console.log('\n✅ All hardening regression assertions completed.');
+
+  // ====================================================================
+  // SECTION 13 — Final Manual-Test Fix Pass Assertions
+  // ====================================================================
+  console.log('\n--- 13. Final Manual-Test Fix Pass Coverage ---');
+
+  // 13a. Canonical member identity resolution for linked test auth users
+  const identityMap = await PermissionService.resolveCanonicalMemberIdentities([ownerUserId, managerUserId, waiterUserId]);
+  const ownerIdent = identityMap.get(ownerUserId);
+  assert(
+    Boolean(ownerIdent?.displayName?.startsWith('Owner') && ownerIdent?.email === ownerEmail),
+    `Final Pass: Canonical identity for Owner User resolves correctly (${ownerIdent?.displayName}, ${ownerIdent?.email})`
+  );
+
+  const mgrIdent = identityMap.get(managerUserId);
+  assert(
+    Boolean(mgrIdent?.displayName?.startsWith('Mgr') && mgrIdent?.email === managerEmail),
+    `Final Pass: Canonical identity for Manager User resolves correctly (${mgrIdent?.displayName}, ${mgrIdent?.email})`
+  );
+
+  // 13b. listTeamMembers uses canonical identity map
+  const teamList = await PermissionService.listTeamMembers(businessAId);
+  const listMgr = teamList.find((m) => m.id === managerMem!.id);
+  assert(
+    Boolean(listMgr?.userName?.startsWith('Mgr') && listMgr?.userEmail === managerEmail),
+    `Final Pass: listTeamMembers returns real user display name (${listMgr?.userName}) and email (${listMgr?.userEmail})`
+  );
+
+  // 13c. previewMemberEffectiveAccess returns real memberName and userEmail
+  const memberPreview = await ScopeGrantService.previewMemberEffectiveAccess(businessAId, managerMem!.id);
+  assert(
+    Boolean(memberPreview?.memberName?.startsWith('Mgr') && memberPreview?.userEmail === managerEmail),
+    `Final Pass: previewMemberEffectiveAccess returns real memberName (${memberPreview?.memberName}) and email (${memberPreview?.userEmail})`
+  );
+
+  // 13d. Static checks for route-level loading skeletons
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/loading.tsx')),
+    'Final Pass: Access Control Hub loading.tsx exists'
+  );
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/roles/loading.tsx')),
+    'Final Pass: Roles page loading.tsx exists'
+  );
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/scope-grants/loading.tsx')),
+    'Final Pass: Scope Grants loading.tsx exists'
+  );
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/members/loading.tsx')),
+    'Final Pass: Staff Members loading.tsx exists'
+  );
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/diagnostics/loading.tsx')),
+    'Final Pass: Access Diagnostics loading.tsx exists'
+  );
+  assert(
+    fs.existsSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/members/[membershipId]/loading.tsx')),
+    'Final Pass: Member Access Profile loading.tsx exists'
+  );
+
+  // 13e. Static check for React cache() deduplication in authorization-context.ts
+  const authContextCode = fs.readFileSync(path.join(process.cwd(), 'src/server/auth/authorization-context.ts'), 'utf-8');
+  assert(
+    authContextCode.includes('getCachedDefaultAuthorizationContext = cache'),
+    'Final Pass: Authorization context uses React cache() deduplication for per-request performance'
+  );
+
+  console.log('\n✅ All Final Manual-Test Fix Pass assertions completed.');
 
   // Clean up Test Fixtures
   console.log('\n--- Cleaning up test fixtures ---');

@@ -55,8 +55,8 @@ export default async function MemberAccessDirectoryPage() {
           <div className="divide-y divide-zinc-100">
             {members.map((m) => {
               const isOwner = m.role === 'business_owner';
-              const name = m.userName || m.userEmail || 'Staff Member';
-              const nameParts = name.trim().split(' ');
+              const name = m.userName || 'Staff Member';
+              const nameParts = name.trim().split(/\s+/);
               const initials = nameParts.length >= 2
                 ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
                 : name.slice(0, 2).toUpperCase();
@@ -87,8 +87,8 @@ export default async function MemberAccessDirectoryPage() {
                           {m.userEmail}
                         </span>
                       ) : (
-                        <span className="block text-xs text-zinc-400 italic">
-                          Email not available
+                        <span className="block text-xs text-zinc-400 font-mono">
+                          No email on file
                         </span>
                       )}
                     </div>

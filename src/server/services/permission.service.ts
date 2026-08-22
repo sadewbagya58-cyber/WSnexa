@@ -907,6 +907,123 @@ export class PermissionService {
    * Fetches team directory with full permission details for UI management.
    * Optimized with parallel queries, branch isolation, and in-memory effective permission evaluation.
    */
+  static async resolveCanonicalMemberIdentities(userIds: string[]): Promise<Map<string, {
+    userId: string;
+    displayName: string;
+    email: string | null;
+    initials: string;
+    identitySource: 'profile' | 'auth' | 'invitation' | 'seed' | 'fallback';
+  }>> {
+    const admin = createAdminClient();
+    const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+    const resultMap = new Map<string, {
+      userId: string;
+      displayName: string;
+      email: string | null;
+      initials: string;
+      identitySource: 'profile' | 'auth' | 'invitation' | 'seed' | 'fallback';
+    }>();
+
+    if (uniqueUserIds.length === 0) return resultMap;
+
+    const { data: profiles } = await admin
+      .from('user_profiles')
+      .select('id, first_name, last_name, email')
+      .in('id', uniqueUserIds);
+
+    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+    const missingUserIds = uniqueUserIds.filter((id) => {
+      const p = profileMap.get(id);
+      return !p || (!p.first_name && !p.last_name) || !p.email;
+    });
+
+    if (missingUserIds.length > 0) {
+      const authResults = await Promise.allSettled(
+        missingUserIds.map((id) => admin.auth.admin.getUserById(id))
+      );
+
+      for (let i = 0; i < missingUserIds.length; i++) {
+        const id = missingUserIds[i];
+        const res = authResults[i];
+        if (res.status === 'fulfilled' && res.value?.data?.user) {
+          const u = res.value.data.user;
+          const existingP = profileMap.get(id);
+          const meta = u.user_metadata || {};
+          const metaFullName = meta.full_name || meta.name || '';
+          const metaFirstName = meta.first_name || (metaFullName ? metaFullName.split(' ')[0] : '');
+          const metaLastName = meta.last_name || (metaFullName ? metaFullName.split(' ').slice(1).join(' ') : '');
+
+          const resolvedEmail = existingP?.email || u.email || null;
+          const resolvedFirstName = existingP?.first_name || metaFirstName || '';
+          const resolvedLastName = existingP?.last_name || metaLastName || '';
+
+          profileMap.set(id, {
+            id,
+            first_name: resolvedFirstName,
+            last_name: resolvedLastName,
+            email: resolvedEmail || '',
+          });
+
+          if (!existingP || !existingP.email) {
+            try {
+              await admin
+                .from('user_profiles')
+                .upsert({
+                  id,
+                  first_name: resolvedFirstName || 'Staff',
+                  last_name: resolvedLastName || 'Member',
+                  email: resolvedEmail || undefined,
+                  updated_at: new Date().toISOString(),
+                });
+            } catch {
+              // Ignore self-heal errors
+            }
+          }
+        }
+      }
+    }
+
+    for (const id of uniqueUserIds) {
+      const p = profileMap.get(id);
+      const rawName = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim();
+      const email = p?.email && p.email.trim().length > 0 ? p.email.trim() : null;
+
+      let displayName = rawName;
+      let identitySource: 'profile' | 'auth' | 'invitation' | 'seed' | 'fallback' = 'profile';
+
+      if (!displayName && email) {
+        const emailPrefix = email.split('@')[0];
+        displayName = emailPrefix
+          .split(/[\._\-]/)
+          .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+        identitySource = 'auth';
+      }
+
+      if (!displayName) {
+        displayName = 'Staff Member';
+        identitySource = 'fallback';
+      }
+
+      const nameParts = displayName.trim().split(/\s+/);
+      const initials =
+        nameParts.length >= 2
+          ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+          : displayName.slice(0, 2).toUpperCase();
+
+      resultMap.set(id, {
+        userId: id,
+        displayName,
+        email,
+        initials,
+        identitySource,
+      });
+    }
+
+    return resultMap;
+  }
+
   static async listTeamMembers(businessId: string, branchId?: string | null): Promise<FormattedMemberDetail[]> {
     const t0 = performance.now();
     const admin = createAdminClient();
@@ -946,50 +1063,13 @@ export class PermissionService {
     const userIds = members.map((m) => m.user_id);
     const membershipIds = members.map((m) => m.id);
 
-    const [profilesRes, areaAssignsRes] = await Promise.all([
-      admin
-        .from('user_profiles')
-        .select('id, first_name, last_name, email')
-        .in('id', userIds),
+    const [identityMap, areaAssignsRes] = await Promise.all([
+      this.resolveCanonicalMemberIdentities(userIds),
       admin
         .from('staff_area_assignments')
         .select('business_membership_id, service_area_id, service_areas(id, name)')
         .in('business_membership_id', membershipIds),
     ]);
-
-    const profileMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
-
-    // Batch resolve auth user metadata for any members missing profile name or email
-    const missingMetadataUserIds = userIds.filter((id) => {
-      const p = profileMap.get(id);
-      return !p || (!p.first_name && !p.last_name) || !p.email;
-    });
-
-    if (missingMetadataUserIds.length > 0) {
-      try {
-        const { data: authUsersRes } = await admin.auth.admin.listUsers();
-        if (authUsersRes?.users) {
-          for (const u of authUsersRes.users) {
-            if (missingMetadataUserIds.includes(u.id)) {
-              const existingP = profileMap.get(u.id) || { id: u.id, first_name: '', last_name: '', email: u.email || '' };
-              const meta = u.user_metadata || {};
-              const metaFullName = meta.full_name || meta.name || '';
-              const metaFirstName = meta.first_name || (metaFullName ? metaFullName.split(' ')[0] : '');
-              const metaLastName = meta.last_name || (metaFullName ? metaFullName.split(' ').slice(1).join(' ') : '');
-
-              profileMap.set(u.id, {
-                id: u.id,
-                first_name: existingP.first_name || metaFirstName || '',
-                last_name: existingP.last_name || metaLastName || '',
-                email: existingP.email || u.email || '',
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch auth metadata fallback for team members:', err);
-      }
-    }
 
     const memberAreaMap = new Map<string, { ids: string[]; names: string[] }>();
 
@@ -1022,29 +1102,22 @@ export class PermissionService {
     }
 
     for (const m of (members as unknown as MemberRow[])) {
-      // Branch Isolation Rule: If branchId is specified and member is NOT a Business Owner,
-      // verify member possesses an explicit branch assignment for target branchId.
       if (branchId && m.role !== 'business_owner') {
         const assignedBranchIds = (m.branch_assignments || []).map((ba) => ba.branch_id);
         if (!assignedBranchIds.includes(branchId)) {
           continue;
         }
       }
-      const p = profileMap.get(m.user_id);
-      let rawName = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim();
-      const userEmail = p?.email || '';
+      const identity = identityMap.get(m.user_id) || {
+        userId: m.user_id,
+        displayName: 'Staff Member',
+        email: null,
+        initials: 'SM',
+        identitySource: 'fallback' as const,
+      };
 
-      if (!rawName && userEmail) {
-        // Derive clean name from email if first_name/last_name not set (e.g. kasun.perera@gmail.com -> Kasun Perera)
-        const emailPrefix = userEmail.split('@')[0];
-        rawName = emailPrefix
-          .split(/[\._\-]/)
-          .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(' ');
-      }
-
-      const userName = rawName || 'Staff Member';
-      // Do NOT fabricate an email address. Leave empty when the real address is unavailable.
+      const userName = identity.displayName;
+      const userEmail = identity.email || '';
 
       const branchAssign = m.branch_assignments?.[0];
       const memberBranchId = branchAssign?.branch_id || null;

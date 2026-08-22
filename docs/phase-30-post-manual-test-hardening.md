@@ -116,3 +116,33 @@ Rewrote technical Policy Engine diagnostic explanations and UI banners into clea
 ---
 
 **Phase 30 Post-Manual-Test Hardening is READY FOR MANUAL RETEST.**
+
+---
+
+## SECTION 8 — Final Manual Retest Follow-up: Canonical Identity & Navigation Latency Fixes
+
+### 1. Real Member Identity Resolver (`PermissionService.resolveCanonicalMemberIdentities`)
+- **Root Cause**: `ScopeGrantService.previewMemberEffectiveAccess` queried `full_name` on `user_profiles` (which does not exist; `user_profiles` stores `first_name` and `last_name`). `PermissionService.listTeamMembers` scanned `user_profiles`, but when rows lacked names/emails in dev/test data, `listUsers()` scanned auth users without persisting.
+- **Fix**: Implemented `PermissionService.resolveCanonicalMemberIdentities(userIds: string[])` as the single server-side identity resolver:
+  1. Batches user profile lookups (`user_profiles`).
+  2. Queries `auth.users` via `admin.auth.admin.getUserById` in parallel for missing user IDs.
+  3. Extracts `email` and `user_metadata` (`full_name`, `name`, `first_name`, `last_name`), and self-heals missing profiles via `user_profiles.upsert`.
+  4. Returns `Map<string, { userId, displayName, email, initials, identitySource }>`.
+  5. Precedence: (1) `user_profiles` `first_name` + `last_name`, (2) `auth.users` metadata name, (3) capitalized name from email prefix, (4) "Staff Member" only as final fallback.
+  6. Email: real `user_profiles.email` or `auth.users.email`, or `null` (never fabricates `staff@wsnexa.internal`).
+  7. Initials: uppercase two-letter initials (e.g. "Kasun Perera" -> "KP").
+
+### 2. Access & Governance Navigation Performance
+- **Server-side Bottleneck**: `resolveAuthorizationContext()` was called 5-10 times during single page renders. Wrapped zero-arg default invocation in React `cache()`, deduplicating database context queries per-request while preserving 100% immediate security revocation semantics.
+- **Client Visual Reaction**: Added route-level loading skeletons (`loading.tsx`) across all Access routes (`/dashboard/access`, `/roles`, `/scope-grants`, `/members`, `/diagnostics`, `/members/[membershipId]`). Clicks instantly swap to frame-1 loading skeletons while server components fetch data.
+
+### 3. Final Verification Metrics
+| Suite | Status | Metrics |
+| :--- | :--- | :--- |
+| `npm run verify:rbac-v2-management-ui` | **PASSED** | 72 PASSED, 0 FAILED |
+| `npm run verify:rbac-v2-roles` | **PASSED** | 68 PASSED, 0 FAILED |
+| `npm run verify:rbac-v2-engine` | **PASSED** | 83 PASSED, 0 FAILED |
+| `npm run verify:rbac-v2-context` | **PASSED** | 45 PASSED, 0 FAILED |
+| `npm run verify:rbac-v2-legacy-cleanup` | **PASSED** | 54 PASSED, 0 FAILED |
+| `npx tsc --noEmit` | **PASSED** | Clean (0 errors) |
+| `npm run build` | **PASSED** | Production bundle compiled cleanly |

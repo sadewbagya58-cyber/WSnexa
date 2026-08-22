@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import {
@@ -34,7 +35,7 @@ export const ACTIVE_BRANCH_COOKIE = 'wsnexa_active_branch';
  * role permissions, overrides, and scope grants are completely rebuilt server-side from database state.
  * Client cookies or requested IDs only serve as non-authoritative selection hints.
  */
-export async function resolveAuthorizationContext(
+async function _resolveAuthorizationContext(
   options: ResolveContextOptions = {}
 ): Promise<AuthorizationContext> {
   const admin = createAdminClient();
@@ -628,4 +629,17 @@ export async function resolveAuthorizationContext(
     selfIdentity,
     diagnostics,
   };
+}
+
+const getCachedDefaultAuthorizationContext = cache(async () => {
+  return _resolveAuthorizationContext({});
+});
+
+export async function resolveAuthorizationContext(
+  options: ResolveContextOptions = {}
+): Promise<AuthorizationContext> {
+  if (!options.overrideUserId && !options.requestedBusinessId) {
+    return getCachedDefaultAuthorizationContext();
+  }
+  return _resolveAuthorizationContext(options);
 }

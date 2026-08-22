@@ -76,7 +76,11 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
   };
 
   const isOwner = preview.role === 'business_owner';
-  const memberDisplayName = preview.memberName || preview.userEmail || 'Member Detail';
+  const memberDisplayName = preview.memberName || 'Staff Member';
+  const nameParts = memberDisplayName.trim().split(/\s+/);
+  const initials = nameParts.length >= 2
+    ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+    : memberDisplayName.slice(0, 2).toUpperCase();
   const actingAssignments = preview.temporaryAuthority?.actingAssignments || [];
   const secondments = preview.temporaryAuthority?.secondmentAssignments || preview.temporaryAuthority?.secondments || [];
   const overridesList = preview.scopedOverrides || preview.overrides || [];
@@ -87,7 +91,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
       <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-lg shadow-2xs">
-            {memberDisplayName.charAt(0).toUpperCase()}
+            {initials}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -98,7 +102,10 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                 </span>
               )}
             </div>
-            <p className="text-xs text-zinc-500 font-mono">Membership ID: {preview.membershipId}</p>
+            {preview.userEmail ? (
+              <p className="text-xs text-zinc-600 font-mono">{preview.userEmail}</p>
+            ) : null}
+            <p className="text-[11px] text-zinc-400 font-mono">Membership ID: {preview.membershipId}</p>
           </div>
         </div>
 

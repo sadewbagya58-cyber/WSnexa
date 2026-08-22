@@ -58,7 +58,8 @@
     "verify:rbac-v2-management-ui": "tsx scripts/verify-rbac-v2-management-ui.ts",
     "verify:phase31-navigation-ia": "tsx scripts/verify-phase31-navigation-ia.ts",
     "verify:phase31-role-aware-navigation": "tsx scripts/verify-phase31-role-aware-navigation.ts",
-    "verify:phase31-dashboard-shell": "tsx scripts/verify-phase31-dashboard-shell.ts"
+    "verify:phase31-dashboard-shell": "tsx scripts/verify-phase31-dashboard-shell.ts",
+    "verify:phase31-dashboard-actions": "tsx scripts/verify-phase31-dashboard-actions.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

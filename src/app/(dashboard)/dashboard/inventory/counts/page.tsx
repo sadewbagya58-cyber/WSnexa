@@ -25,11 +25,26 @@ export default async function StockCountsPage() {
   }
 
   let hasCostPermission = false;
+  let canManageCounts = false;
   try {
     const authContext = await resolveAuthorizationContext();
-    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view', resource: branchResource });
+    const hasCountsManage = await can({ context: authContext, permission: 'inventory.counts.manage', resource: branchResource });
+    const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
+    canManageCounts = hasCountsManage || hasManage || authContext.isBusinessOwner;
   } catch {
     hasCostPermission = false;
+    canManageCounts = false;
   }
 
   const counts = await InventoryService.getStockCounts(
@@ -50,12 +65,14 @@ export default async function StockCountsPage() {
         ]}
         helpSlug="performing-physical-stock-counts"
         primaryAction={
-          <Link
-            href="/dashboard/inventory/counts/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + Start New Count
-          </Link>
+          canManageCounts ? (
+            <Link
+              href="/dashboard/inventory/counts/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + Start New Count
+            </Link>
+          ) : undefined
         }
       />
 

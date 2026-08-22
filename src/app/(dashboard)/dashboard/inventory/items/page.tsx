@@ -25,11 +25,26 @@ export default async function InventoryItemsPage() {
   }
 
   let hasCostPermission = false;
+  let canManageItems = false;
   try {
     const authContext = await resolveAuthorizationContext();
-    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view', resource: branchResource });
+    const hasItemsCreate = await can({ context: authContext, permission: 'inventory.items.create', resource: branchResource });
+    const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
+    canManageItems = hasItemsCreate || hasManage || authContext.isBusinessOwner;
   } catch {
     hasCostPermission = false;
+    canManageItems = false;
   }
 
   const [items, categories, locations] = await Promise.all([
@@ -50,12 +65,14 @@ export default async function InventoryItemsPage() {
         ]}
         helpSlug="adding-inventory-items-and-units"
         primaryAction={
-          <Link
-            href="/dashboard/inventory/items/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + Add Ingredient
-          </Link>
+          canManageItems ? (
+            <Link
+              href="/dashboard/inventory/items/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + Add Ingredient
+            </Link>
+          ) : undefined
         }
         secondaryActions={
           <Link

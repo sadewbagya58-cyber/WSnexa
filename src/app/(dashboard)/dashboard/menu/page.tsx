@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/page-header';
 
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export default async function MenuDashboardPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/menu');
@@ -34,6 +35,26 @@ export default async function MenuDashboardPage() {
       .is('deleted_at', null),
   ]);
 
+  let canManageMenu = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: tenantContext.activeBranch.id,
+      businessId: tenantContext.business.id,
+      branchId: tenantContext.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasItemsCreate = await can({ context: authContext, permission: 'menu.items.create', resource: branchResource });
+    const hasManage = await can({ context: authContext, permission: 'menu.manage', resource: branchResource });
+    canManageMenu = hasItemsCreate || hasManage || authContext.isBusinessOwner;
+  } catch {
+    canManageMenu = false;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -45,20 +66,24 @@ export default async function MenuDashboardPage() {
         ]}
         helpSlug="creating-menu-categories"
         primaryAction={
-          <Link
-            href="/dashboard/menu/items/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + Add Menu Item
-          </Link>
+          canManageMenu ? (
+            <Link
+              href="/dashboard/menu/items/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + Add Menu Item
+            </Link>
+          ) : undefined
         }
         secondaryActions={
-          <Link
-            href="/dashboard/menu/categories"
-            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-          >
-            Manage Categories
-          </Link>
+          canManageMenu ? (
+            <Link
+              href="/dashboard/menu/categories"
+              className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+            >
+              Manage Categories
+            </Link>
+          ) : undefined
         }
       />
 

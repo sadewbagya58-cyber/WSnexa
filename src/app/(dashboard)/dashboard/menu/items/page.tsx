@@ -56,12 +56,14 @@ export default async function MenuItemsPage() {
           { label: 'Menu Items' },
         ]}
         primaryAction={
-          <Link
-            href="/dashboard/menu/items/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + Add Menu Item
-          </Link>
+          canEditPrice ? (
+            <Link
+              href="/dashboard/menu/items/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + Add Menu Item
+            </Link>
+          ) : undefined
         }
       />
 

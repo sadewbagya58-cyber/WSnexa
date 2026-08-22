@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
 
@@ -24,6 +25,26 @@ export default async function PurchasingPage() {
     redirect('/login');
   }
 
+  let canManagePO = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasPOManage = await can({ context: authContext, permission: 'inventory.purchasing.manage', resource: branchResource });
+    const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
+    canManagePO = hasPOManage || hasManage || authContext.isBusinessOwner;
+  } catch {
+    canManagePO = false;
+  }
+
   const purchaseOrders = await PurchasingService.getPurchaseOrders();
   const currency = context.business.defaultCurrency || 'USD';
 
@@ -39,12 +60,14 @@ export default async function PurchasingPage() {
         ]}
         helpSlug="creating-purchase-orders"
         primaryAction={
-          <Link
-            href="/dashboard/inventory/purchasing/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + New Purchase Order
-          </Link>
+          canManagePO ? (
+            <Link
+              href="/dashboard/inventory/purchasing/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + New Purchase Order
+            </Link>
+          ) : undefined
         }
         secondaryActions={
           <Link

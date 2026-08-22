@@ -16,7 +16,7 @@ export const metadata = {
 import { PageHeader } from '@/components/layout/page-header';
 
 export default async function AccessHubPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/access');
+  const { allowed } = await requireRoutePermission('/dashboard/access');
 
   if (!allowed) {
     return (

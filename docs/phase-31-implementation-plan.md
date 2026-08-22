@@ -8,7 +8,7 @@
 | **Step 1** | **Navigation & Information Architecture Audit + Freeze** | Audit real dashboard routes, resolve overlaps/unlinked pages, freeze canonical IA and navigation map | **COMPLETED** |
 | **Step 2** | **Role-Aware & Scope-Aware Navigation Engine** | Implement single-source navigation engine with dynamic permission & scope filtering | **COMPLETED** |
 | **Step 3** | **Dashboard Shell, Page Headers & Navigation UX** | Refactor Dashboard Shell layout, breadcrumbs, header profile, active branch switcher, and mobile drawer | **COMPLETED** |
-| **Step 4** | **Role-Specific Dashboards & Permission-Aware Page Actions** | Build customized role landing views and permission-guarded page action toolbars | **Not Started** |
+| **Step 4** | **Role-Specific Dashboards & Permission-Aware Page Actions** | Build customized role landing views and permission-guarded page action toolbars | **COMPLETED** |
 | **Step 5** | **Management UI Standardization + Cross-Module Navigation** | Standardize data tables, page layouts, empty states, and cross-module deep-linking | **Not Started** |
 | **Step 6** | **Mobile, Accessibility & Performance Hardening** | Mobile viewport optimization, touch target refinement, ARIA accessibility, and skeleton loading | **Not Started** |
 | **Step 7** | **Role Simulation, Full Regression & Phase 31 Closure** | Role simulation preview, multi-persona E2E regression suite, and final Phase 31 checkpoint closure | **Not Started** |
@@ -37,4 +37,15 @@
 - Dynamic layout variant container (`standard`, `wide`, `workspace`) integrated into `<DashboardShell>`.
 - `verify:phase31-dashboard-shell`: 39/39 PASSED.
 - All Phase 30 & Phase 31 RBAC targeted regressions: 421/421 PASSED.
+- Type Check, Lint & Production Build: Passed cleanly.
+
+---
+
+### Step 4 Verification Status
+- Capability-First Dashboard Composition Resolver created in `src/server/navigation/dashboard-home-model.ts`.
+- Tailored role compositions (Owner, Branch Manager, Cashier, Kitchen, Waiter, Custom Roles, Fallback) implemented in `/dashboard`.
+- Conditional data fetching in `/dashboard` prevents N+1 DB query pattern.
+- Page actions in `<PageHeader>` and management pages permission-gated against Policy Engine.
+- `verify:phase31-dashboard-actions`: 34/34 PASSED.
+- All Phase 30 & Phase 31 regressions: 455/455 PASSED.
 - Type Check, Lint & Production Build: Passed cleanly.

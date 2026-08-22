@@ -6,7 +6,7 @@
 | Step | Title | Objective | Status |
 | :--- | :--- | :--- | :---: |
 | **Step 1** | **Navigation & Information Architecture Audit + Freeze** | Audit real dashboard routes, resolve overlaps/unlinked pages, freeze canonical IA and navigation map | **COMPLETED** |
-| **Step 2** | **Role-Aware & Scope-Aware Navigation Engine** | Implement single-source navigation engine with dynamic permission & scope filtering | **Not Started** |
+| **Step 2** | **Role-Aware & Scope-Aware Navigation Engine** | Implement single-source navigation engine with dynamic permission & scope filtering | **COMPLETED** |
 | **Step 3** | **Dashboard Shell, Page Headers & Navigation UX** | Refactor Dashboard Shell layout, breadcrumbs, header profile, active branch switcher, and mobile drawer | **Not Started** |
 | **Step 4** | **Role-Specific Dashboards & Permission-Aware Page Actions** | Build customized role landing views and permission-guarded page action toolbars | **Not Started** |
 | **Step 5** | **Management UI Standardization + Cross-Module Navigation** | Standardize data tables, page layouts, empty states, and cross-module deep-linking | **Not Started** |
@@ -16,8 +16,16 @@
 ---
 
 ### Step 1 Verification Status
+- Complete Dashboard Route Inventory: 75 page routes cataloged.
+- Canonical IA & Navigation Map: Defined and frozen in `docs/phase-31-navigation-map.md`.
+- `verify:phase31-navigation-ia`: 60/60 PASSED.
 
-- **Complete Dashboard Route Inventory**: 75 page routes cataloged.
-- **Canonical IA & Navigation Map**: Defined and frozen in `docs/phase-31-navigation-map.md`.
-- **Step 1 Verification Script**: `npm run verify:phase31-navigation-ia` passed 16/16 assertions.
-- **Type Check, Lint & Build**: Passed with 0 errors.
+---
+
+### Step 2 Verification Status
+- Single-source navigation config created in `src/lib/navigation/dashboard-navigation.ts`.
+- Server navigation engine created in `src/server/navigation/navigation-engine.ts`.
+- Desktop and Mobile nav in `DashboardShell` consume identical `navSections` DTO.
+- `verify:phase31-role-aware-navigation`: 46/46 PASSED.
+- All Phase 30 & Phase 31 RBAC targeted regressions: 382/382 PASSED.
+- Type Check, Lint & Production Build: Passed cleanly.

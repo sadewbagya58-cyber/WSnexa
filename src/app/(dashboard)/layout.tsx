@@ -36,12 +36,14 @@ export default async function DashboardLayout({
     : '';
 
   const { resolveAuthorizationContext } = await import('@/server/auth');
-  let userPermissions: string[] | undefined = undefined;
+  const { resolveDashboardNavigation } = await import('@/server/navigation/navigation-engine');
+
+  let navSections = undefined;
   try {
     const authContext = await resolveAuthorizationContext();
-    userPermissions = authContext.isBusinessOwner ? undefined : authContext.rolePermissions;
+    navSections = resolveDashboardNavigation(authContext);
   } catch {
-    userPermissions = undefined;
+    navSections = undefined;
   }
 
   return (
@@ -52,7 +54,7 @@ export default async function DashboardLayout({
       userEmail={user.email || ''}
       userName={userName || user.email || ''}
       userRole={membership.role}
-      userPermissions={userPermissions}
+      navSections={navSections}
     >
       {children}
     </DashboardShell>

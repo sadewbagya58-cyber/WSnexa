@@ -6,6 +6,11 @@ import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { ActiveBranchSwitcher } from '@/components/layout/active-branch-switcher';
 import { SidebarBranchPicker } from '@/components/layout/sidebar-branch-picker';
+import {
+  DashboardNavSectionDTO,
+  CANONICAL_DASHBOARD_NAV_SECTIONS,
+  isNavItemActive,
+} from '@/lib/navigation/dashboard-navigation';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo } from '@/types';
 
@@ -13,121 +18,13 @@ interface DashboardShellProps {
   children: React.ReactNode;
   userRole: string;
   userPermissions?: string[];
+  navSections?: DashboardNavSectionDTO[];
   userName?: string;
   userEmail?: string;
   businessName: string;
   activeBranch: BranchInfo | null;
   branches: BranchInfo[];
 }
-
-// ── Static nav structure ────────────────────────────────────────────────────
-
-interface NavItem {
-  label: string;
-  href: string;
-  badge?: string;
-  /** When true this item is rendered by a custom component instead of a plain Link */
-  custom?: boolean;
-}
-
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-const rawNavSections: NavSection[] = [
-  {
-    title: 'OVERVIEW',
-    items: [
-      { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Reports & Analytics', href: '/dashboard/reports' },
-    ],
-  },
-  {
-    title: 'VENUE SETUP',
-    items: [
-      { label: 'Business Profile', href: '/dashboard/business' },
-      { label: 'Public Venue Profile', href: '/dashboard/venue-profile' },
-      // Branches is rendered by SidebarBranchPicker on mobile; as a plain link on desktop
-      { label: 'Branches', href: '/dashboard/branches', custom: true },
-      { label: 'Dining Setup', href: '/dashboard/dining' },
-      { label: 'Team & Members', href: '/dashboard/team' },
-      { label: 'Staff Invitations', href: '/dashboard/team/invites' },
-    ],
-  },
-  {
-    title: 'ORGANIZATION & PEOPLE',
-    items: [
-      { label: 'Organization Hub', href: '/dashboard/organization' },
-      { label: 'Structure & Units', href: '/dashboard/organization/structure' },
-      { label: 'Org Chart', href: '/dashboard/organization/chart' },
-      { label: 'Job Titles', href: '/dashboard/organization/job-titles' },
-      { label: 'Positions & Headcount', href: '/dashboard/organization/positions' },
-      { label: 'People Directory', href: '/dashboard/people' },
-      { label: 'Acting & Coverage', href: '/dashboard/people/acting' },
-      { label: 'Secondments', href: '/dashboard/people/secondments' },
-      { label: 'Integrity Diagnostics', href: '/dashboard/people/integrity' },
-    ],
-  },
-  {
-    title: 'ACCESS & GOVERNANCE',
-    items: [
-      { label: 'Access Control Hub', href: '/dashboard/access' },
-      { label: 'Roles & Templates', href: '/dashboard/access/roles' },
-      { label: 'Scope Grants', href: '/dashboard/access/scope-grants' },
-      { label: 'Access Diagnostics', href: '/dashboard/access/diagnostics' },
-    ],
-  },
-  {
-    title: 'MENU',
-    items: [
-      { label: 'Menu Overview', href: '/dashboard/menu' },
-      { label: 'Categories', href: '/dashboard/menu/categories' },
-      { label: 'Menu Items', href: '/dashboard/menu/items' },
-    ],
-  },
-  {
-    title: 'OPERATIONS',
-    items: [
-      { label: 'Cashier POS', href: '/dashboard/cashier' },
-      { label: 'Kitchen Queue', href: '/dashboard/kitchen' },
-      { label: 'Waiter Assistance', href: '/dashboard/waiter' },
-      { label: 'Waiter Menu', href: '/dashboard/waiter/menu' },
-    ],
-  },
-  {
-    title: 'INVENTORY',
-    items: [
-      { label: 'Inventory Hub', href: '/dashboard/inventory' },
-      { label: 'Stock Items', href: '/dashboard/inventory/items' },
-      { label: 'Stock Counts', href: '/dashboard/inventory/counts' },
-      { label: 'Waste Tracking', href: '/dashboard/inventory/waste' },
-      { label: 'Stock Transfers', href: '/dashboard/inventory/transfers' },
-      { label: 'Storage Locations', href: '/dashboard/inventory/locations' },
-    ],
-  },
-  {
-    title: 'GROWTH & GUESTS',
-    items: [
-      { label: 'Customer Reviews', href: '/dashboard/reviews' },
-      { label: 'Reputation & Rankings', href: '/dashboard/reputation' },
-      { label: 'Loyalty & Rewards', href: '/dashboard/loyalty', badge: 'Soon' },
-    ],
-  },
-  {
-    title: 'SETTINGS',
-    items: [
-      { label: 'Order Security', href: '/dashboard/settings/order-security' },
-      { label: 'Payment Methods', href: '/dashboard/settings/payments' },
-    ],
-  },
-  {
-    title: 'SUPPORT & GUIDANCE',
-    items: [
-      { label: 'Help Center', href: '/dashboard/help' },
-    ],
-  },
-];
 
 function formatRoleLabel(role: string): string {
   switch (role) {
@@ -146,6 +43,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   children,
   userRole,
   userPermissions = [],
+  navSections,
   userName,
   userEmail,
   businessName,
@@ -170,34 +68,39 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  // Permission-filtered nav sections
-  const allowedNavSections = rawNavSections
-    .map((sec) => ({
-      ...sec,
-      items: sec.items.filter((item) => {
-        if (userRole === 'business_owner') return true;
-        const requiredPerm = getRequiredPermissionForRoute(item.href);
-        if (!requiredPerm) return true;
-        return userPermissions.includes(requiredPerm);
-      }),
-    }))
-    .filter((sec) => sec.items.length > 0);
+  // Derived or injected navigation sections (Single Source of Truth for Desktop & Mobile)
+  const allowedNavSections: DashboardNavSectionDTO[] = navSections ||
+    CANONICAL_DASHBOARD_NAV_SECTIONS
+      .map((sec) => ({
+        id: sec.id,
+        title: sec.title,
+        items: sec.items.filter((item) => {
+          if (userRole === 'business_owner') return true;
+          const requiredPerm = item.requiredPermission || getRequiredPermissionForRoute(item.href);
+          if (!requiredPerm) return true;
+          return userPermissions.includes(requiredPerm);
+        }).map((item) => ({
+          id: item.id,
+          label: item.label,
+          href: item.href,
+          badge: item.badge,
+          custom: item.custom,
+        })),
+      }))
+      .filter((sec) => sec.items.length > 0);
 
   // ── Desktop nav: plain links for every item ──────────────────────────────
 
   const renderDesktopNavLinks = () => (
     <div className="space-y-6">
-      {allowedNavSections.map((sec, secIdx) => (
-        <div key={secIdx} className="space-y-1">
+      {allowedNavSections.map((sec) => (
+        <div key={sec.id} className="space-y-1">
           <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
             {sec.title}
           </h3>
           <div className="space-y-0.5 pt-1">
             {sec.items.map((item) => {
-              const isActive =
-                item.href === '/dashboard'
-                  ? pathname === '/dashboard'
-                  : pathname.startsWith(item.href);
+              const isActive = isNavItemActive(item, pathname);
               return (
                 <Link
                   key={item.href}
@@ -223,19 +126,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   const renderMobileNavLinks = () => (
     <div className="space-y-6">
-      {allowedNavSections.map((sec, secIdx) => (
-        <div key={secIdx} className="space-y-1">
+      {allowedNavSections.map((sec) => (
+        <div key={sec.id} className="space-y-1">
           <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
             {sec.title}
           </h3>
           <div className="space-y-0.5 pt-1">
             {sec.items.map((item) => {
-              const isActive =
-                item.href === '/dashboard'
-                  ? pathname === '/dashboard'
-                  : pathname.startsWith(item.href);
+              const isActive = isNavItemActive(item, pathname);
 
-              // Branches: render expandable picker
+              // Branches: render expandable picker on mobile
               if (item.custom && item.href === '/dashboard/branches') {
                 return (
                   <SidebarBranchPicker

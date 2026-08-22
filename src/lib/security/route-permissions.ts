@@ -42,6 +42,8 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/inventory/waste', permission: 'inventory.waste.record' },
   { prefix: '/dashboard/inventory/transfers', permission: 'inventory.transfers.manage' },
   { prefix: '/dashboard/inventory/locations', permission: 'inventory.locations.manage' },
+  { prefix: '/dashboard/inventory/recipes', permission: 'inventory.view' },
+  { prefix: '/dashboard/inventory/purchasing', permission: 'inventory.view' },
   { prefix: '/dashboard/inventory', permission: 'inventory.view' },
   { prefix: '/dashboard/settings/order-security', permission: 'order_security.view' },
   { prefix: '/dashboard/settings/payments', permission: 'branches.manage' },

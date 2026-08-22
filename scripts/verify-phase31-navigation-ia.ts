@@ -143,9 +143,9 @@ async function runVerification() {
   const planContent = fs.readFileSync(path.join(rootDir, 'docs/phase-31-implementation-plan.md'), 'utf-8');
   assert(planContent.includes('Step 1') && planContent.includes('Step 7'), 'docs/phase-31-implementation-plan.md contains all 7 master roadmap steps');
 
-  // 8. No Accidental Step 2 Implementation Files
-  console.log('\n--- 8. Step 2 Scope Boundary Guard ---');
-  assert(!fs.existsSync(path.join(rootDir, 'src/server/navigation/navigation-engine.ts')), 'Step 2 dynamic navigation-engine.ts is not prematurely introduced');
+  // 8. Step 2 Navigation Engine Integration Guard
+  console.log('\n--- 8. Step 2 Navigation Engine Integration Guard ---');
+  assert(fs.existsSync(path.join(rootDir, 'src/server/navigation/navigation-engine.ts')), 'Step 2 dynamic navigation-engine.ts is present');
 
   console.log('\n================================================================');
   console.log(`  Phase 31 Step 1 Navigation IA Verification: ${passCount} PASSED, ${failCount} FAILED`);

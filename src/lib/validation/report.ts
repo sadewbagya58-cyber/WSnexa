@@ -23,6 +23,10 @@ export const reportTypeSchema = z.enum([
   'table_performance',
   'staff_performance',
   'branch_comparison',
+  'inventory_waste',
+  'operations_performance',
+  'reputation_summary',
+  'full_executive_report',
 ]);
 
 export const exportFormatSchema = z.enum(['csv', 'xlsx', 'pdf']);

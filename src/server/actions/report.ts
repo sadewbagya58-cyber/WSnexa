@@ -2,8 +2,6 @@
 
 import { AnalyticsService } from '@/server/analytics/analytics.service';
 import { reportFilterSchema, reportExportInputSchema, ReportFilterInput, ReportExportInput } from '@/lib/validation/report';
-import { generateCSV, generateXLSXTable, generateExecutivePDFHtml } from '@/lib/export/export-engine';
-import { formatCurrency } from '@/features/cart/cart-calculations';
 import { AnalyticsDatePreset } from '@/lib/analytics/analytics-types';
 
 import { InsightEngine } from '@/server/insights/insight-engine';
@@ -126,109 +124,9 @@ export async function exportReportAction(rawInput: ReportExportInput) {
       },
     });
 
-    const { sales, menu, summary, branchComparison } = overview;
-    const currency = summary.currency;
-    const title = `${validated.reportType.replace(/_/g, ' ').toUpperCase()} REPORT`;
-
-    let headers: string[] = [];
-    let rows: (string | number)[][] = [];
-
-    switch (validated.reportType) {
-      case 'menu_performance':
-        headers = ['Item Name', 'Quantity Sold', 'Total Revenue', 'Orders Count', 'Average Price'];
-        rows = menu.topSellingItems.map((item) => [
-          item.itemName,
-          item.quantitySold,
-          item.revenueCents !== null ? formatCurrency(item.revenueCents, currency) : 'N/A',
-          item.orderCount,
-          item.avgPriceCents !== null ? formatCurrency(item.avgPriceCents, currency) : 'N/A',
-        ]);
-        break;
-
-      case 'payment_breakdown':
-        headers = ['Payment Method', 'Transaction Count', 'Total Paid', 'Percentage of Revenue'];
-        rows = sales.salesByPaymentMethod.map((p) => [
-          p.label,
-          p.subValue || 0,
-          formatCurrency(p.value, currency),
-          `${p.percentage}%`,
-        ]);
-        break;
-
-      case 'branch_comparison':
-        headers = ['Branch Name', 'Gross Sales', 'Completed Orders', 'AOV', 'Completion Rate', 'Kitchen Prep Time', 'Waste Cost', 'Avg Rating'];
-        rows = (branchComparison || []).map((b) => [
-          b.branchName,
-          b.grossSalesCents !== null ? formatCurrency(b.grossSalesCents, currency) : 'N/A',
-          b.completedOrdersCount,
-          b.aovCents !== null ? formatCurrency(b.aovCents, currency) : 'N/A',
-          b.completionRate !== null ? `${b.completionRate}%` : 'N/A',
-          b.avgPreparationTimeSeconds !== null ? `${Math.round(b.avgPreparationTimeSeconds / 60)}m` : 'N/A',
-          b.wasteCostCents !== null ? formatCurrency(b.wasteCostCents, currency) : 'N/A',
-          b.avgRating !== null ? `${b.avgRating} ★` : 'N/A',
-        ]);
-        break;
-
-      case 'sales_summary':
-      default:
-        headers = ['Metric', 'Value'];
-        rows = [
-          ['Gross Sales', sales.grossSales.value !== null ? formatCurrency(sales.grossSales.value, currency) : 'Redacted'],
-          ['Net Sales', sales.netSales.value !== null ? formatCurrency(sales.netSales.value, currency) : 'Redacted'],
-          ['Completed Orders', sales.completedOrders.value || 0],
-          ['Placed Orders', sales.placedOrders.value || 0],
-          ['Cancelled Orders', sales.cancelledOrders.value || 0],
-          ['Rejected Orders', sales.rejectedOrders.value || 0],
-          ['Average Order Value', sales.aov.value !== null ? formatCurrency(sales.aov.value, currency) : 'Redacted'],
-          ['Items Sold', sales.itemsSold.value || 0],
-        ];
-        break;
-    }
-
-    let fileContent = '';
-    let mimeType = 'text/csv';
-    let filename = `${validated.reportType}_${validated.preset}_${Date.now()}`;
-
-    if (validated.format === 'csv') {
-      fileContent = generateCSV(headers, rows);
-      mimeType = 'text/csv';
-      filename += '.csv';
-    } else if (validated.format === 'xlsx') {
-      fileContent = generateXLSXTable(title, 'WSNexa', 'Selected Scope', headers, rows, [
-        { label: 'Total Orders', value: String(sales.completedOrders.value || 0) },
-      ]);
-      mimeType = 'application/vnd.ms-excel';
-      filename += '.xls';
-    } else if (validated.format === 'pdf') {
-      fileContent = generateExecutivePDFHtml({
-        title,
-        businessName: 'WSNexa',
-        branchName: 'Selected Scope',
-        dateRangeLabel: summary.resolvedDateRange.label,
-        currency,
-        summary: {
-          totalOrders: sales.placedOrders.value || 0,
-          completedOrders: sales.completedOrders.value || 0,
-          grossSalesCents: sales.grossSales.value || 0,
-          paidRevenueCents: sales.netSales.value || 0,
-          outstandingBalanceCents: 0,
-          aovCents: sales.aov.value || 0,
-          topItemName: menu.topSellingItems[0]?.itemName || 'N/A',
-          topCategoryName: menu.categorySales[0]?.label || 'N/A',
-        },
-        tableHeaders: headers,
-        tableRows: rows,
-      });
-      mimeType = 'text/html';
-      filename += '.html';
-    }
-
-    return {
-      success: true,
-      fileContent,
-      mimeType,
-      filename,
-    };
+    const { buildAnalyticsReport } = await import('@/server/reports/report-generator');
+    const result = await buildAnalyticsReport(overview, validated.reportType, validated.format);
+    return result;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Export failed';
     return { success: false, message: msg };

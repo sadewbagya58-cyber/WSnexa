@@ -257,6 +257,23 @@ export function ReportsDashboard() {
         endDate={endDate}
       />
 
+      {/* Print Styles Injection */}
+      <style>{`
+        @media print {
+          aside, nav, header, button, .no-print, [role="dialog"] {
+            display: none !important;
+          }
+          body, main {
+            background: #ffffff !important;
+            color: #000000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          .print-break-inside-avoid {
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

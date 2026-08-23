@@ -107,9 +107,14 @@ export function ExportCenterModal({
               onChange={(e) => setReportType(e.target.value as ReportType)}
               className="w-full bg-zinc-950 text-white text-sm border border-zinc-800 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
-              <option value="sales_summary">Executive Sales Summary</option>
+              <option value="full_executive_report">Comprehensive Executive Report (All Sections)</option>
+              <option value="sales_summary">Executive Sales & Revenue Summary</option>
               <option value="payment_breakdown">Payment Method Breakdown</option>
+              <option value="operations_performance">Operations & Speed Summary</option>
               <option value="menu_performance">Menu Items Performance</option>
+              <option value="inventory_waste">Inventory & Waste Summary</option>
+              <option value="reputation_summary">Guests & Reputation Summary</option>
+              <option value="branch_comparison">Multi-Branch Fleet Comparison</option>
             </select>
           </div>
 

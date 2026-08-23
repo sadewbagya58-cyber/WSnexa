@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { VenueReviewRecord } from '@/server/services/venue-review.service';
 import { respondToReviewAction } from '@/server/actions/venue-discovery';
 
@@ -38,16 +39,13 @@ export function OwnerReviewList({ reviews, canRespond }: OwnerReviewListProps) {
 
   if (reviews.length === 0) {
     return (
-      <div className="rounded-3xl border border-zinc-200 bg-white p-12 text-center space-y-4 shadow-sm max-w-md mx-auto my-12">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl">
-          💬
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-lg font-bold text-zinc-950">No customer reviews yet</h3>
-          <p className="text-xs text-zinc-500 font-medium">
-            Once guests complete orders and leave feedback, reviews will appear here for management responses.
-          </p>
-        </div>
+      <div className="py-6">
+        <EmptyState
+          title="No customer reviews yet"
+          description="Once guests complete orders and leave feedback, reviews will appear here for management responses."
+          icon="💬"
+          helpSlug="customer-reviews"
+        />
       </div>
     );
   }

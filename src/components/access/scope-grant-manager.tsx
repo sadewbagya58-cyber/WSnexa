@@ -109,7 +109,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
     const payload = {
       roleKey: targetType === 'BUILT_IN' ? roleKey : undefined,
       customRoleId: targetType === 'CUSTOM' ? customRoleId : undefined,
-      permissionKey: permissionKey as any,
+      permissionKey: permissionKey as unknown as Parameters<typeof createPermissionScopeGrantAction>[0]['permissionKey'],
       scopeType,
       effect: effect.toLowerCase() as 'allow' | 'deny',
       grantSource: targetType === 'BUILT_IN' ? ('role_preset' as const) : ('custom_role' as const),
@@ -289,7 +289,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                 <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Type</label>
                 <select
                   value={targetType}
-                  onChange={(e) => setTargetType(e.target.value as any)}
+                  onChange={(e) => setTargetType(e.target.value as 'BUILT_IN' | 'CUSTOM')}
                   className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
                   <option value="BUILT_IN">Built-In Role</option>
@@ -345,7 +345,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                 <label className="block text-xs font-semibold text-zinc-700 mb-1">Grant Effect</label>
                 <select
                   value={effect}
-                  onChange={(e) => setEffect(e.target.value as any)}
+                  onChange={(e) => setEffect(e.target.value as 'ALLOW' | 'DENY')}
                   className="w-full px-3 py-2 text-xs font-bold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
                   <option value="ALLOW">ALLOW</option>
@@ -357,7 +357,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                 <label className="block text-xs font-semibold text-zinc-700 mb-1">Scope Level</label>
                 <select
                   value={scopeType}
-                  onChange={(e) => setScopeType(e.target.value as any)}
+                  onChange={(e) => setScopeType(e.target.value as ScopeType)}
                   className="w-full px-3 py-2 text-xs font-semibold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
                   <option value="ORGANIZATION">ORGANIZATION</option>

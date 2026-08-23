@@ -292,6 +292,10 @@ export function InventoryItemsTable({
                           <div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-2">
                             <span>{item.categoryName || 'Uncategorized'}</span>
                             {item.sku && <span>• SKU: {item.sku}</span>}
+                            <span>•</span>
+                            <Link href="/dashboard/inventory/recipes" className="text-emerald-700 hover:underline font-bold">
+                              📖 View Recipes →
+                            </Link>
                           </div>
                         </td>
 

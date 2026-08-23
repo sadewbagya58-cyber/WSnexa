@@ -244,6 +244,12 @@ export function MemberProfileClient({
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-mono bg-zinc-50 border border-zinc-200 text-zinc-700">
                   Role: {member.role}
                 </span>
+                <Link
+                  href={`/dashboard/access/members/${membershipId}`}
+                  className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                >
+                  🛡️ View Access Profile →
+                </Link>
               </div>
               <div className="text-xs text-zinc-500 flex items-center space-x-2 flex-wrap">
                 <span className="font-semibold text-zinc-900">

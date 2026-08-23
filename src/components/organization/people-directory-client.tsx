@@ -294,8 +294,15 @@ export function PeopleDirectoryClient({
                             >
                               {s.fullName}
                             </Link>
-                            <div className="text-[10px] text-zinc-500 capitalize">
-                              Auth Role: {s.role.replace(/_/g, ' ')}
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-500 capitalize">
+                              <span>Auth Role: {s.role.replace(/_/g, ' ')}</span>
+                              <span>•</span>
+                              <Link
+                                href={`/dashboard/access/members/${s.membershipId}`}
+                                className="text-emerald-700 hover:underline font-bold"
+                              >
+                                🛡️ Access Profile →
+                              </Link>
                             </div>
                           </div>
                         </div>

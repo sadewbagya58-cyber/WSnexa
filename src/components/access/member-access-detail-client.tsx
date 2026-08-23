@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { EffectiveAccessPreview, BuiltInRoleTemplate, CustomRoleDetail, FormattedPermission } from '@/types/authorization.types';
 import { MemberOverrideModal } from '@/components/access/member-override-modal';
 import {
@@ -48,7 +49,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
   const handleRemoveOverride = async (permissionKey: string) => {
     if (!confirm(`Are you sure you want to remove the override for '${permissionKey}'?`)) return;
     setIsSubmitting(true);
-    await removeMemberOverrideAction(preview.membershipId, permissionKey as any);
+    await removeMemberOverrideAction(preview.membershipId, permissionKey as unknown as Parameters<typeof removeMemberOverrideAction>[1]);
     setIsSubmitting(false);
     router.refresh();
   };
@@ -60,7 +61,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
 
     const res = await updateMemberRoleAction({
       membershipId: preview.membershipId,
-      builtInRole: selectedRoleType === 'BUILT_IN' ? (selectedRoleKey as any) : 'waiter',
+      builtInRole: selectedRoleType === 'BUILT_IN' ? (selectedRoleKey as unknown as Parameters<typeof updateMemberRoleAction>[0]['builtInRole']) : 'waiter',
       customRoleId: selectedRoleType === 'CUSTOM' ? selectedCustomRoleId : undefined,
     });
 
@@ -101,6 +102,12 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                   Business Owner
                 </span>
               )}
+              <Link
+                href={`/dashboard/people/${preview.membershipId}`}
+                className="text-[11px] font-bold text-zinc-600 hover:text-zinc-900 hover:underline border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 rounded-full"
+              >
+                👤 View People Profile →
+              </Link>
             </div>
             {preview.userEmail ? (
               <p className="text-xs text-zinc-600 font-mono">{preview.userEmail}</p>
@@ -219,8 +226,8 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
               </p>
             ) : (
               <>
-                {actingAssignments.map((a: any) => (
-                  <div key={a.id} className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
+                {actingAssignments.map((a: Record<string, unknown>) => (
+                  <div key={String(a.id)} className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
                     <div className="flex justify-between font-bold text-amber-900">
                       <span>Acting Position Coverage</span>
                       <span className="font-mono text-[10px] bg-amber-200 px-1.5 py-0.5 rounded">Active</span>
@@ -231,8 +238,8 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                   </div>
                 ))}
 
-                {secondments.map((s: any) => (
-                  <div key={s.id} className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1">
+                {secondments.map((s: Record<string, unknown>) => (
+                  <div key={String(s.id)} className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1">
                     <div className="flex justify-between font-bold text-indigo-900">
                       <span>Property Secondment</span>
                       <span className="font-mono text-[10px] bg-indigo-200 px-1.5 py-0.5 rounded">Host Branch</span>
@@ -272,12 +279,12 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
             </p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {overridesList.map((o: any) => {
+              {overridesList.map((o: Record<string, unknown>) => {
                 const isAllowed = o.effect === 'allow' || o.effect === 'ALLOW' || o.isAllowed === true;
 
                 return (
                   <div
-                    key={o.id || o.permissionKey}
+                    key={String(o.id || o.permissionKey)}
                     className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between gap-2 text-xs"
                   >
                     <div className="flex items-center gap-2 truncate">
@@ -287,7 +294,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                         <IconCircleX className="w-4 h-4 text-red-600 shrink-0" />
                       )}
                       <span className="font-mono font-semibold text-zinc-900 truncate">
-                        {o.permissionKey}
+                        {String(o.permissionKey)}
                       </span>
                     </div>
 
@@ -303,7 +310,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                       <button
                         type="button"
                         disabled={isSubmitting}
-                        onClick={() => handleRemoveOverride(o.permissionKey)}
+                        onClick={() => handleRemoveOverride(String(o.permissionKey))}
                         className="p-1 text-zinc-400 hover:text-red-600 transition-colors"
                         title="Remove Override"
                       >
@@ -334,7 +341,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
               <label className="block text-xs font-semibold text-zinc-700 mb-1">Role Type</label>
               <select
                 value={selectedRoleType}
-                onChange={(e) => setSelectedRoleType(e.target.value as any)}
+                onChange={(e) => setSelectedRoleType(e.target.value as 'BUILT_IN' | 'CUSTOM')}
                 className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none"
               >
                 <option value="BUILT_IN">Built-In Role</option>

@@ -54,7 +54,7 @@ function createMockAuthContext(overrides: Partial<AuthorizationContext> = {}): A
     scopeGrants: [],
     roleScopePreset: null,
     selfIdentity: { userId: 'user-123', membershipId: 'mem-123', staffAssignmentIds: [] },
-    diagnostics: { resolvedAt: new Date().toISOString(), queryCount: 1, sources: {} as any },
+    diagnostics: { resolvedAt: new Date().toISOString(), queryCount: 1, sources: {} as unknown as AuthorizationContext['diagnostics']['sources'] },
     ...overrides,
   };
 }

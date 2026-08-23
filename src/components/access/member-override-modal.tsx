@@ -40,7 +40,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
 
     const res = await setScopedMemberOverrideAction({
       membershipId,
-      permissionKey: permissionKey as any,
+      permissionKey: permissionKey as unknown as Parameters<typeof setScopedMemberOverrideAction>[0]['permissionKey'],
       effect: isAllowed ? 'allow' : 'deny',
       scopeType,
       branchId: scopeType === 'PROPERTY' ? branchId : undefined,
@@ -50,10 +50,11 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
     setIsSubmitting(false);
 
     if (!res.success) {
-      setErrorMsg(res.message || 'Failed to set member override.');
+      setErrorMsg(res.message || 'Failed to save permission override.');
       return;
     }
 
+    onClose();
     onSuccess();
   };
 
@@ -62,10 +63,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-zinc-200 space-y-4">
         <div className="flex items-center gap-2">
           <IconShieldAlert className="w-5 h-5 text-emerald-600" />
-          <div>
-            <h3 className="text-base font-bold text-zinc-900">Set Permission Override</h3>
-            <p className="text-xs text-zinc-500">Target Member: {memberName}</p>
-          </div>
+          <h3 className="text-base font-bold text-zinc-900">Set Member Permission Override</h3>
         </div>
 
         {errorMsg && (
@@ -80,7 +78,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
             <IconAlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold block mb-0.5">This will block this staff member from this action.</span>
-              This restriction overrides the staff member's normal role and applies regardless of other permissions. It takes immediate effect for the selected location.
+              This restriction overrides the staff member&apos;s normal role and applies regardless of other permissions. It takes immediate effect for the selected location.
             </div>
           </div>
         )}
@@ -121,7 +119,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
             <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Scope Level</label>
             <select
               value={scopeType}
-              onChange={(e) => setScopeType(e.target.value as any)}
+              onChange={(e) => setScopeType(e.target.value as ScopeType)}
               className="w-full px-3 py-2 text-xs font-semibold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             >
               <option value="ORGANIZATION">ORGANIZATION</option>

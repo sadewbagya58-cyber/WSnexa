@@ -45,7 +45,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
       const res = await createCustomRoleAction({
         name: name.trim(),
         description: description.trim(),
-        permissions: selectedPermissions as any,
+        permissions: selectedPermissions as unknown as Parameters<typeof createCustomRoleAction>[0]['permissions'],
         defaultScope,
         maxScope,
       });
@@ -62,7 +62,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
         roleId: role.id,
         name: name.trim(),
         description: description.trim(),
-        permissions: selectedPermissions as any,
+        permissions: selectedPermissions as unknown as Parameters<typeof updateCustomRoleAction>[0]['permissions'],
         defaultScope,
         maxScope,
       });

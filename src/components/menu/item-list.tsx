@@ -292,9 +292,18 @@ export const ItemList: React.FC<ItemListProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500">
-                      Category: {item.menu_categories?.name || 'Uncategorized'}
-                    </p>
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <span>
+                        Category:{' '}
+                        <Link href="/dashboard/menu/categories" className="font-semibold text-zinc-900 hover:underline">
+                          {item.menu_categories?.name || 'Uncategorized'}
+                        </Link>
+                      </span>
+                      <span>•</span>
+                      <Link href="/dashboard/inventory/recipes" className="text-emerald-700 hover:underline text-[11px] font-bold">
+                        📖 Recipe & Costing →
+                      </Link>
+                    </div>
                     {item.description && (
                       <p className="text-xs text-zinc-600 line-clamp-2">{item.description}</p>
                     )}

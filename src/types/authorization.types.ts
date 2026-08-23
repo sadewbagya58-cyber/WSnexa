@@ -401,9 +401,9 @@ export interface EffectiveAccessPreview {
   }>;
   defaultScope?: ScopeType;
   temporaryAuthority?: {
-    actingAssignments: any[];
-    secondmentAssignments: any[];
-    secondments?: any[];
+    actingAssignments: Record<string, unknown>[];
+    secondmentAssignments: Record<string, unknown>[];
+    secondments?: Record<string, unknown>[];
   };
 }
 

@@ -306,8 +306,9 @@ export class ReportService {
         },
         tables: (tableData as { tables?: TablePerformance[] })?.tables || [],
         branchComparison: branchComparisonData,
-        currency: 'LKR',
+        currency: 'USD',
         branchName,
+
         businessName: authContext.businessName,
         dateRangeLabel: bounds.label,
       },

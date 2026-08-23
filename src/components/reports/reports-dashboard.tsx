@@ -71,7 +71,8 @@ export function ReportsDashboard() {
     tabs.push({ key: 'comparison', label: 'Branch Comparison', icon: '🏬' });
   }
 
-  const currency = data?.summary.currency || 'LKR';
+  const currency = data?.summary.currency || 'USD';
+
   const hasFinancialAccess = data?.summary.hasFinancialAccess ?? true;
 
   return (

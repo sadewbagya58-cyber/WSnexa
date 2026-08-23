@@ -105,8 +105,11 @@ async function runExecutiveAnalyticsVerification() {
     const content = fs.readFileSync(path.join(rootDir, 'src/server/analytics', file), 'utf8');
     assert(!content.includes('SUPABASE_SERVICE_ROLE_KEY'), `12. No service-role key usage in ${file}`);
   });
-  console.log('  ✅ [PASS] 12. Server analytics components contain zero client service-role admin key references');
+  assert(authGuardContent.includes('default_currency') && authGuardContent.includes('businesses'), '12b. Analytics auth resolves canonical default_currency from businesses table');
+  assert(!authGuardContent.includes('currency: \'LKR\''), '12c. Analytics auth does not hardcode LKR currency');
+  console.log('  ✅ [PASS] 12. Server analytics components contain zero client service-role admin key references & resolve canonical business currency');
   passed++;
+
 
   // ------------------------------------------------------------------------
   // SECTION C: EXECUTIVE OVERVIEW

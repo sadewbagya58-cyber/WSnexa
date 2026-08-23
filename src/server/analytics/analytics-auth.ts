@@ -2,6 +2,8 @@ import { resolveAuthorizationContext } from '@/server/auth';
 import { can } from '@/server/auth/policy-engine';
 import { AuthorizationContext } from '@/types/authorization.types';
 import { AnalyticsError } from '@/lib/analytics/analytics-types';
+import { createAdminClient } from '@/lib/supabase/server';
+
 
 export interface AnalyticsAuthResult {
   authContext: AuthorizationContext;
@@ -93,6 +95,16 @@ export async function requireAnalyticsAccess(
     .filter((b) => authContext.authorizedBranchIds.includes(b.branchId))
     .map((b) => ({ id: b.branchId, name: b.branchName }));
 
+  // 6. Fetch canonical business currency
+  const admin = createAdminClient();
+  const { data: biz } = await admin
+    .from('businesses')
+    .select('default_currency')
+    .eq('id', authContext.businessId)
+    .maybeSingle();
+
+  const currency = (biz?.default_currency || 'USD').toUpperCase();
+
   return {
     authContext,
     businessId: authContext.businessId,
@@ -100,6 +112,7 @@ export async function requireAnalyticsAccess(
     authorizedBranchDetails,
     isMultiBranchAuthorized,
     hasFinancialAccess,
-    currency: 'LKR', // Default business currency fallback
+    currency,
   };
 }
+

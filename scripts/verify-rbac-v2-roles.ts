@@ -542,6 +542,10 @@ async function runRoleGovernanceVerification() {
     );
 
     // 4.5 Scope preset update audit
+    await RoleGovernanceService.updateCustomRole(ownerContext, {
+      roleId: ownerOrgRole.role!.id,
+      description: 'Updated regional executive description',
+    });
     const { data: presetAuditLogs } = await admin
       .from('audit_logs')
       .select('*')

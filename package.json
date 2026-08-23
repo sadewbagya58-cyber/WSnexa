@@ -61,7 +61,8 @@
     "verify:phase31-dashboard-shell": "tsx scripts/verify-phase31-dashboard-shell.ts",
     "verify:phase31-dashboard-actions": "tsx scripts/verify-phase31-dashboard-actions.ts",
     "verify:phase31-management-ui": "tsx scripts/verify-phase31-management-ui.ts",
-    "verify:phase31-mobile-a11y-performance": "tsx scripts/verify-phase31-mobile-a11y-performance.ts"
+    "verify:phase31-mobile-a11y-performance": "tsx scripts/verify-phase31-mobile-a11y-performance.ts",
+    "verify:phase31-closure": "tsx scripts/verify-phase31-closure.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

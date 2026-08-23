@@ -267,8 +267,8 @@ async function runVerification() {
     JSON.stringify(actualEnumScopes) === JSON.stringify(canonicalScopes),
     'Canonical scope types are exactly ORGANIZATION, PROPERTY, DEPARTMENT, AREA_TEAM, SELF'
   );
-  assert(!actualEnumScopes.includes('REGION' as unknown as ScopeType), 'REGION does NOT exist as an RBAC scope');
-  assert(!actualEnumScopes.includes('SERVICE_AREA' as unknown as ScopeType), 'SERVICE_AREA does NOT exist as a canonical RBAC scope type');
+  assert(!(actualEnumScopes as string[]).includes('REGION'), 'REGION does NOT exist as an RBAC scope');
+  assert(!(actualEnumScopes as string[]).includes('SERVICE_AREA'), 'SERVICE_AREA does NOT exist as a canonical RBAC scope type');
   assert(actualEnumScopes.includes('SELF'), 'SELF scope level is supported');
   assert(actualEnumScopes.includes('AREA_TEAM'), 'AREA_TEAM scope level is supported for units/service areas');
 
@@ -519,7 +519,7 @@ async function runVerification() {
     ownerUserId,
     businessAId,
     waiterMem!.id,
-    'orders.cancel' as unknown as PermissionKey
+    'orders.cancel' as Parameters<typeof PermissionService.removeMemberOverride>[3]
   );
   assert(removeOverrideRes.success === true, 'Remove member override succeeds');
 
@@ -679,11 +679,11 @@ async function runVerification() {
     'Hardening: Canonical scopes remain exactly ORGANIZATION, PROPERTY, DEPARTMENT, AREA_TEAM, SELF'
   );
   assert(
-    !scopeTypeEnum.options.includes('REGION' as unknown as ScopeType),
+    !(scopeTypeEnum.options as string[]).includes('REGION'),
     'Hardening: REGION is NOT an RBAC scope'
   );
   assert(
-    !scopeTypeEnum.options.includes('SERVICE_AREA' as unknown as ScopeType),
+    !(scopeTypeEnum.options as string[]).includes('SERVICE_AREA'),
     'Hardening: SERVICE_AREA is NOT a canonical RBAC scope'
   );
   assert(

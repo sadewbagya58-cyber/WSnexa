@@ -118,6 +118,18 @@ export interface BreakdownItemDTO {
   percentage?: number;
 }
 
+export interface BranchComparisonItemDTO {
+  branchId: string;
+  branchName: string;
+  grossSalesCents: number | null;
+  completedOrdersCount: number;
+  aovCents: number | null;
+  completionRate: number | null;
+  avgPreparationTimeSeconds: number | null;
+  wasteCostCents: number | null;
+  avgRating: number | null;
+}
+
 export interface SummaryAnalyticsDTO {
   metrics: Record<string, MetricValueDTO>;
   dataQuality: DataQualityFlag;
@@ -126,6 +138,7 @@ export interface SummaryAnalyticsDTO {
   currency: string;
   tenantId: string;
   branchIds: string[];
+  hasFinancialAccess: boolean;
 }
 
 export type AnalyticsErrorCode =

@@ -5,6 +5,8 @@ export const reportPresetSchema = z.enum([
   'yesterday',
   '7d',
   '30d',
+  'last_7_days',
+  'last_30_days',
   'this_month',
   'last_month',
   'custom',

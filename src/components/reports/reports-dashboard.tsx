@@ -1,42 +1,43 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ReportPreset } from '@/lib/validation/report';
+import { AnalyticsDatePreset } from '@/lib/analytics/analytics-types';
 import { fetchAnalyticsAction } from '@/server/actions/report';
-import { CompleteAnalyticsPayload } from '@/server/services/report.service';
+import { ExecutiveOverviewDTO } from '@/server/analytics/analytics.service';
 
-import { DateRangePicker } from './date-range-picker';
-import { KpiSummaryCards } from './kpi-summary-cards';
-import { RevenueTrendChart } from './revenue-trend-chart';
-import { OrdersByHourChart } from './orders-by-hour-chart';
-import { PaymentAnalyticsCard } from './payment-analytics-card';
-import { MenuAnalyticsCard } from './menu-analytics-card';
-import { KitchenAnalyticsCard } from './kitchen-analytics-card';
-import { TableAnalyticsCard } from './table-analytics-card';
-import { ModifierAnalyticsCard } from './modifier-analytics-card';
-import { BranchComparisonCard } from './branch-comparison-card';
+import { AnalyticsFilterBar } from './analytics-filter-bar';
+import { ExecutiveKpiCards } from './executive-kpi-cards';
+import { SalesAnalyticsView } from './sales-analytics-view';
+import { OperationsAnalyticsView } from './operations-analytics-view';
+import { MenuAnalyticsView } from './menu-analytics-view';
+import { InventoryAnalyticsView } from './inventory-analytics-view';
+import { ReputationAnalyticsView } from './reputation-analytics-view';
+import { BranchComparisonView } from './branch-comparison-view';
 import { ExportCenterModal } from './export-center-modal';
-import { CogsAnalyticsCard } from './cogs-analytics-card';
-import { MenuEngineeringCard } from './menu-engineering-card';
+
+type AnalyticsTab = 'overview' | 'sales' | 'operations' | 'menu' | 'inventory' | 'reputation' | 'comparison';
 
 export function ReportsDashboard() {
-  const [preset, setPreset] = useState<ReportPreset>('today');
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview');
+  const [preset, setPreset] = useState<AnalyticsDatePreset>('today');
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [data, setData] = useState<CompleteAnalyticsPayload | null>(null);
+  const [data, setData] = useState<ExecutiveOverviewDTO | null>(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function loadAnalytics() {
       setIsLoading(true);
       const res = await fetchAnalyticsAction({
         preset,
         startDate,
         endDate,
+        branchId: selectedBranchId !== 'all' ? selectedBranchId : undefined,
       });
 
       if (isMounted) {
@@ -44,18 +45,34 @@ export function ReportsDashboard() {
           setData(res.data);
           setErrorMsg(null);
         } else {
-          setErrorMsg(res.message || 'Failed to load reporting data.');
+          setErrorMsg(res.message || 'Failed to load executive analytics data.');
         }
         setIsLoading(false);
       }
     }
 
-    loadData();
+    loadAnalytics();
 
     return () => {
       isMounted = false;
     };
-  }, [preset, startDate, endDate]);
+  }, [preset, startDate, endDate, selectedBranchId]);
+
+  const tabs: { key: AnalyticsTab; label: string; icon: string }[] = [
+    { key: 'overview', label: 'Executive Overview', icon: '📊' },
+    { key: 'sales', label: 'Sales & Revenue', icon: '💰' },
+    { key: 'operations', label: 'Operations & Speed', icon: '⚡' },
+    { key: 'menu', label: 'Menu Performance', icon: '🍽️' },
+    { key: 'inventory', label: 'Inventory & Waste', icon: '📦' },
+    { key: 'reputation', label: 'Guests & Reviews', icon: '⭐' },
+  ];
+
+  if (data?.isMultiBranchAuthorized && data.authorizedBranches.length > 1) {
+    tabs.push({ key: 'comparison', label: 'Branch Comparison', icon: '🏬' });
+  }
+
+  const currency = data?.summary.currency || 'LKR';
+  const hasFinancialAccess = data?.summary.hasFinancialAccess ?? true;
 
   return (
     <div className="space-y-6">
@@ -63,23 +80,24 @@ export function ReportsDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
         <div>
           <h1 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <span>📈</span> Business Intelligence & Reports
+            <span>📈</span> Executive Analytics & Intelligence
           </h1>
           <p className="text-xs text-zinc-400">
-            Real-time analytics, revenue trend, kitchen efficiency & multi-dimension performance metrics
+            Real-time business performance, revenue trends, kitchen efficiency & multi-branch intelligence
           </p>
         </div>
 
         <button
+          type="button"
           onClick={() => setIsExportOpen(true)}
-          className="py-2 px-4 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold rounded-xl transition-all flex items-center gap-2 self-start sm:self-auto shadow-lg"
+          className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold rounded-xl transition-all flex items-center gap-2 self-start sm:self-auto shadow-lg min-h-[44px]"
         >
-          <span>📥</span> Export Report
+          <span>📥</span> Export Analytics Report
         </button>
       </div>
 
-      {/* Date Range Controls */}
-      <DateRangePicker
+      {/* Global Analytics Filter Bar */}
+      <AnalyticsFilterBar
         preset={preset}
         onPresetChange={(p) => {
           setPreset(p);
@@ -94,57 +112,106 @@ export function ReportsDashboard() {
           setStartDate(start);
           setEndDate(end);
         }}
-        timezone={data?.branchName ? `Branch: ${data.branchName}` : undefined}
+        selectedBranchId={selectedBranchId}
+        onBranchChange={(bId) => setSelectedBranchId(bId)}
+        authorizedBranches={data?.authorizedBranches || []}
+        isMultiBranchAuthorized={data?.isMultiBranchAuthorized || false}
+        timezoneLabel={data?.summary.resolvedDateRange.timezone || 'Asia/Colombo'}
+        isLoading={isLoading}
       />
 
-      {/* Loading / Error States */}
+      {/* Data Quality Notice Banner */}
+      {data?.summary.dataQualityNotes && data.summary.dataQualityNotes.length > 0 && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs font-medium space-y-1">
+          {data.summary.dataQualityNotes.map((note, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span>ℹ️</span> <span>{note}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Internal Navigation Tabs */}
+      <div className="flex overflow-x-auto border-b border-zinc-800 gap-1 pb-1">
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap min-h-[44px] flex items-center gap-2 ${
+                active
+                  ? 'bg-zinc-800 text-amber-400 border border-amber-500/30 shadow-md'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Loading Skeletons */}
       {isLoading && (
-        <div className="p-12 text-center text-zinc-400 text-sm font-mono animate-pulse">
-          Loading reporting analytics data from Supabase DB...
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-32 bg-zinc-900 border border-zinc-800 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+          <div className="h-64 bg-zinc-900 border border-zinc-800 rounded-2xl animate-pulse" />
         </div>
       )}
 
-      {errorMsg && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-sm font-semibold">
-          ⚠️ {errorMsg}
+      {/* Error Banner */}
+      {errorMsg && !isLoading && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-semibold flex items-center gap-2">
+          <span>⚠️</span> <span>{errorMsg}</span>
         </div>
       )}
 
+      {/* Main Tab Views */}
       {!isLoading && !errorMsg && data && (
-        <div className="space-y-6">
-          {/* Executive KPI Cards */}
-          <KpiSummaryCards summary={data.summary} currency={data.currency} />
+        <div>
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <ExecutiveKpiCards metrics={data.summary.metrics} currency={currency} />
+              <SalesAnalyticsView sales={data.sales} currency={currency} hasFinancialAccess={hasFinancialAccess} />
+            </div>
+          )}
 
-          {/* Revenue Trend & Peak Hours Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <RevenueTrendChart series={data.timeSeries} currency={data.currency} />
-            <OrdersByHourChart hours={data.ordersByHour} />
-          </div>
+          {activeTab === 'sales' && (
+            <SalesAnalyticsView sales={data.sales} currency={currency} hasFinancialAccess={hasFinancialAccess} />
+          )}
 
-          {/* COGS, Food Cost & Profitability (Phase 28) */}
-          <CogsAnalyticsCard startDate={startDate} endDate={endDate} />
+          {activeTab === 'operations' && (
+            <OperationsAnalyticsView operations={data.operations} />
+          )}
 
-          {/* Menu Engineering & Profitability Matrix (Phase 28) */}
-          <MenuEngineeringCard currency={data.currency} />
+          {activeTab === 'menu' && (
+            <MenuAnalyticsView menu={data.menu} currency={currency} hasFinancialAccess={hasFinancialAccess} />
+          )}
 
-          {/* Payment & Menu Analytics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <PaymentAnalyticsCard payments={data.payments} currency={data.currency} />
-            <MenuAnalyticsCard items={data.menuItems} currency={data.currency} />
-          </div>
+          {activeTab === 'inventory' && (
+            <InventoryAnalyticsView inventory={data.inventory} currency={currency} hasFinancialAccess={hasFinancialAccess} />
+          )}
 
-          {/* Kitchen & Table Analytics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <KitchenAnalyticsCard kitchen={data.kitchen} />
-            <TableAnalyticsCard tables={data.tables} currency={data.currency} />
-          </div>
+          {activeTab === 'reputation' && (
+            <ReputationAnalyticsView reviews={data.reviews} />
+          )}
 
-          {/* Modifiers Performance */}
-          <ModifierAnalyticsCard modifiers={data.modifiers} currency={data.currency} />
-
-          {/* Cross-Branch Comparison (Business Owner Only) */}
-          {data.branchComparison && data.branchComparison.length > 0 && (
-            <BranchComparisonCard branches={data.branchComparison} currency={data.currency} />
+          {activeTab === 'comparison' && (
+            <BranchComparisonView
+              branches={data.branchComparison}
+              currency={currency}
+              hasFinancialAccess={hasFinancialAccess}
+              onSelectBranch={(bId) => {
+                setSelectedBranchId(bId);
+                setActiveTab('overview');
+              }}
+            />
           )}
         </div>
       )}

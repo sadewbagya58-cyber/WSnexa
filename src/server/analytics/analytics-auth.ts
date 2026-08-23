@@ -1,4 +1,5 @@
-import { resolveAuthorizationContext, can } from '@/server/auth';
+import { resolveAuthorizationContext } from '@/server/auth';
+import { can } from '@/server/auth/policy-engine';
 import { AuthorizationContext } from '@/types/authorization.types';
 import { AnalyticsError } from '@/lib/analytics/analytics-types';
 
@@ -6,81 +7,99 @@ export interface AnalyticsAuthResult {
   authContext: AuthorizationContext;
   businessId: string;
   targetBranchIds: string[];
+  authorizedBranchDetails: { id: string; name: string }[];
   isMultiBranchAuthorized: boolean;
+  hasFinancialAccess: boolean;
   currency: string;
 }
 
 /**
- * Server-only authorization guard for analytics execution.
- * Resolves AuthorizationContext, checks `reports.view` / `reports.financial.view`,
- * and intersects requested branch IDs against authorized property scope reach.
+ * Validates and enforces server-side authorization for Analytics Service queries.
+ *
+ * Checks:
+ * 1. Active business membership & authentication
+ * 2. 'reports.view' permission check via Policy Engine
+ * 3. 'reports.financial.view' permission check for financial metrics
+ * 4. Business tenant isolation (businessId)
+ * 5. Branch scoping against authContext.authorizedBranchIds
  */
 export async function requireAnalyticsAccess(
-  inputBranchId?: string | null,
-  inputBranchIds?: string[] | null
+  requestedBranchId?: string | null,
+  requestedBranchIds?: string[] | null
 ): Promise<AnalyticsAuthResult> {
-  let authContext: AuthorizationContext | null = null;
-  try {
-    authContext = await resolveAuthorizationContext();
-  } catch {
-    throw new AnalyticsError('ANALYTICS_FORBIDDEN', 'Authentication required for analytics data.');
-  }
+  // 1. Resolve full authorization context
+  const authContext = await resolveAuthorizationContext();
 
   if (!authContext || !authContext.businessId) {
-    throw new AnalyticsError('ANALYTICS_FORBIDDEN', 'Active business context required for analytics.');
+    throw new AnalyticsError('ANALYTICS_FORBIDDEN', 'Active business membership is required to access analytics.');
   }
 
-  // 1. Determine target branch candidates
-  let requestedBranches: string[] = [];
-  if (inputBranchIds && inputBranchIds.length > 0) {
-    requestedBranches = inputBranchIds;
-  } else if (inputBranchId) {
-    requestedBranches = [inputBranchId];
-  } else if (authContext.activeBranchId) {
-    requestedBranches = [authContext.activeBranchId];
+  // 2. Permission check: reports.view required
+  const canViewReports =
+    authContext.isBusinessOwner ||
+    (await can({ context: authContext, permission: 'reports.view' }));
+
+  if (!canViewReports) {
+    throw new AnalyticsError(
+      'ANALYTICS_FORBIDDEN',
+      'Permission denied: reports.view permission is required to access analytics.'
+    );
   }
 
-  // If no branch specified, fallback to all authorized branches for member
-  if (requestedBranches.length === 0) {
-    requestedBranches = authContext.authorizedBranchIds;
-  }
+  // 3. Resolve target branches against user reach
+  let authorizedTargetBranches: string[] = [];
 
-  if (requestedBranches.length === 0) {
-    throw new AnalyticsError('OUTSIDE_SCOPE', 'No authorized branch scope available for analytics.');
-  }
-
-  // 2. Authorize each branch against Policy Engine
-  const authorizedTargetBranches: string[] = [];
-  for (const bId of requestedBranches) {
-    // Member must have authorized branch scope reach
-    if (!authContext.isBusinessOwner && !authContext.authorizedBranchIds.includes(bId)) {
-      continue;
+  if (requestedBranchId && requestedBranchId !== 'all') {
+    // Check single branch request
+    if (!authContext.authorizedBranchIds.includes(requestedBranchId)) {
+      throw new AnalyticsError(
+        'OUTSIDE_SCOPE',
+        `Target branch ${requestedBranchId} is outside your authorized scope.`
+      );
     }
-
-    const branchResource = { type: 'branch' as const, id: bId };
-    const canView =
-      (await can({ context: authContext, permission: 'reports.view', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'reports.financial.view', resource: branchResource }));
-
-    if (canView) {
-      authorizedTargetBranches.push(bId);
+    authorizedTargetBranches = [requestedBranchId];
+  } else if (requestedBranchIds && requestedBranchIds.length > 0) {
+    // Intersect requested branch array with authorized branches
+    authorizedTargetBranches = requestedBranchIds.filter((bId) =>
+      authContext.authorizedBranchIds.includes(bId)
+    );
+    if (authorizedTargetBranches.length === 0) {
+      throw new AnalyticsError(
+        'OUTSIDE_SCOPE',
+        'None of the requested target branches are within your authorized scope.'
+      );
     }
+  } else {
+    // Default to all authorized branches for user
+    authorizedTargetBranches = [...authContext.authorizedBranchIds];
   }
 
   if (authorizedTargetBranches.length === 0) {
-    throw new AnalyticsError('ANALYTICS_FORBIDDEN', 'Forbidden. Reporting permissions (reports.view) required.');
+    throw new AnalyticsError('OUTSIDE_SCOPE', 'No authorized branches available for analytics.');
   }
 
-  // 3. Multi-branch authorization check
+  // 4. Financial metric permission check
+  const hasFinancialAccess =
+    authContext.isBusinessOwner ||
+    (await can({ context: authContext, permission: 'reports.financial.view' }));
+
+  // 5. Multi-branch authorization check
   const isMultiBranchAuthorized =
     authContext.isBusinessOwner ||
     (await can({ context: authContext, permission: 'reports.view' }));
+
+  // Build branch details for UI filters using authContext.branchAssignments
+  const authorizedBranchDetails = (authContext.branchAssignments || [])
+    .filter((b) => authContext.authorizedBranchIds.includes(b.branchId))
+    .map((b) => ({ id: b.branchId, name: b.branchName }));
 
   return {
     authContext,
     businessId: authContext.businessId,
     targetBranchIds: authorizedTargetBranches,
+    authorizedBranchDetails,
     isMultiBranchAuthorized,
+    hasFinancialAccess,
     currency: 'LKR', // Default business currency fallback
   };
 }

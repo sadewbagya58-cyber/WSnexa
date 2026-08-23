@@ -63,7 +63,8 @@
     "verify:phase31-management-ui": "tsx scripts/verify-phase31-management-ui.ts",
     "verify:phase31-mobile-a11y-performance": "tsx scripts/verify-phase31-mobile-a11y-performance.ts",
     "verify:phase31-closure": "tsx scripts/verify-phase31-closure.ts",
-    "verify:phase32-analytics-foundation": "tsx scripts/verify-phase32-analytics-foundation.ts"
+    "verify:phase32-analytics-foundation": "tsx scripts/verify-phase32-analytics-foundation.ts",
+    "verify:phase32-executive-analytics": "tsx scripts/verify-phase32-executive-analytics.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -32,7 +32,8 @@ export async function getInventoryAnalytics(
   businessId: string,
   branchIds: string[],
   dateRange: ResolvedDateRange,
-  currency: string
+  currency: string,
+  hasFinancialAccess: boolean = true
 ): Promise<InventoryAnalyticsResult> {
   const admin = createAdminClient();
   const primaryBranchId = branchIds[0];
@@ -127,10 +128,11 @@ export async function getInventoryAnalytics(
     },
     wasteCostCents: {
       key: 'waste_cost_cents',
-      value: totalWasteCostCents,
+      value: hasFinancialAccess ? totalWasteCostCents : null,
       unit: 'currency',
       currency,
-      quality: 'COMPLETE',
+      quality: hasFinancialAccess ? 'COMPLETE' : 'UNAVAILABLE',
+      qualityNote: hasFinancialAccess ? undefined : 'Redacted: Financial reporting permission required.',
     },
     transferVolume: {
       key: 'transfer_volume',
@@ -140,3 +142,75 @@ export async function getInventoryAnalytics(
     },
   };
 }
+
+export interface GroupedInventoryBranchMetrics {
+  branchId: string;
+  wasteCostCents: number | null;
+}
+
+/**
+ * Grouped batched analytics retrieval across authorized target branches using DB-side aggregated RPCs.
+ * Returns exactly targetBranchIds.length rows aggregated in Postgres.
+ */
+export async function getGroupedInventoryByBranch(
+  businessId: string,
+  targetBranchIds: string[],
+  dateRange: ResolvedDateRange,
+  currency: string,
+  hasFinancialAccess: boolean = true
+): Promise<Map<string, GroupedInventoryBranchMetrics>> {
+  const admin = createAdminClient();
+  const map = new Map<string, GroupedInventoryBranchMetrics>();
+
+  if (!targetBranchIds || targetBranchIds.length === 0) return map;
+
+  // 1. DB-side aggregated RPC (returns 1 row per branch)
+  const { data: rpcRows, error: rpcErr } = await admin.rpc('get_grouped_branch_inventory_summary', {
+    p_business_id: businessId,
+    p_branch_ids: targetBranchIds,
+    p_start_date: dateRange.startUtc,
+    p_end_date: dateRange.endUtc,
+  });
+
+  if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length > 0) {
+    for (const row of rpcRows) {
+      const bId = row.branch_id;
+      const wasteCents = Number(row.waste_cost_cents || 0);
+
+      map.set(bId, {
+        branchId: bId,
+        wasteCostCents: hasFinancialAccess ? wasteCents : null,
+      });
+    }
+    return map;
+  }
+
+  // 2. Fallback query if RPC is not present
+  const { data: wasteData } = await admin
+    .from('inventory_waste_records')
+    .select('branch_id, total_cost_cents')
+    .in('branch_id', targetBranchIds)
+    .gte('created_at', dateRange.startUtc)
+    .lt('created_at', dateRange.endUtc);
+
+  const branchWasteMap = new Map<string, number>();
+  for (const bId of targetBranchIds) {
+    branchWasteMap.set(bId, 0);
+  }
+
+  for (const row of wasteData || []) {
+    const cur = branchWasteMap.get(row.branch_id) || 0;
+    branchWasteMap.set(row.branch_id, cur + Number(row.total_cost_cents || 0));
+  }
+
+  for (const [bId, wasteCents] of branchWasteMap.entries()) {
+    map.set(bId, {
+      branchId: bId,
+      wasteCostCents: hasFinancialAccess ? wasteCents : null,
+    });
+  }
+
+  return map;
+}
+
+

@@ -1,11 +1,11 @@
 import { requireAnalyticsAccess } from './analytics-auth';
 import { resolveAnalyticsDateRange } from '@/lib/analytics/time-range';
-import { AnalyticsDateRange, SummaryAnalyticsDTO, ResolvedDateRange } from '@/lib/analytics/analytics-types';
-import { getSalesAnalytics, SalesAnalyticsResult } from './sales-analytics';
-import { getOperationsAnalytics, OperationsAnalyticsResult } from './operations-analytics';
+import { AnalyticsDateRange, SummaryAnalyticsDTO, ResolvedDateRange, BranchComparisonItemDTO } from '@/lib/analytics/analytics-types';
+import { getSalesAnalytics, SalesAnalyticsResult, getGroupedSalesByBranch } from './sales-analytics';
+import { getOperationsAnalytics, OperationsAnalyticsResult, getGroupedOperationsByBranch } from './operations-analytics';
 import { getMenuAnalytics, MenuAnalyticsResult } from './menu-analytics';
-import { getInventoryAnalytics, InventoryAnalyticsResult } from './inventory-analytics';
-import { getReviewAnalytics, ReviewAnalyticsResult } from './review-analytics';
+import { getInventoryAnalytics, InventoryAnalyticsResult, getGroupedInventoryByBranch } from './inventory-analytics';
+import { getReviewAnalytics, ReviewAnalyticsResult, getGroupedReviewsByBranch } from './review-analytics';
 
 export interface AnalyticsQueryInput {
   branchId?: string | null;
@@ -21,6 +21,9 @@ export interface ExecutiveOverviewDTO {
   inventory: InventoryAnalyticsResult;
   reviews: ReviewAnalyticsResult;
   summary: SummaryAnalyticsDTO;
+  branchComparison?: BranchComparisonItemDTO[];
+  authorizedBranches: { id: string; name: string }[];
+  isMultiBranchAuthorized: boolean;
 }
 
 export class AnalyticsService {
@@ -31,16 +34,18 @@ export class AnalyticsService {
     sales: SalesAnalyticsResult;
     resolvedDateRange: ResolvedDateRange;
     currency: string;
+    hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
     const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
 
-    const sales = await getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency);
+    const sales = await getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
     return {
       sales,
       resolvedDateRange: resolvedBounds,
       currency: auth.currency,
+      hasFinancialAccess: auth.hasFinancialAccess,
     };
   }
 
@@ -69,16 +74,18 @@ export class AnalyticsService {
     menu: MenuAnalyticsResult;
     resolvedDateRange: ResolvedDateRange;
     currency: string;
+    hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
     const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
 
-    const menu = await getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency);
+    const menu = await getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
     return {
       menu,
       resolvedDateRange: resolvedBounds,
       currency: auth.currency,
+      hasFinancialAccess: auth.hasFinancialAccess,
     };
   }
 
@@ -89,16 +96,18 @@ export class AnalyticsService {
     inventory: InventoryAnalyticsResult;
     resolvedDateRange: ResolvedDateRange;
     currency: string;
+    hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
     const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
 
-    const inventory = await getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency);
+    const inventory = await getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
     return {
       inventory,
       resolvedDateRange: resolvedBounds,
       currency: auth.currency,
+      hasFinancialAccess: auth.hasFinancialAccess,
     };
   }
 
@@ -121,6 +130,55 @@ export class AnalyticsService {
   }
 
   /**
+   * Computes multi-branch comparison dataset using batched grouped domain queries across authorized target branches.
+   * Query complexity is O(1) constant (4 grouped queries total) regardless of branch count.
+   */
+  static async getBranchComparison(
+    businessId: string,
+    targetBranchDetails: { id: string; name: string }[],
+    resolvedBounds: ResolvedDateRange,
+    currency: string,
+    hasFinancialAccess: boolean
+  ): Promise<BranchComparisonItemDTO[]> {
+    if (targetBranchDetails.length <= 1) {
+      return [];
+    }
+
+    const targetBranchIds = targetBranchDetails.map((b) => b.id);
+
+    // Grouped/batched retrieval: exactly 4 domain queries total across ALL target branches
+    const [salesMap, opsMap, invMap, revMap] = await Promise.all([
+      getGroupedSalesByBranch(businessId, targetBranchIds, resolvedBounds, currency, hasFinancialAccess),
+      getGroupedOperationsByBranch(businessId, targetBranchIds, resolvedBounds),
+      getGroupedInventoryByBranch(businessId, targetBranchIds, resolvedBounds, currency, hasFinancialAccess),
+      getGroupedReviewsByBranch(businessId, targetBranchIds, resolvedBounds),
+    ]);
+
+    // In-memory composition of DTOs
+    const comparisonList: BranchComparisonItemDTO[] = targetBranchDetails.map((b) => {
+      const sales = salesMap.get(b.id);
+      const ops = opsMap.get(b.id);
+      const inv = invMap.get(b.id);
+      const rev = revMap.get(b.id);
+
+      return {
+        branchId: b.id,
+        branchName: b.name,
+        grossSalesCents: sales?.grossSalesCents ?? null,
+        completedOrdersCount: sales?.completedOrdersCount ?? 0,
+        aovCents: sales?.aovCents ?? null,
+        completionRate: ops?.completionRate ?? 0,
+        avgPreparationTimeSeconds: ops?.avgPreparationTimeSeconds ?? null,
+        wasteCostCents: inv?.wasteCostCents ?? null,
+        avgRating: rev?.avgRating ?? null,
+      };
+    });
+
+    return comparisonList;
+  }
+
+
+  /**
    * Fetches complete Executive Overview combining independent domain metric families in parallel.
    */
   static async getExecutiveOverview(input: AnalyticsQueryInput): Promise<ExecutiveOverviewDTO> {
@@ -129,15 +187,31 @@ export class AnalyticsService {
 
     // Parallelize independent domain analytics queries with Promise.all
     const [sales, operations, menu, inventory, reviews] = await Promise.all([
-      getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency),
+      getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
       getOperationsAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds),
-      getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency),
-      getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency),
+      getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
+      getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
       getReviewAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds),
     ]);
 
+    // Fetch multi-branch comparison if user is authorized for multiple branches & requesting overview
+    let branchComparison: BranchComparisonItemDTO[] = [];
+    if (auth.isMultiBranchAuthorized && auth.authorizedBranchDetails.length > 1 && (!input.branchId || input.branchId === 'all')) {
+      branchComparison = await AnalyticsService.getBranchComparison(
+        auth.businessId,
+        auth.authorizedBranchDetails,
+        resolvedBounds,
+        auth.currency,
+        auth.hasFinancialAccess
+      );
+    }
+
     const dataQualityNotes: string[] = [];
     let overallQuality = sales.grossSales.quality;
+
+    if (!auth.hasFinancialAccess) {
+      dataQualityNotes.push('Financial metrics are redacted. Financial report permission required.');
+    }
 
     if (menu.estimatedFoodCost.quality === 'PARTIAL' || menu.estimatedFoodCost.qualityNote) {
       dataQualityNotes.push(menu.estimatedFoodCost.qualityNote || 'Recipe cost calculation is partial.');
@@ -173,6 +247,7 @@ export class AnalyticsService {
       currency: auth.currency,
       tenantId: auth.businessId,
       branchIds: auth.targetBranchIds,
+      hasFinancialAccess: auth.hasFinancialAccess,
     };
 
     return {
@@ -182,6 +257,9 @@ export class AnalyticsService {
       inventory,
       reviews,
       summary: summaryDTO,
+      branchComparison,
+      authorizedBranches: auth.authorizedBranchDetails,
+      isMultiBranchAuthorized: auth.isMultiBranchAuthorized,
     };
   }
 }

@@ -55,7 +55,8 @@ export async function getSalesAnalytics(
   businessId: string,
   branchIds: string[],
   dateRange: ResolvedDateRange,
-  currency: string
+  currency: string,
+  hasFinancialAccess: boolean = true
 ): Promise<SalesAnalyticsResult> {
   const admin = createAdminClient();
   const primaryBranchId = branchIds[0];
@@ -143,7 +144,7 @@ export async function getSalesAnalytics(
   const paymentBreakdown: BreakdownItemDTO[] = rawPayments.map((p) => ({
     key: p.payment_method,
     label: p.payment_method.toUpperCase(),
-    value: p.total_cents || 0,
+    value: hasFinancialAccess ? (p.total_cents || 0) : 0,
     subValue: p.transaction_count || 0,
     percentage: p.percentage || 0,
   }));
@@ -151,36 +152,40 @@ export async function getSalesAnalytics(
   const rawSeries = (timeSeriesRes as { series?: RpcTimeSeriesBucket[] })?.series || [];
   const timeSeriesPoints: TimeSeriesPointDTO[] = rawSeries.map((s) => ({
     period: s.bucket,
-    value: s.gross_sales_cents || 0,
+    value: hasFinancialAccess ? (s.gross_sales_cents || 0) : 0,
     ordersCount: s.orders_count || 0,
-    paidRevenueCents: s.paid_revenue_cents || 0,
+    paidRevenueCents: hasFinancialAccess ? (s.paid_revenue_cents || 0) : 0,
   }));
 
   const rawHours = (hourlyRes as { hours?: RpcOrdersByHourBucket[] })?.hours || [];
   const salesByHourPoints: TimeSeriesPointDTO[] = rawHours.map((h) => ({
     period: `Hour ${h.hour}`,
-    value: h.revenue_cents || 0,
+    value: hasFinancialAccess ? (h.revenue_cents || 0) : 0,
     ordersCount: h.orders_count || 0,
   }));
+
+  const financialNote = hasFinancialAccess ? undefined : 'Redacted: Financial reporting permission required.';
 
   return {
     grossSales: {
       key: 'gross_sales',
-      value: grossSalesCents,
+      value: hasFinancialAccess ? grossSalesCents : null,
       unit: 'currency',
       currency,
-      previousValue: prevGrossSalesCents,
-      ...computeMetricComparison(grossSalesCents, prevGrossSalesCents),
-      quality: 'COMPLETE',
+      previousValue: hasFinancialAccess ? prevGrossSalesCents : null,
+      ...(hasFinancialAccess ? computeMetricComparison(grossSalesCents, prevGrossSalesCents) : { absoluteChange: null, percentageChange: null }),
+      quality: hasFinancialAccess ? 'COMPLETE' : 'UNAVAILABLE',
+      qualityNote: financialNote,
     },
     netSales: {
       key: 'net_sales',
-      value: netSalesCents,
+      value: hasFinancialAccess ? netSalesCents : null,
       unit: 'currency',
       currency,
-      previousValue: prevNetSalesCents,
-      ...computeMetricComparison(netSalesCents, prevNetSalesCents),
-      quality: 'COMPLETE',
+      previousValue: hasFinancialAccess ? prevNetSalesCents : null,
+      ...(hasFinancialAccess ? computeMetricComparison(netSalesCents, prevNetSalesCents) : { absoluteChange: null, percentageChange: null }),
+      quality: hasFinancialAccess ? 'COMPLETE' : 'UNAVAILABLE',
+      qualityNote: financialNote,
     },
     completedOrders: {
       key: 'completed_orders',
@@ -216,12 +221,13 @@ export async function getSalesAnalytics(
     },
     aov: {
       key: 'aov',
-      value: aovCents,
+      value: hasFinancialAccess ? aovCents : null,
       unit: 'currency',
       currency,
-      previousValue: prevAovCents,
-      ...computeMetricComparison(aovCents, prevAovCents),
-      quality: 'COMPLETE',
+      previousValue: hasFinancialAccess ? prevAovCents : null,
+      ...(hasFinancialAccess ? computeMetricComparison(aovCents, prevAovCents) : { absoluteChange: null, percentageChange: null }),
+      quality: hasFinancialAccess ? 'COMPLETE' : 'UNAVAILABLE',
+      qualityNote: financialNote,
     },
     itemsSold: {
       key: 'items_sold',
@@ -240,3 +246,99 @@ export async function getSalesAnalytics(
     timeSeries: timeSeriesPoints,
   };
 }
+
+export interface GroupedSalesBranchMetrics {
+  branchId: string;
+  grossSalesCents: number | null;
+  completedOrdersCount: number;
+  aovCents: number | null;
+}
+
+/**
+ * Grouped batched analytics retrieval across authorized target branches using DB-side aggregated RPCs.
+ * Returns exactly targetBranchIds.length rows aggregated in Postgres.
+ */
+export async function getGroupedSalesByBranch(
+  businessId: string,
+  targetBranchIds: string[],
+  dateRange: ResolvedDateRange,
+  currency: string,
+  hasFinancialAccess: boolean = true
+): Promise<Map<string, GroupedSalesBranchMetrics>> {
+  const admin = createAdminClient();
+  const map = new Map<string, GroupedSalesBranchMetrics>();
+
+  if (!targetBranchIds || targetBranchIds.length === 0) return map;
+
+  // 1. DB-side aggregated RPC (returns 1 row per branch)
+  const { data: rpcRows, error: rpcErr } = await admin.rpc('get_grouped_branch_sales_summary', {
+    p_business_id: businessId,
+    p_branch_ids: targetBranchIds,
+    p_start_date: dateRange.startUtc,
+    p_end_date: dateRange.endUtc,
+  });
+
+  if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length > 0) {
+    for (const row of rpcRows) {
+      const bId = row.branch_id;
+      const gross = Number(row.gross_sales_cents || 0);
+      const completedCount = Number(row.completed_orders_count || 0);
+      const aov = Number(row.aov_cents || 0);
+
+      map.set(bId, {
+        branchId: bId,
+        grossSalesCents: hasFinancialAccess ? gross : null,
+        completedOrdersCount: completedCount,
+        aovCents: hasFinancialAccess ? aov : null,
+      });
+    }
+    return map;
+  }
+
+  // 2. Fallback query if RPC is not present
+  const { data: orderRows, error } = await admin
+    .from('orders')
+    .select('branch_id, status, total_cents, payment_status')
+    .in('branch_id', targetBranchIds)
+    .gte('created_at', dateRange.startUtc)
+    .lt('created_at', dateRange.endUtc);
+
+  if (error || !orderRows) {
+    return map;
+  }
+
+  const branchAggs = new Map<string, { grossCents: number; completedCount: number }>();
+  for (const bId of targetBranchIds) {
+    branchAggs.set(bId, { grossCents: 0, completedCount: 0 });
+  }
+
+  for (const row of orderRows) {
+    const agg = branchAggs.get(row.branch_id);
+    if (!agg) continue;
+
+    if (row.status === 'completed' || row.payment_status === 'paid') {
+      agg.grossCents += row.total_cents || 0;
+    }
+    if (row.status === 'completed') {
+      agg.completedCount += 1;
+    }
+  }
+
+  for (const [bId, agg] of branchAggs.entries()) {
+    const grossSalesCents = hasFinancialAccess ? agg.grossCents : null;
+    const aovCents = hasFinancialAccess
+      ? (agg.completedCount > 0 ? Math.round(agg.grossCents / agg.completedCount) : 0)
+      : null;
+
+    map.set(bId, {
+      branchId: bId,
+      grossSalesCents,
+      completedOrdersCount: agg.completedCount,
+      aovCents,
+    });
+  }
+
+  return map;
+}
+
+

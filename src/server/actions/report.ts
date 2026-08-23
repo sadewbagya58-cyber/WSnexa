@@ -1,37 +1,30 @@
 'use server';
 
-import { ReportService } from '@/server/services/report.service';
+import { AnalyticsService } from '@/server/analytics/analytics.service';
 import { reportFilterSchema, reportExportInputSchema, ReportFilterInput, ReportExportInput } from '@/lib/validation/report';
 import { generateCSV, generateXLSXTable, generateExecutivePDFHtml } from '@/lib/export/export-engine';
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { AnalyticsDatePreset } from '@/lib/analytics/analytics-types';
+
+function normalizePreset(preset: string): AnalyticsDatePreset {
+  if (preset === '7d') return 'last_7_days';
+  if (preset === '30d') return 'last_30_days';
+  return preset as AnalyticsDatePreset;
+}
 
 export async function fetchAnalyticsAction(rawInput: ReportFilterInput) {
   try {
-    const { can, resolveAuthorizationContext } = await import('@/server/auth');
-    let authContext;
-    try {
-      authContext = await resolveAuthorizationContext();
-    } catch {
-      return { success: false, message: 'Unauthorized session' };
-    }
-
-    if (!authContext) {
-      return { success: false, message: 'Unauthorized session' };
-    }
-
     const validated = reportFilterSchema.parse(rawInput);
-    const targetBranchId = validated.branchId || authContext.activeBranchId;
-    const branchResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
+    const overview = await AnalyticsService.getExecutiveOverview({
+      branchId: validated.branchId,
+      dateRange: {
+        preset: normalizePreset(validated.preset || 'today'),
+        startDate: validated.startDate,
+        endDate: validated.endDate,
+      },
+    });
 
-    const canView =
-      (await can({ context: authContext, permission: 'reports.view', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'reports.financial.view', resource: branchResource }));
-
-    if (!canView) {
-      return { success: false, message: 'Forbidden: Missing report view permission.' };
-    }
-
-    return await ReportService.getAnalyticsPayload(validated);
+    return { success: true, data: overview };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Invalid reporting parameters';
     return { success: false, message: msg };
@@ -40,42 +33,18 @@ export async function fetchAnalyticsAction(rawInput: ReportFilterInput) {
 
 export async function exportReportAction(rawInput: ReportExportInput) {
   try {
-    const { can, resolveAuthorizationContext } = await import('@/server/auth');
-    let authContext;
-    try {
-      authContext = await resolveAuthorizationContext();
-    } catch {
-      return { success: false, message: 'Unauthorized session' };
-    }
-
-    if (!authContext) {
-      return { success: false, message: 'Unauthorized session' };
-    }
-
     const validated = reportExportInputSchema.parse(rawInput);
-    const targetBranchId = validated.branchId || authContext.activeBranchId;
-    const branchResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
-
-    const canExport =
-      (await can({ context: authContext, permission: 'reports.export', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'reports.view', resource: branchResource }));
-
-    if (!canExport) {
-      return { success: false, message: 'Forbidden: Missing report export permission.' };
-    }
-
-    const analyticsRes = await ReportService.getAnalyticsPayload({
-      preset: validated.preset,
-      startDate: validated.startDate,
-      endDate: validated.endDate,
+    const overview = await AnalyticsService.getExecutiveOverview({
       branchId: validated.branchId,
+      dateRange: {
+        preset: normalizePreset(validated.preset || 'today'),
+        startDate: validated.startDate,
+        endDate: validated.endDate,
+      },
     });
 
-    if (!analyticsRes.success || !analyticsRes.data) {
-      return { success: false, message: analyticsRes.message || 'Failed to generate report dataset.' };
-    }
-
-    const { summary, menuItems, payments, currency, branchName, businessName, dateRangeLabel } = analyticsRes.data;
+    const { sales, menu, summary, branchComparison } = overview;
+    const currency = summary.currency;
     const title = `${validated.reportType.replace(/_/g, ' ').toUpperCase()} REPORT`;
 
     let headers: string[] = [];
@@ -84,22 +53,36 @@ export async function exportReportAction(rawInput: ReportExportInput) {
     switch (validated.reportType) {
       case 'menu_performance':
         headers = ['Item Name', 'Quantity Sold', 'Total Revenue', 'Orders Count', 'Average Price'];
-        rows = menuItems.map((item) => [
-          item.item_name,
-          item.quantity_sold,
-          formatCurrency(item.total_revenue_cents, currency),
-          item.orders_count,
-          formatCurrency(item.avg_price_cents, currency),
+        rows = menu.topSellingItems.map((item) => [
+          item.itemName,
+          item.quantitySold,
+          item.revenueCents !== null ? formatCurrency(item.revenueCents, currency) : 'N/A',
+          item.orderCount,
+          item.avgPriceCents !== null ? formatCurrency(item.avgPriceCents, currency) : 'N/A',
         ]);
         break;
 
       case 'payment_breakdown':
         headers = ['Payment Method', 'Transaction Count', 'Total Paid', 'Percentage of Revenue'];
-        rows = payments.map((p) => [
-          p.payment_method.toUpperCase(),
-          p.transaction_count,
-          formatCurrency(p.total_cents, currency),
+        rows = sales.salesByPaymentMethod.map((p) => [
+          p.label,
+          p.subValue || 0,
+          formatCurrency(p.value, currency),
           `${p.percentage}%`,
+        ]);
+        break;
+
+      case 'branch_comparison':
+        headers = ['Branch Name', 'Gross Sales', 'Completed Orders', 'AOV', 'Completion Rate', 'Kitchen Prep Time', 'Waste Cost', 'Avg Rating'];
+        rows = (branchComparison || []).map((b) => [
+          b.branchName,
+          b.grossSalesCents !== null ? formatCurrency(b.grossSalesCents, currency) : 'N/A',
+          b.completedOrdersCount,
+          b.aovCents !== null ? formatCurrency(b.aovCents, currency) : 'N/A',
+          b.completionRate !== null ? `${b.completionRate}%` : 'N/A',
+          b.avgPreparationTimeSeconds !== null ? `${Math.round(b.avgPreparationTimeSeconds / 60)}m` : 'N/A',
+          b.wasteCostCents !== null ? formatCurrency(b.wasteCostCents, currency) : 'N/A',
+          b.avgRating !== null ? `${b.avgRating} ★` : 'N/A',
         ]);
         break;
 
@@ -107,15 +90,14 @@ export async function exportReportAction(rawInput: ReportExportInput) {
       default:
         headers = ['Metric', 'Value'];
         rows = [
-          ['Total Orders', summary.total_orders],
-          ['Completed Orders', summary.completed_orders],
-          ['Cancelled Orders', summary.cancelled_orders],
-          ['Gross Sales', formatCurrency(summary.gross_sales_cents, currency)],
-          ['Paid Revenue', formatCurrency(summary.paid_revenue_cents, currency)],
-          ['Outstanding Balance', formatCurrency(summary.outstanding_balance_cents, currency)],
-          ['Average Order Value', formatCurrency(summary.aov_cents, currency)],
-          ['Top Selling Item', summary.top_item_name],
-          ['Top Category', summary.top_category_name],
+          ['Gross Sales', sales.grossSales.value !== null ? formatCurrency(sales.grossSales.value, currency) : 'Redacted'],
+          ['Net Sales', sales.netSales.value !== null ? formatCurrency(sales.netSales.value, currency) : 'Redacted'],
+          ['Completed Orders', sales.completedOrders.value || 0],
+          ['Placed Orders', sales.placedOrders.value || 0],
+          ['Cancelled Orders', sales.cancelledOrders.value || 0],
+          ['Rejected Orders', sales.rejectedOrders.value || 0],
+          ['Average Order Value', sales.aov.value !== null ? formatCurrency(sales.aov.value, currency) : 'Redacted'],
+          ['Items Sold', sales.itemsSold.value || 0],
         ];
         break;
     }
@@ -129,27 +111,27 @@ export async function exportReportAction(rawInput: ReportExportInput) {
       mimeType = 'text/csv';
       filename += '.csv';
     } else if (validated.format === 'xlsx') {
-      fileContent = generateXLSXTable(title, businessName, branchName, headers, rows, [
-        { label: 'Total Paid Revenue', value: formatCurrency(summary.paid_revenue_cents, currency) },
+      fileContent = generateXLSXTable(title, 'WSNexa', 'Selected Scope', headers, rows, [
+        { label: 'Total Orders', value: String(sales.completedOrders.value || 0) },
       ]);
       mimeType = 'application/vnd.ms-excel';
       filename += '.xls';
     } else if (validated.format === 'pdf') {
       fileContent = generateExecutivePDFHtml({
         title,
-        businessName,
-        branchName,
-        dateRangeLabel,
+        businessName: 'WSNexa',
+        branchName: 'Selected Scope',
+        dateRangeLabel: summary.resolvedDateRange.label,
         currency,
         summary: {
-          totalOrders: summary.total_orders,
-          completedOrders: summary.completed_orders,
-          grossSalesCents: summary.gross_sales_cents,
-          paidRevenueCents: summary.paid_revenue_cents,
-          outstandingBalanceCents: summary.outstanding_balance_cents,
-          aovCents: summary.aov_cents,
-          topItemName: summary.top_item_name,
-          topCategoryName: summary.top_category_name,
+          totalOrders: sales.placedOrders.value || 0,
+          completedOrders: sales.completedOrders.value || 0,
+          grossSalesCents: sales.grossSales.value || 0,
+          paidRevenueCents: sales.netSales.value || 0,
+          outstandingBalanceCents: 0,
+          aovCents: sales.aov.value || 0,
+          topItemName: menu.topSellingItems[0]?.itemName || 'N/A',
+          topCategoryName: menu.categorySales[0]?.label || 'N/A',
         },
         tableHeaders: headers,
         tableRows: rows,

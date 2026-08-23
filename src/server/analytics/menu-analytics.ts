@@ -4,10 +4,10 @@ import { ResolvedDateRange, MetricValueDTO, BreakdownItemDTO, AnalyticsError, Da
 export interface MenuPerformanceItem {
   itemName: string;
   quantitySold: number;
-  revenueCents: number;
+  revenueCents: number | null;
   orderCount: number;
   penetrationRate: number;
-  avgPriceCents: number;
+  avgPriceCents: number | null;
 }
 
 export interface MenuAnalyticsResult {
@@ -53,7 +53,8 @@ export async function getMenuAnalytics(
   businessId: string,
   branchIds: string[],
   dateRange: ResolvedDateRange,
-  currency: string
+  currency: string,
+  hasFinancialAccess: boolean = true
 ): Promise<MenuAnalyticsResult> {
   const admin = createAdminClient();
   const primaryBranchId = branchIds[0];
@@ -87,10 +88,10 @@ export async function getMenuAnalytics(
   const topSellingItems: MenuPerformanceItem[] = rawItems.map((item) => ({
     itemName: item.item_name,
     quantitySold: item.quantity_sold || 0,
-    revenueCents: item.total_revenue_cents || 0,
+    revenueCents: hasFinancialAccess ? (item.total_revenue_cents || 0) : null,
     orderCount: item.orders_count || 0,
     penetrationRate: completedOrdersCount > 0 ? Number(((item.orders_count / completedOrdersCount) * 100).toFixed(2)) : 0,
-    avgPriceCents: item.avg_price_cents || 0,
+    avgPriceCents: hasFinancialAccess ? (item.avg_price_cents || 0) : null,
   }));
 
   // 3. Category Sales Aggregation
@@ -118,7 +119,7 @@ export async function getMenuAnalytics(
   const categorySales: BreakdownItemDTO[] = Array.from(catMap.entries()).map(([key, val]) => ({
     key,
     label: val.label,
-    value: val.revenue,
+    value: hasFinancialAccess ? val.revenue : 0,
     subValue: val.qty,
     percentage: totalCatRevenue > 0 ? Number(((val.revenue / totalCatRevenue) * 100).toFixed(2)) : 0,
   }));
@@ -135,54 +136,62 @@ export async function getMenuAnalytics(
   const modifierPerformance: BreakdownItemDTO[] = rawModifiers.map((m) => ({
     key: `${m.group_name}:${m.option_name}`,
     label: `${m.group_name} - ${m.option_name}`,
-    value: m.additional_revenue_cents || 0,
+    value: hasFinancialAccess ? (m.additional_revenue_cents || 0) : 0,
     subValue: m.selections_count || 0,
   }));
 
   // 5. Recipe BOM Costing & Contribution Margin Calculations
-  const { data: recipesData } = await admin
-    .from('recipes')
-    .select('menu_item_id, cost_per_unit_cents')
-    .eq('business_id', businessId);
-
-  const recipeCostMap = new Map<string, number>();
-  ((recipesData || []) as { menu_item_id: string | null; cost_per_unit_cents: number | null }[]).forEach((r) => {
-    if (r.menu_item_id && r.cost_per_unit_cents !== null) {
-      recipeCostMap.set(r.menu_item_id, r.cost_per_unit_cents);
-    }
-  });
-
-  let totalFoodCostCents = 0;
-  let itemsWithCostCount = 0;
-  let totalSoldItemsCount = 0;
-
-  categoryRows.forEach((row) => {
-    const menuItemId = row.menu_items?.id;
-    const qty = row.quantity || 0;
-    totalSoldItemsCount += qty;
-
-    if (menuItemId && recipeCostMap.has(menuItemId)) {
-      totalFoodCostCents += recipeCostMap.get(menuItemId)! * qty;
-      itemsWithCostCount += qty;
-    }
-  });
-
+  let estimatedFoodCostVal: number | null = null;
+  let contributionMarginVal: number | null = null;
   let quality: DataQualityFlag = 'COMPLETE';
   let qualityNote: string | undefined = undefined;
 
-  if (totalSoldItemsCount === 0) {
+  if (!hasFinancialAccess) {
     quality = 'UNAVAILABLE';
-    qualityNote = 'No menu items sold during date range.';
-  } else if (itemsWithCostCount === 0) {
-    quality = 'UNAVAILABLE';
-    qualityNote = 'No recipe costing data available for sold menu items.';
-  } else if (itemsWithCostCount < totalSoldItemsCount) {
-    quality = 'PARTIAL';
-    qualityNote = `Estimated food cost covers ${itemsWithCostCount} of ${totalSoldItemsCount} sold item units.`;
-  }
+    qualityNote = 'Redacted: Financial reporting permission required.';
+  } else {
+    const { data: recipesData } = await admin
+      .from('recipes')
+      .select('menu_item_id, cost_per_unit_cents')
+      .eq('business_id', businessId);
 
-  const grossSalesVal = summaryData?.gross_sales_cents || 0;
-  const marginVal = (quality !== 'UNAVAILABLE') ? grossSalesVal - totalFoodCostCents : null;
+    const recipeCostMap = new Map<string, number>();
+    ((recipesData || []) as { menu_item_id: string | null; cost_per_unit_cents: number | null }[]).forEach((r) => {
+      if (r.menu_item_id && r.cost_per_unit_cents !== null) {
+        recipeCostMap.set(r.menu_item_id, r.cost_per_unit_cents);
+      }
+    });
+
+    let totalFoodCostCents = 0;
+    let itemsWithCostCount = 0;
+    let totalSoldItemsCount = 0;
+
+    categoryRows.forEach((row) => {
+      const menuItemId = row.menu_items?.id;
+      const qty = row.quantity || 0;
+      totalSoldItemsCount += qty;
+
+      if (menuItemId && recipeCostMap.has(menuItemId)) {
+        totalFoodCostCents += recipeCostMap.get(menuItemId)! * qty;
+        itemsWithCostCount += qty;
+      }
+    });
+
+    if (totalSoldItemsCount === 0) {
+      quality = 'UNAVAILABLE';
+      qualityNote = 'No menu items sold during date range.';
+    } else if (itemsWithCostCount === 0) {
+      quality = 'UNAVAILABLE';
+      qualityNote = 'No recipe costing data available for sold menu items.';
+    } else if (itemsWithCostCount < totalSoldItemsCount) {
+      quality = 'PARTIAL';
+      qualityNote = `Estimated food cost covers ${itemsWithCostCount} of ${totalSoldItemsCount} sold item units.`;
+    }
+
+    const grossSalesVal = summaryData?.gross_sales_cents || 0;
+    estimatedFoodCostVal = quality !== 'UNAVAILABLE' ? totalFoodCostCents : null;
+    contributionMarginVal = quality !== 'UNAVAILABLE' ? grossSalesVal - totalFoodCostCents : null;
+  }
 
   return {
     topSellingItems,
@@ -190,7 +199,7 @@ export async function getMenuAnalytics(
     modifierPerformance,
     estimatedFoodCost: {
       key: 'estimated_food_cost',
-      value: quality !== 'UNAVAILABLE' ? totalFoodCostCents : null,
+      value: estimatedFoodCostVal,
       unit: 'currency',
       currency,
       quality,
@@ -198,7 +207,7 @@ export async function getMenuAnalytics(
     },
     contributionMargin: {
       key: 'contribution_margin',
-      value: marginVal,
+      value: contributionMarginVal,
       unit: 'currency',
       currency,
       quality,

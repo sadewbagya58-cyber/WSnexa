@@ -103,3 +103,76 @@ export async function getReviewAnalytics(
     },
   };
 }
+
+export interface GroupedReviewBranchMetrics {
+  branchId: string;
+  avgRating: number | null;
+}
+
+/**
+ * Grouped batched analytics retrieval across authorized target branches using DB-side aggregated RPCs.
+ * Returns exactly targetBranchIds.length rows aggregated in Postgres.
+ */
+export async function getGroupedReviewsByBranch(
+  businessId: string,
+  targetBranchIds: string[],
+  dateRange: ResolvedDateRange
+): Promise<Map<string, GroupedReviewBranchMetrics>> {
+  const admin = createAdminClient();
+  const map = new Map<string, GroupedReviewBranchMetrics>();
+
+  if (!targetBranchIds || targetBranchIds.length === 0) return map;
+
+  // 1. DB-side aggregated RPC (returns 1 row per branch)
+  const { data: rpcRows, error: rpcErr } = await admin.rpc('get_grouped_branch_reviews_summary', {
+    p_business_id: businessId,
+    p_branch_ids: targetBranchIds,
+    p_start_date: dateRange.startUtc,
+    p_end_date: dateRange.endUtc,
+  });
+
+  if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length > 0) {
+    for (const row of rpcRows) {
+      const bId = row.branch_id;
+      const avg = row.avg_rating !== null ? Number(row.avg_rating) : null;
+
+      map.set(bId, {
+        branchId: bId,
+        avgRating: avg,
+      });
+    }
+    return map;
+  }
+
+  // 2. Fallback query if RPC is not present
+  const { data: reviewsData } = await admin
+    .from('venue_reviews')
+    .select('branch_id, rating')
+    .in('branch_id', targetBranchIds)
+    .gte('created_at', dateRange.startUtc)
+    .lt('created_at', dateRange.endUtc);
+
+  const branchAggs = new Map<string, { sum: number; count: number }>();
+  for (const bId of targetBranchIds) {
+    branchAggs.set(bId, { sum: 0, count: 0 });
+  }
+
+  for (const row of reviewsData || []) {
+    const agg = branchAggs.get(row.branch_id);
+    if (!agg) continue;
+    agg.sum += Number(row.rating || 0);
+    agg.count += 1;
+  }
+
+  for (const [bId, agg] of branchAggs.entries()) {
+    const avgRating = agg.count > 0 ? Number((agg.sum / agg.count).toFixed(2)) : null;
+    map.set(bId, {
+      branchId: bId,
+      avgRating,
+    });
+  }
+
+  return map;
+}
+
+

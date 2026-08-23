@@ -26,10 +26,25 @@ export async function fetchAnalyticsAction(rawInput: ReportFilterInput) {
 
     return { success: true, data: overview };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Invalid reporting parameters';
+    console.error('[fetchAnalyticsAction Error]:', err);
+    let msg = 'Analytics are temporarily unavailable. Please try again later.';
+    if (err instanceof Error) {
+      if (
+        err.message.includes('column') ||
+        err.message.includes('relation') ||
+        err.message.includes('syntax') ||
+        err.message.includes('Postgres') ||
+        err.message.includes('DATABASE_ERROR')
+      ) {
+        msg = 'Executive analytics are temporarily unavailable due to a system issue. Please try again later.';
+      } else {
+        msg = err.message;
+      }
+    }
     return { success: false, message: msg };
   }
 }
+
 
 export async function exportReportAction(rawInput: ReportExportInput) {
   try {

@@ -233,13 +233,17 @@ async function runExecutiveAnalyticsVerification() {
   const invViewPath = path.join(rootDir, 'src/components/reports/inventory-analytics-view.tsx');
   const invViewContent = fs.readFileSync(invViewPath, 'utf8');
   assert(invViewContent.includes('Low Stock Items') && invViewContent.includes('Out of Stock Items'), '31. Low/Out of stock summary present');
-  console.log('  ✅ [PASS] 31. Low stock & Out-of-stock summary present');
+  const invEngineContentF = fs.readFileSync(path.join(rootDir, 'src/server/analytics/inventory-analytics.ts'), 'utf8');
+  assert(invEngineContentF.includes('inventory_balances(current_quantity, branch_id)'), '31b. Inventory analytics uses canonical current_quantity balance column');
+  console.log('  ✅ [PASS] 31. Low stock & Out-of-stock summary present with canonical current_quantity balance field');
   passed++;
 
   // 32. Waste metrics
-  assert(invViewContent.includes('Recorded Waste Cost') || invViewContent.includes('wasteCostCents'), '32. Waste metrics present');
+  assert(invEngineContentF.includes('inventory_waste_records') && invEngineContentF.includes('total_cost_cents'), '32. Waste metrics present');
   console.log('  ✅ [PASS] 32. Ingredient waste metrics present');
   passed++;
+
+
 
   // 33. Rating distribution
   const repViewPath = path.join(rootDir, 'src/components/reports/reputation-analytics-view.tsx');
@@ -303,6 +307,9 @@ async function runExecutiveAnalyticsVerification() {
   assert(migrationContent.includes('p_business_id IS NULL') && migrationContent.includes('p_start_date >= p_end_date'), '37o. Input validation and guard clauses enforced in RPC SQL');
   assert(migrationContent.includes('o.business_id = p_business_id') && migrationContent.includes('w.business_id = p_business_id'), '37p. SQL predicates enforce double business_id and branch_id isolation');
 
+  const forwardMigrationPath = path.join(rootDir, 'supabase/migrations/20260823183000_fix_phase32_inventory_analytics_schema.sql');
+  assert(fs.existsSync(forwardMigrationPath), '37q. Forward migration 20260823183000_fix_phase32_inventory_analytics_schema.sql exists');
+
   console.log('  ✅ [PASS] 37. Batched multi-branch comparison retrieves metrics via 4 SECURITY DEFINER RPCs restricted exclusively to service_role with fixed search_path (O(1) query complexity)');
   passed++;
 
@@ -339,7 +346,8 @@ async function runExecutiveAnalyticsVerification() {
   passed++;
 
   // 43. Safe error state exists
-  assert(dashboardComponentContent.includes('errorMsg'), '43. Error banner present');
+  const reportActionContent = fs.readFileSync(path.join(rootDir, 'src/server/actions/report.ts'), 'utf8');
+  assert(dashboardComponentContent.includes('errorMsg') && reportActionContent.includes('err.message.includes(\'column\')'), '43. Error banner present with safe error message sanitization');
   console.log('  ✅ [PASS] 43. User-friendly error banners present without raw SQL/Postgres leaks');
   passed++;
 
@@ -348,16 +356,20 @@ async function runExecutiveAnalyticsVerification() {
   console.log('  ✅ [PASS] 44. Data quality status (PARTIAL/UNAVAILABLE notes) exposed to user');
   passed++;
 
-  // 45. Mobile responsive patterns exist
+  // 45. Mobile responsive patterns & high contrast styling
   const filterBarContent = fs.readFileSync(filterBarPath, 'utf8');
   assert(filterBarContent.includes('flex-col md:flex-row'), '45. Filter bar uses mobile flex-col grid');
-  console.log('  ✅ [PASS] 45. Mobile responsive layout patterns (flex-col md:flex-row) present');
+  assert(dashboardComponentContent.includes('text-zinc-900 dark:text-white'), '45b. Executive Analytics header title uses readable light/dark contrast');
+  assert(dashboardComponentContent.includes('bg-amber-500 text-zinc-950 font-black'), '45c. Active and inactive tabs use distinct high contrast styling');
+  assert(filterBarContent.includes('Authorized Scope') && filterBarContent.includes('All Authorized Branches'), '45d. Branch selector displays explicit branch scope for single and multi-branch users');
+  console.log('  ✅ [PASS] 45. Mobile responsive layout patterns and accessible high-contrast typography present');
   passed++;
 
   // 46. Touch targets >= 44px
   assert(filterBarContent.includes('min-h-[44px]') && dashboardComponentContent.includes('min-h-[44px]'), '46. Touch targets enforce min-h-[44px]');
   console.log('  ✅ [PASS] 46. Minimum 44px x 44px touch targets enforced on interactive controls');
   passed++;
+
 
   // 47. Accessibility labels present
   assert(filterBarContent.includes('aria-label') && timeSeriesComponentContent.includes('title'), '47. Accessibility labels present');
@@ -385,11 +397,12 @@ async function runExecutiveAnalyticsVerification() {
   passed++;
 
   // 51. Server-first data retrieval preserved
-  const reportActionPath = path.join(rootDir, 'src/server/actions/report.ts');
-  const reportActionContent = fs.readFileSync(reportActionPath, 'utf8');
-  assert(reportActionContent.includes('AnalyticsService.getExecutiveOverview'), '51. Server action delegates data retrieval to AnalyticsService');
+  const reportActionPathI = path.join(rootDir, 'src/server/actions/report.ts');
+  const reportActionContentI = fs.readFileSync(reportActionPathI, 'utf8');
+  assert(reportActionContentI.includes('AnalyticsService.getExecutiveOverview'), '51. Server action delegates data retrieval to AnalyticsService');
   console.log('  ✅ [PASS] 51. Server-first data retrieval preserved via server actions and AnalyticsService');
   passed++;
+
 
   console.log('\n================================================================');
   console.log(`  Executive Analytics Verification Complete: ALL ${passed} ASSERTIONS PASSED`);

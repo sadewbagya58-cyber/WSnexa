@@ -70,28 +70,37 @@ export function AnalyticsFilterBar({
 
         {/* Right: Branch Selector */}
         <div className="flex items-center gap-2">
-          <label htmlFor="analytics-branch-select" className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0">
+          <label htmlFor="analytics-branch-select" className="text-xs font-bold text-zinc-400 dark:text-zinc-400 uppercase tracking-wider shrink-0">
             Branch:
           </label>
-          <select
-            id="analytics-branch-select"
-            aria-label="Select Target Branch for Analytics"
-            value={selectedBranchId}
-            onChange={(e) => onBranchChange(e.target.value)}
-            disabled={isLoading}
-            className="bg-zinc-800 border border-zinc-700 text-white text-xs font-medium rounded-xl px-3 py-2 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer disabled:opacity-50"
-          >
-            {isMultiBranchAuthorized && authorizedBranches.length > 1 && (
+          {isMultiBranchAuthorized && authorizedBranches.length > 1 ? (
+            <select
+              id="analytics-branch-select"
+              aria-label="Select Target Branch for Analytics"
+              value={selectedBranchId}
+              onChange={(e) => onBranchChange(e.target.value)}
+              disabled={isLoading}
+              className="bg-zinc-800 border border-zinc-700 text-white text-xs font-semibold rounded-xl px-3 py-2 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-50"
+            >
               <option value="all">🌐 All Authorized Branches ({authorizedBranches.length})</option>
-            )}
-            {authorizedBranches.map((b) => (
-              <option key={b.id} value={b.id}>
-                📍 {b.name}
-              </option>
-            ))}
-          </select>
+              {authorizedBranches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  📍 {b.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="flex items-center gap-2 bg-zinc-800/90 border border-zinc-700 text-white text-xs font-semibold rounded-xl px-3 py-2 min-h-[44px]">
+              <span>📍</span>
+              <span>{authorizedBranches[0]?.name || 'Primary Branch'}</span>
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-500/30 ml-1">
+                Authorized Scope
+              </span>
+            </div>
+          )}
         </div>
       </div>
+
 
       {/* Custom Date Picker Inputs */}
       {preset === 'custom' && (

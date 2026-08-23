@@ -77,12 +77,12 @@ export function ReportsDashboard() {
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
-          <h1 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
+          <h1 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
             <span>📈</span> Executive Analytics & Intelligence
           </h1>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
             Real-time business performance, revenue trends, kitchen efficiency & multi-branch intelligence
           </p>
         </div>
@@ -122,7 +122,7 @@ export function ReportsDashboard() {
 
       {/* Data Quality Notice Banner */}
       {data?.summary.dataQualityNotes && data.summary.dataQualityNotes.length > 0 && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs font-medium space-y-1">
+        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-600 dark:text-amber-300 text-xs font-medium space-y-1">
           {data.summary.dataQualityNotes.map((note, i) => (
             <div key={i} className="flex items-center gap-2">
               <span>ℹ️</span> <span>{note}</span>
@@ -132,7 +132,7 @@ export function ReportsDashboard() {
       )}
 
       {/* Internal Navigation Tabs */}
-      <div className="flex overflow-x-auto border-b border-zinc-800 gap-1 pb-1">
+      <div className="flex overflow-x-auto border-b border-zinc-200 dark:border-zinc-800 gap-1.5 pb-1">
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -140,10 +140,10 @@ export function ReportsDashboard() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap min-h-[44px] flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-xs rounded-xl transition-all whitespace-nowrap min-h-[44px] flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                 active
-                  ? 'bg-zinc-800 text-amber-400 border border-amber-500/30 shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  ? 'bg-amber-500 text-zinc-950 font-black shadow-md border border-amber-400'
+                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-bold hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800'
               }`}
             >
               <span>{tab.icon}</span>
@@ -152,6 +152,7 @@ export function ReportsDashboard() {
           );
         })}
       </div>
+
 
       {/* Loading Skeletons */}
       {isLoading && (

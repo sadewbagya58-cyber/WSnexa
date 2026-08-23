@@ -13,7 +13,7 @@ export interface InventoryAnalyticsResult {
 interface InventoryItemRow {
   id: string;
   min_reorder_level?: number | null;
-  inventory_balances?: { quantity?: number | null }[];
+  inventory_balances?: { current_quantity?: number | null; branch_id?: string }[];
 }
 
 interface WasteRecordRow {
@@ -21,7 +21,7 @@ interface WasteRecordRow {
   total_cost_cents?: number | null;
 }
 
-interface TransferRow {
+interface TransferItemRow {
   quantity?: number | null;
 }
 
@@ -42,15 +42,16 @@ export async function getInventoryAnalytics(
     throw new AnalyticsError('OUTSIDE_SCOPE', 'No target branch specified for inventory analytics.');
   }
 
-  // 1. Current Stock Balances & Low/Out-of-Stock Counts
+  // 1. Current Stock Balances & Low/Out-of-Stock Counts (using canonical current_quantity column)
   const { data: itemsData, error: itemsErr } = await admin
     .from('inventory_items')
-    .select('id, min_reorder_level, inventory_balances(quantity)')
+    .select('id, min_reorder_level, inventory_balances(current_quantity, branch_id)')
     .eq('business_id', businessId)
     .eq('is_active', true);
 
   if (itemsErr) {
-    throw new AnalyticsError('DATABASE_ERROR', `Failed to query inventory balances: ${itemsErr.message}`);
+    console.error('[getInventoryAnalytics Error]:', itemsErr);
+    throw new AnalyticsError('DATABASE_ERROR', 'Inventory analytics are temporarily unavailable.');
   }
 
   let totalStockQty = 0;
@@ -59,8 +60,8 @@ export async function getInventoryAnalytics(
 
   const items = (itemsData || []) as unknown as InventoryItemRow[];
   items.forEach((item) => {
-    const balances = item.inventory_balances || [];
-    const itemStock = balances.reduce((sum: number, b) => sum + Number(b.quantity || 0), 0);
+    const balances = (item.inventory_balances || []).filter((b) => !b.branch_id || b.branch_id === primaryBranchId);
+    const itemStock = balances.reduce((sum: number, b) => sum + Number(b.current_quantity || 0), 0);
     const minLevel = Number(item.min_reorder_level || 0);
 
     totalStockQty += itemStock;
@@ -90,16 +91,17 @@ export async function getInventoryAnalytics(
   });
 
   // 3. Stock Transfers (Received Volume)
-  const { data: transferData } = await admin
-    .from('inventory_stock_transfers')
-    .select('quantity')
-    .or(`source_branch_id.eq.${primaryBranchId},destination_branch_id.eq.${primaryBranchId}`)
-    .eq('status', 'received')
-    .gte('updated_at', dateRange.startUtc)
-    .lt('updated_at', dateRange.endUtc);
+  const { data: transferItemData } = await admin
+    .from('inventory_stock_transfer_items')
+    .select('quantity, transfer:inventory_stock_transfers!inner(source_branch_id, destination_branch_id, status, updated_at)')
+    .or(`source_branch_id.eq.${primaryBranchId},destination_branch_id.eq.${primaryBranchId}`, { foreignTable: 'transfer' })
+    .eq('transfer.status', 'received')
+    .gte('transfer.updated_at', dateRange.startUtc)
+    .lt('transfer.updated_at', dateRange.endUtc);
 
-  const transferRows = (transferData || []) as TransferRow[];
-  const totalTransferVolume = transferRows.reduce((sum: number, t) => sum + Number(t.quantity || 0), 0);
+  const transferItems = (transferItemData || []) as unknown as TransferItemRow[];
+  const totalTransferVolume = transferItems.reduce((sum: number, t) => sum + Number(t.quantity || 0), 0);
+
 
   return {
     currentStock: {

@@ -15,12 +15,14 @@ interface KitchenOrderQueueProps {
   initialOrders: OrderRecord[];
   branchName: string;
   branchId: string;
+  canUpdate?: boolean;
 }
 
 export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   initialOrders,
   branchName,
   branchId,
+  canUpdate = true,
 }) => {
   const router = useRouter();
   const { orders, connectionStatus } = useRealtimeKitchen(initialOrders, branchId);
@@ -221,54 +223,62 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                     </span>
                   </div>
 
-                  {order.status === 'pending' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        className="text-xs font-bold text-red-600 hover:bg-red-50"
-                        onClick={() => handleStatusChange(order.id, 'cancelled')}
-                        disabled={isPending}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className="text-xs font-extrabold"
-                        onClick={() => handleStatusChange(order.id, 'confirmed')}
-                        disabled={isPending}
-                      >
-                        Confirm Order
-                      </Button>
+                  {canUpdate ? (
+                    <>
+                      {order.status === 'pending' && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            className="text-xs font-bold text-red-600 hover:bg-red-50"
+                            onClick={() => handleStatusChange(order.id, 'cancelled')}
+                            disabled={isPending}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            className="text-xs font-extrabold"
+                            onClick={() => handleStatusChange(order.id, 'confirmed')}
+                            disabled={isPending}
+                          >
+                            Confirm Order
+                          </Button>
+                        </div>
+                      )}
+
+                      {order.status === 'confirmed' && (
+                        <Button
+                          className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white"
+                          onClick={() => handleStatusChange(order.id, 'preparing')}
+                          disabled={isPending}
+                        >
+                          🍳 Start Preparing
+                        </Button>
+                      )}
+
+                      {order.status === 'preparing' && (
+                        <Button
+                          className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={() => handleStatusChange(order.id, 'ready')}
+                          disabled={isPending}
+                        >
+                          🔔 Mark Ready to Serve
+                        </Button>
+                      )}
+
+                      {order.status === 'ready' && (
+                        <Button
+                          className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white"
+                          onClick={() => handleStatusChange(order.id, 'completed')}
+                          disabled={isPending}
+                        >
+                          ✅ Mark Completed
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
+                      🔒 Read-Only Kitchen View
                     </div>
-                  )}
-
-                  {order.status === 'confirmed' && (
-                    <Button
-                      className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={() => handleStatusChange(order.id, 'preparing')}
-                      disabled={isPending}
-                    >
-                      🍳 Start Preparing
-                    </Button>
-                  )}
-
-                  {order.status === 'preparing' && (
-                    <Button
-                      className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => handleStatusChange(order.id, 'ready')}
-                      disabled={isPending}
-                    >
-                      🔔 Mark Ready to Serve
-                    </Button>
-                  )}
-
-                  {order.status === 'ready' && (
-                    <Button
-                      className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white"
-                      onClick={() => handleStatusChange(order.id, 'completed')}
-                      disabled={isPending}
-                    >
-                      ✅ Mark Completed
-                    </Button>
                   )}
                 </div>
               </div>

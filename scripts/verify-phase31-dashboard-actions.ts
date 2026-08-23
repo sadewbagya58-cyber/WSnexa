@@ -277,6 +277,41 @@ async function runVerification() {
   assert(paymentsPageCode.includes('requireRoutePermission'), 'Branch payments page uses requireRoutePermission route guard');
   assert(paymentsPageCode.includes('canManageBranchPayments'), 'Branch payments page evaluates branches.manage permission');
 
+  // Operational Role Boundary Hardening (Kitchen, Cashier POS, Waiter Assistance)
+  const kitchenPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'kitchen', 'page.tsx');
+  const kitchenPageCode = fs.readFileSync(kitchenPagePath, 'utf8');
+  assert(kitchenPageCode.includes('requireRoutePermission'), 'Kitchen page uses requireRoutePermission route guard');
+  assert(kitchenPageCode.includes('kitchen.update'), 'Kitchen page evaluates kitchen.update permission for canUpdate prop');
+
+  const kitchenQueuePath = path.join(process.cwd(), 'src', 'components', 'kitchen', 'kitchen-order-queue.tsx');
+  const kitchenQueueCode = fs.readFileSync(kitchenQueuePath, 'utf8');
+  assert(kitchenQueueCode.includes('canUpdate = true'), 'KitchenOrderQueue accepts canUpdate prop');
+  assert(kitchenQueueCode.includes('Read-Only Kitchen View'), 'KitchenOrderQueue renders read-only indicator when canUpdate is false');
+
+  const cashierPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'cashier', 'page.tsx');
+  const cashierPageCode = fs.readFileSync(cashierPagePath, 'utf8');
+  assert(cashierPageCode.includes('requireRoutePermission'), 'Cashier page uses requireRoutePermission route guard');
+  assert(cashierPageCode.includes('payments.record'), 'Cashier page evaluates payments.record permission for canRecordPayments');
+
+  const cashierCardPath = path.join(process.cwd(), 'src', 'components', 'cashier', 'order-payment-card.tsx');
+  const cashierCardCode = fs.readFileSync(cashierCardPath, 'utf8');
+  assert(cashierCardCode.includes('canRecordPayments'), 'OrderPaymentCard evaluates canRecordPayments prop for settlement actions');
+
+  const waiterPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'waiter', 'page.tsx');
+  const waiterPageCode = fs.readFileSync(waiterPagePath, 'utf8');
+  assert(waiterPageCode.includes('requireRoutePermission'), 'Waiter page uses requireRoutePermission route guard');
+  assert(waiterPageCode.includes('waiter.requests.manage'), 'Waiter page evaluates waiter.requests.manage permission for canManageRequests');
+
+  const waiterCenterPath = path.join(process.cwd(), 'src', 'components', 'waiter', 'waiter-request-center.tsx');
+  const waiterCenterCode = fs.readFileSync(waiterCenterPath, 'utf8');
+  assert(waiterCenterCode.includes('canManageRequests'), 'WaiterRequestCenter evaluates canManageRequests prop');
+  assert(waiterCenterCode.includes('Read-Only Waiter View'), 'WaiterRequestCenter renders read-only indicator when canManageRequests is false');
+
+  const waiterOrderPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'waiter', 'order', 'page.tsx');
+  const waiterOrderPageCode = fs.readFileSync(waiterOrderPagePath, 'utf8');
+  assert(waiterOrderPageCode.includes('requireRoutePermission'), 'Waiter Order page uses requireRoutePermission route guard');
+  assert(waiterOrderPageCode.includes('canCreateOrders'), 'Waiter Order page evaluates canCreateOrders permission');
+
   // --- C. Explicit DENY & Scope Invariants ---
   console.log('\n--- C. Explicit DENY & Scope Invariants ---');
 

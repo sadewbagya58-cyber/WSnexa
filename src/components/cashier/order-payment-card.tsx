@@ -11,6 +11,7 @@ interface OrderPaymentCardProps {
   onSettlePayment: (order: CashierOrderRecord) => void;
   onPrintReceipt: (orderId: string) => void;
   onAcknowledgeBill?: (requestId: string) => void;
+  canRecordPayments?: boolean;
 }
 
 export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
@@ -18,6 +19,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
   onSettlePayment,
   onPrintReceipt,
   onAcknowledgeBill,
+  canRecordPayments = true,
 }) => {
   const formattedTime = new Date(order.created_at).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -177,7 +179,8 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
         {order.balance_due_cents > 0 ? (
           <Button
             size="sm"
-            className="flex-1 text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white"
+            disabled={!canRecordPayments}
+            className="flex-1 text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white disabled:opacity-50"
             onClick={() => onSettlePayment(order)}
           >
             💳 Settle ({formatCurrency(order.balance_due_cents, order.currency)})

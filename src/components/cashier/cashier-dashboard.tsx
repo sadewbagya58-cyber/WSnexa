@@ -16,6 +16,7 @@ interface CashierDashboardProps {
   branchName: string;
   businessName: string;
   initialOrders: CashierOrderRecord[];
+  canRecordPayments?: boolean;
 }
 
 type TabFilter = 'all' | 'unpaid' | 'partially_paid' | 'paid' | 'completed' | 'cancelled';
@@ -25,6 +26,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
   branchName,
   businessName,
   initialOrders,
+  canRecordPayments = true,
 }) => {
   const [orders, setOrders] = useState<CashierOrderRecord[]>(initialOrders);
   const [activeTab, setActiveTab] = useState<TabFilter>('unpaid');
@@ -247,6 +249,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
             <OrderPaymentCard
               key={order.id}
               order={order}
+              canRecordPayments={canRecordPayments}
               onSettlePayment={(o) => setSelectedSettlementOrder(o)}
               onPrintReceipt={(id) => setReceiptOrderId(id)}
               onAcknowledgeBill={handleAcknowledgeBill}

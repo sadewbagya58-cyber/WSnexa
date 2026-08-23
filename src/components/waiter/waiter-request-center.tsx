@@ -15,6 +15,7 @@ interface WaiterRequestCenterProps {
   branchName: string;
   branchId: string;
   assignedAreaIds?: string[] | null;
+  canManageRequests?: boolean;
 }
 
 export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
@@ -22,6 +23,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   branchName,
   branchId,
   assignedAreaIds,
+  canManageRequests = true,
 }) => {
   const router = useRouter();
   const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
@@ -63,7 +65,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
       )}
 
       {/* Pending Guest Order Approvals Section */}
-      <PendingOrderApprovalsSection branchId={branchId} />
+      <PendingOrderApprovalsSection branchId={branchId} canManageRequests={canManageRequests} />
 
       {/* Header controls & Realtime status */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
@@ -162,34 +164,42 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                 </div>
 
                 <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 gap-2">
-                  {req.status === 'pending' && (
+                  {canManageRequests ? (
                     <>
-                      <Button
-                        variant="outline"
-                        className="text-xs font-bold"
-                        onClick={() => handleStatusChange(req.id, 'accepted')}
-                        disabled={isPending}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
-                        onClick={() => handleStatusChange(req.id, 'completed')}
-                        disabled={isPending}
-                      >
-                        Complete
-                      </Button>
-                    </>
-                  )}
+                      {req.status === 'pending' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="text-xs font-bold"
+                            onClick={() => handleStatusChange(req.id, 'accepted')}
+                            disabled={isPending}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => handleStatusChange(req.id, 'completed')}
+                            disabled={isPending}
+                          >
+                            Complete
+                          </Button>
+                        </>
+                      )}
 
-                  {req.status === 'accepted' && (
-                    <Button
-                      className="col-span-2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => handleStatusChange(req.id, 'completed')}
-                      disabled={isPending}
-                    >
-                      Mark Completed
-                    </Button>
+                      {req.status === 'accepted' && (
+                        <Button
+                          className="col-span-2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={() => handleStatusChange(req.id, 'completed')}
+                          disabled={isPending}
+                        >
+                          Mark Completed
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="col-span-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
+                      🔒 Read-Only Waiter View
+                    </div>
                   )}
                 </div>
               </div>
@@ -201,7 +211,13 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   );
 };
 
-function PendingOrderApprovalsSection({ branchId }: { branchId: string }) {
+function PendingOrderApprovalsSection({
+  branchId,
+  canManageRequests = true,
+}: {
+  branchId: string;
+  canManageRequests?: boolean;
+}) {
   const [approvals, setApprovals] = React.useState<OrderRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [processingId, setProcessingId] = React.useState<string | null>(null);
@@ -340,28 +356,34 @@ function PendingOrderApprovalsSection({ branchId }: { branchId: string }) {
               </div>
             </div>
 
-            <div className="pt-2 flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleReject(ord.id)}
-                disabled={processingId === ord.id}
-                className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px]"
-              >
-                Reject
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={() => handleApprove(ord.id)}
-                disabled={processingId === ord.id}
-                className="w-1/2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-              >
-                {processingId === ord.id ? 'Approving...' : 'Approve Order'}
-              </Button>
-            </div>
+            {canManageRequests ? (
+              <div className="pt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleReject(ord.id)}
+                  disabled={processingId === ord.id}
+                  className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px]"
+                >
+                  Reject
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleApprove(ord.id)}
+                  disabled={processingId === ord.id}
+                  className="w-1/2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+                >
+                  {processingId === ord.id ? 'Approving...' : 'Approve Order'}
+                </Button>
+              </div>
+            ) : (
+              <div className="pt-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
+                🔒 Approval Disabled
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -57,6 +57,7 @@ interface WaiterOrderBuilderProps {
   businessId?: string;
   activeBranchId?: string;
   userId?: string;
+  canCreateOrders?: boolean;
 }
 
 export function WaiterOrderBuilder({
@@ -68,6 +69,7 @@ export function WaiterOrderBuilder({
   businessId,
   activeBranchId,
   userId,
+  canCreateOrders = true,
 }: WaiterOrderBuilderProps) {
   const router = useRouter();
   const currency = catalog.branch.currency || catalog.business.currency || 'USD';
@@ -579,10 +581,10 @@ export function WaiterOrderBuilder({
               <button
                 type="button"
                 onClick={handleSubmitOrder}
-                disabled={isPending || cart.length === 0}
+                disabled={isPending || cart.length === 0 || !canCreateOrders}
                 className="flex-1 py-3 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50 shadow-md"
               >
-                {isPending ? 'Placing Order...' : 'Confirm & Send to Kitchen'}
+                {!canCreateOrders ? 'Order Creation Disabled' : isPending ? 'Placing Order...' : 'Confirm & Send to Kitchen'}
               </button>
             </div>
           </div>

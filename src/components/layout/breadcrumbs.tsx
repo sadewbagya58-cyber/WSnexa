@@ -32,7 +32,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
             {item.href && !isLast ? (
               <Link
                 href={item.href}
-                className="truncate hover:text-zinc-950 transition-colors touch-manipulation focus:outline-none focus:underline"
+                className="truncate hover:text-zinc-950 transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-1 rounded-xs"
               >
                 {item.label}
               </Link>

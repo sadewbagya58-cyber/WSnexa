@@ -63,6 +63,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     setUserMenuOpen(false);
   }
 
+  // Close drawer & menu on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+        setUserMenuOpen(false);
+      }
+    };
+    if (mobileOpen || userMenuOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen, userMenuOpen]);
+
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -93,7 +107,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   // ── Desktop nav: plain links for every item ──────────────────────────────
 
   const renderDesktopNavLinks = () => (
-    <div className="space-y-6">
+    <nav aria-label="Desktop Navigation" className="space-y-6">
       {allowedNavSections.map((sec) => (
         <div key={sec.id} className="space-y-1">
           <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
@@ -106,7 +120,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
                     isActive
                       ? 'bg-zinc-950 text-white shadow-xs'
                       : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
@@ -120,13 +135,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
       ))}
-    </div>
+    </nav>
   );
 
   // ── Mobile nav: Branches item replaced by SidebarBranchPicker ────────────
 
   const renderMobileNavLinks = () => (
-    <div className="space-y-6">
+    <nav aria-label="Mobile Navigation" className="space-y-6">
       {allowedNavSections.map((sec) => (
         <div key={sec.id} className="space-y-1">
           <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
@@ -154,7 +169,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
                     isActive
                       ? 'bg-zinc-950 text-white shadow-xs'
                       : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
@@ -168,7 +184,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
       ))}
-    </div>
+    </nav>
   );
 
   // ── JSX ──────────────────────────────────────────────────────────────────
@@ -181,16 +197,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
         {/* Left: Logo + (mobile) business badge | (desktop) business + branch switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98]">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 rounded-lg">
             <span className="rounded-lg bg-zinc-950 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-extrabold text-white tracking-widest">
               WSNEXA
             </span>
           </Link>
 
-          <span className="text-zinc-300 shrink-0">|</span>
+          <span className="text-zinc-300 shrink-0 select-none">|</span>
 
           {/* Mobile: compact business name only */}
-          <span className="lg:hidden text-xs font-bold text-zinc-700 truncate max-w-[140px] xs:max-w-[180px]">
+          <span className="lg:hidden text-xs font-bold text-zinc-700 truncate max-w-[120px] xs:max-w-[160px]">
             🏢 {businessName}
           </span>
 
@@ -214,8 +230,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <div className="relative hidden lg:block">
             <button
               type="button"
+              aria-expanded={userMenuOpen}
+              aria-haspopup="true"
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex min-h-[44px] items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-2.5 sm:px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus:outline-none"
+              className="flex min-h-[44px] items-center gap-1.5 sm:gap-2 rounded-full border border-zinc-200 bg-zinc-50 py-1 px-2.5 sm:px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
             >
               <span className="font-bold text-zinc-950 max-w-[140px] truncate">{userName || userEmail}</span>
               <Badge variant="neutral" className="text-[10px] uppercase">
@@ -227,7 +245,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             </button>
 
             {userMenuOpen && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl z-50">
+              <div role="menu" className="absolute right-0 mt-2 w-56 rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl z-50">
                 <div className="border-b border-zinc-100 px-3 py-2">
                   <p className="text-xs font-bold text-zinc-950">{userName || 'User Profile'}</p>
                   <p className="text-[11px] text-zinc-500 truncate">{userEmail}</p>
@@ -237,7 +255,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   <form action="/api/auth/logout" method="POST">
                     <button
                       type="submit"
-                      className="flex min-h-[44px] w-full items-center rounded-xl px-3 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 active:bg-red-100 touch-manipulation focus:outline-none"
+                      role="menuitem"
+                      className="flex min-h-[44px] w-full items-center rounded-xl px-3 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 active:bg-red-100 touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                     >
                       🚪 Sign Out
                     </button>
@@ -250,8 +269,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           {/* Mobile hamburger */}
           <button
             type="button"
+            aria-expanded={mobileOpen}
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl p-2 text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus:outline-none"
+            className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl p-2 text-zinc-700 hover:bg-zinc-100 active:bg-zinc-200 touch-manipulation active:scale-[0.95] lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
             aria-label="Toggle Navigation Drawer"
           >
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -278,20 +298,34 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <div className="fixed inset-0 z-50 flex lg:hidden">
             {/* Backdrop */}
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Close navigation drawer"
               className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileOpen(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                  setMobileOpen(false);
+                }
+              }}
             />
 
             {/* Drawer panel */}
-            <aside className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen">
+            <aside
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation drawer"
+              className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen"
+            >
               <div className="space-y-6">
                 {/* Drawer header */}
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                   <span className="font-black text-sm text-zinc-950 uppercase tracking-wider">Navigation</span>
                   <button
                     type="button"
+                    aria-label="Close navigation drawer"
                     onClick={() => setMobileOpen(false)}
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center text-zinc-500 hover:text-zinc-950 text-xs font-extrabold touch-manipulation"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center text-zinc-500 hover:text-zinc-950 text-xs font-extrabold touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 rounded-lg"
                   >
                     ✕
                   </button>

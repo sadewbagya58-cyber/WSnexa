@@ -60,7 +60,8 @@
     "verify:phase31-role-aware-navigation": "tsx scripts/verify-phase31-role-aware-navigation.ts",
     "verify:phase31-dashboard-shell": "tsx scripts/verify-phase31-dashboard-shell.ts",
     "verify:phase31-dashboard-actions": "tsx scripts/verify-phase31-dashboard-actions.ts",
-    "verify:phase31-management-ui": "tsx scripts/verify-phase31-management-ui.ts"
+    "verify:phase31-management-ui": "tsx scripts/verify-phase31-management-ui.ts",
+    "verify:phase31-mobile-a11y-performance": "tsx scripts/verify-phase31-mobile-a11y-performance.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

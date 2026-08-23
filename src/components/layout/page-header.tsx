@@ -41,8 +41,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Main Title & Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 min-w-0">
         <div className="space-y-1 min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight truncate min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight break-words min-w-0 max-w-full">
               {title}
             </h1>
             {badge}

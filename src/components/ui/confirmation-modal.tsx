@@ -31,11 +31,28 @@ export function ConfirmationModal({
   isLoading = false,
   blockedAction,
 }: ConfirmationModalProps) {
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isLoading) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isLoading, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/50 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-4 text-zinc-950 overflow-hidden">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-modal-title"
+        className="bg-white rounded-2xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-4 text-zinc-950 max-h-[90vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -50,13 +67,13 @@ export function ConfirmationModal({
             >
               {blockedAction ? '⚠️' : isDestructive ? '🗑️' : 'ℹ️'}
             </div>
-            <h3 className="text-base font-extrabold tracking-tight text-zinc-950">{title}</h3>
+            <h3 id="confirmation-modal-title" className="text-base font-extrabold tracking-tight text-zinc-950">{title}</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center text-zinc-400 hover:text-zinc-600 font-bold text-sm touch-manipulation"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center text-zinc-400 hover:text-zinc-600 font-bold text-sm touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 rounded-lg"
             aria-label="Close modal"
           >
             ✕

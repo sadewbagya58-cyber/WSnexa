@@ -26,7 +26,7 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
   const endItem = typeof totalItems === 'number' ? Math.min(currentPage * pageSize, totalItems) : currentPage * pageSize;
 
   return (
-    <div className={`flex items-center justify-between gap-3 pt-4 border-t border-zinc-200 ${className}`}>
+    <nav aria-label="Pagination Navigation" className={`flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-zinc-200 ${className}`}>
       <div className="text-xs font-semibold text-zinc-500">
         {typeof totalItems === 'number' ? (
           <span>
@@ -40,18 +40,19 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Button
           size="sm"
           variant="outline"
           disabled={currentPage <= 1}
           onClick={() => onPageChange(currentPage - 1)}
-          className="h-8 px-3 text-xs font-bold"
+          className="h-11 min-h-[44px] px-3.5 text-xs font-bold touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+          aria-label="Go to previous page"
         >
           Previous
         </Button>
 
-        <span className="text-xs font-extrabold text-zinc-800 px-2">
+        <span className="text-xs font-extrabold text-zinc-800 px-2 select-none" aria-live="polite">
           {currentPage} / {totalPages}
         </span>
 
@@ -60,11 +61,12 @@ export const PaginationControls: React.FC<PaginationControlsProps> = ({
           variant="outline"
           disabled={currentPage >= totalPages}
           onClick={() => onPageChange(currentPage + 1)}
-          className="h-8 px-3 text-xs font-bold"
+          className="h-11 min-h-[44px] px-3.5 text-xs font-bold touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+          aria-label="Go to next page"
         >
           Next
         </Button>
       </div>
-    </div>
+    </nav>
   );
 };

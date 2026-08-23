@@ -28,10 +28,19 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('keydown', handleKeyDown);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   const visibleItems = items.filter((item) => !item.disabled);
@@ -41,8 +50,10 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
     <div className={`relative inline-block text-left ${className}`} ref={menuRef}>
       <button
         type="button"
+        aria-expanded={isOpen}
+        aria-haspopup="true"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-8 w-8 rounded-lg flex items-center justify-center text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 font-black text-sm transition-colors focus:outline-none"
+        className="min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 font-black text-base transition-colors touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
         aria-label="Actions menu"
       >
         ⋯
@@ -50,9 +61,10 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
 
       {isOpen && (
         <div
+          role="menu"
           className={`absolute ${
             align === 'right' ? 'right-0' : 'left-0'
-          } mt-1 w-44 rounded-xl bg-white border border-zinc-200 shadow-xl py-1 z-30 animate-in fade-in duration-100`}
+          } mt-1 w-48 rounded-xl bg-white border border-zinc-200 shadow-xl py-1 z-30 animate-in fade-in duration-100`}
         >
           {visibleItems.map((item, idx) => {
             const content = (
@@ -62,7 +74,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
               </span>
             );
 
-            const baseStyle = `w-full text-left px-3 py-2 text-xs font-bold transition-colors ${
+            const baseStyle = `w-full text-left px-3 py-2.5 min-h-[44px] flex items-center text-xs font-bold transition-colors touch-manipulation focus-visible:outline-none focus-visible:bg-zinc-100 ${
               item.isDestructive
                 ? 'text-rose-600 hover:bg-rose-50'
                 : 'text-zinc-800 hover:bg-zinc-100 hover:text-zinc-950'
@@ -73,6 +85,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
                 <Link
                   key={idx}
                   href={item.href}
+                  role="menuitem"
                   onClick={() => setIsOpen(false)}
                   className={`block ${baseStyle}`}
                 >
@@ -85,6 +98,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, align = 'right', 
               <button
                 key={idx}
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setIsOpen(false);
                   item.onClick?.();

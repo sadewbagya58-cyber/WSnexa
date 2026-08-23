@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
 import { AnalyticsDatePreset } from '@/lib/analytics/analytics-types';
 import { fetchAnalyticsAction } from '@/server/actions/report';
 import { ExecutiveOverviewDTO } from '@/server/analytics/analytics.service';
@@ -15,51 +16,73 @@ import { ReputationAnalyticsView } from './reputation-analytics-view';
 import { BranchComparisonView } from './branch-comparison-view';
 import { ExportCenterModal } from './export-center-modal';
 
-type AnalyticsTab = 'overview' | 'sales' | 'operations' | 'menu' | 'inventory' | 'reputation' | 'comparison';
+import { InsightsTab } from './insights-tab';
+import { ExecutiveOverviewInsightsCard } from './executive-overview-insights-card';
+import { OperationalInsightDTO } from '@/lib/insights/insight-types';
+
+export type AnalyticsTab = 'overview' | 'insights' | 'sales' | 'operations' | 'menu' | 'inventory' | 'reputation' | 'comparison';
+
+interface AnalyticsDataResponse extends ExecutiveOverviewDTO {
+  insights?: OperationalInsightDTO[];
+}
 
 export function ReportsDashboard() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('overview');
-  const [preset, setPreset] = useState<AnalyticsDatePreset>('today');
+  const [preset, setPreset] = useState<string>('today');
   const [startDate, setStartDate] = useState<string | undefined>();
   const [endDate, setEndDate] = useState<string | undefined>();
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<AnalyticsDataResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [data, setData] = useState<ExecutiveOverviewDTO | null>(null);
-  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
+
+  const loadAnalyticsData = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    const res = await fetchAnalyticsAction({
+      preset: preset as AnalyticsDatePreset,
+      startDate,
+      endDate,
+      branchId: selectedBranchId === 'all' ? undefined : selectedBranchId,
+    });
+    if (res.success && res.data) {
+      setData(res.data as AnalyticsDataResponse);
+    } else {
+      setErrorMsg(res.message || 'Failed to load analytics.');
+    }
+    setIsLoading(false);
+  }, [preset, startDate, endDate, selectedBranchId]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadAnalytics() {
-      setIsLoading(true);
-      const res = await fetchAnalyticsAction({
-        preset,
-        startDate,
-        endDate,
-        branchId: selectedBranchId !== 'all' ? selectedBranchId : undefined,
-      });
-
-      if (isMounted) {
+    let ignore = false;
+    fetchAnalyticsAction({
+      preset: preset as AnalyticsDatePreset,
+      startDate,
+      endDate,
+      branchId: selectedBranchId === 'all' ? undefined : selectedBranchId,
+    }).then((res) => {
+      if (!ignore) {
         if (res.success && res.data) {
-          setData(res.data);
+          setData(res.data as AnalyticsDataResponse);
           setErrorMsg(null);
         } else {
-          setErrorMsg(res.message || 'Failed to load executive analytics data.');
+          setErrorMsg(res.message || 'Failed to load analytics.');
         }
         setIsLoading(false);
       }
-    }
-
-    loadAnalytics();
+    });
 
     return () => {
-      isMounted = false;
+      ignore = true;
     };
   }, [preset, startDate, endDate, selectedBranchId]);
 
+
+
   const tabs: { key: AnalyticsTab; label: string; icon: string }[] = [
     { key: 'overview', label: 'Executive Overview', icon: '📊' },
+    { key: 'insights', label: 'Operational Insights', icon: '💡' },
     { key: 'sales', label: 'Sales & Revenue', icon: '💰' },
     { key: 'operations', label: 'Operations & Speed', icon: '⚡' },
     { key: 'menu', label: 'Menu Performance', icon: '🍽️' },
@@ -72,8 +95,8 @@ export function ReportsDashboard() {
   }
 
   const currency = data?.summary.currency || 'USD';
-
   const hasFinancialAccess = data?.summary.hasFinancialAccess ?? true;
+  const insights = data?.insights || [];
 
   return (
     <div className="space-y-6">
@@ -91,42 +114,37 @@ export function ReportsDashboard() {
         <button
           type="button"
           onClick={() => setIsExportOpen(true)}
-          className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold rounded-xl transition-all flex items-center gap-2 self-start sm:self-auto shadow-lg min-h-[44px]"
+          className="px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold text-xs hover:bg-zinc-800 dark:hover:bg-white transition-colors flex items-center justify-center gap-2 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 shadow-sm"
         >
-          <span>📥</span> Export Analytics Report
+          <span>📥</span>
+          <span>Export Center</span>
         </button>
       </div>
 
-      {/* Global Analytics Filter Bar */}
+      {/* Filter Bar */}
       <AnalyticsFilterBar
-        preset={preset}
-        onPresetChange={(p) => {
-          setPreset(p);
-          if (p !== 'custom') {
-            setStartDate(undefined);
-            setEndDate(undefined);
-          }
-        }}
+        preset={preset as AnalyticsDatePreset}
         startDate={startDate}
         endDate={endDate}
+        selectedBranchId={selectedBranchId}
+        authorizedBranches={data?.authorizedBranches || []}
+        isMultiBranchAuthorized={data?.isMultiBranchAuthorized || false}
+        onPresetChange={setPreset}
         onCustomDateChange={(start, end) => {
           setStartDate(start);
           setEndDate(end);
         }}
-        selectedBranchId={selectedBranchId}
-        onBranchChange={(bId) => setSelectedBranchId(bId)}
-        authorizedBranches={data?.authorizedBranches || []}
-        isMultiBranchAuthorized={data?.isMultiBranchAuthorized || false}
+        onBranchChange={setSelectedBranchId}
         timezoneLabel={data?.summary.resolvedDateRange.timezone || 'Asia/Colombo'}
         isLoading={isLoading}
       />
 
-      {/* Data Quality Notice Banner */}
+      {/* Data Quality Warning Notes */}
       {data?.summary.dataQualityNotes && data.summary.dataQualityNotes.length > 0 && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-600 dark:text-amber-300 text-xs font-medium space-y-1">
-          {data.summary.dataQualityNotes.map((note, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span>ℹ️</span> <span>{note}</span>
+        <div className="space-y-1">
+          {data.summary.dataQualityNotes.map((note, idx) => (
+            <div key={idx} className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-600 dark:text-amber-400 text-xs font-medium flex items-center gap-2">
+              <span>⚠️</span> <span>{note}</span>
             </div>
           ))}
         </div>
@@ -149,11 +167,15 @@ export function ReportsDashboard() {
             >
               <span>{tab.icon}</span>
               <span>{tab.label}</span>
+              {tab.key === 'insights' && insights.filter((i) => i.status === 'ACTIVE').length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-zinc-950 text-amber-400 dark:bg-amber-400 dark:text-zinc-950 ml-0.5">
+                  {insights.filter((i) => i.status === 'ACTIVE').length}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
-
 
       {/* Loading Skeletons */}
       {isLoading && (
@@ -179,9 +201,17 @@ export function ReportsDashboard() {
         <div>
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <ExecutiveOverviewInsightsCard
+                insights={insights}
+                onNavigateToInsights={() => setActiveTab('insights')}
+              />
               <ExecutiveKpiCards metrics={data.summary.metrics} currency={currency} />
               <SalesAnalyticsView sales={data.sales} currency={currency} hasFinancialAccess={hasFinancialAccess} />
             </div>
+          )}
+
+          {activeTab === 'insights' && (
+            <InsightsTab insights={insights} onRefresh={loadAnalyticsData} />
           )}
 
           {activeTab === 'sales' && (
@@ -222,10 +252,11 @@ export function ReportsDashboard() {
       <ExportCenterModal
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
-        preset={preset}
+        preset={preset as AnalyticsDatePreset}
         startDate={startDate}
         endDate={endDate}
       />
+
     </div>
   );
 }

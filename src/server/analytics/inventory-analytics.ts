@@ -12,7 +12,7 @@ export interface InventoryAnalyticsResult {
 
 interface InventoryItemRow {
   id: string;
-  min_reorder_level?: number | null;
+  min_stock_level?: number | null;
   inventory_balances?: { current_quantity?: number | null; branch_id?: string }[];
 }
 
@@ -22,7 +22,8 @@ interface WasteRecordRow {
 }
 
 interface TransferItemRow {
-  quantity?: number | null;
+  quantity_sent_base?: number | null;
+  quantity_received_base?: number | null;
 }
 
 /**
@@ -42,15 +43,15 @@ export async function getInventoryAnalytics(
     throw new AnalyticsError('OUTSIDE_SCOPE', 'No target branch specified for inventory analytics.');
   }
 
-  // 1. Current Stock Balances & Low/Out-of-Stock Counts (using canonical current_quantity column)
+  // 1. Current Stock Balances & Low/Out-of-Stock Counts (using canonical current_quantity & min_stock_level columns)
   const { data: itemsData, error: itemsErr } = await admin
     .from('inventory_items')
-    .select('id, min_reorder_level, inventory_balances(current_quantity, branch_id)')
+    .select('id, min_stock_level, inventory_balances(current_quantity, branch_id)')
     .eq('business_id', businessId)
     .eq('is_active', true);
 
   if (itemsErr) {
-    console.error('[getInventoryAnalytics Error]:', itemsErr);
+    console.error('[getInventoryAnalytics itemsErr]:', itemsErr);
     throw new AnalyticsError('DATABASE_ERROR', 'Inventory analytics are temporarily unavailable.');
   }
 
@@ -62,7 +63,7 @@ export async function getInventoryAnalytics(
   items.forEach((item) => {
     const balances = (item.inventory_balances || []).filter((b) => !b.branch_id || b.branch_id === primaryBranchId);
     const itemStock = balances.reduce((sum: number, b) => sum + Number(b.current_quantity || 0), 0);
-    const minLevel = Number(item.min_reorder_level || 0);
+    const minLevel = Number(item.min_stock_level || 0);
 
     totalStockQty += itemStock;
 
@@ -74,12 +75,16 @@ export async function getInventoryAnalytics(
   });
 
   // 2. Waste Records
-  const { data: wasteData } = await admin
+  const { data: wasteData, error: wasteErr } = await admin
     .from('inventory_waste_records')
     .select('quantity, total_cost_cents')
     .eq('branch_id', primaryBranchId)
     .gte('created_at', dateRange.startUtc)
     .lt('created_at', dateRange.endUtc);
+
+  if (wasteErr) {
+    console.error('[getInventoryAnalytics wasteErr]:', wasteErr);
+  }
 
   let totalWasteQty = 0;
   let totalWasteCostCents = 0;
@@ -91,17 +96,25 @@ export async function getInventoryAnalytics(
   });
 
   // 3. Stock Transfers (Received Volume)
-  const { data: transferItemData } = await admin
-    .from('inventory_stock_transfer_items')
-    .select('quantity, transfer:inventory_stock_transfers!inner(source_branch_id, destination_branch_id, status, updated_at)')
-    .or(`source_branch_id.eq.${primaryBranchId},destination_branch_id.eq.${primaryBranchId}`, { foreignTable: 'transfer' })
-    .eq('transfer.status', 'received')
-    .gte('transfer.updated_at', dateRange.startUtc)
-    .lt('transfer.updated_at', dateRange.endUtc);
+  const { data: transferData, error: transferErr } = await admin
+    .from('inventory_stock_transfers')
+    .select('id, inventory_stock_transfer_items(quantity_sent_base, quantity_received_base)')
+    .or(`source_branch_id.eq.${primaryBranchId},destination_branch_id.eq.${primaryBranchId}`)
+    .eq('status', 'received')
+    .gte('updated_at', dateRange.startUtc)
+    .lt('updated_at', dateRange.endUtc);
 
-  const transferItems = (transferItemData || []) as unknown as TransferItemRow[];
-  const totalTransferVolume = transferItems.reduce((sum: number, t) => sum + Number(t.quantity || 0), 0);
+  if (transferErr) {
+    console.error('[getInventoryAnalytics transferErr]:', transferErr);
+  }
 
+  let totalTransferVolume = 0;
+  (transferData || []).forEach((t: { inventory_stock_transfer_items?: TransferItemRow[] }) => {
+    const transferItems = t.inventory_stock_transfer_items || [];
+    transferItems.forEach((ti) => {
+      totalTransferVolume += Number(ti.quantity_received_base ?? ti.quantity_sent_base ?? 0);
+    });
+  });
 
   return {
     currentStock: {
@@ -187,6 +200,10 @@ export async function getGroupedInventoryByBranch(
     return map;
   }
 
+  if (rpcErr) {
+    console.error('[getGroupedInventoryByBranch rpcErr]:', rpcErr);
+  }
+
   // 2. Fallback query if RPC is not present
   const { data: wasteData } = await admin
     .from('inventory_waste_records')
@@ -214,5 +231,3 @@ export async function getGroupedInventoryByBranch(
 
   return map;
 }
-
-

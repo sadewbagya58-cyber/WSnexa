@@ -235,8 +235,10 @@ async function runExecutiveAnalyticsVerification() {
   assert(invViewContent.includes('Low Stock Items') && invViewContent.includes('Out of Stock Items'), '31. Low/Out of stock summary present');
   const invEngineContentF = fs.readFileSync(path.join(rootDir, 'src/server/analytics/inventory-analytics.ts'), 'utf8');
   assert(invEngineContentF.includes('inventory_balances(current_quantity, branch_id)'), '31b. Inventory analytics uses canonical current_quantity balance column');
-  console.log('  ✅ [PASS] 31. Low stock & Out-of-stock summary present with canonical current_quantity balance field');
+  assert(invEngineContentF.includes('min_stock_level'), '31c. Inventory analytics uses canonical min_stock_level item column');
+  console.log('  ✅ [PASS] 31. Low stock & Out-of-stock summary present with canonical current_quantity & min_stock_level fields');
   passed++;
+
 
   // 32. Waste metrics
   assert(invEngineContentF.includes('inventory_waste_records') && invEngineContentF.includes('total_cost_cents'), '32. Waste metrics present');

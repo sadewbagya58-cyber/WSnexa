@@ -32,16 +32,22 @@ async function handleAction<T>(fn: () => Promise<T>): Promise<ReservationActionR
     if (err && typeof err === 'object' && 'code' in err) {
       const errObj = err as Record<string, unknown>;
       const code = (errObj.code as ReservationErrorCode) || 'INTERNAL_ERROR';
-      const message = typeof errObj.message === 'string' ? errObj.message : 'Reservation table allocation action failed.';
+      let message = typeof errObj.message === 'string' ? errObj.message : 'Reservation table allocation action failed.';
+      if (message.includes('not-null constraint') || message.includes('relation') || message.includes('violates') || message.includes('column')) {
+        message = 'Unable to complete waitlist action.';
+      }
       return { ok: false, error: { code, message } };
     }
     if (err instanceof Error) {
-      const message = err.message;
+      let message = err.message;
       if (message.includes('Unauthorized') || message.includes('Forbidden')) {
         return { ok: false, error: { code: 'UNAUTHORIZED', message } };
       }
       if (message.includes('not found') || message.includes('outside your authorized property scope')) {
         return { ok: false, error: { code: 'FORBIDDEN_SCOPE', message: 'Resource not found or outside authorized property scope.' } };
+      }
+      if (message.includes('not-null constraint') || message.includes('relation') || message.includes('violates') || message.includes('column')) {
+        message = 'Unable to complete waitlist action.';
       }
       return { ok: false, error: { code: 'INVALID_INPUT', message } };
     }

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { maskEmail, maskPhone } from '@/lib/crm/crm-normalization';
 import { ReservationService } from '@/server/reservations/reservation.service';
 import { ReservationAllocationService } from '@/server/reservations/reservation-allocation.service';
+import { ReservationSettingsService } from '@/server/reservations/reservation-settings.service';
 import { createDomainError } from '@/server/reservations/reservation-validation.service';
 import {
   CreateWaitlistEntryInput,
@@ -62,11 +63,41 @@ export class ReservationWaitlistService {
 
   /**
    * Adds a new entry to the waitlist queue.
+   * Resolves branch settings for default duration and derives canonical requested_start_at / requested_end_at window.
    */
   static async addWaitlistEntry(
     input: CreateWaitlistEntryInput & { businessId: string }
   ): Promise<WaitlistEntryDTO> {
     const admin = createAdminClient();
+
+    // 1. Resolve branch settings for canonical default duration & party size bounds
+    const settings = await ReservationSettingsService.getBranchSettings(input.businessId, input.branchId);
+
+    // Validate party size
+    if (input.partySize < settings.minimumPartySize || input.partySize > settings.maximumPartySize) {
+      throw createDomainError(
+        `Party size must be between ${settings.minimumPartySize} and ${settings.maximumPartySize}.`,
+        'INVALID_PARTY_SIZE'
+      );
+    }
+
+    if (!input.guestName || input.guestName.trim().length < 2) {
+      throw createDomainError('Guest name is required and must be at least 2 characters.', 'INVALID_INPUT');
+    }
+
+    // 2. Derive trusted start and end time window
+    const nowIso = new Date().toISOString();
+    const startAt = input.requestedStartAt ? new Date(input.requestedStartAt) : new Date(nowIso);
+    if (isNaN(startAt.getTime())) {
+      throw createDomainError('Invalid waitlist start time.', 'INVALID_INPUT');
+    }
+
+    const durationMinutes = settings.defaultDurationMinutes || 90;
+    const defaultEndMs = startAt.getTime() + durationMinutes * 60 * 1000;
+    const endAt = input.requestedEndAt ? new Date(input.requestedEndAt) : new Date(defaultEndMs);
+    if (isNaN(endAt.getTime()) || endAt.getTime() <= startAt.getTime()) {
+      throw createDomainError('Waitlist end time must be strictly after start time.', 'INVALID_INPUT');
+    }
 
     const payload = {
       business_id: input.businessId,
@@ -76,8 +107,8 @@ export class ReservationWaitlistService {
       guest_email: input.guestEmail ? input.guestEmail.trim().toLowerCase() : null,
       guest_phone: input.guestPhone ? input.guestPhone.trim() : null,
       party_size: input.partySize,
-      requested_start_at: input.requestedStartAt || null,
-      requested_end_at: input.requestedEndAt || null,
+      requested_start_at: startAt.toISOString(),
+      requested_end_at: endAt.toISOString(),
       status: 'WAITING',
       priority: input.priority || 0,
       notes: input.notes ? input.notes.trim() : null,
@@ -90,7 +121,8 @@ export class ReservationWaitlistService {
       .single();
 
     if (error || !data) {
-      throw createDomainError(`Failed to add waitlist entry: ${error?.message}`, 'INVALID_INPUT');
+      console.error('[ReservationWaitlistService] DB insert error:', error?.message);
+      throw createDomainError('Unable to add this guest to the waitlist.', 'INVALID_INPUT');
     }
 
     return this.mapRowToDTO(data, true);

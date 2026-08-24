@@ -314,8 +314,15 @@ async function runVerification() {
   assert(uiClientContent.includes('setActiveAssignmentsMap'), '49. handlePromoteWaitlist in management UI populates activeAssignmentsMap with returned table assignments');
   assert(serviceContent.includes('Assign a table before seating this reservation.'), '50. Canonical markSeated guard strictly blocks SEATED transition if zero active assignments exist');
 
+  // 13. Waitlist Creation Time Window & Safe Error Sanitization Assertions
+  console.log('\n--- SECTION 13: Waitlist Time Window Derivation & Safe Error Sanitization ---');
+  assert(waitlistContent.includes('ReservationSettingsService.getBranchSettings'), '51. addWaitlistEntry resolves default duration from canonical ReservationSettingsService');
+  assert(waitlistContent.includes('startAt.toISOString()') && waitlistContent.includes('endAt.toISOString()'), '52 & 53. addWaitlistEntry derives valid non-null requested_start_at and requested_end_at window');
+  assert(waitlistContent.includes('Unable to add this guest to the waitlist.'), '54. addWaitlistEntry logs DB errors server-side and throws clean domain message without Postgres leakage');
+  assert(actionsContent.includes('not-null constraint') && actionsContent.includes('Unable to complete waitlist action.'), '55. handleAction in reservation-allocation.ts sanitizes raw database error strings');
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 2 Verification Complete: ALL 50 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 2 Verification Complete: ALL 55 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

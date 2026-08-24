@@ -61,6 +61,11 @@ export const permissionKeyEnum = z.enum([
   'reports.financial.view',
   'reports.export',
 
+  // Customer CRM & Guest Data (Phase 33)
+  'customers.view',
+  'customers.manage',
+  'customers.contact_view',
+
   // Staff & Team
   'staff.view',
   'staff.manage', // Preserved for backward compatibility

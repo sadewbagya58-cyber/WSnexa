@@ -46,12 +46,31 @@ export async function submitGuestOrderAction(
   }
 
   // Server-side optional auto-link for authenticated customers placing guest orders
-  if (activeUserId && result.data.orderId && result.data.accessToken) {
+  if (result.data.orderId) {
     try {
-      const { CustomerOrderService } = await import('@/server/services/customer-order.service');
-      await CustomerOrderService.claimOrder(activeUserId, result.data.orderId, result.data.accessToken);
+      if (activeUserId && result.data.accessToken) {
+        const { CustomerOrderService } = await import('@/server/services/customer-order.service');
+        await CustomerOrderService.claimOrder(activeUserId, result.data.orderId, result.data.accessToken);
+      }
+
+      // Safe CRM Guest Identity Linkage Enrichment (Phase 33 Step 1)
+      const { CustomerIdentityService } = await import('@/server/crm/customer-identity.service');
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      const admin = createAdminClient();
+      const { data: ord } = await admin.from('orders').select('business_id').eq('id', result.data.orderId).single();
+      if (ord?.business_id) {
+        const identity = await CustomerIdentityService.resolveOrCreateCustomerIdentity({
+          businessId: ord.business_id,
+          authUserId: activeUserId,
+          guestPhone: input.guestPhone,
+          guestName: input.guestName,
+        });
+        if (identity) {
+          await admin.from('orders').update({ crm_customer_id: identity.id }).eq('id', result.data.orderId);
+        }
+      }
     } catch (err) {
-      console.warn('[submitGuestOrderAction] Optional auto-link skipped:', err);
+      console.warn('[submitGuestOrderAction] Optional auto-link / CRM enrichment skipped:', err);
     }
   }
 

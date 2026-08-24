@@ -66,7 +66,8 @@
     "verify:phase32-analytics-foundation": "tsx scripts/verify-phase32-analytics-foundation.ts",
     "verify:phase32-executive-analytics": "tsx scripts/verify-phase32-executive-analytics.ts",
     "verify:phase32-operational-insights": "tsx scripts/verify-phase32-operational-insights.ts",
-    "verify:phase32-closure": "tsx scripts/verify-phase32-closure.ts"
+    "verify:phase32-closure": "tsx scripts/verify-phase32-closure.ts",
+    "verify:phase33-guest-foundation": "tsx scripts/verify-phase33-guest-foundation.ts"
   },
 
   "dependencies": {

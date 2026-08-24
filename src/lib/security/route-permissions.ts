@@ -34,6 +34,7 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/reputation', permission: 'reputation.view' },
   { prefix: '/dashboard/loyalty/rewards', permission: 'loyalty.rewards.manage' },
   { prefix: '/dashboard/loyalty/customers', permission: 'loyalty.customers.view' },
+  { prefix: '/dashboard/customers', permission: 'customers.view' },
   { prefix: '/dashboard/loyalty/tiers', permission: 'loyalty.manage' },
   { prefix: '/dashboard/loyalty', permission: 'loyalty.view' },
   { prefix: '/dashboard/inventory/items/new', permission: 'inventory.items.manage' },

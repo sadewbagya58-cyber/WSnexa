@@ -94,6 +94,8 @@ export interface ReservationSettingsDTO {
   requireGuestPhone: boolean;
   requireGuestEmail: boolean;
   autoConfirm: boolean;
+  tableTurnoverBufferMinutes?: number;
+  maxTableCombination?: number;
   createdAt: string;
   updatedAt: string;
 }

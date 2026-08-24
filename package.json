@@ -71,7 +71,8 @@
     "verify:phase33-segmentation": "tsx scripts/verify-phase33-segmentation.ts",
     "verify:phase33-crm-actions": "tsx scripts/verify-phase33-crm-actions.ts",
     "verify:phase33-closure": "tsx scripts/verify-phase33-closure.ts",
-    "verify:phase35-reservation-foundation": "tsx scripts/verify-phase35-reservation-foundation.ts"
+    "verify:phase35-reservation-foundation": "tsx scripts/verify-phase35-reservation-foundation.ts",
+    "verify:phase35-table-allocation": "tsx scripts/verify-phase35-table-allocation.ts"
   },
 
   "dependencies": {

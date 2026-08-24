@@ -29,6 +29,8 @@ export class ReservationSettingsService {
         requireGuestPhone: data.require_guest_phone,
         requireGuestEmail: data.require_guest_email,
         autoConfirm: data.auto_confirm,
+        tableTurnoverBufferMinutes: (data as { table_turnover_buffer_minutes?: number }).table_turnover_buffer_minutes ?? 15,
+        maxTableCombination: (data as { max_table_combination?: number }).max_table_combination ?? 3,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -49,6 +51,8 @@ export class ReservationSettingsService {
       requireGuestPhone: false,
       requireGuestEmail: false,
       autoConfirm: false,
+      tableTurnoverBufferMinutes: 15,
+      maxTableCombination: 3,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -78,6 +82,8 @@ export class ReservationSettingsService {
       require_guest_phone: input.requireGuestPhone ?? current.requireGuestPhone,
       require_guest_email: input.requireGuestEmail ?? current.requireGuestEmail,
       auto_confirm: input.autoConfirm ?? current.autoConfirm,
+      table_turnover_buffer_minutes: input.tableTurnoverBufferMinutes ?? current.tableTurnoverBufferMinutes ?? 15,
+      max_table_combination: input.maxTableCombination ?? current.maxTableCombination ?? 3,
       updated_at: new Date().toISOString(),
     };
 
@@ -105,6 +111,8 @@ export class ReservationSettingsService {
       requireGuestPhone: data.require_guest_phone,
       requireGuestEmail: data.require_guest_email,
       autoConfirm: data.auto_confirm,
+      tableTurnoverBufferMinutes: (data as { table_turnover_buffer_minutes?: number }).table_turnover_buffer_minutes ?? 15,
+      maxTableCombination: (data as { max_table_combination?: number }).max_table_combination ?? 3,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

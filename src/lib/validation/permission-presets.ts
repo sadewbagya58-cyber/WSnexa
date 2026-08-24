@@ -131,6 +131,12 @@ export const ROLE_PRESETS: RolePreset[] = [
       'inventory.menu_profitability.view',
       'inventory.settings.manage',
       'inventory.production.manage',
+      'reservations.view',
+      'reservations.create',
+      'reservations.manage',
+      'reservations.cancel',
+      'reservations.assign_tables',
+      'reservations.waitlist_manage',
     ],
   },
   {

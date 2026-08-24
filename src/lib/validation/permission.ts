@@ -71,6 +71,8 @@ export const permissionKeyEnum = z.enum([
   'reservations.create',
   'reservations.manage',
   'reservations.cancel',
+  'reservations.assign_tables',
+  'reservations.waitlist_manage',
 
   // Staff & Team
   'staff.view',

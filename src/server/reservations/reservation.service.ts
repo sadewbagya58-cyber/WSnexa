@@ -349,6 +349,17 @@ export class ReservationService {
     // 1. Validate status machine (throws SAME_STATE_TRANSITION or ILLEGAL_RESERVATION_TRANSITION if invalid)
     ReservationLifecycleService.validateTransition(existing.status, targetStatus);
 
+    // 1b. SEATED Guard (Part L): Require active table assignment before seating
+    if (targetStatus === 'SEATED') {
+      const { ReservationAllocationService } = await import('./reservation-allocation.service');
+      const activeAssignments = await ReservationAllocationService.getActiveAssignments(businessId, reservationId);
+      if (!activeAssignments || activeAssignments.length === 0) {
+        const err = new Error('Assign a table before seating this reservation.');
+        (err as unknown as { code: string }).code = 'INVALID_INPUT';
+        throw err;
+      }
+    }
+
     const nowIso = new Date().toISOString();
     const updatePayload: Record<string, unknown> = {
       status: targetStatus,
@@ -378,6 +389,16 @@ export class ReservationService {
       const err = new Error(`Reservation status transition to '${targetStatus}' could not be applied. State may have changed.`);
       (err as unknown as { code: string }).code = 'CONCURRENCY_CONFLICT';
       throw err;
+    }
+
+    // 2b. Auto Release Tables (Part K): Release assignments on terminal / departure transitions
+    if (['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(targetStatus)) {
+      try {
+        const { ReservationAllocationService } = await import('./reservation-allocation.service');
+        await ReservationAllocationService.releaseReservationTables(businessId, reservationId);
+      } catch (relErr: unknown) {
+        console.warn('[ReservationService] Auto-release tables failed:', (relErr as Error).message);
+      }
     }
 
     // 3. Record append-only audit event strictly AFTER successful mutation

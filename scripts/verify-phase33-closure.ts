@@ -215,10 +215,18 @@ async function main() {
 
   // --- SECTION J: HOTFIX INTERACTION & TAG CONTROLS ASSERTIONS ---
   console.log('\n--- SECTION J: Hotfix Interaction & Tag Controls Assertions ---');
-  assert(crmHubClientContent.includes('href={`/dashboard/customers/${cust.customerId}`}') && crmHubClientContent.includes('router.push(`/dashboard/customers/${cust.customerId}`)'), '75. View Profile control has real canonical customerId href and imperative router.push handler');
+  assert(crmHubClientContent.includes('href={`/dashboard/customers/${cust.customerId}`}') && crmHubClientContent.includes('prefetch={true}'), '75. View Profile control has real canonical customerId link with prefetch enabled');
   assert(crmHubClientContent.includes('View Guest Profile'), '76. Action Queue cards contain direct View Guest Profile link');
-  assert(crmProfileClientContent.includes('createCustomerTagServerAction') && crmProfileClientContent.includes('Create & Assign'), '77. Operational tags panel equips authorized managers with tag creation and assignment controls');
+  assert(crmProfileClientContent.includes('createAndAssignCustomerTagServerAction') && crmProfileClientContent.includes('Create & Assign'), '77. Operational tags panel equips authorized managers with atomic tag creation and assignment controls');
   assert(crmProfileClientContent.includes('{canManage && (') && crmProfileClientContent.includes('handleRemoveTag'), '78. Tag management controls strictly gated by canManage permission with read-only fallback');
+
+  // --- SECTION K: PERFORMANCE & INSTANT INTERACTION HOTFIX ASSERTIONS ---
+  console.log('\n--- SECTION K: Performance & Instant Interaction Hotfix Assertions ---');
+  const crmActionsServerContent = fs.readFileSync(path.join(process.cwd(), 'src/server/actions/crm.ts'), 'utf-8');
+  assert(crmActionsServerContent.includes('createAndAssignCustomerTagServerAction'), '79. Atomic createAndAssignCustomerTagServerAction present eliminating double round-trip latency');
+  assert(crmActionsServerContent.includes('.select(\'email_normalized, phone_normalized\')'), '80. revealCustomerContactDetailsServerAction optimized to single lightweight admin query');
+  assert(crmOverviewServiceContent.includes('Promise.all(['), '81. CRMOverviewService parallelizes independent overview queries via Promise.all');
+  assert(crmProfileClientContent.includes('activeAction') && crmProfileClientContent.includes('Adding...'), '82. Customer profile buttons render immediate pending feedback state on click');
 
   console.log('\n================================================================');
   console.log(`  Phase 33 Master Closure Verification Complete: ${passed} PASSED, ${failed} FAILED`);

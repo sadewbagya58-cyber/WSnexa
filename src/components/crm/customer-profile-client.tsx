@@ -7,7 +7,7 @@ import type { CustomerSegmentationDTO, UnifiedCustomerProfileDTO } from '@/lib/c
 import {
   addCustomerNoteServerAction,
   assignCustomerTagServerAction,
-  createCustomerTagServerAction,
+  createAndAssignCustomerTagServerAction,
   deleteCustomerNoteServerAction,
   removeCustomerTagServerAction,
   revealCustomerContactDetailsServerAction,
@@ -45,53 +45,64 @@ export function CustomerProfileClient({
   const [allAvailableTags, setAllAvailableTags] = useState<CustomerTagDTO[]>(availableTags);
   const [newTagName, setNewTagName] = useState('');
   const [isCreatingTagMode, setIsCreatingTagMode] = useState(false);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleRevealContact = () => {
+    setActiveAction('REVEAL');
     startTransition(async () => {
       try {
         const details = await revealCustomerContactDetailsServerAction(businessId, profile.customerId);
         setUnmaskedContact(details);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleAddNote = () => {
     if (!newNoteText.trim()) return;
+    setActiveAction('ADD_NOTE');
     startTransition(async () => {
       try {
         const newNote = await addCustomerNoteServerAction(businessId, profile.customerId, newNoteText);
-        setNotesList([newNote, ...notesList]);
+        setNotesList((prev) => [newNote, ...prev]);
         setNewNoteText('');
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleDeleteNote = (noteId: string) => {
+    setActiveAction(`delete_note_${noteId}`);
     startTransition(async () => {
       try {
         await deleteCustomerNoteServerAction(businessId, noteId);
-        setNotesList(notesList.filter((n) => n.id !== noteId));
+        setNotesList((prev) => prev.filter((n) => n.id !== noteId));
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleAssignTag = () => {
     if (!selectedTagId) return;
+    setActiveAction('ASSIGN_TAG');
     startTransition(async () => {
       try {
         await assignCustomerTagServerAction(businessId, profile.customerId, selectedTagId);
         const tagObj = allAvailableTags.find((t) => t.id === selectedTagId);
         if (tagObj) {
-          setTagsList([
-            ...tagsList,
+          setTagsList((prev) => [
+            ...prev,
             {
               tagId: tagObj.id,
               tagName: tagObj.name,
@@ -105,17 +116,19 @@ export function CustomerProfileClient({
         setSelectedTagId('');
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleCreateAndAssignTag = () => {
     if (!newTagName.trim()) return;
+    setActiveAction('CREATE_TAG');
     startTransition(async () => {
       try {
-        const createdTag = await createCustomerTagServerAction(businessId, newTagName.trim());
+        const createdTag = await createAndAssignCustomerTagServerAction(businessId, profile.customerId, newTagName.trim());
         setAllAvailableTags((prev) => [...prev, createdTag]);
-        await assignCustomerTagServerAction(businessId, profile.customerId, createdTag.id);
         setTagsList((prev) => [
           ...prev,
           {
@@ -131,17 +144,22 @@ export function CustomerProfileClient({
         setIsCreatingTagMode(false);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleRemoveTag = (tagId: string) => {
+    setActiveAction(`remove_tag_${tagId}`);
     startTransition(async () => {
       try {
         await removeCustomerTagServerAction(businessId, profile.customerId, tagId);
-        setTagsList(tagsList.filter((t) => t.tagId !== tagId));
+        setTagsList((prev) => prev.filter((t) => t.tagId !== tagId));
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveAction(null);
       }
     });
   };
@@ -190,9 +208,9 @@ export function CustomerProfileClient({
               <button
                 onClick={handleRevealContact}
                 disabled={isPending}
-                className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
+                className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold disabled:opacity-50"
               >
-                Reveal full contact
+                {activeAction === 'REVEAL' ? 'Revealing...' : 'Reveal full contact'}
               </button>
             )}
 
@@ -314,9 +332,9 @@ export function CustomerProfileClient({
                 <button
                   disabled={!newNoteText.trim() || isPending}
                   onClick={handleAddNote}
-                  className="px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                 >
-                  Add Note
+                  {activeAction === 'ADD_NOTE' ? 'Adding...' : 'Add Note'}
                 </button>
               </div>
             </div>
@@ -336,9 +354,9 @@ export function CustomerProfileClient({
                     <button
                       disabled={isPending}
                       onClick={() => handleDeleteNote(note.id)}
-                      className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
                     >
-                      Delete
+                      {activeAction === `delete_note_${note.id}` ? 'Deleting...' : 'Delete'}
                     </button>
                   )}
                 </div>
@@ -369,14 +387,14 @@ export function CustomerProfileClient({
                     <button
                       disabled={!newTagName.trim() || isPending}
                       onClick={handleCreateAndAssignTag}
-                      className="px-3 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                      className="px-3.5 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                     >
-                      Create & Assign
+                      {activeAction === 'CREATE_TAG' ? 'Creating...' : 'Create & Assign'}
                     </button>
                     {allAvailableTags.length > 0 && (
                       <button
                         onClick={() => setIsCreatingTagMode(false)}
-                        className="px-3 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                       >
                         Cancel
                       </button>
@@ -398,13 +416,13 @@ export function CustomerProfileClient({
                   <button
                     disabled={!selectedTagId || isPending}
                     onClick={handleAssignTag}
-                    className="px-3 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                    className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                   >
-                    Assign Tag
+                    {activeAction === 'ASSIGN_TAG' ? 'Assigning...' : 'Assign Tag'}
                   </button>
                   <button
                     onClick={() => setIsCreatingTagMode(true)}
-                    className="px-3 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   >
                     + New Tag
                   </button>
@@ -425,10 +443,11 @@ export function CustomerProfileClient({
                   {tag.tagName}
                   {canManage && (
                     <button
+                      disabled={isPending}
                       onClick={() => handleRemoveTag(tag.tagId)}
-                      className="ml-1.5 text-slate-400 hover:text-red-500 font-bold"
+                      className="ml-1.5 text-slate-400 hover:text-red-500 font-bold disabled:opacity-50"
                     >
-                      ×
+                      {activeAction === `remove_tag_${tag.tagId}` ? '...' : '×'}
                     </button>
                   )}
                 </span>

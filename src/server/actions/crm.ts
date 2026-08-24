@@ -1,6 +1,7 @@
 'use server';
 
 import { can, resolveAuthorizationContext } from '@/server/auth';
+import { createAdminClient } from '@/lib/supabase/server';
 import type { CRMActionStatus } from '@/lib/crm/crm-action.types';
 import type { CustomerDirectoryQueryInput } from '@/lib/crm/crm-types';
 import { CustomerActionService } from '@/server/crm/customer-action.service';
@@ -62,12 +63,19 @@ export async function revealCustomerContactDetailsServerAction(
     throw new Error('Forbidden: customers.contact_view permission is required to reveal full contact details.');
   }
 
-  const profile = await CustomerProfileService.getUnifiedCustomerProfile(customerId, businessId, authContext);
-  if (!profile) throw new Error('Customer not found');
+  const admin = createAdminClient();
+  const { data: customer } = await admin
+    .from('crm_customers')
+    .select('email_normalized, phone_normalized')
+    .eq('id', customerId)
+    .eq('business_id', businessId)
+    .maybeSingle();
+
+  if (!customer) throw new Error('Customer not found');
 
   return {
-    email: profile.emailUnmasked || null,
-    phone: profile.phoneUnmasked || null,
+    email: customer.email_normalized || null,
+    phone: customer.phone_normalized || null,
   };
 }
 
@@ -170,6 +178,35 @@ export async function createCustomerTagServerAction(
     description,
     colorHex,
   });
+}
+
+export async function createAndAssignCustomerTagServerAction(
+  businessId: string,
+  crmCustomerId: string,
+  name: string
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || authContext.businessId !== businessId) {
+    throw new Error('Unauthorized business session');
+  }
+
+  if (!(await can({ context: authContext, permission: 'customers.manage' }))) {
+    throw new Error('Forbidden: missing customers.manage permission');
+  }
+
+  const tag = await CustomerTagService.createTag({
+    businessId,
+    name,
+  });
+
+  await CustomerTagService.assignTag({
+    businessId,
+    crmCustomerId,
+    tagId: tag.id,
+    actorUserId: authContext.userId,
+  });
+
+  return tag;
 }
 
 export async function assignCustomerTagServerAction(

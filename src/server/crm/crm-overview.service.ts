@@ -39,13 +39,39 @@ export class CRMOverviewService {
     const { businessId, branchIds } = input;
     const admin = createAdminClient();
 
-    // 1. Fetch Segment Breakdown using dynamic/authorized scope
-    const breakdown = await CustomerSegmentationService.getSegmentBreakdown({
-      businessId,
-      branchIds,
-    });
+    // Build CRM Action Queue Breakdown query
+    let actionQuery = admin
+      .from('crm_actions')
+      .select('status, priority, branch_id')
+      .eq('business_id', businessId);
+
+    if (branchIds && branchIds.length > 0) {
+      actionQuery = actionQuery.or(`branch_id.is.null,branch_id.in.(${branchIds.join(',')})`);
+    }
+
+    // Parallelize all independent overview queries concurrently via Promise.all
+    const [breakdown, registeredRes, guestRes, actionsRes] = await Promise.all([
+      CustomerSegmentationService.getSegmentBreakdown({
+        businessId,
+        branchIds,
+      }),
+      admin
+        .from('crm_customers')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('identity_type', 'REGISTERED'),
+      admin
+        .from('crm_customers')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('identity_type', 'KNOWN_GUEST'),
+      actionQuery,
+    ]);
 
     const totalCustomers = breakdown.totalCustomers;
+    const registeredCount = registeredRes.count || 0;
+    const guestCount = guestRes.count || 0;
+
     let vipCount = 0;
     let regularCount = 0;
     let atRiskCount = 0;
@@ -62,31 +88,7 @@ export class CRMOverviewService {
       if (seg.segmentCode === 'ONE_TIME') oneTimeCount = seg.customerCount;
     }
 
-    // 2. Query Identity Types Breakdown
-    const { count: registeredCount } = await admin
-      .from('crm_customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('identity_type', 'REGISTERED');
-
-    const { count: guestCount } = await admin
-      .from('crm_customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('identity_type', 'KNOWN_GUEST');
-
-    // 3. Query CRM Action Queue Breakdown
-    let actionQuery = admin
-      .from('crm_actions')
-      .select('status, priority, branch_id')
-      .eq('business_id', businessId);
-
-    if (branchIds && branchIds.length > 0) {
-      actionQuery = actionQuery.or(`branch_id.is.null,branch_id.in.(${branchIds.join(',')})`);
-    }
-
-    const { data: actionsData } = await actionQuery;
-
+    const actionsData = actionsRes.data || [];
     let open = 0;
     let inProgress = 0;
     let snoozed = 0;

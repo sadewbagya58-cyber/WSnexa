@@ -213,6 +213,13 @@ async function main() {
   assert(step4DocContent.includes('3 service-level batched operations resulting in'), '73. Performance architecture accurately describes <= 5 database queries across 3 service operations');
   assert(step4DocContent.includes('Known sensitive category keywords/patterns are blocked'), '74. Sensitive tag validation documents operational-only keyword blocking without AI');
 
+  // --- SECTION J: HOTFIX INTERACTION & TAG CONTROLS ASSERTIONS ---
+  console.log('\n--- SECTION J: Hotfix Interaction & Tag Controls Assertions ---');
+  assert(crmHubClientContent.includes('href={`/dashboard/customers/${cust.customerId}`}') && crmHubClientContent.includes('router.push(`/dashboard/customers/${cust.customerId}`)'), '75. View Profile control has real canonical customerId href and imperative router.push handler');
+  assert(crmHubClientContent.includes('View Guest Profile'), '76. Action Queue cards contain direct View Guest Profile link');
+  assert(crmProfileClientContent.includes('createCustomerTagServerAction') && crmProfileClientContent.includes('Create & Assign'), '77. Operational tags panel equips authorized managers with tag creation and assignment controls');
+  assert(crmProfileClientContent.includes('{canManage && (') && crmProfileClientContent.includes('handleRemoveTag'), '78. Tag management controls strictly gated by canManage permission with read-only fallback');
+
   console.log('\n================================================================');
   console.log(`  Phase 33 Master Closure Verification Complete: ${passed} PASSED, ${failed} FAILED`);
   console.log('================================================================\n');

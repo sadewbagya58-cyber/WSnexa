@@ -345,7 +345,7 @@ export class CustomerActionService {
         if (!hasReach) continue;
       }
 
-      const userObj = mem.users as any;
+      const userObj = mem.users as unknown as { display_name?: string; email?: string } | null;
       const displayName = userObj?.display_name || userObj?.email || `Staff Member (${mem.user_id.slice(0, 8)})`;
 
       result.push({

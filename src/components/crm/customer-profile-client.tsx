@@ -7,6 +7,7 @@ import type { CustomerSegmentationDTO, UnifiedCustomerProfileDTO } from '@/lib/c
 import {
   addCustomerNoteServerAction,
   assignCustomerTagServerAction,
+  createCustomerTagServerAction,
   deleteCustomerNoteServerAction,
   removeCustomerTagServerAction,
   revealCustomerContactDetailsServerAction,
@@ -41,6 +42,9 @@ export function CustomerProfileClient({
 
   const [newNoteText, setNewNoteText] = useState('');
   const [selectedTagId, setSelectedTagId] = useState('');
+  const [allAvailableTags, setAllAvailableTags] = useState<CustomerTagDTO[]>(availableTags);
+  const [newTagName, setNewTagName] = useState('');
+  const [isCreatingTagMode, setIsCreatingTagMode] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -84,7 +88,7 @@ export function CustomerProfileClient({
     startTransition(async () => {
       try {
         await assignCustomerTagServerAction(businessId, profile.customerId, selectedTagId);
-        const tagObj = availableTags.find((t) => t.id === selectedTagId);
+        const tagObj = allAvailableTags.find((t) => t.id === selectedTagId);
         if (tagObj) {
           setTagsList([
             ...tagsList,
@@ -99,6 +103,32 @@ export function CustomerProfileClient({
           ]);
         }
         setSelectedTagId('');
+      } catch (err: unknown) {
+        setErrorMessage((err as Error).message);
+      }
+    });
+  };
+
+  const handleCreateAndAssignTag = () => {
+    if (!newTagName.trim()) return;
+    startTransition(async () => {
+      try {
+        const createdTag = await createCustomerTagServerAction(businessId, newTagName.trim());
+        setAllAvailableTags((prev) => [...prev, createdTag]);
+        await assignCustomerTagServerAction(businessId, profile.customerId, createdTag.id);
+        setTagsList((prev) => [
+          ...prev,
+          {
+            tagId: createdTag.id,
+            tagName: createdTag.name,
+            tagSlug: createdTag.slug,
+            colorHex: createdTag.colorHex,
+            assignedBy: 'Current User',
+            assignedAt: new Date().toISOString(),
+          },
+        ]);
+        setNewTagName('');
+        setIsCreatingTagMode(false);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
       }
@@ -324,25 +354,62 @@ export function CustomerProfileClient({
             <span className="text-xs text-slate-500">{tagsList.length} assigned</span>
           </div>
 
-          {canManage && availableTags.length > 0 && (
-            <div className="flex gap-2">
-              <select
-                value={selectedTagId}
-                onChange={(e) => setSelectedTagId(e.target.value)}
-                className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-              >
-                <option value="">Select tag to assign...</option>
-                {availableTags.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <button
-                disabled={!selectedTagId || isPending}
-                onClick={handleAssignTag}
-                className="px-3 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                Assign Tag
-              </button>
+          {canManage && (
+            <div className="space-y-3">
+              {isCreatingTagMode || allAvailableTags.length === 0 ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter new tag name (e.g. Preferred Guest)..."
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                    className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      disabled={!newTagName.trim() || isPending}
+                      onClick={handleCreateAndAssignTag}
+                      className="px-3 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      Create & Assign
+                    </button>
+                    {allAvailableTags.length > 0 && (
+                      <button
+                        onClick={() => setIsCreatingTagMode(false)}
+                        className="px-3 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={selectedTagId}
+                    onChange={(e) => setSelectedTagId(e.target.value)}
+                    className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    <option value="">Select tag to assign...</option>
+                    {allAvailableTags.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!selectedTagId || isPending}
+                    onClick={handleAssignTag}
+                    className="px-3 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    Assign Tag
+                  </button>
+                  <button
+                    onClick={() => setIsCreatingTagMode(true)}
+                    className="px-3 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    + New Tag
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

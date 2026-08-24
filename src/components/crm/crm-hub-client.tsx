@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { CustomerCRMOverviewDTO } from '@/server/crm/crm-overview.service';
 import type { CustomerDirectoryItemDTO, IdentityType } from '@/lib/crm/crm-types';
 import type { CRMActionStatus, RetentionOpportunityDTO } from '@/lib/crm/crm-action.types';
@@ -37,6 +38,7 @@ export function CRMHubClient({
   hasContactView,
   authorizedBranchIds,
 }: CRMHubClientProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'directory' | 'intelligence' | 'actions'>('directory');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSegment, setSelectedSegment] = useState<string>('');
@@ -319,7 +321,10 @@ export function CRMHubClient({
                         <td className="py-3 px-4 text-right">
                           <Link
                             href={`/dashboard/customers/${cust.customerId}`}
-                            className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                            onClick={() => {
+                              router.push(`/dashboard/customers/${cust.customerId}`);
+                            }}
+                            className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
                           >
                             View Profile
                           </Link>
@@ -490,10 +495,21 @@ export function CRMHubClient({
                       <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{action.recommendedAction}</p>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                      <span>Reason: <code className="text-slate-700 dark:text-slate-300">{action.reasonCode}</code></span>
-                      <span>•</span>
-                      <span>Channel: <strong className="text-slate-700 dark:text-slate-300">{action.engagementEligibility.allowedChannels.join(', ') || 'In-App'}</strong></span>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400 items-center justify-between">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span>Reason: <code className="text-slate-700 dark:text-slate-300">{action.reasonCode}</code></span>
+                        <span>•</span>
+                        <span>Channel: <strong className="text-slate-700 dark:text-slate-300">{action.engagementEligibility.allowedChannels.join(', ') || 'In-App'}</strong></span>
+                      </div>
+                      <Link
+                        href={`/dashboard/customers/${action.customerId}`}
+                        onClick={() => {
+                          router.push(`/dashboard/customers/${action.customerId}`);
+                        }}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline"
+                      >
+                        View Guest Profile &rarr;
+                      </Link>
                     </div>
                   </div>
 

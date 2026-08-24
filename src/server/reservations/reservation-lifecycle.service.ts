@@ -19,17 +19,26 @@ export class ReservationLifecycleService {
    * Checks whether a status transition from `fromStatus` to `toStatus` is legal.
    */
   static canTransition(fromStatus: ReservationStatus, toStatus: ReservationStatus): boolean {
-    if (fromStatus === toStatus) return true;
+    if (fromStatus === toStatus) {
+      return false; // Same-state transitions are strictly rejected
+    }
     const allowed = this.ALLOWED_TRANSITIONS[fromStatus] || [];
     return allowed.includes(toStatus);
   }
 
   /**
-   * Validates a status transition, throwing an Error if illegal.
+   * Validates a status transition, throwing a structured Error if illegal.
    */
   static validateTransition(fromStatus: ReservationStatus, toStatus: ReservationStatus): void {
+    if (fromStatus === toStatus) {
+      const err = new Error(`Reservation is already marked as ${fromStatus}.`);
+      (err as unknown as { code: string }).code = 'SAME_STATE_TRANSITION';
+      throw err;
+    }
     if (!this.canTransition(fromStatus, toStatus)) {
-      throw new Error(`Illegal reservation status transition from '${fromStatus}' to '${toStatus}'`);
+      const err = new Error(`Reservation cannot move from ${fromStatus} to ${toStatus}.`);
+      (err as unknown as { code: string }).code = 'ILLEGAL_RESERVATION_TRANSITION';
+      throw err;
     }
   }
 

@@ -40,12 +40,21 @@ export class ReservationService {
     const admin = createAdminClient();
     const settings = await ReservationSettingsService.getBranchSettings(input.businessId, input.branchId);
 
+    // Fetch branch timezone if available
+    const { data: branch } = await admin
+      .from('branches')
+      .select('timezone')
+      .eq('id', input.branchId)
+      .single();
+
+    const branchTimezone = branch?.timezone || 'Asia/Colombo';
     const isStaffCreation = actorType === 'STAFF';
     const duration = input.durationMinutes || settings.defaultDurationMinutes;
 
     const startAt = new Date(input.reservationStartAt);
     const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
 
+    // Canonical validation for ALL creation paths (staff + public)
     ReservationValidationService.validateReservationInput({
       partySize: input.partySize,
       reservationStartAt: startAt.toISOString(),
@@ -55,6 +64,7 @@ export class ReservationService {
       guestPhone: input.guestPhone,
       settings,
       isStaffCreation,
+      branchTimezone,
     });
 
     // Resolve or link CRM customer identity while preserving local snapshot
@@ -77,7 +87,7 @@ export class ReservationService {
     }
 
     const confirmationCode = this.generateConfirmationCode();
-    const reservationDate = startAt.toISOString().split('T')[0];
+    const reservationDate = ReservationValidationService.deriveBranchReservationDate(startAt.toISOString(), branchTimezone);
 
     let initialStatus: ReservationStatus = 'PENDING';
     if (isStaffCreation) {
@@ -119,7 +129,7 @@ export class ReservationService {
       throw new Error(`Failed to create reservation: ${error?.message}`);
     }
 
-    // Append initial creation event
+    // Append initial creation event strictly AFTER successful DB row insertion
     await this.recordStatusEvent({
       reservationId: inserted.id,
       businessId: inserted.business_id,
@@ -174,44 +184,16 @@ export class ReservationService {
     actorType: StatusActorType,
     reason?: string | null
   ): Promise<ReservationDTO> {
-    const admin = createAdminClient();
-    const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) {
-      throw new Error('Reservation not found');
-    }
-
-    ReservationLifecycleService.validateTransition(existing.status, 'CANCELLED');
-
-    const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: 'CANCELLED',
-        cancelled_at: nowIso,
-        cancelled_by_user_id: actorUserId || null,
-        cancellation_reason: reason ? reason.trim() : null,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
-
-    if (error) {
-      throw new Error(`Failed to cancel reservation: ${error.message}`);
-    }
-
-    await this.recordStatusEvent({
-      reservationId,
+    return this.transitionStatus({
       businessId,
-      branchId: existing.branchId,
-      fromStatus: existing.status,
-      toStatus: 'CANCELLED',
+      reservationId,
+      targetStatus: 'CANCELLED',
       actorUserId,
       actorType,
       reason: reason || 'Reservation cancelled',
+      timestampField: 'cancelled_at',
+      cancellationReason: reason,
     });
-
-    const updated = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    return updated!;
   }
 
   /**
@@ -222,38 +204,15 @@ export class ReservationService {
     reservationId: string,
     actorUserId: string
   ): Promise<ReservationDTO> {
-    const admin = createAdminClient();
-    const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) throw new Error('Reservation not found');
-
-    ReservationLifecycleService.validateTransition(existing.status, 'ARRIVED');
-
-    const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: 'ARRIVED',
-        arrived_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
-
-    if (error) throw new Error(`Failed to mark arrival: ${error.message}`);
-
-    await this.recordStatusEvent({
-      reservationId,
+    return this.transitionStatus({
       businessId,
-      branchId: existing.branchId,
-      fromStatus: existing.status,
-      toStatus: 'ARRIVED',
+      reservationId,
+      targetStatus: 'ARRIVED',
       actorUserId,
       actorType: 'STAFF',
       reason: 'Guest arrived at venue',
+      timestampField: 'arrived_at',
     });
-
-    const updated = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    return updated!;
   }
 
   /**
@@ -264,38 +223,15 @@ export class ReservationService {
     reservationId: string,
     actorUserId: string
   ): Promise<ReservationDTO> {
-    const admin = createAdminClient();
-    const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) throw new Error('Reservation not found');
-
-    ReservationLifecycleService.validateTransition(existing.status, 'SEATED');
-
-    const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: 'SEATED',
-        seated_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
-
-    if (error) throw new Error(`Failed to mark seated: ${error.message}`);
-
-    await this.recordStatusEvent({
-      reservationId,
+    return this.transitionStatus({
       businessId,
-      branchId: existing.branchId,
-      fromStatus: existing.status,
-      toStatus: 'SEATED',
+      reservationId,
+      targetStatus: 'SEATED',
       actorUserId,
       actorType: 'STAFF',
       reason: 'Party seated at dining area',
+      timestampField: 'seated_at',
     });
-
-    const updated = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    return updated!;
   }
 
   /**
@@ -306,38 +242,15 @@ export class ReservationService {
     reservationId: string,
     actorUserId: string
   ): Promise<ReservationDTO> {
-    const admin = createAdminClient();
-    const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) throw new Error('Reservation not found');
-
-    ReservationLifecycleService.validateTransition(existing.status, 'COMPLETED');
-
-    const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: 'COMPLETED',
-        completed_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
-
-    if (error) throw new Error(`Failed to mark completed: ${error.message}`);
-
-    await this.recordStatusEvent({
-      reservationId,
+    return this.transitionStatus({
       businessId,
-      branchId: existing.branchId,
-      fromStatus: existing.status,
-      toStatus: 'COMPLETED',
+      reservationId,
+      targetStatus: 'COMPLETED',
       actorUserId,
       actorType: 'STAFF',
       reason: 'Dining experience completed',
+      timestampField: 'completed_at',
     });
-
-    const updated = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    return updated!;
   }
 
   /**
@@ -348,38 +261,15 @@ export class ReservationService {
     reservationId: string,
     actorUserId: string
   ): Promise<ReservationDTO> {
-    const admin = createAdminClient();
-    const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) throw new Error('Reservation not found');
-
-    ReservationLifecycleService.validateTransition(existing.status, 'NO_SHOW');
-
-    const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: 'NO_SHOW',
-        no_show_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
-
-    if (error) throw new Error(`Failed to mark no-show: ${error.message}`);
-
-    await this.recordStatusEvent({
-      reservationId,
+    return this.transitionStatus({
       businessId,
-      branchId: existing.branchId,
-      fromStatus: existing.status,
-      toStatus: 'NO_SHOW',
+      reservationId,
+      targetStatus: 'NO_SHOW',
       actorUserId,
       actorType: 'STAFF',
       reason: 'Guest did not arrive',
+      timestampField: 'no_show_at',
     });
-
-    const updated = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    return updated!;
   }
 
   /**
@@ -434,7 +324,7 @@ export class ReservationService {
   }
 
   /**
-   * Generic status transition helper.
+   * Generic status transition helper with optimistic concurrency & same-state checks.
    */
   private static async transitionStatus(options: {
     businessId: string;
@@ -443,29 +333,54 @@ export class ReservationService {
     actorUserId: string | null;
     actorType: StatusActorType;
     reason: string;
+    timestampField?: 'arrived_at' | 'seated_at' | 'completed_at' | 'no_show_at' | 'cancelled_at';
+    cancellationReason?: string | null;
   }): Promise<ReservationDTO> {
     const admin = createAdminClient();
-    const { businessId, reservationId, targetStatus, actorUserId, actorType, reason } = options;
+    const { businessId, reservationId, targetStatus, actorUserId, actorType, reason, timestampField, cancellationReason } = options;
 
     const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
-    if (!existing) throw new Error('Reservation not found');
+    if (!existing) {
+      const err = new Error('Reservation not found.');
+      (err as unknown as { code: string }).code = 'NOT_FOUND';
+      throw err;
+    }
 
+    // 1. Validate status machine (throws SAME_STATE_TRANSITION or ILLEGAL_RESERVATION_TRANSITION if invalid)
     ReservationLifecycleService.validateTransition(existing.status, targetStatus);
 
     const nowIso = new Date().toISOString();
-    const { error } = await admin
-      .from('reservations')
-      .update({
-        status: targetStatus,
-        updated_at: nowIso,
-      })
-      .eq('id', reservationId)
-      .eq('business_id', businessId);
+    const updatePayload: Record<string, unknown> = {
+      status: targetStatus,
+      updated_at: nowIso,
+    };
 
-    if (error) {
-      throw new Error(`Failed to update reservation status: ${error.message}`);
+    if (timestampField) {
+      updatePayload[timestampField] = nowIso;
+    }
+    if (targetStatus === 'CANCELLED') {
+      updatePayload.cancelled_by_user_id = actorUserId || null;
+      if (cancellationReason !== undefined) {
+        updatePayload.cancellation_reason = cancellationReason ? cancellationReason.trim() : null;
+      }
     }
 
+    // 2. Concurrency-resistant update checking existing.status
+    const { data: updatedRows, error } = await admin
+      .from('reservations')
+      .update(updatePayload)
+      .eq('id', reservationId)
+      .eq('business_id', businessId)
+      .eq('status', existing.status) // Optimistic concurrency check
+      .select('id');
+
+    if (error || !updatedRows || updatedRows.length === 0) {
+      const err = new Error(`Reservation status transition to '${targetStatus}' could not be applied. State may have changed.`);
+      (err as unknown as { code: string }).code = 'CONCURRENCY_CONFLICT';
+      throw err;
+    }
+
+    // 3. Record append-only audit event strictly AFTER successful mutation
     await this.recordStatusEvent({
       reservationId,
       businessId,

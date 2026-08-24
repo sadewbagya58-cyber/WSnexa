@@ -146,8 +146,32 @@ export function ReservationsSmokeClient({
     setChecklistResults((prev) => ({ ...prev, [id]: result }));
   };
 
+  // Helper for status button capability matrix
+  const canPerformTransition = (target: ReservationStatus): boolean => {
+    if (!currentResDetail) return false;
+    const status = currentResDetail.status;
+    if (status === target) return false; // Same state transition disabled
+
+    switch (status) {
+      case 'PENDING':
+        return target === 'CONFIRMED' || target === 'CANCELLED' || target === 'DECLINED';
+      case 'CONFIRMED':
+        return target === 'ARRIVED' || target === 'CANCELLED' || target === 'NO_SHOW';
+      case 'ARRIVED':
+        return target === 'SEATED' || target === 'CANCELLED';
+      case 'SEATED':
+        return target === 'COMPLETED';
+      case 'COMPLETED':
+      case 'CANCELLED':
+      case 'NO_SHOW':
+      case 'DECLINED':
+      default:
+        return false;
+    }
+  };
+
   // ------------------------------------------------------------------
-  // Actions Handlers
+  // Action Handlers
   // ------------------------------------------------------------------
 
   const handleCreateStaffReservation = async (e: React.FormEvent) => {
@@ -168,14 +192,20 @@ export function ReservationsSmokeClient({
         occasion: staffForm.occasion || null,
         source: 'STAFF',
       });
-      setCreatedStaffRes(res);
-      setSelectedResId(res.id);
-      setCurrentResDetail(res);
-      setLastActionMessage(`✅ Created staff reservation code: ${res.confirmationCode}`);
-      markChecklist(1, 'PASS');
-      if (res.crmCustomerId) markChecklist(10, 'PASS');
+
+      if (res.ok) {
+        setCreatedStaffRes(res.data);
+        setSelectedResId(res.data.id);
+        setCurrentResDetail(res.data);
+        setLastActionMessage(`✅ Created staff reservation code: ${res.data.confirmationCode}`);
+        markChecklist(1, 'PASS');
+        if (res.data.crmCustomerId) markChecklist(10, 'PASS');
+      } else {
+        setLastActionMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        markChecklist(1, 'FAIL');
+      }
     } catch (err: unknown) {
-      setLastActionMessage(`❌ Staff creation failed: ${(err as Error).message}`);
+      setLastActionMessage(`❌ Error: ${(err as Error).message}`);
       markChecklist(1, 'FAIL');
     } finally {
       setIsPending(false);
@@ -187,7 +217,7 @@ export function ReservationsSmokeClient({
     setIsPending(true);
     setLastActionMessage(null);
     try {
-      const publicRes = await createPublicReservationAction({
+      const res = await createPublicReservationAction({
         branchId: selectedBranchId,
         guestName: publicForm.guestName,
         guestEmail: publicForm.guestEmail || null,
@@ -197,11 +227,17 @@ export function ReservationsSmokeClient({
         specialRequests: publicForm.specialRequests || null,
         occasion: publicForm.occasion || null,
       });
-      setCreatedPublicRes(publicRes);
-      setLastActionMessage(`✅ Created public reservation code: ${publicRes.confirmationCode}`);
-      markChecklist(2, 'PASS');
+
+      if (res.ok) {
+        setCreatedPublicRes(res.data);
+        setLastActionMessage(`✅ Created public reservation code: ${res.data.confirmationCode}`);
+        markChecklist(2, 'PASS');
+      } else {
+        setLastActionMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        markChecklist(2, 'FAIL');
+      }
     } catch (err: unknown) {
-      setLastActionMessage(`❌ Public creation failed: ${(err as Error).message}`);
+      setLastActionMessage(`❌ Error: ${(err as Error).message}`);
       markChecklist(2, 'FAIL');
     } finally {
       setIsPending(false);
@@ -212,14 +248,16 @@ export function ReservationsSmokeClient({
     if (!idToLoad) return;
     setIsPending(true);
     try {
-      const detail = await getReservationByIdAction(idToLoad);
-      setCurrentResDetail(detail);
-      if (detail) {
-        const history = await getReservationStatusHistoryAction(detail.id);
-        setStatusHistory(history);
+      const res = await getReservationByIdAction(idToLoad);
+      if (res.ok && res.data) {
+        setCurrentResDetail(res.data);
+        const historyRes = await getReservationStatusHistoryAction(res.data.id);
+        if (historyRes.ok) setStatusHistory(historyRes.data);
+      } else {
+        setLastActionMessage(`🔒 ${res.ok ? 'Reservation not found' : res.error.message}`);
       }
     } catch (err: unknown) {
-      setLastActionMessage(`❌ Load reservation failed: ${(err as Error).message}`);
+      setLastActionMessage(`❌ Error loading reservation: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
@@ -235,38 +273,46 @@ export function ReservationsSmokeClient({
     setIsPending(true);
     setLastActionMessage(null);
     try {
-      let updated: ReservationDTO;
+      let res;
       if (type === 'confirm') {
-        updated = await confirmReservationAction(selectedResId);
-        markChecklist(4, 'PASS');
+        res = await confirmReservationAction(selectedResId);
+        if (res.ok) markChecklist(4, 'PASS');
       } else if (type === 'arrived') {
-        updated = await markReservationArrivedAction(selectedResId);
-        markChecklist(6, 'PASS');
+        res = await markReservationArrivedAction(selectedResId);
+        if (res.ok) markChecklist(6, 'PASS');
       } else if (type === 'seated') {
-        updated = await markReservationSeatedAction(selectedResId);
-        markChecklist(6, 'PASS');
+        res = await markReservationSeatedAction(selectedResId);
+        if (res.ok) markChecklist(6, 'PASS');
       } else if (type === 'complete') {
-        updated = await markReservationCompletedAction(selectedResId);
-        markChecklist(6, 'PASS');
+        res = await markReservationCompletedAction(selectedResId);
+        if (res.ok) markChecklist(6, 'PASS');
       } else if (type === 'cancel') {
-        updated = await cancelReservationAction({ reservationId: selectedResId, reason: 'Smoke test cancellation' });
-        markChecklist(5, 'PASS');
+        res = await cancelReservationAction({ reservationId: selectedResId, reason: 'Smoke test cancellation' });
+        if (res.ok) markChecklist(5, 'PASS');
       } else {
-        updated = await markReservationNoShowAction(selectedResId);
-        markChecklist(7, 'PASS');
+        res = await markReservationNoShowAction(selectedResId);
+        if (res.ok) markChecklist(7, 'PASS');
       }
-      setCurrentResDetail(updated);
-      const history = await getReservationStatusHistoryAction(updated.id);
-      setStatusHistory(history);
-      setLastActionMessage(`✅ Status transition to '${updated.status}' succeeded`);
+
+      if (res.ok) {
+        setCurrentResDetail(res.data);
+        const historyRes = await getReservationStatusHistoryAction(res.data.id);
+        if (historyRes.ok) setStatusHistory(historyRes.data);
+        setLastActionMessage(`✅ Status transition to '${res.data.status}' succeeded`);
+      } else {
+        setLastActionMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        if (res.error.code === 'SAME_STATE_TRANSITION' || res.error.code === 'ILLEGAL_RESERVATION_TRANSITION') {
+          markChecklist(8, 'PASS');
+        }
+      }
     } catch (err: unknown) {
-      setLastActionMessage(`❌ Status transition failed: ${(err as Error).message}`);
+      setLastActionMessage(`❌ Unexpected error: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
   };
 
-  const handleIllegalTransitionAttempt = async (illegalTarget: 'PENDING' | 'SEATED') => {
+  const handleIllegalTransitionAttempt = async (illegalTarget: 'PENDING' | 'SEATED' | 'SAME_STATE') => {
     if (!selectedResId || !currentResDetail) {
       setLastActionMessage('❌ Select a reservation first');
       return;
@@ -274,21 +320,33 @@ export function ReservationsSmokeClient({
     setIsPending(true);
     setLastActionMessage(null);
     try {
-      if (illegalTarget === 'PENDING') {
-        // Attempting invalid PENDING transition on an existing non-pending status or completed
-        await confirmReservationAction(selectedResId); // Valid
-        await markReservationArrivedAction(selectedResId); // Valid
-        await markReservationSeatedAction(selectedResId); // Valid
-        await markReservationCompletedAction(selectedResId); // Terminal
-        // Now try illegal transition
-        await confirmReservationAction(selectedResId);
+      let res;
+      if (illegalTarget === 'SAME_STATE') {
+        // Attempt same-state transition (e.g. ARRIVED -> ARRIVED or CONFIRMED -> CONFIRMED)
+        if (currentResDetail.status === 'ARRIVED') {
+          res = await markReservationArrivedAction(selectedResId);
+        } else if (currentResDetail.status === 'CONFIRMED') {
+          res = await confirmReservationAction(selectedResId);
+        } else if (currentResDetail.status === 'COMPLETED') {
+          res = await markReservationCompletedAction(selectedResId);
+        } else {
+          res = await markReservationNoShowAction(selectedResId);
+        }
+      } else if (illegalTarget === 'PENDING') {
+        // Attempt illegal jump COMPLETED -> PENDING or CONFIRMED -> PENDING
+        res = await confirmReservationAction(selectedResId);
       } else {
-        // Attempt SEATED on CANCELLED
-        await cancelReservationAction({ reservationId: selectedResId, reason: 'Test illegal' });
-        await markReservationSeatedAction(selectedResId);
+        // Attempt SEATED on CANCELLED or PENDING
+        res = await markReservationSeatedAction(selectedResId);
       }
-      setLastActionMessage(`❌ UNEXPECTED: Illegal transition allowed!`);
-      markChecklist(8, 'FAIL');
+
+      if (res.ok) {
+        setLastActionMessage(`❌ UNEXPECTED: Illegal transition allowed to '${res.data.status}'!`);
+        markChecklist(8, 'FAIL');
+      } else {
+        setLastActionMessage(`✅ SAFELY REJECTED [${res.error.code}]: ${res.error.message}`);
+        markChecklist(8, 'PASS');
+      }
     } catch (err: unknown) {
       setLastActionMessage(`✅ SAFELY REJECTED: ${(err as Error).message}`);
       markChecklist(8, 'PASS');
@@ -300,13 +358,18 @@ export function ReservationsSmokeClient({
   const handleSaveSettings = async (updates: Partial<ReservationSettingsDTO>) => {
     setIsPending(true);
     try {
-      const updated = await updateReservationSettingsAction({
+      const res = await updateReservationSettingsAction({
         branchId: selectedBranchId,
         ...updates,
       });
-      setSettings(updated);
-      setLastActionMessage('✅ Reservation settings updated successfully');
-      markChecklist(11, 'PASS');
+      if (res.ok) {
+        setSettings(res.data);
+        setLastActionMessage('✅ Reservation settings updated successfully');
+        markChecklist(11, 'PASS');
+      } else {
+        setLastActionMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        markChecklist(11, 'FAIL');
+      }
     } catch (err: unknown) {
       setLastActionMessage(`❌ Settings update failed: ${(err as Error).message}`);
       markChecklist(11, 'FAIL');
@@ -319,8 +382,9 @@ export function ReservationsSmokeClient({
     setIsPending(true);
     setValidationTestOutput(null);
     try {
+      let res;
       if (testCase === 'min_party') {
-        await createStaffReservationAction({
+        res = await createStaffReservationAction({
           businessId,
           branchId: selectedBranchId,
           guestName: 'Invalid Party Test',
@@ -328,7 +392,7 @@ export function ReservationsSmokeClient({
           reservationStartAt: new Date(Date.now() + 3600 * 1000).toISOString(),
         });
       } else if (testCase === 'max_party') {
-        await createStaffReservationAction({
+        res = await createStaffReservationAction({
           businessId,
           branchId: selectedBranchId,
           guestName: 'Huge Party Test',
@@ -336,7 +400,7 @@ export function ReservationsSmokeClient({
           reservationStartAt: new Date(Date.now() + 3600 * 1000).toISOString(),
         });
       } else {
-        await createStaffReservationAction({
+        res = await createStaffReservationAction({
           businessId,
           branchId: selectedBranchId,
           guestName: 'Past Reservation Test',
@@ -344,8 +408,14 @@ export function ReservationsSmokeClient({
           reservationStartAt: new Date(Date.now() - 3600 * 1000).toISOString(),
         });
       }
-      setValidationTestOutput('❌ UNEXPECTED: Server accepted invalid input!');
-      markChecklist(11, 'FAIL');
+
+      if (res.ok) {
+        setValidationTestOutput(`❌ UNEXPECTED: Server accepted invalid input! Saved ID: ${res.data.id}`);
+        markChecklist(11, 'FAIL');
+      } else {
+        setValidationTestOutput(`✅ SAFELY REJECTED BY SERVER [${res.error.code}]: ${res.error.message}`);
+        markChecklist(11, 'PASS');
+      }
     } catch (err: unknown) {
       setValidationTestOutput(`✅ SAFELY REJECTED BY SERVER: ${(err as Error).message}`);
       markChecklist(11, 'PASS');
@@ -359,10 +429,10 @@ export function ReservationsSmokeClient({
     setIsPending(true);
     try {
       const res = await getReservationByIdAction(scopeLookupInputId);
-      if (res) {
-        setScopeLookupResult(`✅ FOUND: ${res.guestName} (${res.confirmationCode}) - Branch: ${res.branchId}`);
+      if (res.ok && res.data) {
+        setScopeLookupResult(`✅ FOUND: ${res.data.guestName} (${res.data.confirmationCode}) - Branch: ${res.data.branchId}`);
       } else {
-        setScopeLookupResult('🔒 NEUTRAL DENIAL: Reservation not found or authorized scope reach denied');
+        setScopeLookupResult(`🔒 NEUTRAL DENIAL: ${res.ok ? 'Not found' : res.error.message}`);
         markChecklist(3, 'PASS');
       }
     } catch (err: unknown) {
@@ -383,11 +453,17 @@ export function ReservationsSmokeClient({
         limit: queryState.pageSize,
         offset: (page - 1) * queryState.pageSize,
       });
-      setQueryResult(res);
-      setQueryState((prev) => ({ ...prev, page }));
-      markChecklist(12, 'PASS');
+
+      if (res.ok) {
+        setQueryResult(res.data);
+        setQueryState((prev) => ({ ...prev, page }));
+        markChecklist(12, 'PASS');
+      } else {
+        setLastActionMessage(`❌ Query failed: ${res.error.message}`);
+        markChecklist(12, 'FAIL');
+      }
     } catch (err: unknown) {
-      setLastActionMessage(`❌ Query failed: ${(err as Error).message}`);
+      setLastActionMessage(`❌ Query error: ${(err as Error).message}`);
       markChecklist(12, 'FAIL');
     } finally {
       setIsPending(false);
@@ -406,7 +482,7 @@ export function ReservationsSmokeClient({
             <span className="px-2.5 py-1 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md">
               DEV / SMOKE TEST HARNESS
             </span>
-            <span className="text-xs text-slate-400">Phase 35 Step 1</span>
+            <span className="text-xs text-slate-400">Phase 35 Step 1 Hotfix</span>
           </div>
           <h1 className="text-2xl font-bold mt-1 text-slate-100">Reservation Foundation Production Harness</h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -534,7 +610,7 @@ export function ReservationsSmokeClient({
           <div>
             <h2 className="text-lg font-bold text-slate-900">Panel A: Staff Reservation Creation</h2>
             <p className="text-sm text-slate-500">
-              Executes <code className="text-amber-700">createStaffReservationAction</code> with server capability checks.
+              Executes <code className="text-amber-700">createStaffReservationAction</code> returning safe <code className="text-amber-700">ReservationActionResult</code>.
             </p>
           </div>
 
@@ -645,7 +721,7 @@ export function ReservationsSmokeClient({
           <div>
             <h2 className="text-lg font-bold text-slate-900">Panel B: Public/Customer Booking Simulator</h2>
             <p className="text-sm text-slate-500">
-              Executes <code className="text-amber-700">createPublicReservationAction</code> using trusted branch-to-business tenancy resolution.
+              Executes <code className="text-amber-700">createPublicReservationAction</code> returning safe <code className="text-amber-700">PublicReservationDTO</code>.
             </p>
           </div>
 
@@ -738,7 +814,7 @@ export function ReservationsSmokeClient({
           <div>
             <h2 className="text-lg font-bold text-slate-900">Panel C: Canonical Status Transitions & Event Log</h2>
             <p className="text-sm text-slate-500">
-              Executes state machine status actions (<code className="text-amber-700">confirm</code>, <code className="text-amber-700">markArrived</code>, <code className="text-amber-700">markSeated</code>, <code className="text-amber-700">markCompleted</code>, <code className="text-amber-700">cancel</code>, <code className="text-amber-700">markNoShow</code>).
+              Executes state machine status actions with immediate button disabling to prevent race conditions.
             </p>
           </div>
 
@@ -756,7 +832,7 @@ export function ReservationsSmokeClient({
             <button
               onClick={() => handleLoadReservationDetail(selectedResId)}
               disabled={isPending || !selectedResId}
-              className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded text-sm"
+              className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded text-sm disabled:opacity-50"
             >
               Load Details & History
             </button>
@@ -778,47 +854,47 @@ export function ReservationsSmokeClient({
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons Matrix */}
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => handleTransition('confirm')}
-                  disabled={isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('CONFIRMED')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Confirm
                 </button>
                 <button
                   onClick={() => handleTransition('arrived')}
-                  disabled={isPending}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('ARRIVED')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Mark Arrived
                 </button>
                 <button
                   onClick={() => handleTransition('seated')}
-                  disabled={isPending}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('SEATED')}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Mark Seated
                 </button>
                 <button
                   onClick={() => handleTransition('complete')}
-                  disabled={isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('COMPLETED')}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Mark Completed
                 </button>
                 <button
                   onClick={() => handleTransition('cancel')}
-                  disabled={isPending}
-                  className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('CANCELLED')}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleTransition('no_show')}
-                  disabled={isPending}
-                  className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded text-xs font-bold"
+                  disabled={isPending || !canPerformTransition('NO_SHOW')}
+                  className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1.5 rounded text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Mark No-Show
                 </button>
@@ -868,33 +944,40 @@ export function ReservationsSmokeClient({
       {activeTab === 'illegal' && (
         <div className="bg-white border rounded-xl p-6 shadow-sm space-y-6">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Panel D: Illegal Transition Safety Test</h2>
+            <h2 className="text-lg font-bold text-slate-900">Panel D: Same-State & Illegal Transition Safety Test</h2>
             <p className="text-sm text-slate-500">
-              Deliberately attempts illegal state machine transitions to verify server-side rejection without database mutation.
+              Deliberately attempts illegal state machine transitions and same-state transitions to verify safe domain error responses.
             </p>
           </div>
 
           <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-sm space-y-2">
             <p className="font-semibold">Target Reservation: {selectedResId || 'None Selected'}</p>
             <p className="text-xs">
-              This panel will test illegal state jumps (e.g. progressing to COMPLETED then attempting to jump back to PENDING).
+              Current Status: <span className="font-mono font-bold">{currentResDetail?.status || 'N/A'}</span>
             </p>
           </div>
 
           <div className="flex flex-wrap gap-4">
             <button
+              onClick={() => handleIllegalTransitionAttempt('SAME_STATE')}
+              disabled={isPending || !selectedResId}
+              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2 rounded text-sm disabled:opacity-50"
+            >
+              Test Same-State Transition ({currentResDetail?.status || 'CURRENT'} → {currentResDetail?.status || 'CURRENT'})
+            </button>
+            <button
               onClick={() => handleIllegalTransitionAttempt('PENDING')}
               disabled={isPending || !selectedResId}
               className="bg-rose-700 hover:bg-rose-800 text-white font-bold px-4 py-2 rounded text-sm disabled:opacity-50"
             >
-              Test Illegal Jump: COMPLETED → PENDING
+              Test Illegal Jump: {currentResDetail?.status || 'CURRENT'} → PENDING
             </button>
             <button
               onClick={() => handleIllegalTransitionAttempt('SEATED')}
               disabled={isPending || !selectedResId}
               className="bg-rose-700 hover:bg-rose-800 text-white font-bold px-4 py-2 rounded text-sm disabled:opacity-50"
             >
-              Test Illegal Jump: CANCELLED → SEATED
+              Test Illegal Jump: {currentResDetail?.status || 'CURRENT'} → SEATED
             </button>
           </div>
         </div>
@@ -1010,16 +1093,16 @@ export function ReservationsSmokeClient({
                   <button
                     onClick={() => handleSaveSettings({ autoConfirm: !settings.autoConfirm })}
                     disabled={isPending}
-                    className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded"
+                    className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded disabled:opacity-50"
                   >
-                    Toggle Auto Confirm ({settings.autoConfirm ? 'Currently ON' : 'Currently OFF'})
+                    Toggle Auto Confirm ({settings.autoConfirm ? 'ON' : 'OFF'})
                   </button>
                   <button
                     onClick={() => handleSaveSettings({ reservationsEnabled: !settings.reservationsEnabled })}
                     disabled={isPending}
-                    className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded"
+                    className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded disabled:opacity-50"
                   >
-                    Toggle Reservations Enabled ({settings.reservationsEnabled ? 'Currently ON' : 'Currently OFF'})
+                    Toggle Reservations Enabled ({settings.reservationsEnabled ? 'ON' : 'OFF'})
                   </button>
                 </div>
               )}
@@ -1032,21 +1115,21 @@ export function ReservationsSmokeClient({
               <button
                 onClick={() => handleTestValidationRejection('min_party')}
                 disabled={isPending}
-                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded"
+                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded disabled:opacity-50"
               >
                 Test: Party Size = 0 (Min Rejection)
               </button>
               <button
                 onClick={() => handleTestValidationRejection('max_party')}
                 disabled={isPending}
-                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded"
+                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded disabled:opacity-50"
               >
                 Test: Party Size = 500 (Max Rejection)
               </button>
               <button
                 onClick={() => handleTestValidationRejection('past_time')}
                 disabled={isPending}
-                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded"
+                className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-2 rounded disabled:opacity-50"
               >
                 Test: Start Time in Past (Advance Rejection)
               </button>
@@ -1087,7 +1170,7 @@ export function ReservationsSmokeClient({
             <button
               onClick={handleScopeLookup}
               disabled={isPending || !scopeLookupInputId}
-              className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 rounded text-xs"
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2 rounded text-xs disabled:opacity-50"
             >
               Test Cross-Property Lookup
             </button>
@@ -1142,7 +1225,7 @@ export function ReservationsSmokeClient({
             <button
               onClick={() => handleRunQuery(1)}
               disabled={isPending}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-1.5 rounded text-sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-1.5 rounded text-sm disabled:opacity-50"
             >
               Filter & Search
             </button>

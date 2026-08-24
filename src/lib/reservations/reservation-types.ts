@@ -163,3 +163,25 @@ export interface PaginatedReservationsDTO {
   limit: number;
   offset: number;
 }
+
+export type ReservationErrorCode =
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN_SCOPE'
+  | 'NOT_FOUND'
+  | 'SAME_STATE_TRANSITION'
+  | 'ILLEGAL_RESERVATION_TRANSITION'
+  | 'PAST_RESERVATION_TIME'
+  | 'MINIMUM_ADVANCE_TIME'
+  | 'MAXIMUM_ADVANCE_TIME'
+  | 'SAME_DAY_DISABLED'
+  | 'INVALID_PARTY_SIZE'
+  | 'RESERVATIONS_DISABLED'
+  | 'REQUIRED_CONTACT_MISSING'
+  | 'INVALID_INPUT'
+  | 'CONCURRENCY_CONFLICT'
+  | 'INTERNAL_ERROR';
+
+export type ReservationActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: { code: ReservationErrorCode; message: string } };
+

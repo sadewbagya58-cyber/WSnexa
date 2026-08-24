@@ -12,7 +12,9 @@ import {
   ListReservationsFilter,
   PaginatedReservationsDTO,
   PublicReservationDTO,
+  ReservationActionResult,
   ReservationDTO,
+  ReservationErrorCode,
   ReservationSettingsDTO,
   ReservationStatusEventDTO,
 } from '@/lib/reservations/reservation-types';
@@ -24,31 +26,98 @@ import {
 } from '@/lib/validation/reservation';
 
 /**
+ * Universal safe server action execution wrapper for reservation operations.
+ * Prevents internal raw database / RSC errors from leaking across the RSC boundary.
+ */
+async function handleAction<T>(fn: () => Promise<T>): Promise<ReservationActionResult<T>> {
+  try {
+    const data = await fn();
+    return { ok: true, data };
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err) {
+      const errObj = err as Record<string, unknown>;
+      const code = (errObj.code as ReservationErrorCode) || 'INTERNAL_ERROR';
+      const message = typeof errObj.message === 'string' ? errObj.message : 'Reservation action failed.';
+      return { ok: false, error: { code, message } };
+    }
+    if (err instanceof Error) {
+      const message = err.message;
+      if (message.includes('Unauthorized') || message.includes('Forbidden')) {
+        return { ok: false, error: { code: 'UNAUTHORIZED', message } };
+      }
+      if (message.includes('not found') || message.includes('outside your authorized property scope')) {
+        return {
+          ok: false,
+          error: {
+            code: 'FORBIDDEN_SCOPE',
+            message: 'Reservation was not found or is outside your authorized property scope.',
+          },
+        };
+      }
+      if (message.includes('Party size')) {
+        return { ok: false, error: { code: 'INVALID_PARTY_SIZE', message } };
+      }
+      if (message.includes('in the future')) {
+        return { ok: false, error: { code: 'PAST_RESERVATION_TIME', message } };
+      }
+      if (message.includes('already marked as')) {
+        return { ok: false, error: { code: 'SAME_STATE_TRANSITION', message } };
+      }
+      if (message.includes('cannot move from')) {
+        return { ok: false, error: { code: 'ILLEGAL_RESERVATION_TRANSITION', message } };
+      }
+      if (message.includes('booked at least')) {
+        return { ok: false, error: { code: 'MINIMUM_ADVANCE_TIME', message } };
+      }
+      if (message.includes('booked more than')) {
+        return { ok: false, error: { code: 'MAXIMUM_ADVANCE_TIME', message } };
+      }
+      if (message.includes('Same-day reservations')) {
+        return { ok: false, error: { code: 'SAME_DAY_DISABLED', message } };
+      }
+      if (message.includes('disabled for this venue/branch')) {
+        return { ok: false, error: { code: 'RESERVATIONS_DISABLED', message } };
+      }
+      if (message.includes('required by branch policy')) {
+        return { ok: false, error: { code: 'REQUIRED_CONTACT_MISSING', message } };
+      }
+      return { ok: false, error: { code: 'INVALID_INPUT', message } };
+    }
+    return {
+      ok: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Unable to complete reservation action.' },
+    };
+  }
+}
+
+/**
  * Staff-authenticated creation of a new table reservation.
  */
 export async function createStaffReservationAction(
   input: CreateReservationInput
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (input.businessId !== authContext.businessId) {
-    throw new Error('Forbidden: Business tenancy mismatch');
-  }
+    if (input.businessId !== authContext.businessId) {
+      throw new Error('Forbidden: Business tenancy mismatch');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.create' }))) {
-    throw new Error('Forbidden: missing reservations.create permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.create' }))) {
+      throw new Error('Forbidden: missing reservations.create permission');
+    }
 
-  const validated = createReservationInputSchema.parse(input);
+    const validated = createReservationInputSchema.parse(input);
 
-  return ReservationService.createReservation(
-    validated,
-    authContext.userId,
-    'STAFF'
-  );
+    return ReservationService.createReservation(
+      validated,
+      authContext.userId,
+      'STAFF'
+    );
+  });
 }
 
 /**
@@ -57,40 +126,42 @@ export async function createStaffReservationAction(
  */
 export async function createPublicReservationAction(
   input: CreatePublicReservationInput
-): Promise<PublicReservationDTO> {
-  const validated = createPublicReservationInputSchema.parse(input);
-  const admin = createAdminClient();
+): Promise<ReservationActionResult<PublicReservationDTO>> {
+  return handleAction(async () => {
+    const validated = createPublicReservationInputSchema.parse(input);
+    const admin = createAdminClient();
 
-  // Trusted resolution of business_id from branch
-  const { data: branch, error } = await admin
-    .from('branches')
-    .select('id, business_id')
-    .eq('id', validated.branchId)
-    .single();
+    // Trusted resolution of business_id from branch
+    const { data: branch, error } = await admin
+      .from('branches')
+      .select('id, business_id')
+      .eq('id', validated.branchId)
+      .single();
 
-  if (error || !branch) {
-    throw new Error('Invalid venue branch specified for reservation');
-  }
+    if (error || !branch) {
+      throw new Error('Invalid venue branch specified for reservation');
+    }
 
-  const reservation = await ReservationService.createReservation(
-    {
-      businessId: branch.business_id,
-      branchId: branch.id,
-      guestName: validated.guestName,
-      guestEmail: validated.guestEmail,
-      guestPhone: validated.guestPhone,
-      reservationStartAt: validated.reservationStartAt,
-      durationMinutes: validated.durationMinutes,
-      partySize: validated.partySize,
-      specialRequests: validated.specialRequests,
-      occasion: validated.occasion,
-      source: 'PUBLIC_WEB',
-    },
-    null,
-    'CUSTOMER'
-  );
+    const reservation = await ReservationService.createReservation(
+      {
+        businessId: branch.business_id,
+        branchId: branch.id,
+        guestName: validated.guestName,
+        guestEmail: validated.guestEmail,
+        guestPhone: validated.guestPhone,
+        reservationStartAt: validated.reservationStartAt,
+        durationMinutes: validated.durationMinutes,
+        partySize: validated.partySize,
+        specialRequests: validated.specialRequests,
+        occasion: validated.occasion,
+        source: 'PUBLIC_WEB',
+      },
+      null,
+      'CUSTOMER'
+    );
 
-  return ReservationService.toPublicDTO(reservation);
+    return ReservationService.toPublicDTO(reservation);
+  });
 }
 
 /**
@@ -98,24 +169,26 @@ export async function createPublicReservationAction(
  */
 export async function getReservationByIdAction(
   reservationId: string
-): Promise<ReservationDTO | null> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO | null>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
-    throw new Error('Forbidden: missing reservations.view permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
+      throw new Error('Forbidden: missing reservations.view permission');
+    }
 
-  const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
+    const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
 
-  return ReservationQueryService.getReservationById(
-    authContext.businessId,
-    reservationId,
-    authContext.authorizedBranchIds,
-    hasContactView
-  );
+    return ReservationQueryService.getReservationById(
+      authContext.businessId,
+      reservationId,
+      authContext.authorizedBranchIds,
+      hasContactView
+    );
+  });
 }
 
 /**
@@ -123,26 +196,28 @@ export async function getReservationByIdAction(
  */
 export async function listReservationsAction(
   filter: Omit<ListReservationsFilter, 'businessId' | 'authorizedBranchIds'>
-): Promise<PaginatedReservationsDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<PaginatedReservationsDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
-    throw new Error('Forbidden: missing reservations.view permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
+      throw new Error('Forbidden: missing reservations.view permission');
+    }
 
-  const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
+    const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
 
-  return ReservationQueryService.listReservations(
-    {
-      ...filter,
-      businessId: authContext.businessId,
-      authorizedBranchIds: authContext.authorizedBranchIds,
-    },
-    hasContactView
-  );
+    return ReservationQueryService.listReservations(
+      {
+        ...filter,
+        businessId: authContext.businessId,
+        authorizedBranchIds: authContext.authorizedBranchIds,
+      },
+      hasContactView
+    );
+  });
 }
 
 /**
@@ -150,22 +225,24 @@ export async function listReservationsAction(
  */
 export async function confirmReservationAction(
   reservationId: string
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
-    throw new Error('Forbidden: missing reservations.manage permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
+      throw new Error('Forbidden: missing reservations.manage permission');
+    }
 
-  return ReservationService.confirmReservation(
-    authContext.businessId,
-    reservationId,
-    authContext.userId,
-    'STAFF'
-  );
+    return ReservationService.confirmReservation(
+      authContext.businessId,
+      reservationId,
+      authContext.userId,
+      'STAFF'
+    );
+  });
 }
 
 /**
@@ -173,28 +250,30 @@ export async function confirmReservationAction(
  */
 export async function cancelReservationAction(
   input: CancelReservationInput
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  const hasCancel = await can({ context: authContext, permission: 'reservations.cancel' });
-  const hasManage = await can({ context: authContext, permission: 'reservations.manage' });
+    const hasCancel = await can({ context: authContext, permission: 'reservations.cancel' });
+    const hasManage = await can({ context: authContext, permission: 'reservations.manage' });
 
-  if (!hasCancel && !hasManage) {
-    throw new Error('Forbidden: missing reservations.cancel or reservations.manage permission');
-  }
+    if (!hasCancel && !hasManage) {
+      throw new Error('Forbidden: missing reservations.cancel or reservations.manage permission');
+    }
 
-  const validated = cancelReservationInputSchema.parse(input);
+    const validated = cancelReservationInputSchema.parse(input);
 
-  return ReservationService.cancelReservation(
-    authContext.businessId,
-    validated.reservationId,
-    authContext.userId,
-    'STAFF',
-    validated.reason
-  );
+    return ReservationService.cancelReservation(
+      authContext.businessId,
+      validated.reservationId,
+      authContext.userId,
+      'STAFF',
+      validated.reason
+    );
+  });
 }
 
 /**
@@ -202,17 +281,19 @@ export async function cancelReservationAction(
  */
 export async function markReservationArrivedAction(
   reservationId: string
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
-    throw new Error('Forbidden: missing reservations.manage permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
+      throw new Error('Forbidden: missing reservations.manage permission');
+    }
 
-  return ReservationService.markArrived(authContext.businessId, reservationId, authContext.userId);
+    return ReservationService.markArrived(authContext.businessId, reservationId, authContext.userId);
+  });
 }
 
 /**
@@ -220,17 +301,19 @@ export async function markReservationArrivedAction(
  */
 export async function markReservationSeatedAction(
   reservationId: string
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
-    throw new Error('Forbidden: missing reservations.manage permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
+      throw new Error('Forbidden: missing reservations.manage permission');
+    }
 
-  return ReservationService.markSeated(authContext.businessId, reservationId, authContext.userId);
+    return ReservationService.markSeated(authContext.businessId, reservationId, authContext.userId);
+  });
 }
 
 /**
@@ -238,17 +321,19 @@ export async function markReservationSeatedAction(
  */
 export async function markReservationCompletedAction(
   reservationId: string
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
-    throw new Error('Forbidden: missing reservations.manage permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
+      throw new Error('Forbidden: missing reservations.manage permission');
+    }
 
-  return ReservationService.markCompleted(authContext.businessId, reservationId, authContext.userId);
+    return ReservationService.markCompleted(authContext.businessId, reservationId, authContext.userId);
+  });
 }
 
 /**
@@ -256,17 +341,19 @@ export async function markReservationCompletedAction(
  */
 export async function markReservationNoShowAction(
   reservationId: string
-): Promise<ReservationDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
-    throw new Error('Forbidden: missing reservations.manage permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.manage' }))) {
+      throw new Error('Forbidden: missing reservations.manage permission');
+    }
 
-  return ReservationService.markNoShow(authContext.businessId, reservationId, authContext.userId);
+    return ReservationService.markNoShow(authContext.businessId, reservationId, authContext.userId);
+  });
 }
 
 /**
@@ -274,17 +361,19 @@ export async function markReservationNoShowAction(
  */
 export async function getReservationStatusHistoryAction(
   reservationId: string
-): Promise<ReservationStatusEventDTO[]> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationStatusEventDTO[]>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
-    throw new Error('Forbidden: missing reservations.view permission');
-  }
+    if (!(await can({ context: authContext, permission: 'reservations.view' }))) {
+      throw new Error('Forbidden: missing reservations.view permission');
+    }
 
-  return ReservationService.getStatusHistory(authContext.businessId, reservationId);
+    return ReservationService.getStatusHistory(authContext.businessId, reservationId);
+  });
 }
 
 /**
@@ -292,24 +381,26 @@ export async function getReservationStatusHistoryAction(
  */
 export async function updateReservationSettingsAction(
   input: Partial<Omit<ReservationSettingsDTO, 'id' | 'businessId' | 'createdAt' | 'updatedAt'>> & { branchId: string }
-): Promise<ReservationSettingsDTO> {
-  const authContext = await resolveAuthorizationContext();
-  if (!authContext) {
-    throw new Error('Unauthorized');
-  }
+): Promise<ReservationActionResult<ReservationSettingsDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
 
-  const validated = reservationSettingsInputSchema.parse(input);
+    const validated = reservationSettingsInputSchema.parse(input);
 
-  const hasManage = await can({ context: authContext, permission: 'reservations.manage' });
-  const hasSettings = await can({ context: authContext, permission: 'business.settings.manage' });
+    const hasManage = await can({ context: authContext, permission: 'reservations.manage' });
+    const hasSettings = await can({ context: authContext, permission: 'business.settings.manage' });
 
-  if (!hasManage && !hasSettings) {
-    throw new Error('Forbidden: missing reservations.manage or business.settings.manage permission');
-  }
+    if (!hasManage && !hasSettings) {
+      throw new Error('Forbidden: missing reservations.manage or business.settings.manage permission');
+    }
 
-  return ReservationSettingsService.upsertBranchSettings(
-    authContext.businessId,
-    validated.branchId,
-    validated
-  );
+    return ReservationSettingsService.upsertBranchSettings(
+      authContext.businessId,
+      validated.branchId,
+      validated
+    );
+  });
 }

@@ -217,8 +217,85 @@ async function runVerification() {
   assert(!reservationServiceContent.includes('waitlist'), '31. Waitlist queue architecture strictly absent from Step 1 foundation');
   assert(!reservationServiceContent.includes('hotel') && !reservationServiceContent.includes('pms'), '32. Hotel room/PMS booking architecture strictly absent from dining reservation foundation');
 
+  // 8. Hotfix Regression & Validation Hardening Assertions
+  console.log('\n--- SECTION 8: Hotfix Lifecycle & Validation Hardening ---');
+
+  // 33 & 34: Same-State Transition Rejections
+  assert(!ReservationLifecycleService.canTransition('ARRIVED', 'ARRIVED'), '33. Same-state transition ARRIVED -> ARRIVED strictly returns false');
+  assert(!ReservationLifecycleService.canTransition('CONFIRMED', 'CONFIRMED'), '34. Same-state transition CONFIRMED -> CONFIRMED strictly returns false');
+
+  let arrivedSameStateBlocked = false;
+  try {
+    ReservationLifecycleService.validateTransition('ARRIVED', 'ARRIVED');
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'SAME_STATE_TRANSITION') {
+      arrivedSameStateBlocked = true;
+    }
+  }
+  assert(arrivedSameStateBlocked, '35. validateTransition(ARRIVED, ARRIVED) throws structured SAME_STATE_TRANSITION error');
+
+  // 36: Past Reservation Validation Rejection
+  const { ReservationValidationService } = await import('@/server/reservations/reservation-validation.service');
+  let pastTimeBlocked = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 2,
+      reservationStartAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+      reservationEndAt: new Date(Date.now() - 1800 * 1000).toISOString(),
+      guestName: 'Past Test',
+      settings: {
+        id: 'set-1',
+        businessId: 'bus-1',
+        branchId: 'br-1',
+        reservationsEnabled: true,
+        defaultDurationMinutes: 90,
+        minimumPartySize: 1,
+        maximumPartySize: 20,
+        minimumAdvanceMinutes: 30,
+        maximumAdvanceDays: 90,
+        allowSameDay: true,
+        requireGuestPhone: false,
+        requireGuestEmail: false,
+        autoConfirm: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      isStaffCreation: true,
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'PAST_RESERVATION_TIME') {
+      pastTimeBlocked = true;
+    }
+  }
+  assert(pastTimeBlocked, '36. Past reservation start time (start <= now) strictly rejected for staff and public creations');
+
+  // 37: Timezone Date Derivation
+  const localDate = ReservationValidationService.deriveBranchReservationDate(
+    new Date('2026-08-25T19:30:00Z').toISOString(),
+    'Asia/Colombo'
+  );
+  assert(localDate === '2026-08-26', '37. Branch local reservation_date derived correctly in target timezone (Asia/Colombo)');
+
+  // 38: Unified Action Wrapper Contract
+  assert(actionsContent.includes('ReservationActionResult'), '38. ReservationActionResult contract wraps server action returns');
+  assert(actionsContent.includes('safeReservationResult') || actionsContent.includes('handleAction'), '39. Universal handleAction wrapper catches domain errors safely');
+
+  // 39: Optimistic Concurrency Check
+  assert(
+    reservationServiceContent.includes(".eq('status', existing.status)"),
+    '40. Optimistic concurrency check (.eq(\'status\', existing.status)) present in status transition updates'
+  );
+
+  // 40: Smoke Harness Button State Matrix
+  const harnessClientPath = path.join(process.cwd(), 'src/components/dev/reservations-smoke-client.tsx');
+  const harnessClientContent = fs.readFileSync(harnessClientPath, 'utf-8');
+  assert(
+    harnessClientContent.includes('canPerformTransition') && harnessClientContent.includes('disabled={isPending || !canPerformTransition('),
+    '41. Smoke harness client renders button state matrix disabling invalid transitions for current state'
+  );
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 1 Verification Complete: ALL 32 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 1 Verification Complete: ALL 41 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

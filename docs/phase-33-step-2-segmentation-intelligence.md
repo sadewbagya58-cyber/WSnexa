@@ -8,16 +8,21 @@ Establish a deterministic, provider-free behavioral segmentation and customer in
 
 ---
 
-### 2. Segment Catalog & Classification Rules (V1 Semantics)
+### 2. Segment Catalog & Classification Rules (Hardened V1 Semantics)
 
 | Segment Code | Segment Name | Color | Classification Criteria | Priority |
 | :--- | :--- | :--- | :--- | :--- |
-| **`VIP`** | VIP / High Value | `#8B5CF6` | Total Spend $\ge \$300$ (30,000 cents) AND (Frequency Score $\ge 4$ OR Recency Score $\ge 4$) | 1 |
+| **`VIP`** | VIP / High Value | `#8B5CF6` | Monetary Score $\ge 4$ AND (Frequency Score $\ge 4$ OR Recency Score $\ge 4$) | 1 |
 | **`AT_RISK`** | At Risk of Churn | `#F59E0B` | Total Orders $\ge 2$ AND Risk Level is `HIGH` or `CRITICAL` AND Recency $\le 90$ days | 2 |
-| **`LAPSED`** | Lapsed / Inactive | `#EF4444` | Days since last completed order $> 90$ | 3 |
+| **`LAPSED`** | Lapsed / Inactive | `#EF4444` | Days since last completed order $> 90$ (totalOrders $\ge 1$) | 3 |
 | **`REGULAR`** | Regular Guests | `#3B82F6` | Frequency Score $\ge 3$ AND Recency Score $\ge 3$ (and not VIP) | 4 |
-| **`NEW_GUEST`** | New Guests | `#10B981` | First order / joined within last 30 days AND Total Orders $\le 2$ | 5 |
-| **`ONE_TIME`** | One-Time Visitors | `#6B7280` | Exactly 1 total order placed $> 30$ days ago | 6 |
+| **`NEW_GUEST`** | New Guests | `#10B981` | First order placed within last 30 days AND Total Orders $\le 2$ | 5 |
+| **`ONE_TIME`** | One-Time Visitors | `#6B7280` | Exactly 1 total completed order placed 31 to 90 days ago | 6 |
+
+#### Explicit Boundary Rules:
+- **`NEW_GUEST`**: `completedOrders <= 2` AND `recency <= 30` days.
+- **`ONE_TIME`**: `completedOrders === 1` AND `31 <= recency <= 90` days.
+- **`LAPSED`**: `completedOrders >= 1` AND `recency >= 91` days.
 
 ---
 
@@ -37,16 +42,23 @@ Establish a deterministic, provider-free behavioral segmentation and customer in
 - **Score 2**: Orders in last 90d $\ge 2$ OR Total Orders $\ge 2$
 - **Score 1**: Total Orders $= 1$
 
-#### Monetary Score (M)
-- **Score 5**: Total Spend $\ge \$500$ (50,000 cents) OR AOV $\ge \$50$ (5,000 cents)
-- **Score 4**: Total Spend $\ge \$250$ (25,000 cents) OR AOV $\ge \$30$ (3,000 cents)
-- **Score 3**: Total Spend $\ge \$100$ (10,000 cents) OR AOV $\ge \$20$ (2,000 cents)
-- **Score 2**: Total Spend $\ge \$40$ (4,000 cents)
-- **Score 1**: Total Spend $< \$40$
+#### Currency-Independent Monetary Score (M)
+Monetary scoring uses **relative population quantile ranking** instead of hardcoded USD thresholds. This operates identically across LKR, AUD, GBP, EUR, USD, and JPY without FX service dependencies:
+- **Score 5**: Top 20% ($\ge 80\text{th}$ percentile)
+- **Score 4**: $60\text{th}$ to $80\text{th}$ percentile
+- **Score 3**: $40\text{th}$ to $60\text{th}$ percentile
+- **Score 2**: $20\text{th}$ to $40\text{th}$ percentile
+- **Score 1**: Bottom 20% ($< 20\text{th}$ percentile)
+
+#### Small Cohort Fallbacks:
+- $N = 0$: `Monetary 1`
+- $N = 1$: `Monetary 3` (neutral baseline for single customer)
+- $N = 2$: Lower spend = `Monetary 2`, Higher spend = `Monetary 4`
+- $N = 3 \text{ or } 4$: Bottom spend = `Monetary 1`, Middle = `Monetary 3`, Top = `Monetary 5`
 
 ---
 
-### 4. Retention Risk Algorithm & Wording Definition
+### 4. Retention Risk Algorithm & Exact Non-Overlapping Ranges
 
 > [!NOTE]
 > Retention Risk is a **DETERMINISTIC HEURISTIC INTELLIGENCE** metric. It is **NOT** an AI prediction, machine learning churn model, or statistical probability curve.
@@ -55,11 +67,20 @@ $$\text{Average Visit Interval} = \max\left(3, \frac{\text{Date of Last Order} -
 
 $$\text{Decay Ratio} = \frac{\text{Days Since Last Order}}{\text{Average Visit Interval}}$$
 
-- **Risk Levels**:
-  - `CRITICAL` (Score 75–99%): Decay Ratio $\ge 3.0$ or Recency $> 90$ days.
-  - `HIGH` (Score 55–84%): Decay Ratio $\ge 2.0$.
-  - `MEDIUM` (Score 30–54%): Decay Ratio $\ge 1.3$.
-  - `LOW` (Score 0–29%): Decay Ratio $< 1.3$.
+#### Locked Non-Overlapping Risk Level Ranges:
+- **`LOW`** (Score 0–29): Normal visit pattern ($r < 1.3$).
+- **`MEDIUM`** (Score 30–54): Moderate visit delay ($1.3 \le r < 2.0$).
+- **`HIGH`** (Score 55–74): Significant interval expansion ($2.0 \le r < 3.0$).
+- **`CRITICAL`** (Score 75–100): Severe visit decay ($r \ge 3.0$ or Recency $> 90$ days).
+
+#### Boundary Mappings:
+- $29 \rightarrow$ `LOW`
+- $30 \rightarrow$ `MEDIUM`
+- $54 \rightarrow$ `MEDIUM`
+- $55 \rightarrow$ `HIGH`
+- $74 \rightarrow$ `HIGH`
+- $75 \rightarrow$ `CRITICAL`
+- $100 \rightarrow$ `CRITICAL`
 
 ---
 
@@ -67,7 +88,9 @@ $$\text{Decay Ratio} = \frac{\text{Days Since Last Order}}{\text{Average Visit I
 
 - **0 Completed Orders**: `retentionRiskScore = 0`, `riskLevel = LOW`. Prevents fabricating churn risk when zero order history exists.
 - **1 Completed Order Recent ($\le 21$d)**: `retentionRiskScore = 10`, `riskLevel = LOW`.
-- **1 Completed Order Inactive ($> 45$d)**: `retentionRiskScore = 65`, `riskLevel = HIGH`, classified as `ONE_TIME` / `LAPSED`.
+- **1 Completed Order Medium Inactive ($22–45$d)**: `retentionRiskScore = 40`, `riskLevel = MEDIUM`.
+- **1 Completed Order High Inactive ($46–90$d)**: `retentionRiskScore = 65`, `riskLevel = HIGH`, classified as `ONE_TIME`.
+- **1 Completed Order Lapsed ($> 90$d)**: `retentionRiskScore = 80`, `riskLevel = CRITICAL`, classified as `LAPSED`.
 
 ---
 
@@ -78,17 +101,18 @@ $$\text{Decay Ratio} = \frac{\text{Days Since Last Order}}{\text{Average Visit I
 
 ---
 
-### 7. Property Scope Reach Isolation
+### 7. Property Scope Cohort Isolation
 
 - **Property Scope Reach**: When a user is authorized for a subset of branches (e.g., `branchIds = ['Branch A']`), `getCustomerSegmentation` and `getSegmentBreakdown` filter `orders` strictly by `branch_id IN (authorizedBranchIds)`.
+- **Cohort Scoring Isolation**: Quantile percentile ranks for Monetary score are calculated strictly against the customer population within the authorized property reach.
 - **Zero Leakage**: Total orders, total spend, RFM score, primary segment, retention risk, and segment breakdown reflect ONLY activity within authorized reach. No facts about unauthorized branches (e.g. Branch B) leak to restricted users.
 
 ---
 
-### 8. Persistence & Stale Membership Model
+### 8. Persisted vs Dynamically Scoped Segment Model
 
-- **Tables**: `crm_segments` and `crm_customer_segments`.
-- **Idempotent Evaluation**: `evaluateAndPersistCustomerSegments` replaces existing segment records for the target customer atomically (`DELETE WHERE customer_id = X` followed by `INSERT`). No duplicate segment rows are produced.
+- **Persisted Truth (`crm_customer_segments`)**: Stores business-wide segment records (evaluated across all branches in the business).
+- **Dynamically Scoped Reach (`getCustomerSegmentation`)**: For property-restricted requests, the service dynamically computes segmentation bounded strictly by `branchIds` without exposing un-scoped business-wide persisted facts that would leak Branch B activity.
 
 ---
 

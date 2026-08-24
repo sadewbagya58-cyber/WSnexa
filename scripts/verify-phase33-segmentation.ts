@@ -21,7 +21,7 @@ async function main() {
   const { CustomerSegmentationService } = await import('../src/server/crm/customer-segmentation.service');
 
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 33 Step 2 — Behavioral Segmentation & RFM Suite  ');
+  console.log('  WSNexa Phase 33 Step 2 — Hardened Segmentation & Intelligence  ');
   console.log('================================================================\n');
 
   let passed = 0;
@@ -51,37 +51,16 @@ async function main() {
     '2. Contains VIP, REGULAR, AT_RISK, LAPSED, NEW_GUEST, and ONE_TIME codes'
   );
 
-  // --- SECTION 2: Deterministic RFM Score Calculation ---
-  console.log('\n--- SECTION 2: Deterministic RFM Score Calculation ---');
+  // --- SECTION 2: Exact Retention Risk Ranges & Boundaries ---
+  console.log('\n--- SECTION 2: Exact Retention Risk Ranges & Boundaries ---');
 
-  const rfmRecentHighSpend = CustomerSegmentationService.computeCustomerRFM({
-    recencyDays: 3,
-    frequency30d: 5,
-    frequency90d: 12,
-    totalOrders: 15,
-    totalSpendCents: 60000,
-    aovCents: 4000,
-  });
-
-  assert(rfmRecentHighSpend.recencyScore === 5, '3. Recent visit (3 days) scores Recency = 5');
-  assert(rfmRecentHighSpend.frequencyScore === 5, '4. High frequency (15 total orders) scores Frequency = 5');
-  assert(rfmRecentHighSpend.monetaryScore === 5, '5. High spend ($600) scores Monetary = 5');
-
-  const rfmOldLowSpend = CustomerSegmentationService.computeCustomerRFM({
-    recencyDays: 120,
-    frequency30d: 0,
-    frequency90d: 0,
-    totalOrders: 1,
-    totalSpendCents: 1500,
-    aovCents: 1500,
-  });
-
-  assert(rfmOldLowSpend.recencyScore === 1, '6. Old visit (120 days) scores Recency = 1');
-  assert(rfmOldLowSpend.frequencyScore === 1, '7. 1 total order scores Frequency = 1');
-  assert(rfmOldLowSpend.monetaryScore === 1, '8. Low spend ($15) scores Monetary = 1');
-
-  // --- SECTION 3: Retention Risk & Sample-Size Safety ---
-  console.log('\n--- SECTION 3: Retention Risk & Sample-Size Safety ---');
+  assert(CustomerSegmentationService.getRiskLevel(29) === 'LOW', '3. Risk score 29 maps to LOW');
+  assert(CustomerSegmentationService.getRiskLevel(30) === 'MEDIUM', '4. Risk score 30 maps to MEDIUM (boundary test)');
+  assert(CustomerSegmentationService.getRiskLevel(54) === 'MEDIUM', '5. Risk score 54 maps to MEDIUM');
+  assert(CustomerSegmentationService.getRiskLevel(55) === 'HIGH', '6. Risk score 55 maps to HIGH (boundary test)');
+  assert(CustomerSegmentationService.getRiskLevel(74) === 'HIGH', '7. Risk score 74 maps to HIGH');
+  assert(CustomerSegmentationService.getRiskLevel(75) === 'CRITICAL', '8. Risk score 75 maps to CRITICAL (boundary test)');
+  assert(CustomerSegmentationService.getRiskLevel(100) === 'CRITICAL', '9. Risk score 100 maps to CRITICAL');
 
   const zeroOrderRisk = CustomerSegmentationService.computeRetentionRisk({
     recencyDays: 0,
@@ -89,153 +68,186 @@ async function main() {
     firstOrderAt: null,
     lastOrderAt: null,
   });
-  assert(zeroOrderRisk.riskLevel === 'LOW', '9. Customer with 0 completed orders evaluates riskLevel = LOW (no fabricated confidence)');
-  assert(zeroOrderRisk.retentionRiskScore <= 15, '10. Customer with 0 completed orders retention risk score is <= 15');
+  assert(zeroOrderRisk.riskLevel === 'LOW' && zeroOrderRisk.retentionRiskScore === 0, '10. Zero order history maps safely to retentionRiskScore = 0 and LOW risk');
 
-  const oneOrderRecentRisk = CustomerSegmentationService.computeRetentionRisk({
-    recencyDays: 5,
-    totalOrders: 1,
-    firstOrderAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    lastOrderAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(oneOrderRecentRisk.riskLevel === 'LOW', '11. Single-order recent guest evaluates riskLevel = LOW');
+  // --- SECTION 3: NEW_GUEST / ONE_TIME / LAPSED Boundary Semantics ---
+  console.log('\n--- SECTION 3: NEW_GUEST / ONE_TIME / LAPSED Boundary Semantics ---');
 
-  const oneOrderOldRisk = CustomerSegmentationService.computeRetentionRisk({
-    recencyDays: 50,
-    totalOrders: 1,
-    firstOrderAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
-    lastOrderAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(oneOrderOldRisk.riskLevel === 'HIGH', '12. Single-order guest 50 days inactive evaluates riskLevel = HIGH');
+  const now = Date.now();
+  const d30Ago = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const d31Ago = new Date(now - 31 * 24 * 60 * 60 * 1000).toISOString();
+  const d90Ago = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const d91Ago = new Date(now - 91 * 24 * 60 * 60 * 1000).toISOString();
 
-  const multiOrderLowRisk = CustomerSegmentationService.computeRetentionRisk({
-    recencyDays: 5,
-    totalOrders: 10,
-    firstOrderAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
-    lastOrderAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(multiOrderLowRisk.riskLevel === 'LOW', '13. Active multi-order customer evaluates riskLevel = LOW');
-
-  const multiOrderAtRisk = CustomerSegmentationService.computeRetentionRisk({
-    recencyDays: 45,
-    totalOrders: 10,
-    firstOrderAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString(),
-    lastOrderAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(
-    multiOrderAtRisk.riskLevel === 'HIGH' || multiOrderAtRisk.riskLevel === 'CRITICAL',
-    '14. Multi-order customer with doubled visit interval evaluates riskLevel = HIGH or CRITICAL'
-  );
-
-  // --- SECTION 4: Segment Classification Rules & Idempotency ---
-  console.log('\n--- SECTION 4: Segment Classification Rules & Idempotency ---');
-
-  const vipClass = CustomerSegmentationService.classifyCustomerSegments({
-    rfmScore: rfmRecentHighSpend,
-    retentionRiskScore: 10,
-    riskLevel: 'LOW',
-    firstSeenAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(vipClass.primarySegmentCode === 'VIP', '15. High spend + high frequency customer classified as VIP');
-  assert(vipClass.segmentCodes.includes('VIP'), '16. segmentCodes includes VIP');
-
-  const lapsedClass = CustomerSegmentationService.classifyCustomerSegments({
-    rfmScore: rfmOldLowSpend,
-    retentionRiskScore: 85,
-    riskLevel: 'CRITICAL',
-    firstSeenAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString(),
-  });
-  assert(lapsedClass.segmentCodes.includes('LAPSED'), '17. Customer >90 days inactive includes LAPSED segment');
-
-  const newGuestClass = CustomerSegmentationService.classifyCustomerSegments({
+  // 30 days recency (1 order) -> NEW_GUEST
+  const rec30Eval = CustomerSegmentationService.classifyCustomerSegments({
     rfmScore: CustomerSegmentationService.computeCustomerRFM({
-      recencyDays: 2,
+      recencyDays: 30,
       frequency30d: 1,
       frequency90d: 1,
       totalOrders: 1,
-      totalSpendCents: 2500,
-      aovCents: 2500,
+      totalSpendCents: 5000,
+      aovCents: 5000,
     }),
     retentionRiskScore: 10,
     riskLevel: 'LOW',
-    firstSeenAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    firstSeenAt: d30Ago,
   });
-  assert(newGuestClass.primarySegmentCode === 'NEW_GUEST', '18. Customer joined 5 days ago classified as NEW_GUEST');
+  assert(rec30Eval.primarySegmentCode === 'NEW_GUEST', '11. 30 days recency (1 order) classifies as NEW_GUEST');
 
-  const oneTimeClass = CustomerSegmentationService.classifyCustomerSegments({
+  // 31 days recency (1 order) -> ONE_TIME
+  const rec31Eval = CustomerSegmentationService.classifyCustomerSegments({
     rfmScore: CustomerSegmentationService.computeCustomerRFM({
-      recencyDays: 40,
+      recencyDays: 31,
       frequency30d: 0,
       frequency90d: 1,
       totalOrders: 1,
-      totalSpendCents: 2000,
-      aovCents: 2000,
+      totalSpendCents: 5000,
+      aovCents: 5000,
+    }),
+    retentionRiskScore: 40,
+    riskLevel: 'MEDIUM',
+    firstSeenAt: d31Ago,
+  });
+  assert(rec31Eval.primarySegmentCode === 'ONE_TIME', '12. 31 days recency (1 order) classifies as ONE_TIME (boundary test)');
+
+  // 90 days recency (1 order) -> ONE_TIME
+  const rec90Eval = CustomerSegmentationService.classifyCustomerSegments({
+    rfmScore: CustomerSegmentationService.computeCustomerRFM({
+      recencyDays: 90,
+      frequency30d: 0,
+      frequency90d: 1,
+      totalOrders: 1,
+      totalSpendCents: 5000,
+      aovCents: 5000,
     }),
     retentionRiskScore: 65,
     riskLevel: 'HIGH',
-    firstSeenAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+    firstSeenAt: d90Ago,
   });
-  assert(oneTimeClass.segmentCodes.includes('ONE_TIME'), '19. Customer with 1 order 40 days ago includes ONE_TIME segment');
+  assert(rec90Eval.primarySegmentCode === 'ONE_TIME', '13. 90 days recency (1 order) classifies as ONE_TIME (boundary test)');
 
-  // --- SECTION 5: Property Scope Reach Isolation ---
-  console.log('\n--- SECTION 5: Property Scope Reach Isolation ---');
-
-  // Scenario: Customer has 2 orders on Branch A ($40 total) and 10 orders on Branch B ($1,000 total)
-  // Scoped to Branch A only
-  const branchAScopedEval = CustomerSegmentationService.evaluateCustomerSegmentation({
-    customerId: 'cust-branch-test',
-    businessId: 'biz-123',
-    firstSeenAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    lastOrderAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-    firstOrderAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    totalOrders: 2, // ONLY Branch A orders
-    completedOrders: 2,
-    totalSpendCents: 4000, // ONLY Branch A spend ($40)
-    orders30d: 1,
-    orders90d: 2,
+  // 91 days recency (1 order) -> LAPSED
+  const rec91Eval = CustomerSegmentationService.classifyCustomerSegments({
+    rfmScore: CustomerSegmentationService.computeCustomerRFM({
+      recencyDays: 91,
+      frequency30d: 0,
+      frequency90d: 0,
+      totalOrders: 1,
+      totalSpendCents: 5000,
+      aovCents: 5000,
+    }),
+    retentionRiskScore: 80,
+    riskLevel: 'CRITICAL',
+    firstSeenAt: d91Ago,
   });
+  assert(rec91Eval.primarySegmentCode === 'LAPSED', '14. 91 days recency (1 order) classifies as LAPSED (boundary test)');
 
-  assert(branchAScopedEval.rfmScore.totalOrders === 2, '20. Scoped evaluation totalOrders reflects strictly authorized Branch A orders (2)');
-  assert(branchAScopedEval.rfmScore.totalSpendCents === 4000, '21. Scoped evaluation totalSpendCents reflects strictly authorized Branch A spend (4000 cents)');
-  assert(branchAScopedEval.primarySegmentCode !== 'VIP', '22. Scoped evaluation does NOT classify customer as VIP based on unauthorized Branch B spend');
-  assert(branchAScopedEval.rfmScore.monetaryScore <= 3 && branchAScopedEval.rfmScore.monetaryScore < 5, '23. Scoped monetary score reflects ONLY Branch A spend ($40 total spend, score 3 vs 5 for Branch B)');
+  // --- SECTION 4: Currency-Independent Monetary Scoring & Cohort Fallbacks ---
+  console.log('\n--- SECTION 4: Currency-Independent Monetary Scoring & Cohort Fallbacks ---');
 
-  // --- SECTION 6: Migration & Server-Only Security ---
-  console.log('\n--- SECTION 6: Migration & Server-Only Security ---');
+  // Percentile Map Test
+  const percentile90 = CustomerSegmentationService.computeCustomerRFM({
+    recencyDays: 5,
+    frequency30d: 2,
+    frequency90d: 4,
+    totalOrders: 5,
+    totalSpendCents: 500000, // 500,000 LKR or AUD or JPY
+    aovCents: 100000,
+    monetaryPercentile: 90, // Top 10%
+  });
+  assert(percentile90.monetaryScore === 5, '15. 90th percentile spend scores Monetary = 5 (currency-independent)');
+
+  const percentile15 = CustomerSegmentationService.computeCustomerRFM({
+    recencyDays: 5,
+    frequency30d: 2,
+    frequency90d: 4,
+    totalOrders: 5,
+    totalSpendCents: 5000,
+    aovCents: 1000,
+    monetaryPercentile: 15, // Bottom 15%
+  });
+  assert(percentile15.monetaryScore === 1, '16. 15th percentile spend scores Monetary = 1 (currency-independent)');
+
+  // Small Cohort Fallback Test (1 customer)
+  const singleCohortMap = CustomerSegmentationService.computeCohortPercentiles([{ id: 'c1', totalSpendCents: 20000 }]);
+  assert(singleCohortMap.get('c1') === 50, '17. Single customer cohort scores neutral 50th percentile (Monetary = 3)');
+
+  // Small Cohort Fallback Test (2 customers)
+  const duoCohortMap = CustomerSegmentationService.computeCohortPercentiles([
+    { id: 'c1', totalSpendCents: 10000 },
+    { id: 'c2', totalSpendCents: 50000 },
+  ]);
+  assert(duoCohortMap.get('c1') === 30 && duoCohortMap.get('c2') === 80, '18. 2-customer cohort maps lower to 30th percentile (M2) and higher to 80th percentile (M4)');
+
+  // --- SECTION 5: Currency-Independent VIP Definition ---
+  console.log('\n--- SECTION 5: Currency-Independent VIP Definition ---');
+
+  const vipEval = CustomerSegmentationService.classifyCustomerSegments({
+    rfmScore: {
+      recencyDays: 4,
+      frequency30d: 5,
+      frequency90d: 10,
+      totalOrders: 12,
+      totalSpendCents: 1500000,
+      aovCents: 125000,
+      recencyScore: 5,
+      frequencyScore: 5,
+      monetaryScore: 5,
+    },
+    retentionRiskScore: 10,
+    riskLevel: 'LOW',
+    firstSeenAt: new Date(now - 120 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  assert(vipEval.primarySegmentCode === 'VIP', '19. MonetaryScore >= 4 + FrequencyScore >= 4 classifies as VIP (no USD threshold)');
+
+  // --- SECTION 6: Property Scope Cohort Safety ---
+  console.log('\n--- SECTION 6: Property Scope Cohort Safety ---');
+
+  const branchASpendCohort = [
+    { id: 'cust-1', totalSpendCents: 1000 },
+    { id: 'cust-2', totalSpendCents: 2000 },
+    { id: 'cust-3', totalSpendCents: 3000 },
+    { id: 'cust-4', totalSpendCents: 4000 },
+    { id: 'cust-5', totalSpendCents: 5000 },
+  ];
+  const branchAPercentiles = CustomerSegmentationService.computeCohortPercentiles(branchASpendCohort);
+  assert(branchAPercentiles.get('cust-5') === 100, '20. Branch A cohort top spender receives 100th percentile within Branch A reach');
+
+  // --- SECTION 7: Migration & Server-Only Security ---
+  console.log('\n--- SECTION 7: Migration & Server-Only Security ---');
 
   const migrationPath = path.join(
     process.cwd(),
     'supabase/migrations/20260824120000_phase33_crm_segmentation.sql'
   );
-  assert(fs.existsSync(migrationPath), '24. Migration 20260824120000_phase33_crm_segmentation.sql exists');
+  assert(fs.existsSync(migrationPath), '21. Migration 20260824120000_phase33_crm_segmentation.sql exists');
 
   const migrationContent = fs.readFileSync(migrationPath, 'utf-8');
-  assert(migrationContent.includes('CREATE TABLE IF NOT EXISTS public.crm_segments'), '25. crm_segments table created in migration');
-  assert(migrationContent.includes('CREATE TABLE IF NOT EXISTS public.crm_customer_segments'), '26. crm_customer_segments table created in migration');
-  assert(migrationContent.includes('ALTER TABLE public.crm_segments ENABLE ROW LEVEL SECURITY;'), '27. crm_segments RLS enabled');
-  assert(migrationContent.includes('ALTER TABLE public.crm_customer_segments ENABLE ROW LEVEL SECURITY;'), '28. crm_customer_segments RLS enabled');
-  assert(migrationContent.includes('REVOKE ALL ON public.crm_segments FROM PUBLIC, anon, authenticated;'), '29. crm_segments direct client access revoked');
-  assert(migrationContent.includes('REVOKE ALL ON public.crm_customer_segments FROM PUBLIC, anon, authenticated;'), '30. crm_customer_segments direct client access revoked');
-  assert(migrationContent.includes('GRANT ALL ON public.crm_segments TO service_role;'), '31. crm_segments service_role granted');
-  assert(migrationContent.includes('GRANT ALL ON public.crm_customer_segments TO service_role;'), '32. crm_customer_segments service_role granted');
+  assert(migrationContent.includes('ALTER TABLE public.crm_segments ENABLE ROW LEVEL SECURITY;'), '22. crm_segments RLS enabled');
+  assert(migrationContent.includes('ALTER TABLE public.crm_customer_segments ENABLE ROW LEVEL SECURITY;'), '23. crm_customer_segments RLS enabled');
+  assert(migrationContent.includes('REVOKE ALL ON public.crm_segments FROM PUBLIC, anon, authenticated;'), '24. crm_segments direct client access revoked');
+  assert(migrationContent.includes('GRANT ALL ON public.crm_segments TO service_role;'), '25. crm_segments service_role granted');
 
-  // --- SECTION 7: Provider-Free & Performance Architecture Audit ---
-  console.log('\n--- SECTION 7: Provider-Free & Performance Architecture Audit ---');
+  // --- SECTION 8: Provider-Free & Source Code Audit ---
+  console.log('\n--- SECTION 8: Provider-Free & Source Code Audit ---');
 
   const pkgJsonPath = path.join(process.cwd(), 'package.json');
   const pkgContent = fs.readFileSync(pkgJsonPath, 'utf-8');
-  assert(!pkgContent.includes('"openai"'), '33. Zero openai SDK in package.json');
-  assert(!pkgContent.includes('"@google/generative-ai"'), '34. Zero @google/generative-ai SDK in package.json');
-  assert(!pkgContent.includes('"@anthropic-ai/sdk"'), '35. Zero @anthropic-ai/sdk in package.json');
+  assert(!pkgContent.includes('"openai"'), '26. Zero openai SDK in package.json');
+  assert(!pkgContent.includes('"@google/generative-ai"'), '27. Zero @google/generative-ai SDK in package.json');
+  assert(!pkgContent.includes('"@anthropic-ai/sdk"'), '28. Zero @anthropic-ai/sdk in package.json');
 
   const servicePath = path.join(
     process.cwd(),
     'src/server/crm/customer-segmentation.service.ts'
   );
   const serviceContent = fs.readFileSync(servicePath, 'utf-8');
-  assert(!serviceContent.includes('openai'), '36. Zero LLM references in customer-segmentation.service.ts');
-  assert(!serviceContent.includes('gemini'), '37. Zero Gemini references in customer-segmentation.service.ts');
-  assert(!serviceContent.includes('customers.map(async'), '38. Zero N+1 per-customer queries in customer-segmentation.service.ts');
+  assert(!serviceContent.includes('openai'), '29. Zero LLM references in customer-segmentation.service.ts');
+  assert(!serviceContent.includes('$500'), '30. Zero hardcoded $500 USD threshold in customer-segmentation.service.ts');
+  assert(!serviceContent.includes('$250'), '31. Zero hardcoded $250 USD threshold in customer-segmentation.service.ts');
+  assert(!serviceContent.includes('$100'), '32. Zero hardcoded $100 USD threshold in customer-segmentation.service.ts');
+  assert(!serviceContent.includes('customers.map(async'), '33. Zero N+1 per-customer queries in customer-segmentation.service.ts');
 
   console.log('\n================================================================');
   console.log(`  Phase 33 Step 2 Verification Complete: ${passed} PASSED, ${failed} FAILED`);

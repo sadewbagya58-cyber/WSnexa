@@ -11,7 +11,62 @@ import { SYSTEM_SEGMENTS as SYSTEM_SEGMENT_DEFS } from '@/lib/crm/crm-segmentati
 
 export class CustomerSegmentationService {
   /**
+   * Returns exact non-overlapping RiskLevel based on retention risk score (0-100).
+   * LOW: 0-29, MEDIUM: 30-54, HIGH: 55-74, CRITICAL: 75-100
+   */
+  public static getRiskLevel(score: number): RiskLevel {
+    if (score >= 75) return 'CRITICAL';
+    if (score >= 55) return 'HIGH';
+    if (score >= 30) return 'MEDIUM';
+    return 'LOW';
+  }
+
+  /**
+   * Calculates cohort percentile ranks for a list of customer spends.
+   * Handles small cohorts safely (1, 2, 3-4 customers).
+   */
+  public static computeCohortPercentiles(
+    customers: { id: string; totalSpendCents: number }[]
+  ): Map<string, number> {
+    const map = new Map<string, number>();
+    const n = customers.length;
+    if (n === 0) return map;
+
+    // Sort ascending by totalSpendCents
+    const sorted = [...customers].sort((a, b) => a.totalSpendCents - b.totalSpendCents);
+
+    if (n === 1) {
+      map.set(sorted[0].id, 50); // Single customer baseline = neutral 50th percentile (Monetary 3)
+      return map;
+    }
+
+    if (n === 2) {
+      map.set(sorted[0].id, 30); // Lower spend = 30th percentile (Monetary 2)
+      map.set(sorted[1].id, 80); // Higher spend = 80th percentile (Monetary 4)
+      return map;
+    }
+
+    if (n === 3 || n === 4) {
+      sorted.forEach((c, idx) => {
+        if (idx === 0) map.set(c.id, 10); // Bottom = 10th percentile (Monetary 1)
+        else if (idx === n - 1) map.set(c.id, 90); // Top = 90th percentile (Monetary 5)
+        else map.set(c.id, 50); // Middle = 50th percentile (Monetary 3)
+      });
+      return map;
+    }
+
+    // N >= 5: Standard relative quantile ranking
+    sorted.forEach((c, idx) => {
+      const percentile = Math.round((idx / (n - 1)) * 100);
+      map.set(c.id, percentile);
+    });
+
+    return map;
+  }
+
+  /**
    * Calculates deterministic RFM (Recency, Frequency, Monetary) scores.
+   * Monetary score is currency-independent, derived from percentile rank or relative tier.
    */
   public static computeCustomerRFM(input: {
     recencyDays: number;
@@ -20,8 +75,17 @@ export class CustomerSegmentationService {
     totalOrders: number;
     totalSpendCents: number;
     aovCents: number;
+    monetaryPercentile?: number | null; // 0 to 100
   }): RFMScoreDTO {
-    const { recencyDays, frequency30d, frequency90d, totalOrders, totalSpendCents, aovCents } = input;
+    const {
+      recencyDays,
+      frequency30d,
+      frequency90d,
+      totalOrders,
+      totalSpendCents,
+      aovCents,
+      monetaryPercentile,
+    } = input;
 
     // Recency Score (1 = old/worst, 5 = recent/best)
     let recencyScore = 1;
@@ -37,12 +101,19 @@ export class CustomerSegmentationService {
     else if (frequency90d >= 3 || totalOrders >= 4) frequencyScore = 3;
     else if (frequency90d >= 2 || totalOrders >= 2) frequencyScore = 2;
 
-    // Monetary Score
+    // Currency-Independent Monetary Score (Percentile Distribution / Quantile Rank)
     let monetaryScore = 1;
-    if (totalSpendCents >= 50000 || aovCents >= 5000) monetaryScore = 5;
-    else if (totalSpendCents >= 25000 || aovCents >= 3000) monetaryScore = 4;
-    else if (totalSpendCents >= 10000 || aovCents >= 2000) monetaryScore = 3;
-    else if (totalSpendCents >= 4000) monetaryScore = 2;
+    if (monetaryPercentile !== undefined && monetaryPercentile !== null) {
+      if (monetaryPercentile >= 80) monetaryScore = 5;
+      else if (monetaryPercentile >= 60) monetaryScore = 4;
+      else if (monetaryPercentile >= 40) monetaryScore = 3;
+      else if (monetaryPercentile >= 20) monetaryScore = 2;
+      else monetaryScore = 1;
+    } else {
+      // Standalone fallback when no cohort percentile is provided
+      if (totalSpendCents > 0) monetaryScore = 3;
+      else monetaryScore = 1;
+    }
 
     return {
       recencyDays,
@@ -59,6 +130,7 @@ export class CustomerSegmentationService {
 
   /**
    * Calculates deterministic Retention Risk Score (0-100) and Risk Level.
+   * Ranges: LOW = 0-29, MEDIUM = 30-54, HIGH = 55-74, CRITICAL = 75-100.
    */
   public static computeRetentionRisk(input: {
     recencyDays: number;
@@ -68,8 +140,14 @@ export class CustomerSegmentationService {
   }): { retentionRiskScore: number; riskLevel: RiskLevel } {
     const { recencyDays, totalOrders, firstOrderAt, lastOrderAt } = input;
 
-    if (totalOrders <= 1 || !firstOrderAt || !lastOrderAt) {
-      if (recencyDays > 90) return { retentionRiskScore: 85, riskLevel: 'CRITICAL' };
+    // Sample-Size Safety: 0 completed orders
+    if (totalOrders <= 0) {
+      return { retentionRiskScore: 0, riskLevel: 'LOW' };
+    }
+
+    // Sample-Size Safety: 1 completed order (insufficient interval history)
+    if (totalOrders === 1 || !firstOrderAt || !lastOrderAt) {
+      if (recencyDays > 90) return { retentionRiskScore: 80, riskLevel: 'CRITICAL' };
       if (recencyDays > 45) return { retentionRiskScore: 65, riskLevel: 'HIGH' };
       if (recencyDays > 21) return { retentionRiskScore: 40, riskLevel: 'MEDIUM' };
       return { retentionRiskScore: 10, riskLevel: 'LOW' };
@@ -83,19 +161,17 @@ export class CustomerSegmentationService {
     const ratio = recencyDays / avgIntervalDays;
 
     let retentionRiskScore = 10;
-    let riskLevel: RiskLevel = 'LOW';
-
     if (ratio >= 3.0 || recencyDays > 90) {
-      retentionRiskScore = Math.min(99, Math.round(75 + ratio * 5));
-      riskLevel = 'CRITICAL';
+      retentionRiskScore = Math.min(100, Math.max(75, 75 + Math.round((ratio - 3.0) * 10)));
     } else if (ratio >= 2.0) {
-      retentionRiskScore = Math.min(85, Math.round(55 + (ratio - 2.0) * 20));
-      riskLevel = 'HIGH';
+      retentionRiskScore = Math.min(74, Math.max(55, 55 + Math.round((ratio - 2.0) * 19)));
     } else if (ratio >= 1.3) {
-      retentionRiskScore = Math.min(55, Math.round(30 + (ratio - 1.3) * 25));
-      riskLevel = 'MEDIUM';
+      retentionRiskScore = Math.min(54, Math.max(30, 30 + Math.round((ratio - 1.3) * 34)));
+    } else {
+      retentionRiskScore = Math.min(29, Math.max(0, Math.round(ratio * 22)));
     }
 
+    const riskLevel = this.getRiskLevel(retentionRiskScore);
     return { retentionRiskScore, riskLevel };
   }
 
@@ -116,15 +192,15 @@ export class CustomerSegmentationService {
       Math.floor((Date.now() - new Date(firstSeenAt).getTime()) / (1000 * 60 * 60 * 24))
     );
 
-    // VIP Rule: High spend + good frequency or recency
+    // 1. VIP Rule (Currency-Independent): Top quantile monetary spender + high frequency or recency
     if (
-      rfmScore.totalSpendCents >= 30000 &&
+      rfmScore.monetaryScore >= 4 &&
       (rfmScore.frequencyScore >= 4 || rfmScore.recencyScore >= 4)
     ) {
       codesSet.add('VIP');
     }
 
-    // REGULAR Rule: Consistent repeat visit pattern
+    // 2. REGULAR Rule: Consistent repeat visit pattern
     if (
       rfmScore.frequencyScore >= 3 &&
       rfmScore.recencyScore >= 3 &&
@@ -133,12 +209,12 @@ export class CustomerSegmentationService {
       codesSet.add('REGULAR');
     }
 
-    // LAPSED Rule: > 90 days since last order
-    if (rfmScore.recencyDays > 90) {
+    // 3. LAPSED Rule: > 90 days since last completed order
+    if (rfmScore.totalOrders >= 1 && rfmScore.recencyDays > 90) {
       codesSet.add('LAPSED');
     }
 
-    // AT_RISK Rule: Active history but high risk decay and not yet lapsed
+    // 4. AT_RISK Rule: Active history (>= 2 orders) but high/critical risk decay and not yet lapsed (>90d)
     if (
       rfmScore.totalOrders >= 2 &&
       (riskLevel === 'HIGH' || riskLevel === 'CRITICAL') &&
@@ -147,25 +223,27 @@ export class CustomerSegmentationService {
       codesSet.add('AT_RISK');
     }
 
-    // NEW_GUEST Rule: Joined or first order within last 30 days
-    if (firstSeenDays <= 30 && rfmScore.totalOrders <= 2) {
+    // 5. NEW_GUEST Rule: Joined or first order within last 30 days (totalOrders <= 2)
+    if (firstSeenDays <= 30 && rfmScore.recencyDays <= 30 && rfmScore.totalOrders <= 2) {
       codesSet.add('NEW_GUEST');
     }
 
-    // ONE_TIME Rule: Only 1 order > 30 days ago
-    if (rfmScore.totalOrders === 1 && rfmScore.recencyDays > 30) {
+    // 6. ONE_TIME Rule: Exactly 1 completed order placed 31 to 90 days ago
+    if (rfmScore.totalOrders === 1 && rfmScore.recencyDays >= 31 && rfmScore.recencyDays <= 90) {
       codesSet.add('ONE_TIME');
     }
 
     // Fallback if no specific rule matched
     if (codesSet.size === 0) {
       if (rfmScore.totalOrders >= 2) codesSet.add('REGULAR');
-      else codesSet.add('NEW_GUEST');
+      else if (rfmScore.recencyDays <= 30) codesSet.add('NEW_GUEST');
+      else if (rfmScore.recencyDays <= 90) codesSet.add('ONE_TIME');
+      else codesSet.add('LAPSED');
     }
 
     const segmentCodes = Array.from(codesSet);
 
-    // Primary segment determination by priority
+    // Primary segment determination by strict priority order
     const priorityOrder: SegmentCode[] = [
       'VIP',
       'AT_RISK',
@@ -200,6 +278,7 @@ export class CustomerSegmentationService {
     totalSpendCents: number;
     orders30d: number;
     orders90d: number;
+    monetaryPercentile?: number | null;
   }): CustomerSegmentationDTO {
     const now = Date.now();
     const lastOrderTime = input.lastOrderAt ? new Date(input.lastOrderAt).getTime() : now;
@@ -217,6 +296,7 @@ export class CustomerSegmentationService {
       totalOrders: input.completedOrders,
       totalSpendCents: input.totalSpendCents,
       aovCents,
+      monetaryPercentile: input.monetaryPercentile,
     });
 
     const { retentionRiskScore, riskLevel } = this.computeRetentionRisk({
@@ -306,6 +386,36 @@ export class CustomerSegmentationService {
       if (t >= ninetyDaysAgo) orders90d++;
     }
 
+    // Compute cohort percentile strictly bounded by property reach
+    let monetaryPercentile: number | null = null;
+    let cohortQuery = admin
+      .from('orders')
+      .select('crm_customer_id, total_cents, status, branch_id')
+      .eq('business_id', businessId);
+
+    if (branchIds && branchIds.length > 0) {
+      cohortQuery = cohortQuery.in('branch_id', branchIds);
+    }
+
+    const { data: cohortOrders } = await cohortQuery;
+    const validCohortOrders = (cohortOrders || []).filter(
+      (o) => o.status === 'completed' || o.status === 'served' || o.status === 'delivered'
+    );
+
+    const spendMap = new Map<string, number>();
+    for (const ord of validCohortOrders) {
+      if (!ord.crm_customer_id) continue;
+      spendMap.set(ord.crm_customer_id, (spendMap.get(ord.crm_customer_id) || 0) + (ord.total_cents || 0));
+    }
+
+    const cohortList = Array.from(spendMap.entries()).map(([id, totalSpendCents]) => ({
+      id,
+      totalSpendCents,
+    }));
+
+    const percentileMap = this.computeCohortPercentiles(cohortList);
+    monetaryPercentile = percentileMap.get(customerId) ?? null;
+
     return this.evaluateCustomerSegmentation({
       customerId,
       businessId,
@@ -317,11 +427,12 @@ export class CustomerSegmentationService {
       totalSpendCents,
       orders30d,
       orders90d,
+      monetaryPercentile,
     });
   }
 
   /**
-   * Evaluates and persists customer segment mappings to database.
+   * Evaluates and persists customer segment mappings to database (Business-Wide Truth).
    */
   public static async evaluateAndPersistCustomerSegments(
     businessId: string,
@@ -374,6 +485,30 @@ export class CustomerSegmentationService {
       if (t >= ninetyDaysAgo) orders90d++;
     }
 
+    // Business-wide cohort percentile calculation
+    const { data: businessOrders } = await admin
+      .from('orders')
+      .select('crm_customer_id, total_cents, status')
+      .eq('business_id', businessId);
+
+    const validBizOrders = (businessOrders || []).filter(
+      (o) => o.status === 'completed' || o.status === 'served' || o.status === 'delivered'
+    );
+
+    const bizSpendMap = new Map<string, number>();
+    for (const ord of validBizOrders) {
+      if (!ord.crm_customer_id) continue;
+      bizSpendMap.set(ord.crm_customer_id, (bizSpendMap.get(ord.crm_customer_id) || 0) + (ord.total_cents || 0));
+    }
+
+    const bizCohortList = Array.from(bizSpendMap.entries()).map(([id, totalSpendCents]) => ({
+      id,
+      totalSpendCents,
+    }));
+
+    const bizPercentileMap = this.computeCohortPercentiles(bizCohortList);
+    const monetaryPercentile = bizPercentileMap.get(customerId) ?? null;
+
     const dto = this.evaluateCustomerSegmentation({
       customerId,
       businessId,
@@ -385,9 +520,10 @@ export class CustomerSegmentationService {
       totalSpendCents,
       orders30d,
       orders90d,
+      monetaryPercentile,
     });
 
-    // Delete existing segments for customer and upsert new primary segment
+    // Delete existing segments for customer and upsert new primary/secondary segment rows
     await admin.from('crm_customer_segments').delete().eq('customer_id', customerId);
 
     const rowsToInsert = dto.segmentCodes.map((code) => ({
@@ -407,7 +543,7 @@ export class CustomerSegmentationService {
   }
 
   /**
-   * Computes segment breakdown distribution across customer base.
+   * Computes segment breakdown distribution across customer base (bounded by property reach).
    */
   public static async getSegmentBreakdown(input: {
     businessId: string;
@@ -461,14 +597,24 @@ export class CustomerSegmentationService {
         (o) => o.status === 'completed' || o.status === 'served' || o.status === 'delivered'
       );
 
-      // Group orders by customer
+      // Group orders by customer and calculate spend for cohort percentile
       const ordersByCustMap = new Map<string, typeof validOrders>();
+      const spendMap = new Map<string, number>();
+
       for (const ord of validOrders) {
         if (!ord.crm_customer_id) continue;
         const list = ordersByCustMap.get(ord.crm_customer_id) || [];
         list.push(ord);
         ordersByCustMap.set(ord.crm_customer_id, list);
+        spendMap.set(ord.crm_customer_id, (spendMap.get(ord.crm_customer_id) || 0) + (ord.total_cents || 0));
       }
+
+      const cohortList = customerList.map((cust) => ({
+        id: cust.id,
+        totalSpendCents: spendMap.get(cust.id) || 0,
+      }));
+
+      const percentileMap = this.computeCohortPercentiles(cohortList);
 
       for (const cust of customerList) {
         const custOrders = ordersByCustMap.get(cust.id) || [];
@@ -492,6 +638,7 @@ export class CustomerSegmentationService {
 
         const firstOrderAt = custOrders.length > 0 ? custOrders[0].created_at : null;
         const lastOrderAt = custOrders.length > 0 ? custOrders[custOrders.length - 1].created_at : null;
+        const monetaryPercentile = percentileMap.get(cust.id) ?? null;
 
         const dto = this.evaluateCustomerSegmentation({
           customerId: cust.id,
@@ -504,6 +651,7 @@ export class CustomerSegmentationService {
           totalSpendCents,
           orders30d,
           orders90d,
+          monetaryPercentile,
         });
 
         // Tally segment breakdown

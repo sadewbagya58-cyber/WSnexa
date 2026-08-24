@@ -17,7 +17,7 @@ export interface RFMScoreDTO {
   aovCents: number;
   recencyScore: number; // 1 (lowest/worst) to 5 (highest/best)
   frequencyScore: number; // 1 to 5
-  monetaryScore: number; // 1 to 5
+  monetaryScore: number; // 1 to 5 (relative cohort distribution percentile)
 }
 
 export interface CustomerSegmentationDTO {
@@ -62,7 +62,7 @@ export const SYSTEM_SEGMENTS: SystemSegmentDefinition[] = [
   {
     code: 'VIP',
     name: 'VIP / High Value',
-    description: 'Top spending customers with frequent recent visits',
+    description: 'Top quantile monetary spenders with high frequency or recent visits',
     colorHex: '#8B5CF6', // Purple
   },
   {
@@ -74,25 +74,25 @@ export const SYSTEM_SEGMENTS: SystemSegmentDefinition[] = [
   {
     code: 'AT_RISK',
     name: 'At Risk of Churn',
-    description: 'Previously regular guests whose visit interval has doubled',
+    description: 'Multi-order guests whose visit interval has doubled (high retention risk)',
     colorHex: '#F59E0B', // Amber
   },
   {
     code: 'LAPSED',
     name: 'Lapsed / Inactive',
-    description: 'No order activity in over 90 days',
+    description: 'No completed order activity in over 90 days',
     colorHex: '#EF4444', // Red
   },
   {
     code: 'NEW_GUEST',
     name: 'New Guests',
-    description: 'First joined or placed initial order within the last 30 days',
+    description: 'First order placed within the last 30 days (total orders <= 2)',
     colorHex: '#10B981', // Emerald
   },
   {
     code: 'ONE_TIME',
     name: 'One-Time Visitors',
-    description: 'Placed exactly one order over 30 days ago without returning',
+    description: 'Placed exactly one order 31 to 90 days ago without returning',
     colorHex: '#6B7280', // Gray
   },
 ];

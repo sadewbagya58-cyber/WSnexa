@@ -1,4 +1,4 @@
-import { ReservationSettingsDTO } from '@/lib/reservations/reservation-types';
+import { ReservationSettingsDTO, ReservationValidationIntent } from '@/lib/reservations/reservation-types';
 
 export function createDomainError(message: string, code: string): Error {
   const err = new Error(message);
@@ -28,7 +28,7 @@ export class ReservationValidationService {
   }
 
   /**
-   * Validates reservation parameters against branch settings and time rules.
+   * Validates reservation parameters against branch settings and intent-aware time rules.
    */
   static validateReservationInput(options: {
     partySize: number;
@@ -39,6 +39,7 @@ export class ReservationValidationService {
     guestPhone?: string | null;
     settings: ReservationSettingsDTO;
     isStaffCreation?: boolean;
+    intent?: ReservationValidationIntent;
     branchTimezone?: string;
   }): void {
     const {
@@ -50,10 +51,14 @@ export class ReservationValidationService {
       guestPhone,
       settings,
       isStaffCreation = false,
+      intent,
       branchTimezone = 'Asia/Colombo',
     } = options;
 
-    if (!settings.reservationsEnabled && !isStaffCreation) {
+    const validationIntent: ReservationValidationIntent =
+      intent || (isStaffCreation ? 'FUTURE_STAFF_RESERVATION' : 'PUBLIC_RESERVATION');
+
+    if (!settings.reservationsEnabled && validationIntent === 'PUBLIC_RESERVATION') {
       throw createDomainError('Reservations are currently disabled for this venue/branch.', 'RESERVATIONS_DISABLED');
     }
 
@@ -76,14 +81,18 @@ export class ReservationValidationService {
       throw createDomainError('Reservation end time must be strictly after start time.', 'INVALID_INPUT');
     }
 
-    // MANDATORY FOR ALL CREATION PATHS (STAFF AND PUBLIC):
+    // MANDATORY FOR FUTURE BOOKINGS (STAFF AND PUBLIC):
     // Start time MUST be in the future relative to server "now"
-    if (start.getTime() <= now.getTime()) {
+    // NOT APPLIED to immediate operational seating flows (WALK_IN_SEATING & WAITLIST_PROMOTION)
+    const isImmediateSeating =
+      validationIntent === 'WALK_IN_SEATING' || validationIntent === 'WAITLIST_PROMOTION';
+
+    if (!isImmediateSeating && start.getTime() <= now.getTime()) {
       throw createDomainError('Reservation time must be in the future.', 'PAST_RESERVATION_TIME');
     }
 
-    // Public / customer creation advance booking bounds
-    if (!isStaffCreation) {
+    // Public customer creation advance booking bounds
+    if (validationIntent === 'PUBLIC_RESERVATION') {
       const minAdvanceMs = settings.minimumAdvanceMinutes * 60 * 1000;
       if (start.getTime() < now.getTime() + minAdvanceMs) {
         throw createDomainError(
@@ -107,18 +116,18 @@ export class ReservationValidationService {
       if (isSameDay && !settings.allowSameDay) {
         throw createDomainError('Same-day reservations are not accepted at this branch.', 'SAME_DAY_DISABLED');
       }
+
+      if (settings.requireGuestEmail && (!guestEmail || !guestEmail.trim())) {
+        throw createDomainError('Guest email address is required by branch policy.', 'REQUIRED_CONTACT_MISSING');
+      }
+
+      if (settings.requireGuestPhone && (!guestPhone || !guestPhone.trim())) {
+        throw createDomainError('Guest phone number is required by branch policy.', 'REQUIRED_CONTACT_MISSING');
+      }
     }
 
     if (!guestName || guestName.trim().length < 2) {
       throw createDomainError('Guest name is required and must be at least 2 characters.', 'INVALID_INPUT');
-    }
-
-    if (settings.requireGuestEmail && (!guestEmail || !guestEmail.trim())) {
-      throw createDomainError('Guest email address is required by branch policy.', 'REQUIRED_CONTACT_MISSING');
-    }
-
-    if (settings.requireGuestPhone && (!guestPhone || !guestPhone.trim())) {
-      throw createDomainError('Guest phone number is required by branch policy.', 'REQUIRED_CONTACT_MISSING');
     }
   }
 }

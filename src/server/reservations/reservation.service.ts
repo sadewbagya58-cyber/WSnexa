@@ -54,7 +54,7 @@ export class ReservationService {
     const startAt = new Date(input.reservationStartAt);
     const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
 
-    // Canonical validation for ALL creation paths (staff + public)
+    // Canonical validation for ALL creation paths (staff + public + walk-in + waitlist)
     ReservationValidationService.validateReservationInput({
       partySize: input.partySize,
       reservationStartAt: startAt.toISOString(),
@@ -64,6 +64,7 @@ export class ReservationService {
       guestPhone: input.guestPhone,
       settings,
       isStaffCreation,
+      intent: input.intent,
       branchTimezone,
     });
 
@@ -89,11 +90,11 @@ export class ReservationService {
     const confirmationCode = this.generateConfirmationCode();
     const reservationDate = ReservationValidationService.deriveBranchReservationDate(startAt.toISOString(), branchTimezone);
 
-    let initialStatus: ReservationStatus = 'PENDING';
-    if (isStaffCreation) {
-      initialStatus = 'CONFIRMED';
-    } else if (settings.autoConfirm) {
-      initialStatus = 'CONFIRMED';
+    let initialStatus: ReservationStatus = input.initialStatus || 'PENDING';
+    if (!input.initialStatus) {
+      if (isStaffCreation || settings.autoConfirm) {
+        initialStatus = 'CONFIRMED';
+      }
     }
 
     const payload = {

@@ -105,7 +105,7 @@ async function runVerification() {
     '22. Transition to SEATED strictly blocked unless at least one valid active table assignment exists'
   );
 
-  // 6. Walk-In Seating Flow
+  // 6. Walk-In Seating Architecture
   console.log('\n--- SECTION 6: Walk-In Seating Architecture ---');
   assert(allocationContent.includes('createWalkInSeating'), '23. Canonical walk-in seating operation implemented');
 
@@ -123,7 +123,7 @@ async function runVerification() {
   );
   assert(
     waitlistContent.includes('promoteWaitlistEntryToReservation') &&
-    waitlistContent.includes('Duplicate promotion is blocked.'),
+    waitlistContent.includes('WAITLIST_ALREADY_PROMOTED'),
     '25 & 26. Waitlist promotion creates reservation, assigns table, and strictly prevents duplicate promotion'
   );
   assert(
@@ -166,8 +166,145 @@ async function runVerification() {
   assert(!allocationContent.includes('guest_journey_stage'), '33. Step 3 guest journey orchestration strictly absent');
   assert(!allocationContent.includes('hotel_room_id'), '34. Hotel PMS / room booking logic strictly absent');
 
+  // 11. Immediate Seating Intent & Hotfix Assertions
+  console.log('\n--- SECTION 11: Immediate Seating Intent & Hotfix Hardening ---');
+  const { ReservationValidationService } = await import('@/server/reservations/reservation-validation.service');
+
+  const testSettings = {
+    id: 'set-1',
+    businessId: 'bus-1',
+    branchId: 'br-1',
+    reservationsEnabled: true,
+    defaultDurationMinutes: 90,
+    minimumPartySize: 1,
+    maximumPartySize: 20,
+    minimumAdvanceMinutes: 30,
+    maximumAdvanceDays: 90,
+    allowSameDay: true,
+    requireGuestPhone: false,
+    requireGuestEmail: false,
+    autoConfirm: false,
+    tableTurnoverBufferMinutes: 15,
+    maxTableCombination: 3,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const nowIso = new Date().toISOString();
+  const ninetyMinLaterIso = new Date(Date.now() + 90 * 60 * 1000).toISOString();
+
+  // Assertion 35 & 36: WALK_IN_SEATING intent allows nowIso without throwing PAST_RESERVATION_TIME
+  let walkInValidationPassed = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 2,
+      reservationStartAt: nowIso,
+      reservationEndAt: ninetyMinLaterIso,
+      guestName: 'Walk-In Guest',
+      settings: testSettings,
+      intent: 'WALK_IN_SEATING',
+    });
+    walkInValidationPassed = true;
+  } catch (err) {
+    console.error('Walk-in validation unexpected failure:', err);
+  }
+  assert(walkInValidationPassed, '35 & 36. WALK_IN_SEATING validation intent allows immediate seating at server "now" without throwing PAST_RESERVATION_TIME');
+
+  // Assertion 37 & 38: WAITLIST_PROMOTION intent allows nowIso without throwing PAST_RESERVATION_TIME
+  let waitlistValidationPassed = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 4,
+      reservationStartAt: nowIso,
+      reservationEndAt: ninetyMinLaterIso,
+      guestName: 'Waitlist Promoted Guest',
+      settings: testSettings,
+      intent: 'WAITLIST_PROMOTION',
+    });
+    waitlistValidationPassed = true;
+  } catch (err) {
+    console.error('Waitlist promotion validation unexpected failure:', err);
+  }
+  assert(waitlistValidationPassed, '37 & 38. WAITLIST_PROMOTION validation intent allows immediate seating at server "now" without throwing PAST_RESERVATION_TIME');
+
+  // Assertion 39: Immediate seating flows STILL enforce party size bounds
+  let walkInBadPartyBlocked = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 0,
+      reservationStartAt: nowIso,
+      reservationEndAt: ninetyMinLaterIso,
+      guestName: 'Walk-In Guest',
+      settings: testSettings,
+      intent: 'WALK_IN_SEATING',
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'INVALID_PARTY_SIZE') {
+      walkInBadPartyBlocked = true;
+    }
+  }
+  assert(walkInBadPartyBlocked, '39. WALK_IN_SEATING intent still strictly enforces party size bounds (partySize = 0 rejected)');
+
+  // Assertion 40: Future staff reservation with start <= now STILL REJECTS
+  let staffPastTimeBlocked = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 2,
+      reservationStartAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+      reservationEndAt: new Date(Date.now() - 1800 * 1000).toISOString(),
+      guestName: 'Past Staff Test',
+      settings: testSettings,
+      intent: 'FUTURE_STAFF_RESERVATION',
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'PAST_RESERVATION_TIME') {
+      staffPastTimeBlocked = true;
+    }
+  }
+  assert(staffPastTimeBlocked, '40. FUTURE_STAFF_RESERVATION intent strictly rejects past start times (start <= now)');
+
+  // Assertion 41: Public reservation with start <= now STILL REJECTS
+  let publicPastTimeBlocked = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 2,
+      reservationStartAt: new Date(Date.now() - 3600 * 1000).toISOString(),
+      reservationEndAt: new Date(Date.now() - 1800 * 1000).toISOString(),
+      guestName: 'Past Public Test',
+      settings: testSettings,
+      intent: 'PUBLIC_RESERVATION',
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'PAST_RESERVATION_TIME') {
+      publicPastTimeBlocked = true;
+    }
+  }
+  assert(publicPastTimeBlocked, '41. PUBLIC_RESERVATION intent strictly rejects past start times (start <= now)');
+
+  // Assertion 42: Public reservation inside minimum advance window STILL REJECTS
+  let publicMinAdvanceBlocked = false;
+  try {
+    ReservationValidationService.validateReservationInput({
+      partySize: 2,
+      reservationStartAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 min < 30 min minAdvance
+      reservationEndAt: new Date(Date.now() + 100 * 60 * 1000).toISOString(),
+      guestName: 'Advance Test',
+      settings: testSettings,
+      intent: 'PUBLIC_RESERVATION',
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err as unknown as { code: string }).code === 'MINIMUM_ADVANCE_TIME') {
+      publicMinAdvanceBlocked = true;
+    }
+  }
+  assert(publicMinAdvanceBlocked, '42. PUBLIC_RESERVATION intent strictly enforces minimum advance booking window');
+
+  // Assertion 43 & 44: Codebase references intent-aware creation paths
+  assert(allocationContent.includes("intent: 'WALK_IN_SEATING'"), '43. createWalkInSeating passes explicit WALK_IN_SEATING validation intent');
+  assert(waitlistContent.includes("intent: 'WAITLIST_PROMOTION'"), '44. promoteWaitlistEntryToReservation passes explicit WAITLIST_PROMOTION validation intent');
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 2 Verification Complete: ALL 34 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 2 Verification Complete: ALL 44 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

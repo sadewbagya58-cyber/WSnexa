@@ -175,7 +175,7 @@ export class ReservationAllocationService {
 
     const nowIso = new Date().toISOString();
 
-    // 1. Create walk-in reservation
+    // 1. Create walk-in reservation with WALK_IN_SEATING intent
     const reservation = await ReservationService.createReservation(
       {
         businessId,
@@ -188,6 +188,8 @@ export class ReservationAllocationService {
         durationMinutes,
         specialRequests,
         source: 'WALK_IN',
+        intent: 'WALK_IN_SEATING',
+        initialStatus: 'CONFIRMED',
       },
       actorUserId,
       'STAFF'

@@ -258,10 +258,12 @@ export class ReservationWaitlistService {
     }
 
     if (entry.status === 'SEATED' || entry.status === 'CANCELLED') {
-      throw createDomainError(`Waitlist entry is already ${entry.status}. Duplicate promotion is blocked.`, 'INVALID_INPUT');
+      throw createDomainError(`This waitlist entry has already been promoted (${entry.status}).`, 'WAITLIST_ALREADY_PROMOTED');
     }
 
-    // 1. Create canonical reservation
+    const nowIso = new Date().toISOString();
+
+    // 1. Create canonical reservation with WAITLIST_PROMOTION intent
     const reservation = await ReservationService.createReservation(
       {
         businessId: entry.business_id,
@@ -271,8 +273,10 @@ export class ReservationWaitlistService {
         guestEmail: entry.guest_email,
         guestPhone: entry.guest_phone,
         partySize: entry.party_size,
-        reservationStartAt: new Date().toISOString(),
+        reservationStartAt: nowIso,
         source: 'STAFF',
+        intent: 'WAITLIST_PROMOTION',
+        initialStatus: 'CONFIRMED',
       },
       actorUserId,
       'STAFF'
@@ -294,9 +298,13 @@ export class ReservationWaitlistService {
       }
     }
 
-    // 3. Mark waitlist entry status as SEATED
+    // 3. Apply canonical ARRIVED -> SEATED lifecycle transitions
+    await ReservationService.markArrived(entry.business_id, reservation.id, actorUserId);
+    const seatedRes = await ReservationService.markSeated(entry.business_id, reservation.id, actorUserId);
+
+    // 4. Mark waitlist entry status as SEATED
     const updatedWaitlist = await this.updateWaitlistStatus(entry.business_id, entry.id, 'SEATED');
 
-    return { reservation, waitlistEntry: updatedWaitlist };
+    return { reservation: seatedRes, waitlistEntry: updatedWaitlist };
   }
 }

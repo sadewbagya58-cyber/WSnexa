@@ -114,6 +114,8 @@ export interface CreateReservationInput {
   occasion?: string | null;
   source?: ReservationSource;
   crmCustomerId?: string | null;
+  intent?: ReservationValidationIntent;
+  initialStatus?: ReservationStatus;
 }
 
 export interface CreatePublicReservationInput {
@@ -166,6 +168,12 @@ export interface PaginatedReservationsDTO {
   offset: number;
 }
 
+export type ReservationValidationIntent =
+  | 'FUTURE_STAFF_RESERVATION'
+  | 'PUBLIC_RESERVATION'
+  | 'WALK_IN_SEATING'
+  | 'WAITLIST_PROMOTION';
+
 export type ReservationErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN_SCOPE'
@@ -181,6 +189,8 @@ export type ReservationErrorCode =
   | 'REQUIRED_CONTACT_MISSING'
   | 'INVALID_INPUT'
   | 'CONCURRENCY_CONFLICT'
+  | 'NO_TABLE_AVAILABLE'
+  | 'WAITLIST_ALREADY_PROMOTED'
   | 'INTERNAL_ERROR';
 
 export type ReservationActionResult<T> =

@@ -66,6 +66,12 @@ export const permissionKeyEnum = z.enum([
   'customers.manage',
   'customers.contact_view',
 
+  // Reservations & Dining Guest Journey (Phase 35)
+  'reservations.view',
+  'reservations.create',
+  'reservations.manage',
+  'reservations.cancel',
+
   // Staff & Team
   'staff.view',
   'staff.manage', // Preserved for backward compatibility

@@ -121,6 +121,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
     id: 'growth-guests',
     title: 'GROWTH & GUESTS',
     items: [
+      { id: 'customers', label: 'Guest CRM', href: '/dashboard/customers', requiredPermission: 'customers.view', context: 'ORGANIZATION' },
       { id: 'reviews', label: 'Customer Reviews', href: '/dashboard/reviews', requiredPermission: 'reviews.respond', context: 'PROPERTY' },
       { id: 'reputation', label: 'Reputation & Rankings', href: '/dashboard/reputation', requiredPermission: 'reputation.view', context: 'ORGANIZATION' },
       { id: 'loyalty', label: 'Loyalty & Rewards', href: '/dashboard/loyalty', requiredPermission: 'loyalty.view', badge: 'Soon', context: 'ORGANIZATION' },

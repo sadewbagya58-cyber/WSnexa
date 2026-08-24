@@ -418,6 +418,17 @@ export const DASHBOARD_PAGE_METADATA_REGISTRY: Record<string, DashboardPageMetad
     contextType: 'ORGANIZATION',
     layoutVariant: 'standard',
   },
+  '/dashboard/customers': {
+    route: '/dashboard/customers',
+    title: 'Guest CRM & Retention',
+    shortTitle: 'Guest CRM',
+    description: 'Manage guest profiles, behavioral segmentation, retention risk, and auditable CRM actions.',
+    sectionId: 'growth-guests',
+    parentHref: '/dashboard',
+    parentLabel: 'Dashboard',
+    contextType: 'ORGANIZATION',
+    layoutVariant: 'standard',
+  },
   '/dashboard/reviews': {
     route: '/dashboard/reviews',
     title: 'Customer Reviews',

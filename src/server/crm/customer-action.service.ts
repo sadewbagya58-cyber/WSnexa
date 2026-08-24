@@ -229,7 +229,137 @@ export class CustomerActionService {
   }
 
   /**
-   * Assigns action to a staff user in the same business.
+   * Validates if a staff user has legitimate property reach into a target branch.
+   */
+  public static async validateAssigneeBranchReach(input: {
+    businessId: string;
+    assignedUserId: string;
+    targetBranchId: string;
+  }): Promise<boolean> {
+    const { businessId, assignedUserId, targetBranchId } = input;
+    const admin = createAdminClient();
+
+    // 1. Fetch active business membership
+    const { data: membership } = await admin
+      .from('business_memberships')
+      .select('id, user_id, role, primary_branch_id')
+      .eq('business_id', businessId)
+      .eq('user_id', assignedUserId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (!membership) return false;
+
+    // Business Owners have canonical organization-wide reach across all branches
+    if (membership.role === 'business_owner') return true;
+
+    // Direct primary branch match
+    if (membership.primary_branch_id === targetBranchId) return true;
+
+    // Active staff assignments reach match
+    const { data: assignment } = await admin
+      .from('staff_assignments')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('user_id', assignedUserId)
+      .eq('branch_id', targetBranchId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (assignment) return true;
+
+    // Active secondment reach match (temporal validity check)
+    const nowIso = new Date().toISOString();
+    const { data: secondment } = await admin
+      .from('secondments')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('user_id', assignedUserId)
+      .eq('host_branch_id', targetBranchId)
+      .lte('start_date', nowIso)
+      .gte('end_date', nowIso)
+      .maybeSingle();
+
+    if (secondment) return true;
+
+    // Active acting assignment reach match (temporal validity check)
+    const { data: acting } = await admin
+      .from('acting_assignments')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('user_id', assignedUserId)
+      .eq('branch_id', targetBranchId)
+      .lte('start_date', nowIso)
+      .gte('end_date', nowIso)
+      .maybeSingle();
+
+    if (acting) return true;
+
+    return false;
+  }
+
+  /**
+   * Retrieves server-scoped eligible staff assignees for a given action or branch reach.
+   */
+  public static async getEligibleAssignees(input: {
+    businessId: string;
+    actionId?: string;
+    branchId?: string | null;
+  }): Promise<{ userId: string; displayName: string; role: string }[]> {
+    const { businessId, actionId, branchId } = input;
+    const admin = createAdminClient();
+
+    let targetBranchId: string | null = branchId || null;
+
+    if (actionId) {
+      const { data: action } = await admin
+        .from('crm_actions')
+        .select('branch_id')
+        .eq('id', actionId)
+        .eq('business_id', businessId)
+        .single();
+      if (action) {
+        targetBranchId = action.branch_id;
+      }
+    }
+
+    const { data: memberships } = await admin
+      .from('business_memberships')
+      .select('user_id, role, users:user_id ( id, display_name, email )')
+      .eq('business_id', businessId)
+      .is('deleted_at', null);
+
+    if (!memberships) return [];
+
+    const result: { userId: string; displayName: string; role: string }[] = [];
+
+    for (const mem of memberships) {
+      if (!mem.user_id) continue;
+
+      if (targetBranchId) {
+        const hasReach = await CustomerActionService.validateAssigneeBranchReach({
+          businessId,
+          assignedUserId: mem.user_id,
+          targetBranchId,
+        });
+        if (!hasReach) continue;
+      }
+
+      const userObj = mem.users as any;
+      const displayName = userObj?.display_name || userObj?.email || `Staff Member (${mem.user_id.slice(0, 8)})`;
+
+      result.push({
+        userId: mem.user_id,
+        displayName,
+        role: mem.role,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Assigns action to a staff user with business tenancy and property-scope reach validation.
    */
   public static async assignAction(input: {
     businessId: string;
@@ -240,17 +370,42 @@ export class CustomerActionService {
     const { businessId, actionId, assignedUserId, actorUserId } = input;
     const admin = createAdminClient();
 
-    // Verify assignee belongs to the same business
-    const { data: membership } = await admin
-      .from('business_memberships')
-      .select('id')
+    // 1. Fetch action details to check branch scoping
+    const { data: action } = await admin
+      .from('crm_actions')
+      .select('id, branch_id')
+      .eq('id', actionId)
       .eq('business_id', businessId)
-      .eq('user_id', assignedUserId)
-      .is('deleted_at', null)
       .maybeSingle();
 
-    if (!membership) {
-      throw new Error('Assignee must be an active staff member belonging to the same business.');
+    if (!action) {
+      throw new Error('CRM Action not found or outside business tenancy.');
+    }
+
+    // 2. Verify property scope reach if action is branch-specific
+    if (action.branch_id) {
+      const hasReach = await CustomerActionService.validateAssigneeBranchReach({
+        businessId,
+        assignedUserId,
+        targetBranchId: action.branch_id,
+      });
+
+      if (!hasReach) {
+        throw new Error('Assignee does not have valid property reach for this branch-specific action.');
+      }
+    } else {
+      // For business-wide actions, verify active business membership
+      const { data: membership } = await admin
+        .from('business_memberships')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('user_id', assignedUserId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (!membership) {
+        throw new Error('Assignee must be an active staff member belonging to the same business.');
+      }
     }
 
     const { error } = await admin

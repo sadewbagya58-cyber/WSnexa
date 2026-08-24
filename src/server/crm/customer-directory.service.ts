@@ -35,10 +35,17 @@ export class CustomerDirectoryService {
       query = query.eq('identity_type', input.identityType);
     }
 
+    const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
+
     if (input.searchQuery) {
       const q = input.searchQuery.trim().toLowerCase();
       if (q) {
-        query = query.or(`display_name.ilike.%${q}%,email_normalized.ilike.%${q}%,phone_normalized.ilike.%${q}%`);
+        if (hasContactView) {
+          query = query.or(`display_name.ilike.%${q}%,email_normalized.ilike.%${q}%,phone_normalized.ilike.%${q}%`);
+        } else {
+          // Without contact_view permission, search is strictly display_name to prevent contact enumeration side-channels
+          query = query.ilike('display_name', `%${q}%`);
+        }
       }
     }
 
@@ -47,13 +54,19 @@ export class CustomerDirectoryService {
     const { data: customers, count } = await query;
     if (!customers) return { items: [], totalCount: 0 };
 
-    // Fetch order counts and spend summary per customer in batch
+    // Fetch order counts and spend summary per customer in batch with property reach filtering
     const customerIds = customers.map((c) => c.id);
-    const { data: ordersData } = await admin
+    let ordersQuery = admin
       .from('orders')
-      .select('crm_customer_id, status, total_cents')
+      .select('crm_customer_id, status, total_cents, branch_id')
       .eq('business_id', businessId)
       .in('crm_customer_id', customerIds);
+
+    if (authContext.authorizedBranchIds && authContext.authorizedBranchIds.length > 0) {
+      ordersQuery = ordersQuery.in('branch_id', authContext.authorizedBranchIds);
+    }
+
+    const { data: ordersData } = await ordersQuery;
 
     const orderStatsMap = new Map<string, { totalOrders: number; totalSpendCents: number }>();
     (ordersData || []).forEach((o) => {

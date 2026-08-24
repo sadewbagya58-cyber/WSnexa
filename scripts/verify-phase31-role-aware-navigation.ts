@@ -71,7 +71,7 @@ async function runVerification() {
 
   // 1. Config contains all frozen primary items (42 total items)
   const allItems = CANONICAL_DASHBOARD_NAV_SECTIONS.flatMap((s) => s.items);
-  assert(allItems.length === 42, `Canonical nav config contains exactly 42 primary items (found ${allItems.length})`);
+  assert(allItems.length === 43, `Canonical nav config contains exactly 43 primary items (found ${allItems.length})`);
 
   // 2. Section IDs unique
   const sectionIds = CANONICAL_DASHBOARD_NAV_SECTIONS.map((s) => s.id);

@@ -8,7 +8,7 @@
 | **Step 1** | **Guest Data Foundation & Unified Customer Profile** | Unified Identity Resolution, Profile Aggregation, Contact Masking, Consent Model | **COMPLETED / CHECKPOINTED** |
 | **Step 2** | **Segmentation & Customer Intelligence** | Deterministic Customer Segments, Recency/Frequency/Monetary Rules, Retention Risk | **COMPLETED / CHECKPOINTED** |
 | **Step 3** | **CRM Actions, Retention & Guest Engagement** | Targeted Retention Offers, Win-back Promos, Feedback Recovery, Guest Communication | **COMPLETED / CHECKPOINTED** |
-| **Step 4** | **CRM Dashboard, Security, Full Regression & Phase 33 Closure** | Guest Directory UI, Customer Profile View, RBAC Audits, System-wide Regressions | **NOT STARTED** |
+| **Step 4** | **CRM Dashboard, Security, Full Regression & Phase 33 Closure** | Guest Directory UI, Customer Profile View, RBAC Audits, System-wide Regressions | **COMPLETED / CHECKPOINTED** |
 
 ---
 
@@ -52,3 +52,17 @@
 - **Concurrency-Safe Deduplication**: Partial unique index `idx_crm_actions_open_dedupe` on active actions (`OPEN`, `IN_PROGRESS`, `SNOOZED`).
 - **Server-Only RLS Security**: RLS enabled on `crm_customer_notes`, `crm_tags`, `crm_customer_tags`, `crm_actions`, `crm_action_events`. Direct client access REVOKED, execution GRANTED strictly to `service_role`.
 - **Verification Suite**: `verify:phase33-crm-actions` $\rightarrow$ **48 / 48 PASSED**.
+
+---
+
+### Step 4 Detailed Architecture & Verification
+- **Status**: **COMPLETED / CHECKPOINTED**
+- **Production Migration**: **NONE** *(Pure UI & server service orchestration)*
+- **Primary Route & IA**: `/dashboard/customers` registered in navigation under `GROWTH & GUESTS`, gated by `customers.view`.
+- **Customer Directory UI**: Server-side paginated, searchable, filterable directory list with masked contact details by default.
+- **Customer Profile UI**: `/dashboard/customers/[customerId]` with KPI summary cards, RFM breakdown, order history, loyalty summary, reviews, staff notes, operational tags, and active retention actions.
+- **Contact Privacy UX**: Controlled "Reveal full contact" button calling server action requiring `customers.contact_view` permission. Contact search disabled for non-holders of `customers.contact_view` to prevent enumeration side-channels.
+- **Staff Notes & Tags**: Notes UI with 2000-char plain text limit, delete confirmation, and sensitive PII warning banner. Operational tags UI with sensitive category validation.
+- **Retention Action Queue**: Filterable action list with `Start`, `Snooze` (max 90 days date selector), `Complete`, and `Dismiss` transition controls.
+- **Hardened Property-Scope Assignment**: Branch-specific actions validate assignee property reach across primary branch, active staff assignments, active secondments, or active acting assignments. Server-scoped assignee query (`CustomerActionService.getEligibleAssignees`) returns only eligible assignees.
+- **Master Closure Verification**: `verify:phase33-closure` $\rightarrow$ **74 / 74 PASSED**.

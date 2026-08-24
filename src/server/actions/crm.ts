@@ -2,9 +2,74 @@
 
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import type { CRMActionStatus } from '@/lib/crm/crm-action.types';
+import type { CustomerDirectoryQueryInput } from '@/lib/crm/crm-types';
 import { CustomerActionService } from '@/server/crm/customer-action.service';
+import { CustomerDirectoryService } from '@/server/crm/customer-directory.service';
 import { CustomerNotesService } from '@/server/crm/customer-notes.service';
+import { CustomerProfileService } from '@/server/crm/customer-profile.service';
 import { CustomerTagService } from '@/server/crm/customer-tag.service';
+import { CRMOverviewService } from '@/server/crm/crm-overview.service';
+
+export async function getCRMOverviewServerAction(
+  businessId: string,
+  branchIds?: string[] | null
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || authContext.businessId !== businessId) {
+    throw new Error('Unauthorized business session');
+  }
+
+  if (!(await can({ context: authContext, permission: 'customers.view' }))) {
+    throw new Error('Forbidden: missing customers.view permission');
+  }
+
+  return CRMOverviewService.getCRMOverview({
+    businessId,
+    branchIds: branchIds || authContext.authorizedBranchIds,
+  });
+}
+
+export async function listCustomerDirectoryServerAction(
+  input: CustomerDirectoryQueryInput = {}
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext) throw new Error('Unauthorized session');
+  return CustomerDirectoryService.searchCustomerDirectory(authContext, input);
+}
+
+export async function getUnifiedCustomerProfileServerAction(
+  businessId: string,
+  customerId: string
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || authContext.businessId !== businessId) {
+    throw new Error('Unauthorized business session');
+  }
+
+  return CustomerProfileService.getUnifiedCustomerProfile(customerId, businessId, authContext);
+}
+
+export async function revealCustomerContactDetailsServerAction(
+  businessId: string,
+  customerId: string
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || authContext.businessId !== businessId) {
+    throw new Error('Unauthorized business session');
+  }
+
+  if (!(await can({ context: authContext, permission: 'customers.contact_view' }))) {
+    throw new Error('Forbidden: customers.contact_view permission is required to reveal full contact details.');
+  }
+
+  const profile = await CustomerProfileService.getUnifiedCustomerProfile(customerId, businessId, authContext);
+  if (!profile) throw new Error('Customer not found');
+
+  return {
+    email: profile.emailUnmasked || null,
+    phone: profile.phoneUnmasked || null,
+  };
+}
 
 export async function listCustomerNotesServerAction(
   businessId: string,
@@ -196,6 +261,27 @@ export async function assignCRMActionServerAction(
     actionId,
     assignedUserId,
     actorUserId: authContext.userId,
+  });
+}
+
+export async function getEligibleAssigneesServerAction(
+  businessId: string,
+  actionId?: string,
+  branchId?: string | null
+) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || authContext.businessId !== businessId) {
+    throw new Error('Unauthorized business session');
+  }
+
+  if (!(await can({ context: authContext, permission: 'customers.view' }))) {
+    throw new Error('Forbidden: missing customers.view permission');
+  }
+
+  return CustomerActionService.getEligibleAssignees({
+    businessId,
+    actionId,
+    branchId,
   });
 }
 

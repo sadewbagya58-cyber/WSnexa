@@ -37,6 +37,34 @@ export class CustomerConsentService {
   }
 
   /**
+   * Internal helper to fetch consent summary for service-role evaluation.
+   */
+  static async getCustomerConsentSummary(
+    businessId: string,
+    customerId: string
+  ): Promise<{ emailConsent: ConsentStatus; smsConsent: ConsentStatus }> {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from('crm_consent_records')
+      .select('channel, status')
+      .eq('business_id', businessId)
+      .eq('crm_customer_id', customerId);
+
+    let emailConsent: ConsentStatus = 'UNKNOWN';
+    let smsConsent: ConsentStatus = 'UNKNOWN';
+
+    for (const row of data || []) {
+      if (row.channel === 'MARKETING_EMAIL') emailConsent = row.status as ConsentStatus;
+      if (row.channel === 'MARKETING_SMS' || row.channel === 'MARKETING_WHATSAPP') {
+        if (row.status === 'DENIED' || row.status === 'OPTED_OUT') smsConsent = row.status as ConsentStatus;
+        else if (row.status === 'GRANTED' && smsConsent !== 'DENIED') smsConsent = 'GRANTED';
+      }
+    }
+
+    return { emailConsent, smsConsent };
+  }
+
+  /**
    * Records or updates a consent status with auditable event log.
    */
   static async updateConsentStatus(

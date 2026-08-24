@@ -68,7 +68,8 @@
     "verify:phase32-operational-insights": "tsx scripts/verify-phase32-operational-insights.ts",
     "verify:phase32-closure": "tsx scripts/verify-phase32-closure.ts",
     "verify:phase33-guest-foundation": "tsx scripts/verify-phase33-guest-foundation.ts",
-    "verify:phase33-segmentation": "tsx scripts/verify-phase33-segmentation.ts"
+    "verify:phase33-segmentation": "tsx scripts/verify-phase33-segmentation.ts",
+    "verify:phase33-crm-actions": "tsx scripts/verify-phase33-crm-actions.ts"
   },
 
   "dependencies": {

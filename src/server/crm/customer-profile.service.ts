@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { AuthorizationContext } from '@/types/authorization.types';
 import { can } from '@/server/auth/policy-engine';
 import { maskEmail, maskPhone } from '@/lib/crm/crm-normalization';
-import { UnifiedCustomerProfileDTO } from '@/lib/crm/crm-types';
+import { ConsentChannel, ConsentStatus, UnifiedCustomerProfileDTO } from '@/lib/crm/crm-types';
 
 export class CustomerProfileService {
   /**
@@ -185,6 +185,162 @@ export class CustomerProfileService {
       consents: consentsRes.map((c) => ({
         channel: c.channel,
         status: c.status,
+        updatedAt: c.updated_at,
+      })),
+    };
+  }
+
+  /**
+   * Internal helper to fetch profile DTO for service-role background opportunity evaluation.
+   */
+  static async getUnifiedCustomerProfileInternal(input: {
+    customerId: string;
+    businessId: string;
+    branchIds?: string[] | null;
+  }): Promise<UnifiedCustomerProfileDTO | null> {
+    const { customerId, businessId, branchIds } = input;
+    const admin = createAdminClient();
+
+    const { data: customer } = await admin
+      .from('crm_customers')
+      .select('*')
+      .eq('id', customerId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!customer) return null;
+
+    const [ordersRes, loyaltyRes, reviewsRes, consentsRes, businessRes] = await Promise.all([
+      (async () => {
+        let query = admin
+          .from('orders')
+          .select('id, total_cents, status, created_at, branch_id')
+          .eq('crm_customer_id', customerId)
+          .eq('business_id', businessId);
+
+        if (branchIds && branchIds.length > 0) {
+          query = query.in('branch_id', branchIds);
+        }
+        const { data } = await query;
+        return data || [];
+      })(),
+
+      (async () => {
+        const { data } = await admin
+          .from('customer_loyalty_accounts')
+          .select('points_balance, lifetime_points_earned, lifetime_points_redeemed, loyalty_tiers(name)')
+          .eq('business_id', businessId)
+          .eq('crm_customer_id', customerId)
+          .maybeSingle();
+        return data;
+      })(),
+
+      (async () => {
+        let query = admin
+          .from('venue_reviews')
+          .select('rating, created_at')
+          .eq('business_id', businessId)
+          .eq('crm_customer_id', customerId);
+
+        if (branchIds && branchIds.length > 0) {
+          query = query.in('branch_id', branchIds);
+        }
+        const { data } = await query;
+        return data || [];
+      })(),
+
+      (async () => {
+        const { data } = await admin
+          .from('crm_consent_records')
+          .select('channel, status, updated_at')
+          .eq('business_id', businessId)
+          .eq('crm_customer_id', customerId);
+        return data || [];
+      })(),
+
+      (async () => {
+        const { data } = await admin
+          .from('businesses')
+          .select('default_currency')
+          .eq('id', businessId)
+          .maybeSingle();
+        return data;
+      })(),
+    ]);
+
+    const completedOrders = ordersRes.filter(
+      (o) => o.status === 'completed' || o.status === 'served' || o.status === 'delivered'
+    );
+
+    let totalSpendCents = 0;
+    const visitedBranches = new Set<string>();
+    let firstOrderAt: string | null = null;
+    let lastOrderAt: string | null = null;
+
+    completedOrders.sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    if (completedOrders.length > 0) {
+      firstOrderAt = completedOrders[0].created_at;
+      lastOrderAt = completedOrders[completedOrders.length - 1].created_at;
+    }
+
+    for (const ord of completedOrders) {
+      totalSpendCents += ord.total_cents || 0;
+      if (ord.branch_id) visitedBranches.add(ord.branch_id);
+    }
+
+    const aovCents = completedOrders.length > 0 ? Math.round(totalSpendCents / completedOrders.length) : 0;
+    const currency = businessRes?.default_currency || 'LKR';
+
+    const reviewRatings = reviewsRes.map((r) => r.rating).filter((r): r is number => typeof r === 'number');
+    const avgRatingGiven =
+      reviewRatings.length > 0
+        ? Number((reviewRatings.reduce((sum, val) => sum + val, 0) / reviewRatings.length).toFixed(1))
+        : null;
+
+    return {
+      customerId: customer.id,
+      businessId: customer.business_id,
+      authUserId: customer.auth_user_id,
+      identityType: customer.identity_type,
+      displayName: customer.display_name,
+      emailMasked: maskEmail(customer.email_normalized),
+      phoneMasked: maskPhone(customer.phone_normalized),
+      emailUnmasked: customer.email_normalized,
+      phoneUnmasked: customer.phone_normalized,
+      isAccountLinked: Boolean(customer.auth_user_id),
+      firstSeenAt: customer.created_at,
+      lastSeenAt: customer.last_seen_at || customer.created_at,
+      activity: {
+        totalOrders: ordersRes.length,
+        completedOrders: completedOrders.length,
+        totalSpendCents,
+        aovCents,
+        branchesVisitedCount: visitedBranches.size,
+        lastOrderAt,
+        currency,
+      },
+      loyalty: {
+        pointsBalance: loyaltyRes?.points_balance || 0,
+        lifetimePointsEarned: loyaltyRes?.lifetime_points_earned || 0,
+        lifetimePointsRedeemed: loyaltyRes?.lifetime_points_redeemed || 0,
+        tierName: (loyaltyRes?.loyalty_tiers as unknown as { name: string } | null)?.name || null,
+      },
+      reviews: {
+        reviewCount: reviewsRes.length,
+        avgRatingGiven,
+        lastReviewAt: reviewsRes.length > 0 ? reviewsRes[reviewsRes.length - 1].created_at : null,
+      },
+      topStats: {
+        topOrderedItemName: null,
+        topCategoryName: null,
+        mostVisitedBranchName: null,
+      },
+      consents: consentsRes.map((c) => ({
+        channel: c.channel as ConsentChannel,
+        status: c.status as ConsentStatus,
         updatedAt: c.updated_at,
       })),
     };

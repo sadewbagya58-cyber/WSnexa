@@ -226,13 +226,10 @@ export async function addWaitlistEntryAction(
       throw new Error('Forbidden: Requested branch is outside your authorized property scope.');
     }
 
-    return ReservationWaitlistService.addWaitlistEntry(
-      {
-        ...validated,
-        businessId: authContext.businessId,
-      },
-      authContext.userId
-    );
+    return ReservationWaitlistService.addWaitlistEntry({
+      ...validated,
+      businessId: authContext.businessId,
+    });
   });
 }
 
@@ -287,7 +284,7 @@ export async function updateWaitlistStatusAction(params: {
  */
 export async function promoteWaitlistEntryAction(
   input: PromoteWaitlistInput
-): Promise<ReservationActionResult<{ reservation: ReservationDTO; waitlistEntry: WaitlistEntryDTO }>> {
+): Promise<ReservationActionResult<{ reservation: ReservationDTO; waitlistEntry: WaitlistEntryDTO; assignments: ReservationTableAssignmentDTO[] }>> {
   return handleAction(async () => {
     const authContext = await resolveAuthorizationContext();
     if (!(await can({ context: authContext, permission: 'reservations.waitlist_manage' }))) {

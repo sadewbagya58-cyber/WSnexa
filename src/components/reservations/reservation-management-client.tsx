@@ -295,7 +295,17 @@ export function ReservationManagementClient({
           ...prev,
           items: [res.data.reservation, ...prev.items],
         }));
-        setLastMessage(`✅ Promoted waitlist guest ${entry.guestName} to reservation ${res.data.reservation.confirmationCode}`);
+        if (res.data.assignments && res.data.assignments.length > 0) {
+          setActiveAssignmentsMap((prev) => ({
+            ...prev,
+            [res.data.reservation.id]: res.data.assignments,
+          }));
+        }
+        const count = res.data.assignments?.length || 0;
+        const tablesText = count === 1
+          ? `and seated at ${res.data.assignments[0].tableName || `Table ${res.data.assignments[0].tableNumber}`}`
+          : `and seated using ${count} tables`;
+        setLastMessage(`✅ Promoted waitlist guest ${entry.guestName} ${tablesText}!`);
       } else {
         setLastMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
       }

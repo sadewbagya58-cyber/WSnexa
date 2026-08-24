@@ -166,7 +166,7 @@ async function runVerification() {
   assert(!allocationContent.includes('guest_journey_stage'), '33. Step 3 guest journey orchestration strictly absent');
   assert(!allocationContent.includes('hotel_room_id'), '34. Hotel PMS / room booking logic strictly absent');
 
-  // 11. Immediate Seating Intent & Hotfix Assertions
+  // 11. Immediate Seating Intent & Hotfix Hardening
   console.log('\n--- SECTION 11: Immediate Seating Intent & Hotfix Hardening ---');
   const { ReservationValidationService } = await import('@/server/reservations/reservation-validation.service');
 
@@ -303,8 +303,19 @@ async function runVerification() {
   assert(allocationContent.includes("intent: 'WALK_IN_SEATING'"), '43. createWalkInSeating passes explicit WALK_IN_SEATING validation intent');
   assert(waitlistContent.includes("intent: 'WAITLIST_PROMOTION'"), '44. promoteWaitlistEntryToReservation passes explicit WAITLIST_PROMOTION validation intent');
 
+  // 12. Waitlist Promotion Table-Seating Invariant & Compensation Assertions
+  console.log('\n--- SECTION 12: Waitlist Promotion Table-Seating Invariant & Compensation ---');
+  assert(waitlistContent.includes('assignments: ReservationTableAssignmentDTO[]'), '45. promoteWaitlistEntryToReservation return signature includes active assignments DTO array');
+  assert(waitlistContent.includes('getActiveAssignments('), '46. promoteWaitlistEntryToReservation verifies active assignments exist before seating');
+  assert(waitlistContent.includes(".delete().eq('id', reservation.id)"), '47. promoteWaitlistEntryToReservation executes compensation cleanup if table allocation fails');
+  assert(actionsContent.includes('assignments: ReservationTableAssignmentDTO[]'), '48. promoteWaitlistEntryAction return type includes assignments');
+
+  const uiClientContent = fs.readFileSync(uiClientPath, 'utf-8');
+  assert(uiClientContent.includes('setActiveAssignmentsMap'), '49. handlePromoteWaitlist in management UI populates activeAssignmentsMap with returned table assignments');
+  assert(serviceContent.includes('Assign a table before seating this reservation.'), '50. Canonical markSeated guard strictly blocks SEATED transition if zero active assignments exist');
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 2 Verification Complete: ALL 44 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 2 Verification Complete: ALL 50 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

@@ -1,146 +1,118 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { CustomerIdentityService } from '@/server/crm/customer-identity.service';
-import { ReservationService } from './reservation.service';
-import { ReservationAllocationService } from './reservation-allocation.service';
-import { createDomainError } from './reservation-validation.service';
+import { maskEmail, maskPhone } from '@/lib/crm/crm-normalization';
+import { ReservationService } from '@/server/reservations/reservation.service';
+import { ReservationAllocationService } from '@/server/reservations/reservation-allocation.service';
+import { createDomainError } from '@/server/reservations/reservation-validation.service';
 import {
   CreateWaitlistEntryInput,
   PromoteWaitlistInput,
+  ReservationTableAssignmentDTO,
   WaitlistEntryDTO,
   WaitlistStatus,
 } from '@/lib/reservations/table-allocation-types';
 import { ReservationDTO } from '@/lib/reservations/reservation-types';
 
+interface WaitlistRow {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  crm_customer_id?: string | null;
+  guest_name: string;
+  guest_email?: string | null;
+  guest_phone?: string | null;
+  party_size: number;
+  requested_start_at?: string | null;
+  requested_end_at?: string | null;
+  status: string;
+  priority: number;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  seated_at?: string | null;
+  cancelled_at?: string | null;
+}
+
 export class ReservationWaitlistService {
   /**
-   * Helper to mask email address.
+   * Helper to map DB waitlist row to WaitlistEntryDTO with contact privacy masking.
    */
-  private static maskEmail(email: string | null): string | null {
-    if (!email || !email.includes('@')) return null;
-    const [local, domain] = email.split('@');
-    if (local.length <= 2) return `${local[0]}*@${domain}`;
-    return `${local[0]}***${local[local.length - 1]}@${domain}`;
+  private static mapRowToDTO(row: WaitlistRow, hasContactView: boolean): WaitlistEntryDTO {
+    return {
+      id: row.id,
+      businessId: row.business_id,
+      branchId: row.branch_id,
+      crmCustomerId: row.crm_customer_id || null,
+      guestName: row.guest_name,
+      guestEmail: hasContactView ? (row.guest_email || null) : null,
+      guestPhone: hasContactView ? (row.guest_phone || null) : null,
+      guestEmailMasked: row.guest_email ? maskEmail(row.guest_email) : null,
+      guestPhoneMasked: row.guest_phone ? maskPhone(row.guest_phone) : null,
+      partySize: row.party_size,
+      requestedStartAt: row.requested_start_at || null,
+      requestedEndAt: row.requested_end_at || null,
+      status: row.status as WaitlistStatus,
+      priority: row.priority,
+      notes: row.notes || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      seatedAt: row.seated_at || null,
+      cancelledAt: row.cancelled_at || null,
+    };
   }
 
   /**
-   * Helper to mask phone number.
-   */
-  private static maskPhone(phone: string | null): string | null {
-    if (!phone || phone.length < 5) return null;
-    const visible = phone.slice(-4);
-    return `${phone.slice(0, 3)}******${visible}`;
-  }
-
-  /**
-   * Adds a guest entry to the branch waitlist.
+   * Adds a new entry to the waitlist queue.
    */
   static async addWaitlistEntry(
-    input: CreateWaitlistEntryInput,
-    actorUserId?: string | null
+    input: CreateWaitlistEntryInput & { businessId: string }
   ): Promise<WaitlistEntryDTO> {
     const admin = createAdminClient();
 
-    if (input.partySize < 1) {
-      throw createDomainError('Party size must be at least 1.', 'INVALID_PARTY_SIZE');
-    }
-
-    const startAt = new Date(input.requestedStartAt);
-    if (isNaN(startAt.getTime())) {
-      throw createDomainError('Invalid requested start timestamp.', 'INVALID_INPUT');
-    }
-
-    const endAtMs = input.requestedEndAt
-      ? new Date(input.requestedEndAt).getTime()
-      : startAt.getTime() + 90 * 60 * 1000;
-    const endAt = new Date(endAtMs);
-
-    // Resolve or link CRM customer identity
-    let crmCustomerId: string | null = null;
-    if (input.guestEmail || input.guestPhone || actorUserId) {
-      try {
-        const crmIdentity = await CustomerIdentityService.resolveOrCreateCustomerIdentity({
-          businessId: input.businessId,
-          authUserId: actorUserId || null,
-          guestName: input.guestName,
-          guestEmail: input.guestEmail,
-          guestPhone: input.guestPhone,
-        });
-        if (crmIdentity) {
-          crmCustomerId = crmIdentity.id;
-        }
-      } catch (err: unknown) {
-        console.warn('[ReservationWaitlistService] CRM identity resolution skipped:', (err as Error).message);
-      }
-    }
-
-    const nowIso = new Date().toISOString();
     const payload = {
       business_id: input.businessId,
       branch_id: input.branchId,
-      crm_customer_id: crmCustomerId,
+      crm_customer_id: input.crmCustomerId || null,
       guest_name: input.guestName.trim(),
       guest_email: input.guestEmail ? input.guestEmail.trim().toLowerCase() : null,
       guest_phone: input.guestPhone ? input.guestPhone.trim() : null,
       party_size: input.partySize,
-      requested_start_at: startAt.toISOString(),
-      requested_end_at: endAt.toISOString(),
-      status: 'WAITING' as WaitlistStatus,
+      requested_start_at: input.requestedStartAt || null,
+      requested_end_at: input.requestedEndAt || null,
+      status: 'WAITING',
       priority: input.priority || 0,
       notes: input.notes ? input.notes.trim() : null,
-      created_at: nowIso,
-      updated_at: nowIso,
     };
 
-    const { data: inserted, error } = await admin
+    const { data, error } = await admin
       .from('reservation_waitlist_entries')
       .insert(payload)
       .select('*')
       .single();
 
-    if (error || !inserted) {
-      throw new Error(`Failed to create waitlist entry: ${error?.message}`);
+    if (error || !data) {
+      throw createDomainError(`Failed to add waitlist entry: ${error?.message}`, 'INVALID_INPUT');
     }
 
-    return {
-      id: inserted.id,
-      businessId: inserted.business_id,
-      branchId: inserted.branch_id,
-      crmCustomerId: inserted.crm_customer_id || null,
-      guestName: inserted.guest_name,
-      guestEmail: inserted.guest_email || null,
-      guestPhone: inserted.guest_phone || null,
-      guestEmailMasked: this.maskEmail(inserted.guest_email),
-      guestPhoneMasked: this.maskPhone(inserted.guest_phone),
-      partySize: inserted.party_size,
-      requestedStartAt: inserted.requested_start_at,
-      requestedEndAt: inserted.requested_end_at,
-      status: inserted.status as WaitlistStatus,
-      priority: inserted.priority,
-      notes: inserted.notes || null,
-      createdAt: inserted.created_at,
-      updatedAt: inserted.updated_at,
-      seatedAt: inserted.seated_at || null,
-      cancelledAt: inserted.cancelled_at || null,
-    };
+    return this.mapRowToDTO(data, true);
   }
 
   /**
-   * Retrieves deterministic ordered waitlist entries for a branch with privacy contact masking.
+   * Lists waitlist entries for a branch ordered by priority DESC, created_at ASC.
    */
-  static async listWaitlistEntries(options: {
+  static async listWaitlistEntries(params: {
     businessId: string;
     branchId: string;
     status?: WaitlistStatus | WaitlistStatus[] | null;
     hasContactView?: boolean;
     authorizedBranchIds?: string[] | null;
   }): Promise<WaitlistEntryDTO[]> {
-    const { businessId, branchId, status, hasContactView = false, authorizedBranchIds } = options;
+    const admin = createAdminClient();
+    const { businessId, branchId, status, hasContactView = false, authorizedBranchIds } = params;
 
     if (authorizedBranchIds && authorizedBranchIds.length > 0 && !authorizedBranchIds.includes(branchId)) {
       return [];
     }
 
-    const admin = createAdminClient();
     let query = admin
       .from('reservation_waitlist_entries')
       .select('*')
@@ -151,56 +123,42 @@ export class ReservationWaitlistService {
 
     if (status) {
       if (Array.isArray(status)) {
-        query = query.in('status', status);
+        if (status.length > 0) {
+          query = query.in('status', status);
+        }
       } else {
         query = query.eq('status', status);
       }
     }
 
-    const { data: rows, error } = await query;
-    if (error || !rows) return [];
+    const { data, error } = await query;
+    if (error || !data) {
+      return [];
+    }
 
-    return rows.map((r) => ({
-      id: r.id,
-      businessId: r.business_id,
-      branchId: r.branch_id,
-      crmCustomerId: r.crm_customer_id || null,
-      guestName: r.guest_name,
-      guestEmail: hasContactView ? (r.guest_email || null) : null,
-      guestPhone: hasContactView ? (r.guest_phone || null) : null,
-      guestEmailMasked: this.maskEmail(r.guest_email),
-      guestPhoneMasked: this.maskPhone(r.guest_phone),
-      partySize: r.party_size,
-      requestedStartAt: r.requested_start_at,
-      requestedEndAt: r.requested_end_at,
-      status: r.status as WaitlistStatus,
-      priority: r.priority,
-      notes: r.notes || null,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-      seatedAt: r.seated_at || null,
-      cancelledAt: r.cancelled_at || null,
-    }));
+    return data.map((row) => this.mapRowToDTO(row, hasContactView));
   }
 
   /**
-   * Updates waitlist status.
+   * Updates waitlist status and records completion/cancellation timestamp.
    */
   static async updateWaitlistStatus(
     businessId: string,
     waitlistEntryId: string,
-    newStatus: WaitlistStatus
+    targetStatus: WaitlistStatus
   ): Promise<WaitlistEntryDTO> {
     const admin = createAdminClient();
-    const nowIso = new Date().toISOString();
 
     const updatePayload: Record<string, unknown> = {
-      status: newStatus,
-      updated_at: nowIso,
+      status: targetStatus,
+      updated_at: new Date().toISOString(),
     };
 
-    if (newStatus === 'SEATED') updatePayload.seated_at = nowIso;
-    if (newStatus === 'CANCELLED') updatePayload.cancelled_at = nowIso;
+    if (targetStatus === 'SEATED') {
+      updatePayload.seated_at = new Date().toISOString();
+    } else if (targetStatus === 'CANCELLED') {
+      updatePayload.cancelled_at = new Date().toISOString();
+    }
 
     const { data: updated, error } = await admin
       .from('reservation_waitlist_entries')
@@ -211,7 +169,7 @@ export class ReservationWaitlistService {
       .single();
 
     if (error || !updated) {
-      throw createDomainError('Waitlist entry not found.', 'NOT_FOUND');
+      throw createDomainError('Failed to update waitlist entry status.', 'INVALID_INPUT');
     }
 
     return {
@@ -222,11 +180,11 @@ export class ReservationWaitlistService {
       guestName: updated.guest_name,
       guestEmail: updated.guest_email || null,
       guestPhone: updated.guest_phone || null,
-      guestEmailMasked: this.maskEmail(updated.guest_email),
-      guestPhoneMasked: this.maskPhone(updated.guest_phone),
+      guestEmailMasked: updated.guest_email ? maskEmail(updated.guest_email) : null,
+      guestPhoneMasked: updated.guest_phone ? maskPhone(updated.guest_phone) : null,
       partySize: updated.party_size,
-      requestedStartAt: updated.requested_start_at,
-      requestedEndAt: updated.requested_end_at,
+      requestedStartAt: updated.requested_start_at || null,
+      requestedEndAt: updated.requested_end_at || null,
       status: updated.status as WaitlistStatus,
       priority: updated.priority,
       notes: updated.notes || null,
@@ -239,12 +197,13 @@ export class ReservationWaitlistService {
 
   /**
    * Promotes a waitlist entry into a confirmed/seated reservation.
-   * Revalidates availability and prevents duplicate promotions.
+   * Revalidates table availability, persists active table assignments, enforces SEATED invariant,
+   * and prevents duplicate promotions.
    */
   static async promoteWaitlistEntryToReservation(
     input: PromoteWaitlistInput,
     actorUserId: string
-  ): Promise<{ reservation: ReservationDTO; waitlistEntry: WaitlistEntryDTO }> {
+  ): Promise<{ reservation: ReservationDTO; waitlistEntry: WaitlistEntryDTO; assignments: ReservationTableAssignmentDTO[] }> {
     const admin = createAdminClient();
 
     const { data: entry, error } = await admin
@@ -282,29 +241,49 @@ export class ReservationWaitlistService {
       'STAFF'
     );
 
-    // 2. Allocate or assign tables if specified
-    if (input.tableIds && input.tableIds.length > 0) {
-      await ReservationAllocationService.manuallyAssignTables({
-        businessId: entry.business_id,
-        reservationId: reservation.id,
-        tableIds: input.tableIds,
-        actorUserId,
-      });
-    } else {
-      try {
-        await ReservationAllocationService.allocateReservationTables(entry.business_id, reservation.id, actorUserId);
-      } catch (allocErr: unknown) {
-        console.warn('[WaitlistPromotion] Table auto-allocation skipped:', (allocErr as Error).message);
+    // 2. Allocate or assign specified tables WITHOUT swallowing errors
+    let assignments: ReservationTableAssignmentDTO[] = [];
+    try {
+      if (input.tableIds && input.tableIds.length > 0) {
+        assignments = await ReservationAllocationService.manuallyAssignTables({
+          businessId: entry.business_id,
+          reservationId: reservation.id,
+          tableIds: input.tableIds,
+          actorUserId,
+        });
+      } else {
+        assignments = await ReservationAllocationService.allocateReservationTables(
+          entry.business_id,
+          reservation.id,
+          actorUserId
+        );
       }
+    } catch (allocErr: unknown) {
+      // Compensation: Roll back provisional reservation record if table allocation fails
+      try {
+        await admin.from('reservations').delete().eq('id', reservation.id);
+      } catch (cleanupErr: unknown) {
+        console.error('[WaitlistPromotion] Compensation cleanup failed:', (cleanupErr as Error).message);
+      }
+      throw allocErr;
     }
 
-    // 3. Apply canonical ARRIVED -> SEATED lifecycle transitions
+    // 3. Verify active table assignment exists before seating (Invariant Guard)
+    const activeAssignments = await ReservationAllocationService.getActiveAssignments(entry.business_id, reservation.id);
+    if (!activeAssignments || activeAssignments.length === 0) {
+      try {
+        await admin.from('reservations').delete().eq('id', reservation.id);
+      } catch {}
+      throw createDomainError('No suitable table is currently available.', 'NO_TABLE_AVAILABLE');
+    }
+
+    // 4. Apply canonical ARRIVED -> SEATED lifecycle transitions
     await ReservationService.markArrived(entry.business_id, reservation.id, actorUserId);
     const seatedRes = await ReservationService.markSeated(entry.business_id, reservation.id, actorUserId);
 
-    // 4. Mark waitlist entry status as SEATED
+    // 5. Mark waitlist entry status as SEATED
     const updatedWaitlist = await this.updateWaitlistStatus(entry.business_id, entry.id, 'SEATED');
 
-    return { reservation: seatedRes, waitlistEntry: updatedWaitlist };
+    return { reservation: seatedRes, waitlistEntry: updatedWaitlist, assignments: activeAssignments };
   }
 }

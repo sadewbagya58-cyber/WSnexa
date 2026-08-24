@@ -60,8 +60,8 @@ export interface WaitlistEntryDTO {
   guestEmailMasked: string | null;
   guestPhoneMasked: string | null;
   partySize: number;
-  requestedStartAt: string;
-  requestedEndAt: string;
+  requestedStartAt: string | null;
+  requestedEndAt: string | null;
   status: WaitlistStatus;
   priority: number;
   notes: string | null;
@@ -74,11 +74,12 @@ export interface WaitlistEntryDTO {
 export interface CreateWaitlistEntryInput {
   businessId: string;
   branchId: string;
+  crmCustomerId?: string | null;
   guestName: string;
   guestEmail?: string | null;
   guestPhone?: string | null;
   partySize: number;
-  requestedStartAt: string;
+  requestedStartAt?: string | null;
   requestedEndAt?: string | null;
   priority?: number;
   notes?: string | null;

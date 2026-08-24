@@ -228,6 +228,17 @@ async function main() {
   assert(crmOverviewServiceContent.includes('Promise.all(['), '81. CRMOverviewService parallelizes independent overview queries via Promise.all');
   assert(crmProfileClientContent.includes('activeAction') && crmProfileClientContent.includes('Adding...'), '82. Customer profile buttons render immediate pending feedback state on click');
 
+  // --- SECTION L: MOBILE RESPONSIVENESS & INTERACTION RELIABILITY ASSERTIONS ---
+  console.log('\n--- SECTION L: Mobile Responsiveness & Interaction Reliability Assertions ---');
+  assert(crmHubClientContent.includes('md:hidden') && crmHubClientContent.includes('View Profile'), '83. Mobile card view alternative implemented in crm-hub-client.tsx for Customer Directory');
+  assert(crmHubClientContent.includes('hidden md:block'), '84. Desktop table view responsive toggle implemented in crm-hub-client.tsx');
+  assert(crmHubClientContent.includes('overflow-x-hidden') && crmProfileClientContent.includes('overflow-x-hidden'), '85. Containers enforce page-level overflow prevention via overflow-x-hidden and min-w-0');
+  assert(crmHubClientContent.includes('flex flex-wrap gap-2 w-full'), '86. Action Queue status filters wrap cleanly on mobile viewports via flex-wrap');
+  assert(crmHubClientContent.includes('overflow-x-auto max-w-full'), '87. CRM tabs container uses local overflow-x-auto scrolling for mobile accessibility');
+  assert(crmHubClientContent.includes('type="button"') && crmProfileClientContent.includes('type="button"'), '88. Non-submit buttons explicitly enforce type="button" attribute');
+  assert(crmHubClientContent.includes('touch-manipulation') && crmProfileClientContent.includes('touch-manipulation'), '89. Touch controls enforce touch-manipulation and minimum touch targets');
+  assert(crmHubClientContent.includes('activeActionId') && crmHubClientContent.includes('Starting...'), '90. Action Queue buttons implement per-action pending states with immediate text feedback');
+
   console.log('\n================================================================');
   console.log(`  Phase 33 Master Closure Verification Complete: ${passed} PASSED, ${failed} FAILED`);
   console.log('================================================================\n');

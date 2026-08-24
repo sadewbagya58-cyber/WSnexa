@@ -165,7 +165,7 @@ export function CustomerProfileClient({
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto min-w-0 max-w-full overflow-x-hidden">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
         <Link href="/dashboard/customers" className="hover:underline">Customers</Link>
@@ -176,7 +176,7 @@ export function CustomerProfileClient({
       {errorMessage && (
         <div className="rounded-md bg-red-50 p-4 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm flex items-center justify-between">
           <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="font-bold">✕</button>
+          <button type="button" onClick={() => setErrorMessage(null)} className="font-bold min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
         </div>
       )}
 
@@ -206,9 +206,10 @@ export function CustomerProfileClient({
 
             {hasContactView && !unmaskedContact && (
               <button
+                type="button"
                 onClick={handleRevealContact}
                 disabled={isPending}
-                className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold disabled:opacity-50"
+                className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold disabled:opacity-50 min-h-[44px] touch-manipulation inline-flex items-center"
               >
                 {activeAction === 'REVEAL' ? 'Revealing...' : 'Reveal full contact'}
               </button>
@@ -243,7 +244,7 @@ export function CustomerProfileClient({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
           <p className="text-xs text-slate-500 dark:text-slate-400">Completed Orders</p>
           <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{profile.activity.completedOrders}</p>
@@ -327,12 +328,13 @@ export function CustomerProfileClient({
                 onChange={(e) => setNewNoteText(e.target.value)}
                 className="w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs text-slate-400">{newNoteText.length} / 2000 characters</span>
                 <button
+                  type="button"
                   disabled={!newNoteText.trim() || isPending}
                   onClick={handleAddNote}
-                  className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors min-h-[44px] touch-manipulation flex items-center justify-center"
                 >
                   {activeAction === 'ADD_NOTE' ? 'Adding...' : 'Add Note'}
                 </button>
@@ -352,9 +354,10 @@ export function CustomerProfileClient({
                   </div>
                   {canManage && (
                     <button
+                      type="button"
                       disabled={isPending}
                       onClick={() => handleDeleteNote(note.id)}
-                      className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center"
                     >
                       {activeAction === `delete_note_${note.id}` ? 'Deleting...' : 'Delete'}
                     </button>
@@ -385,16 +388,18 @@ export function CustomerProfileClient({
                   />
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       disabled={!newTagName.trim() || isPending}
                       onClick={handleCreateAndAssignTag}
-                      className="px-3.5 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      className="px-3.5 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors min-h-[44px] touch-manipulation flex items-center justify-center"
                     >
                       {activeAction === 'CREATE_TAG' ? 'Creating...' : 'Create & Assign'}
                     </button>
                     {allAvailableTags.length > 0 && (
                       <button
+                        type="button"
                         onClick={() => setIsCreatingTagMode(false)}
-                        className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] touch-manipulation flex items-center justify-center"
                       >
                         Cancel
                       </button>
@@ -414,15 +419,17 @@ export function CustomerProfileClient({
                     ))}
                   </select>
                   <button
+                    type="button"
                     disabled={!selectedTagId || isPending}
                     onClick={handleAssignTag}
-                    className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors min-h-[44px] touch-manipulation flex items-center justify-center"
                   >
                     {activeAction === 'ASSIGN_TAG' ? 'Assigning...' : 'Assign Tag'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setIsCreatingTagMode(true)}
-                    className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] touch-manipulation flex items-center justify-center"
                   >
                     + New Tag
                   </button>
@@ -438,14 +445,15 @@ export function CustomerProfileClient({
               tagsList.map((tag) => (
                 <span
                   key={tag.tagId}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700"
+                  className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 min-h-[36px]"
                 >
                   {tag.tagName}
                   {canManage && (
                     <button
+                      type="button"
                       disabled={isPending}
                       onClick={() => handleRemoveTag(tag.tagId)}
-                      className="ml-1.5 text-slate-400 hover:text-red-500 font-bold disabled:opacity-50"
+                      className="ml-1.5 text-slate-400 hover:text-red-500 font-bold disabled:opacity-50 min-h-[32px] min-w-[32px] inline-flex items-center justify-center touch-manipulation"
                     >
                       {activeAction === `remove_tag_${tag.tagId}` ? '...' : '×'}
                     </button>
@@ -466,8 +474,8 @@ export function CustomerProfileClient({
             <p className="py-4 text-center text-xs text-slate-500 col-span-2">No active retention actions queued for this guest.</p>
           ) : (
             actions.map((act) => (
-              <div key={act.id} className="p-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
-                <div className="flex items-center justify-between">
+              <div key={act.id} className="p-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{act.priority} PRIORITY</span>
                   <span className="text-xs text-slate-500">Status: {act.status}</span>
                 </div>

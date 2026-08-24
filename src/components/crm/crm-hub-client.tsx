@@ -49,6 +49,7 @@ export function CRMHubClient({
   const [actionsStatusFilter, setActionsStatusFilter] = useState<CRMActionStatus | 'ACTIVE' | 'ALL'>('ACTIVE');
   const [snoozeModalActionId, setSnoozeModalActionId] = useState<string | null>(null);
   const [snoozeDays, setSnoozeDays] = useState(7);
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
 
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export function CRMHubClient({
   };
 
   const handleStartAction = (actionId: string) => {
+    setActiveActionId(`start_${actionId}`);
     startTransition(async () => {
       try {
         await startCRMActionServerAction(businessId, actionId);
@@ -98,6 +100,8 @@ export function CRMHubClient({
         setActionsList(res.actions);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveActionId(null);
       }
     });
   };
@@ -105,6 +109,7 @@ export function CRMHubClient({
   const handleSnoozeSubmit = () => {
     if (!snoozeModalActionId) return;
     const snoozedUntil = new Date(Date.now() + snoozeDays * 24 * 60 * 60 * 1000).toISOString();
+    setActiveActionId(`snooze_${snoozeModalActionId}`);
 
     startTransition(async () => {
       try {
@@ -114,11 +119,14 @@ export function CRMHubClient({
         setActionsList(res.actions);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveActionId(null);
       }
     });
   };
 
   const handleCompleteAction = (actionId: string) => {
+    setActiveActionId(`complete_${actionId}`);
     startTransition(async () => {
       try {
         await completeCRMActionServerAction(businessId, actionId);
@@ -126,11 +134,14 @@ export function CRMHubClient({
         setActionsList(res.actions);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveActionId(null);
       }
     });
   };
 
   const handleDismissAction = (actionId: string) => {
+    setActiveActionId(`dismiss_${actionId}`);
     startTransition(async () => {
       try {
         await dismissCRMActionServerAction(businessId, actionId);
@@ -138,12 +149,14 @@ export function CRMHubClient({
         setActionsList(res.actions);
       } catch (err: unknown) {
         setErrorMessage((err as Error).message);
+      } finally {
+        setActiveActionId(null);
       }
     });
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto min-w-0 max-w-full overflow-x-hidden">
       {/* Header Banner */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
@@ -157,12 +170,12 @@ export function CRMHubClient({
       {errorMessage && (
         <div className="rounded-md bg-red-50 p-4 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm flex items-center justify-between">
           <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="font-bold">✕</button>
+          <button type="button" onClick={() => setErrorMessage(null)} className="font-bold min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Customers</p>
           <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{overview.totalCustomers}</p>
@@ -195,11 +208,12 @@ export function CRMHubClient({
       </div>
 
       {/* Tabs Navigation */}
-      <div className="border-b border-slate-200 dark:border-slate-800">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-slate-200 dark:border-slate-800 overflow-x-auto max-w-full">
+        <nav className="-mb-px flex space-x-2 sm:space-x-8 min-w-max touch-manipulation" aria-label="Tabs">
           <button
+            type="button"
             onClick={() => setActiveTab('directory')}
-            className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm transition-colors min-h-[44px] flex items-center touch-manipulation ${
               activeTab === 'directory'
                 ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -209,8 +223,9 @@ export function CRMHubClient({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('intelligence')}
-            className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm transition-colors min-h-[44px] flex items-center touch-manipulation ${
               activeTab === 'intelligence'
                 ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -220,8 +235,9 @@ export function CRMHubClient({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('actions')}
-            className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors relative ${
+            className={`whitespace-nowrap py-3 px-3 border-b-2 font-medium text-sm transition-colors min-h-[44px] flex items-center touch-manipulation ${
               activeTab === 'actions'
                 ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
@@ -240,7 +256,6 @@ export function CRMHubClient({
       {/* TAB 1: DIRECTORY */}
       {activeTab === 'directory' && (
         <div className="space-y-4">
-          {/* Search & Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="w-full sm:w-96 relative">
               <input
@@ -256,7 +271,7 @@ export function CRMHubClient({
               <select
                 value={selectedIdentity}
                 onChange={(e) => handleSearch(searchQuery, selectedSegment, e.target.value)}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="w-full sm:w-auto rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <option value="">All Identity Types</option>
                 <option value="REGISTERED">Registered Account</option>
@@ -265,9 +280,10 @@ export function CRMHubClient({
             </div>
           </div>
 
-          {/* Directory Table */}
+          {/* Directory Desktop Table & Mobile Card View */}
           <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                   <tr>
@@ -320,7 +336,7 @@ export function CRMHubClient({
                           <Link
                             href={`/dashboard/customers/${cust.customerId}`}
                             prefetch={true}
-                            className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            className="inline-flex items-center px-3 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors min-h-[44px] touch-manipulation"
                           >
                             View Profile
                           </Link>
@@ -332,23 +348,72 @@ export function CRMHubClient({
               </table>
             </div>
 
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-slate-200 dark:divide-slate-800">
+              {directoryItems.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                  No guest profiles match the selected filter criteria.
+                </div>
+              ) : (
+                directoryItems.map((cust) => (
+                  <div key={cust.customerId} className="p-4 space-y-2 bg-white dark:bg-slate-900">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/dashboard/customers/${cust.customerId}`}
+                        prefetch={true}
+                        className="font-bold text-sm text-indigo-600 dark:text-indigo-400 hover:underline min-h-[44px] flex items-center touch-manipulation"
+                      >
+                        {cust.displayName}
+                      </Link>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        cust.identityType === 'REGISTERED'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
+                      }`}>
+                        {cust.identityType === 'REGISTERED' ? 'Registered' : 'Known Guest'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400">
+                      <div>Contact: <span className="font-mono text-slate-900 dark:text-slate-200">{cust.emailMasked || cust.phoneMasked || 'No contact'}</span></div>
+                      <div>Orders: <strong className="text-slate-900 dark:text-white">{cust.totalOrders}</strong></div>
+                      <div>Spend: <strong className="text-slate-900 dark:text-white">{(cust.totalSpendCents / 100).toLocaleString('en-US', { style: 'currency', currency: cust.currency })}</strong></div>
+                      <div>Last Visit: <span className="text-slate-900 dark:text-slate-200">{new Date(cust.lastSeenAt).toLocaleDateString()}</span></div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <Link
+                        href={`/dashboard/customers/${cust.customerId}`}
+                        prefetch={true}
+                        className="w-full text-center px-3 py-2.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] flex items-center justify-center touch-manipulation"
+                      >
+                        View Profile
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
             {/* Pagination Controls */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 Showing {directoryItems.length > 0 ? (page - 1) * pageSize + 1 : 0} to {Math.min(page * pageSize, totalCustomers)} of {totalCustomers} guests
               </span>
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 w-full sm:w-auto justify-end">
                 <button
+                  type="button"
                   disabled={page <= 1 || isPending}
                   onClick={() => handleSearch(searchQuery, selectedSegment, selectedIdentity, page - 1)}
-                  className="px-3 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] touch-manipulation flex items-center"
                 >
                   Previous
                 </button>
                 <button
+                  type="button"
                   disabled={page * pageSize >= totalCustomers || isPending}
                   onClick={() => handleSearch(searchQuery, selectedSegment, selectedIdentity, page + 1)}
-                  className="px-3 py-1 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] touch-manipulation flex items-center"
                 >
                   Next
                 </button>
@@ -361,58 +426,82 @@ export function CRMHubClient({
       {/* TAB 2: RETENTION & INTELLIGENCE */}
       {activeTab === 'intelligence' && (
         <div className="space-y-6">
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Deterministic Segment Breakdown</h2>
+          <div className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Customer Cohort Segments</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Calculated using relative population quantiles and visit interval decay ratios. Currency-independent V1 rules.
+              Deterministic, rule-based audience breakdown based on visit recency, frequency, and relative monetary quantiles.
             </p>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-md border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
-                <p className="text-xs font-bold text-amber-800 dark:text-amber-300">VIP</p>
-                <p className="text-xl font-extrabold text-amber-900 dark:text-amber-100 mt-1">{overview.vipCount}</p>
-                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">High spend + high recency/frequency</p>
-              </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {overview.vipCount > 0 && (
+                <div className="p-4 rounded-md border border-amber-200 bg-amber-50/40 dark:border-amber-900/40 dark:bg-amber-950/20">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-amber-900 dark:text-amber-200">VIP GUESTS</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100">{overview.vipCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">Monetary & Frequency scores $\ge$ 4. Core revenue generators.</p>
+                </div>
+              )}
 
-              <div className="rounded-md border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">REGULAR</p>
-                <p className="text-xl font-extrabold text-emerald-900 dark:text-emerald-100 mt-1">{overview.regularCount}</p>
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">Consistent repeat visit pattern</p>
-              </div>
+              {overview.regularCount > 0 && (
+                <div className="p-4 rounded-md border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white">REGULAR GUESTS</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200">{overview.regularCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">Steady repeat visits with consistent cadence.</p>
+                </div>
+              )}
 
-              <div className="rounded-md border border-orange-200 bg-orange-50/50 p-4 dark:border-orange-900/40 dark:bg-orange-950/20">
-                <p className="text-xs font-bold text-orange-800 dark:text-orange-300">AT_RISK</p>
-                <p className="text-xl font-extrabold text-orange-900 dark:text-orange-100 mt-1">{overview.atRiskCount}</p>
-                <p className="text-[11px] text-orange-700 dark:text-orange-400 mt-1">Decaying visit interval</p>
-              </div>
+              {overview.atRiskCount > 0 && (
+                <div className="p-4 rounded-md border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-950/20">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-orange-900 dark:text-orange-200">AT RISK</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100">{overview.atRiskCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">Previously regular guests whose visit interval expanded significantly.</p>
+                </div>
+              )}
 
-              <div className="rounded-md border border-red-200 bg-red-50/50 p-4 dark:border-red-900/40 dark:bg-red-950/20">
-                <p className="text-xs font-bold text-red-800 dark:text-red-300">LAPSED</p>
-                <p className="text-xl font-extrabold text-red-900 dark:text-red-100 mt-1">{overview.lapsedCount}</p>
-                <p className="text-[11px] text-red-700 dark:text-red-400 mt-1">&gt; 90 days inactive</p>
-              </div>
+              {overview.lapsedCount > 0 && (
+                <div className="p-4 rounded-md border border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-red-900 dark:text-red-200">LAPSED GUESTS</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-red-200 text-red-900 dark:bg-red-900 dark:text-red-100">{overview.lapsedCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">Repeat guests with no orders in over 90 days.</p>
+                </div>
+              )}
 
-              <div className="rounded-md border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
-                <p className="text-xs font-bold text-blue-800 dark:text-blue-300">NEW_GUEST</p>
-                <p className="text-xl font-extrabold text-blue-900 dark:text-blue-100 mt-1">{overview.newGuestCount}</p>
-                <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-1">&le; 2 orders in past 30 days</p>
-              </div>
+              {overview.newGuestCount > 0 && (
+                <div className="p-4 rounded-md border border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-emerald-900 dark:text-emerald-200">NEW GUESTS</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100">{overview.newGuestCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">First order completed within past 30 days.</p>
+                </div>
+              )}
 
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">ONE_TIME</p>
-                <p className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{overview.oneTimeCount}</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Single order 31–90 days ago</p>
-              </div>
+              {overview.oneTimeCount > 0 && (
+                <div className="p-4 rounded-md border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-900 dark:text-white">ONE TIME VISITORS</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-extrabold bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200">{overview.oneTimeCount}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">Single completed order with no return visit in 31–90 days.</p>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
+          <div className="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900 shadow-sm">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Retention Risk Distribution</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Calculated from visit interval expansion ratios. Strictly non-overlapping ranges (LOW 0–29, MEDIUM 30–54, HIGH 55–74, CRITICAL 75–100).
             </p>
 
-            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
               <div className="p-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
                 <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">LOW RISK (0–29)</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{overview.riskCounts.low}</p>
@@ -438,12 +527,13 @@ export function CRMHubClient({
       {activeTab === 'actions' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2 w-full">
               {(['ACTIVE', 'OPEN', 'IN_PROGRESS', 'SNOOZED', 'COMPLETED', 'DISMISSED', 'ALL'] as const).map((filter) => (
                 <button
+                  type="button"
                   key={filter}
                   onClick={() => handleActionStatusChange(filter)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md transition-colors min-h-[44px] touch-manipulation flex items-center justify-center ${
                     actionsStatusFilter === filter
                       ? 'bg-indigo-600 text-white'
                       : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300'
@@ -464,10 +554,10 @@ export function CRMHubClient({
               actionsList.map((action) => (
                 <div
                   key={action.id}
-                  className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between"
+                  className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 flex flex-col justify-between space-y-3"
                 >
                   <div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
                         action.priority === 'CRITICAL'
                           ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
@@ -500,7 +590,7 @@ export function CRMHubClient({
                       <Link
                         href={`/dashboard/customers/${action.customerId}`}
                         prefetch={true}
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline"
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline min-h-[44px] flex items-center touch-manipulation"
                       >
                         View Guest Profile &rarr;
                       </Link>
@@ -511,38 +601,42 @@ export function CRMHubClient({
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-2 justify-end">
                       {action.status === 'OPEN' && (
                         <button
-                          disabled={isPending}
+                          type="button"
+                          disabled={activeActionId !== null || isPending}
                           onClick={() => handleStartAction(action.id)}
-                          className="px-3 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                          className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center justify-center"
                         >
-                          Start Action
+                          {activeActionId === `start_${action.id}` ? 'Starting...' : 'Start Action'}
                         </button>
                       )}
 
                       {(action.status === 'OPEN' || action.status === 'IN_PROGRESS') && (
                         <button
-                          disabled={isPending}
+                          type="button"
+                          disabled={activeActionId !== null || isPending}
                           onClick={() => setSnoozeModalActionId(action.id)}
-                          className="px-3 py-1 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center justify-center"
                         >
                           Snooze
                         </button>
                       )}
 
                       <button
-                        disabled={isPending}
+                        type="button"
+                        disabled={activeActionId !== null || isPending}
                         onClick={() => handleCompleteAction(action.id)}
-                        className="px-3 py-1 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                        className="px-3.5 py-2 text-xs font-medium rounded bg-emerald-600 text-white hover:emerald-700 disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center justify-center"
                       >
-                        Complete
+                        {activeActionId === `complete_${action.id}` ? 'Completing...' : 'Complete'}
                       </button>
 
                       <button
-                        disabled={isPending}
+                        type="button"
+                        disabled={activeActionId !== null || isPending}
                         onClick={() => handleDismissAction(action.id)}
-                        className="px-3 py-1 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30"
+                        className="px-3.5 py-2 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center justify-center"
                       >
-                        Dismiss
+                        {activeActionId === `dismiss_${action.id}` ? 'Dismissing...' : 'Dismiss'}
                       </button>
                     </div>
                   )}
@@ -555,7 +649,7 @@ export function CRMHubClient({
 
       {/* Snooze Modal */}
       {snoozeModalActionId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Snooze Action</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Select snooze duration (max 90 days).</p>
@@ -568,26 +662,29 @@ export function CRMHubClient({
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               >
                 <option value={3}>3 Days</option>
-                <option value={7}>7 Days (1 Week)</option>
-                <option value={14}>14 Days (2 Weeks)</option>
-                <option value={30}>30 Days (1 Month)</option>
-                <option value={60}>60 Days (2 Months)</option>
+                <option value={7}>7 Days</option>
+                <option value={14}>14 Days</option>
+                <option value={30}>30 Days</option>
+                <option value={60}>60 Days</option>
+                <option value={90}>90 Days</option>
               </select>
             </div>
 
             <div className="mt-6 flex justify-end space-x-3">
               <button
+                type="button"
                 onClick={() => setSnoozeModalActionId(null)}
-                className="px-4 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                className="px-3.5 py-2 text-xs font-medium rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-h-[44px] touch-manipulation flex items-center justify-center"
               >
                 Cancel
               </button>
               <button
-                disabled={isPending}
+                type="button"
+                disabled={activeActionId !== null || isPending}
                 onClick={handleSnoozeSubmit}
-                className="px-4 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="px-3.5 py-2 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 min-h-[44px] touch-manipulation flex items-center justify-center"
               >
-                Confirm Snooze
+                {activeActionId === `snooze_${snoozeModalActionId}` ? 'Snoozing...' : 'Confirm Snooze'}
               </button>
             </div>
           </div>

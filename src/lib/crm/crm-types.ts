@@ -1,3 +1,7 @@
+import type { CustomerSegmentationDTO } from './crm-segmentation.types';
+
+export * from './crm-segmentation.types';
+
 export type IdentityType = 'REGISTERED' | 'KNOWN_GUEST' | 'ANONYMOUS';
 
 export type ConsentChannel =
@@ -62,6 +66,7 @@ export interface UnifiedCustomerProfileDTO {
   reviews: CustomerReviewSummaryDTO;
   topStats: CustomerTopStatsDTO;
   consents: CustomerConsentDTO[];
+  segmentation?: CustomerSegmentationDTO;
 }
 
 export interface CustomerDirectoryItemDTO {

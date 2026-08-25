@@ -5,11 +5,18 @@ import { createClient } from '@/lib/supabase/server';
 import { PendingAccessScreen } from '@/components/auth/pending-access-screen';
 
 export const metadata: Metadata = {
-  title: 'Pending Authorization | WSNexa',
-  description: 'Your manager or staff account is waiting for business authorization',
+  title: 'Pending Access | WSNexa',
+  description: 'Your account access status and workspace authorization',
 };
 
-export default async function PendingAccessPage() {
+export default async function PendingAccessPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ reason?: string }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const reason = resolvedParams.reason || null;
+
   const supabase = await createClient();
 
   const {
@@ -20,16 +27,21 @@ export default async function PendingAccessPage() {
     redirect('/login');
   }
 
-  // 1. If user has a verified active business membership, redirect to dashboard
-  const { data: memberships } = await supabase
-    .from('business_memberships')
-    .select('role, membership_status')
-    .eq('user_id', user.id)
-    .eq('membership_status', 'active')
-    .limit(1);
+  // 1. Redirect active memberships to /dashboard ONLY when no explicit restriction reason is present.
+  // When reason=subscription_suspended or reason=platform_suspended is set, staff members have an
+  // active membership record in DB, but their workspace is restricted. Skipping this check prevents
+  // infinite redirect loops between /dashboard and /account/pending-access.
+  if (!reason) {
+    const { data: memberships } = await supabase
+      .from('business_memberships')
+      .select('role, membership_status')
+      .eq('user_id', user.id)
+      .eq('membership_status', 'active')
+      .limit(1);
 
-  if (memberships && memberships.length > 0) {
-    redirect('/dashboard');
+    if (memberships && memberships.length > 0) {
+      redirect('/dashboard');
+    }
   }
 
   // 2. Fetch onboarding intent from user_profiles
@@ -43,7 +55,7 @@ export default async function PendingAccessPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
-      <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} />
+      <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} reason={reason} />
     </div>
   );
 }

@@ -287,8 +287,21 @@ async function runVerification() {
   const ownerPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/settings/subscription/page.tsx');
   assert(fs.existsSync(ownerPagePath), '50. Owner Subscription Management page exists at /dashboard/settings/subscription');
 
+  // 10. Step 2 Pending-Access Hotfix & Redirect Loop Protection Verification
+  console.log('\n--- SECTION 10: Pending-Access Hotfix & Redirect Loop Protection ---');
+  const pendingPagePath = path.join(process.cwd(), 'src/app/(auth)/account/pending-access/page.tsx');
+  const pendingPageContent = fs.readFileSync(pendingPagePath, 'utf-8');
+  assert(pendingPageContent.includes('if (!reason)'), '51. PendingAccessPage skips dashboard redirect check when reason parameter is present');
+
+  const pendingScreenPath = path.join(process.cwd(), 'src/components/auth/pending-access-screen.tsx');
+  const pendingScreenContent = fs.readFileSync(pendingScreenPath, 'utf-8');
+  assert(pendingScreenContent.includes('reason === \'subscription_suspended\''), '52. PendingAccessScreen handles subscription_suspended reason');
+  assert(pendingScreenContent.includes('Subscription Suspended'), '53. PendingAccessScreen renders Subscription Suspended header');
+  assert(pendingScreenContent.includes('reason === \'platform_suspended\''), '54. PendingAccessScreen handles platform_suspended reason');
+  assert(pendingScreenContent.includes('Sign Out / Switch Account'), '55. PendingAccessScreen exposes Sign Out button');
+
   console.log('\n================================================================');
-  console.log('  V1 Subscription Core Step 2: ALL 50 ASSERTIONS PASSED');
+  console.log('  V1 Subscription Core Step 2: ALL 55 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

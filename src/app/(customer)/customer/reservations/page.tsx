@@ -23,17 +23,18 @@ export default async function CustomerReservationsPage() {
     redirect('/login');
   }
 
-  const { data: memberships } = await supabase
-    .from('business_memberships')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('membership_status', 'active')
-    .limit(1);
+  const [membershipsRes, customerData, reservations] = await Promise.all([
+    supabase
+      .from('business_memberships')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('membership_status', 'active')
+      .limit(1),
+    AccountService.getCustomerProfile(user.id),
+    CustomerReservationService.getCustomerReservations(user.id),
+  ]);
 
-  const customerData = await AccountService.getCustomerProfile(user.id);
-  const hasBusinessAccess = !!(memberships && memberships.length > 0);
-
-  const reservations = await CustomerReservationService.getCustomerReservations(user.id);
+  const hasBusinessAccess = !!(membershipsRes.data && membershipsRes.data.length > 0);
 
   return (
     <CustomerShell

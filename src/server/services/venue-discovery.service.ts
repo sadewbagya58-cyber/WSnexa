@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
 import { VenueSearchQuery } from '@/lib/validation/venue';
 
@@ -288,7 +289,7 @@ export class VenueDiscoveryService {
   /**
    * Get single public venue profile by slug.
    */
-  static async getVenueBySlug(slug: string, includeUnpublished = false): Promise<VenuePublicProfileRecord | null> {
+  static getVenueBySlug = cache(async (slug: string, includeUnpublished = false): Promise<VenuePublicProfileRecord | null> => {
     const admin = createAdminClient();
 
     let query = admin.from('venue_public_profiles').select('*, businesses!inner(status)').eq('slug', slug);
@@ -360,7 +361,7 @@ export class VenueDiscoveryService {
       has_public_menu,
       branches,
     };
-  }
+  });
 
   /**
    * Fetch public safe menu preview items for featured branch.

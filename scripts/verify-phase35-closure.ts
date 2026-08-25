@@ -207,8 +207,41 @@ async function runVerification() {
 
   assert(venueFormContent.includes('publicReservationsEnabled') && venueFormContent.includes('publicMenuEnabled'), '60. Public reservations and public menu remain independent feature toggles');
 
+  // 10. App-Wide Interaction Responsiveness & Query Concurrency
+  console.log('\n--- SECTION 10: Interaction Responsiveness & Query Concurrency ---');
+  assert(discoveryServiceContent.includes("import { cache } from 'react'") && discoveryServiceContent.includes('static getVenueBySlug = cache('), '61. VenueDiscoveryService.getVenueBySlug memoized via React.cache');
+
+  const resSettingsServicePath = path.join(process.cwd(), 'src/server/reservations/reservation-settings.service.ts');
+  const resSettingsServiceContent = fs.readFileSync(resSettingsServicePath, 'utf-8');
+  assert(resSettingsServiceContent.includes("import { cache } from 'react'") && resSettingsServiceContent.includes('static getBranchSettings = cache('), '62. ReservationSettingsService.getBranchSettings memoized via React.cache');
+
+  assert(reserveSlugPageContent.includes('Promise.all(['), '63. Reserve page uses Promise.all for query concurrency');
+
+  const dashResPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/reservations/page.tsx');
+  const dashResPageContent = fs.readFileSync(dashResPagePath, 'utf-8');
+  assert(dashResPageContent.includes('Promise.all(['), '64. Dashboard reservations page uses Promise.all for permissions and data queries');
+
+  const custResPagePath = path.join(process.cwd(), 'src/app/(customer)/customer/reservations/page.tsx');
+  const custResPageContent = fs.readFileSync(custResPagePath, 'utf-8');
+  assert(custResPageContent.includes('Promise.all(['), '65. Customer reservations page uses Promise.all for query concurrency');
+
+  const venueLoadingPath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/loading.tsx');
+  const menuLoadingPath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/menu/loading.tsx');
+  const reserveLoadingPath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/loading.tsx');
+  const dashResLoadingPath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/reservations/loading.tsx');
+  const custResLoadingPath = path.join(process.cwd(), 'src/app/(customer)/customer/reservations/loading.tsx');
+
+  assert(
+    fs.existsSync(venueLoadingPath) &&
+    fs.existsSync(menuLoadingPath) &&
+    fs.existsSync(reserveLoadingPath) &&
+    fs.existsSync(dashResLoadingPath) &&
+    fs.existsSync(custResLoadingPath),
+    '66. Route-level loading.tsx skeletons exist for public, customer, and dashboard reservation routes'
+  );
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 4 Verification Complete: ALL 60 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 4 Verification Complete: ALL 66 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

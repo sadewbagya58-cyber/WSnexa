@@ -29,28 +29,30 @@ export default async function ReservePage({ params }: ReservePageProps) {
   if (!venue || !venue.featured_branch_id) notFound();
 
   const admin = createAdminClient();
-  const { data: branch } = await admin
-    .from('branches')
-    .select('id, name')
-    .eq('id', venue.featured_branch_id)
-    .eq('business_id', venue.business_id)
-    .single();
+  const supabase = await createClient();
 
+  const [settings, branchRes, authRes] = await Promise.all([
+    ReservationSettingsService.getBranchSettings(
+      venue.business_id,
+      venue.featured_branch_id
+    ),
+    admin
+      .from('branches')
+      .select('id, name')
+      .eq('id', venue.featured_branch_id)
+      .eq('business_id', venue.business_id)
+      .single(),
+    supabase.auth.getUser(),
+  ]);
+
+  const branch = branchRes.data;
   if (!branch) notFound();
-
-  const settings = await ReservationSettingsService.getBranchSettings(
-    venue.business_id,
-    venue.featured_branch_id
-  );
 
   if (!settings.reservationsEnabled || (venue as unknown as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) {
     notFound();
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = authRes.data?.user || null;
 
   let currentUser = null;
   if (user) {

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createAdminClient } from '@/lib/supabase/server';
 import { ReservationSettingsDTO } from '@/lib/reservations/reservation-types';
 
@@ -5,7 +6,7 @@ export class ReservationSettingsService {
   /**
    * Fetches reservation settings for a specific branch. Returns default settings if not configured.
    */
-  static async getBranchSettings(businessId: string, branchId: string): Promise<ReservationSettingsDTO> {
+  static getBranchSettings = cache(async (businessId: string, branchId: string): Promise<ReservationSettingsDTO> => {
     const admin = createAdminClient();
     const { data } = await admin
       .from('reservation_settings')
@@ -56,7 +57,7 @@ export class ReservationSettingsService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-  }
+  });
 
   /**
    * Upserts reservation settings for a specific branch.

@@ -26,15 +26,23 @@ export default async function ReservationsDashboardPage() {
     redirect('/login');
   }
 
-  const hasViewPermission = await can({ context: authContext, permission: 'reservations.view' });
+  const [
+    hasViewPermission,
+    hasManagePermission,
+    hasAssignPermission,
+    hasWaitlistPermission,
+    hasContactView,
+  ] = await Promise.all([
+    can({ context: authContext, permission: 'reservations.view' }),
+    can({ context: authContext, permission: 'reservations.manage' }),
+    can({ context: authContext, permission: 'reservations.assign_tables' }),
+    can({ context: authContext, permission: 'reservations.waitlist_manage' }),
+    can({ context: authContext, permission: 'customers.contact_view' }),
+  ]);
+
   if (!hasViewPermission) {
     redirect('/dashboard');
   }
-
-  const hasManagePermission = await can({ context: authContext, permission: 'reservations.manage' });
-  const hasAssignPermission = await can({ context: authContext, permission: 'reservations.assign_tables' });
-  const hasWaitlistPermission = await can({ context: authContext, permission: 'reservations.waitlist_manage' });
-  const hasContactView = await can({ context: authContext, permission: 'customers.contact_view' });
 
   // Fetch branches
   const branchesData = await BranchService.getBusinessBranches(authContext.businessId);
@@ -46,27 +54,27 @@ export default async function ReservationsDashboardPage() {
 
   const activeBranchId = branches.length > 0 ? branches[0].id : '';
 
-  // Initial reservation list query
-  const initialReservations = await ReservationQueryService.listReservations(
-    {
-      businessId: authContext.businessId,
-      branchId: activeBranchId || undefined,
-      authorizedBranchIds: authContext.authorizedBranchIds,
-      limit: 20,
-      offset: 0,
-    },
-    hasContactView
-  );
-
-  // Initial waitlist queue query
-  const initialWaitlist = activeBranchId
-    ? await ReservationWaitlistService.listWaitlistEntries({
+  // Initial reservation list & waitlist queue queries run concurrently
+  const [initialReservations, initialWaitlist] = await Promise.all([
+    ReservationQueryService.listReservations(
+      {
         businessId: authContext.businessId,
-        branchId: activeBranchId,
-        hasContactView,
+        branchId: activeBranchId || undefined,
         authorizedBranchIds: authContext.authorizedBranchIds,
-      })
-    : [];
+        limit: 20,
+        offset: 0,
+      },
+      hasContactView
+    ),
+    activeBranchId
+      ? ReservationWaitlistService.listWaitlistEntries({
+          businessId: authContext.businessId,
+          branchId: activeBranchId,
+          hasContactView,
+          authorizedBranchIds: authContext.authorizedBranchIds,
+        })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <ReservationManagementClient

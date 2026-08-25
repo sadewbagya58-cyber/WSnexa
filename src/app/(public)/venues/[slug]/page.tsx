@@ -164,15 +164,15 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               </div>
             </div>
 
-            {/* Ordering badge */}
+            {/* Feature Status Badge */}
             <div className="flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto">
-              {hasOrdering ? (
-                <Badge className="bg-emerald-50 text-emerald-900 border border-emerald-200 font-extrabold text-xs px-3 py-1">
-                  ✓ WSNexa Ordering Available
+              {(venue.public_menu_enabled ?? true) && venue.has_public_menu ? (
+                <Badge className="bg-amber-50 text-amber-900 border border-amber-200 font-extrabold text-xs px-3 py-1">
+                  ✓ Menu Available
                 </Badge>
               ) : (
                 <Badge className="bg-zinc-100 text-zinc-800 border border-zinc-200 font-extrabold text-xs px-3 py-1">
-                  View Venue Only
+                  Verified Venue Profile
                 </Badge>
               )}
             </div>
@@ -197,9 +197,9 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
            * click failures on mobile Safari and some Android browsers.
            */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
-            {venue.qr_token && hasOrdering && (venue.public_menu_enabled ?? true) && (
-              <Link href={`/m/${venue.qr_token}`} className={ctaPrimary}>
-                <span aria-hidden>📖</span> View Menu &amp; Order
+            {(venue.public_menu_enabled ?? true) && venue.has_public_menu && (
+              <Link href={`/venues/${venue.slug}/menu`} className={ctaPrimary}>
+                <span aria-hidden>📖</span> View Menu
               </Link>
             )}
 
@@ -253,11 +253,9 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-black text-zinc-950">Popular Menu Items</h3>
-                  {venue.qr_token && (
-                    <Link href={`/m/${venue.qr_token}`} className="text-xs font-extrabold text-amber-600 hover:underline">
-                      Full Menu →
-                    </Link>
-                  )}
+                  <Link href={`/venues/${venue.slug}/menu`} className="text-xs font-extrabold text-amber-600 hover:underline">
+                    Full Menu →
+                  </Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {menuPreview.map((item) => (

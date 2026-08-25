@@ -189,8 +189,26 @@ async function runVerification() {
   assert(!uiContent.includes('router.refresh()'), '52. No unnecessary router.refresh() mutation loops in reservation dashboard');
   assert(uiContent.includes('isPending'), '53. Reservation dashboard provides immediate pending state on mutation buttons');
 
+  // 9. Public Menu View-Only Semantics & Route Safety
+  console.log('\n--- SECTION 9: Public Menu View-Only Semantics & Route Safety ---');
+  assert(venueSlugPageContent.includes('View Menu') && !venueSlugPageContent.includes('View Menu & Order') && !venueSlugPageContent.includes('WSNexa Ordering Available'), '54. Public venue CTA says View Menu and contains zero online ordering claims');
+
+  const menuSlugRoutePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/menu/page.tsx');
+  assert(fs.existsSync(menuSlugRoutePath), '55. Dedicated view-only public menu route /venues/[slug]/menu exists');
+
+  const menuSlugRouteContent = fs.readFileSync(menuSlugRoutePath, 'utf-8');
+  assert(menuSlugRouteContent.includes('public_menu_enabled') && menuSlugRouteContent.includes('notFound()'), '56. Public menu route server-enforces public_menu_enabled with notFound()');
+  assert(!menuSlugRouteContent.includes('Add to Cart') && !menuSlugRouteContent.includes('Checkout') && !menuSlugRouteContent.includes('Order Now'), '57. Public menu route is strictly view-only with zero cart or order controls');
+
+  assert(discoveryServiceContent.includes('getVenueFullPublicMenu'), '58. VenueDiscoveryService exposes getVenueFullPublicMenu without requiring QR tokens or table sessions');
+
+  const qrOrderRoutePath = path.join(process.cwd(), 'src/app/m/[token]/page.tsx');
+  assert(fs.existsSync(qrOrderRoutePath), '59. QR table ordering route /m/[token] remains 100% intact and separate');
+
+  assert(venueFormContent.includes('publicReservationsEnabled') && venueFormContent.includes('publicMenuEnabled'), '60. Public reservations and public menu remain independent feature toggles');
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 4 Verification Complete: ALL 53 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 4 Verification Complete: ALL 60 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

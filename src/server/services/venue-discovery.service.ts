@@ -424,4 +424,108 @@ export class VenueDiscoveryService {
       availability_status: item.availability_status,
     }));
   }
+
+  /**
+   * Fetch full view-only public menu grouped by category for a venue/branch.
+   */
+  static async getVenueFullPublicMenu(businessId: string, featuredBranchId?: string | null): Promise<PublicMenuCategoryWithItems[]> {
+    const admin = createAdminClient();
+    let branchId = featuredBranchId;
+
+    if (!branchId) {
+      const { data: defaultBranch } = await admin
+        .from('branches')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultBranch) {
+        branchId = defaultBranch.id;
+      }
+    }
+
+    if (!branchId) return [];
+
+    const [{ data: categories }, { data: items }] = await Promise.all([
+      admin
+        .from('menu_categories')
+        .select('id, name, display_order')
+        .eq('business_id', businessId)
+        .order('display_order', { ascending: true }),
+      admin
+        .from('menu_items')
+        .select('id, category_id, name, description, price_cents, image_url, availability_status, display_order')
+        .eq('business_id', businessId)
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('display_order', { ascending: true }),
+    ]);
+
+    if (!items || items.length === 0) return [];
+
+    const categoryMap = new Map<string, PublicMenuCategoryWithItems>();
+
+    if (categories) {
+      for (const cat of categories) {
+        categoryMap.set(cat.id, {
+          id: cat.id,
+          name: cat.name,
+          display_order: cat.display_order || 0,
+          items: [],
+        });
+      }
+    }
+
+    const defaultCatKey = 'general-uncategorized';
+
+    for (const item of items) {
+      const catId = item.category_id;
+      if (catId && categoryMap.has(catId)) {
+        categoryMap.get(catId)!.items.push({
+          id: item.id,
+          name: item.name,
+          description: item.description || null,
+          price_cents: item.price_cents,
+          image_url: item.image_url || null,
+          availability_status: item.availability_status || 'AVAILABLE',
+        });
+      } else {
+        if (!categoryMap.has(defaultCatKey)) {
+          categoryMap.set(defaultCatKey, {
+            id: defaultCatKey,
+            name: 'General Menu',
+            display_order: 999,
+            items: [],
+          });
+        }
+        categoryMap.get(defaultCatKey)!.items.push({
+          id: item.id,
+          name: item.name,
+          description: item.description || null,
+          price_cents: item.price_cents,
+          image_url: item.image_url || null,
+          availability_status: item.availability_status || 'AVAILABLE',
+        });
+      }
+    }
+
+    return Array.from(categoryMap.values()).filter((c) => c.items.length > 0);
+  }
+}
+
+export interface PublicMenuCategoryWithItems {
+  id: string;
+  name: string;
+  display_order: number;
+  items: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    price_cents: number;
+    image_url: string | null;
+    availability_status: string;
+  }>;
 }

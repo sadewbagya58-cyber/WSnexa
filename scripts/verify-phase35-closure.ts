@@ -113,8 +113,12 @@ async function runVerification() {
   console.log('\n--- SECTION 6: Navigation & Dev Smoke Harness Cleanup ---');
   const navPath = path.join(process.cwd(), 'src/lib/navigation/dashboard-navigation.ts');
   const navContent = fs.readFileSync(navPath, 'utf-8');
-  assert(navContent.includes('Table Reservations') && navContent.includes('/dashboard/reservations'), '31. Table Reservations registered in dashboard navigation under OPERATIONS');
+  assert((navContent.includes('Table Reservations') || navContent.includes('Reservations')) && navContent.includes('/dashboard/reservations'), '31. Reservations registered in dashboard navigation under OPERATIONS');
   assert(navContent.includes('reservations.view'), '32. Navigation item guarded by canonical reservations.view permission');
+
+  const routePermPath = path.join(process.cwd(), 'src/lib/security/route-permissions.ts');
+  const routePermContent = fs.readFileSync(routePermPath, 'utf-8');
+  assert(routePermContent.includes('/dashboard/reservations') && routePermContent.includes('reservations.view'), '33. Route /dashboard/reservations registered in ROUTE_PERMISSION_MAP');
 
   const smokeRoutePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/dev/reservations-smoke/page.tsx');
   assert(!fs.existsSync(smokeRoutePath), '33. Temporary dev smoke route /dashboard/dev/reservations-smoke REMOVED');

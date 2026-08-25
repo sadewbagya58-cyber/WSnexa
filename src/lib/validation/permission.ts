@@ -155,6 +155,12 @@ export const permissionKeyEnum = z.enum([
   'people.manage',
   'positions.manage',
 
+  // Reservations (Phase 35)
+  'reservations.view',
+  'reservations.create',
+  'reservations.manage',
+  'reservations.cancel',
+
   // Owner Only
   'invitations.manage', // Preserved for backward compatibility
   'owner.transfer',

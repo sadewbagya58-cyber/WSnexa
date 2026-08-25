@@ -70,6 +70,7 @@ export function ReservationManagementClient({
   );
   const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'waitlist' | 'settings'>('today');
   const [statusFilter, setStatusFilter] = useState<string>('OPERATIONAL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState<boolean>(false);
   const [branchSettings, setBranchSettings] = useState<ReservationSettingsDTO | null>(null);
@@ -441,8 +442,14 @@ export function ReservationManagementClient({
     }
   };
 
-  // Filter reservations based on active tab and status filter
+  // Filter reservations based on search and status
   const displayedReservations = reservations.items.filter((r) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const nameMatch = r.guestName.toLowerCase().includes(q);
+      const codeMatch = r.confirmationCode.toLowerCase().includes(q);
+      if (!nameMatch && !codeMatch) return false;
+    }
     if (statusFilter === 'OPERATIONAL') {
       return ['PENDING', 'CONFIRMED', 'ARRIVED', 'SEATED'].includes(r.status);
     }
@@ -452,40 +459,54 @@ export function ReservationManagementClient({
     return true;
   });
 
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'CONFIRMED': return 'bg-blue-50 text-blue-800 border-blue-200';
+      case 'ARRIVED': return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      case 'SEATED': return 'bg-purple-50 text-purple-800 border-purple-200';
+      case 'COMPLETED': return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      case 'CANCELLED': return 'bg-rose-50 text-rose-800 border-rose-200';
+      case 'NO_SHOW': return 'bg-slate-100 text-slate-700 border-slate-300';
+      case 'DECLINED': return 'bg-rose-50 text-rose-800 border-rose-200';
+      default: return 'bg-slate-50 text-slate-700 border-slate-200';
+    }
+  };
+
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header & Operational Action Bar */}
-      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5 font-sans">
+      {/* Header Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="px-2.5 py-1 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
-            RESERVATION OPERATIONS
-          </span>
-          <h1 className="text-2xl font-bold mt-1">Dining Reservations & Allocation</h1>
-          <p className="text-sm text-slate-400">
-            Real-time table assignment, guest seating, waitlist, & operational workflow.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reservations</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Manage bookings, arrivals, seating, and waitlist.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Branch</label>
-            <select
-              className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded border border-slate-600 focus:outline-none"
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <select
+            className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 min-h-[40px]"
+            value={selectedBranchId}
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+          >
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </option>
+            ))}
+          </select>
 
           {hasCreatePermission && (
             <button
-              onClick={() => setShowStaffCreateModal(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
+              onClick={() => {
+                setStaffCreateForm((prev) => ({
+                  ...prev,
+                  reservationStartAt: new Date(Date.now() + 3600000).toISOString().slice(0, 16),
+                }));
+                setShowStaffCreateModal(true);
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm transition min-h-[40px]"
             >
               + New Reservation
             </button>
@@ -494,46 +515,49 @@ export function ReservationManagementClient({
           {hasManagePermission && (
             <button
               onClick={() => setShowWalkInModal(true)}
-              className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
+              className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm transition min-h-[40px]"
             >
-              + Walk-In Seating
+              Walk-In
             </button>
           )}
 
           {hasWaitlistPermission && (
             <button
               onClick={() => setShowWaitlistModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
+              className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-lg transition min-h-[40px]"
             >
-              + Add to Waitlist
+              Add to Waitlist
             </button>
           )}
         </div>
       </div>
 
-      {/* Global Status Message */}
+      {/* Global Status Banner */}
       {lastMessage && (
         <div
-          className={`p-4 rounded-lg text-sm font-mono border ${
+          className={`p-3.5 rounded-lg text-xs font-mono border flex items-center justify-between ${
             lastMessage.startsWith('✅')
-              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
-              : 'bg-rose-950/60 text-rose-300 border-rose-800'
+              ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+              : 'bg-rose-50 text-rose-900 border-rose-200'
           }`}
         >
-          {lastMessage}
+          <span>{lastMessage}</span>
+          <button onClick={() => setLastMessage(null)} className="text-slate-400 hover:text-slate-600 ml-4 font-sans font-bold">✕</button>
         </div>
       )}
 
-      {/* View Tabs & Operational Filter */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b gap-4">
-        <div className="flex gap-2">
+      {/* View Tabs & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-3">
+        <div className="flex items-center gap-1 sm:gap-2">
           <button
             onClick={() => {
               setActiveTab('today');
               setStatusFilter('OPERATIONAL');
             }}
-            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-              activeTab === 'today' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            className={`px-3 py-2 text-xs font-bold rounded-lg transition ${
+              activeTab === 'today'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             Today Operations
@@ -543,19 +567,23 @@ export function ReservationManagementClient({
               setActiveTab('upcoming');
               setStatusFilter('ALL');
             }}
-            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-              activeTab === 'upcoming' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            className={`px-3 py-2 text-xs font-bold rounded-lg transition ${
+              activeTab === 'upcoming'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            All Reservations ({reservations.items.length})
+            All ({reservations.items.length})
           </button>
           <button
             onClick={() => setActiveTab('waitlist')}
-            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-              activeTab === 'waitlist' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            className={`px-3 py-2 text-xs font-bold rounded-lg transition ${
+              activeTab === 'waitlist'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            Waitlist Queue ({waitlist.filter((w) => w.status === 'WAITING').length})
+            Waitlist ({waitlist.filter((w) => w.status === 'WAITING').length})
           </button>
           {hasManagePermission && (
             <button
@@ -570,219 +598,203 @@ export function ReservationManagementClient({
                   }
                 }
               }}
-              className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-                activeTab === 'settings' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+              className={`px-3 py-2 text-xs font-bold rounded-lg transition ${
+                activeTab === 'settings'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              ⚙️ Settings
+              Settings
             </button>
           )}
         </div>
 
         {(activeTab === 'today' || activeTab === 'upcoming') && (
-          <div className="flex items-center gap-2 mb-2 md:mb-0">
-            <span className="text-xs text-slate-500 font-semibold">Status:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              placeholder="Search guest or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="text-xs bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 min-h-[36px]"
+            />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs bg-white border border-slate-300 rounded px-2.5 py-1 font-semibold text-slate-800"
+              className="text-xs bg-white border border-slate-300 rounded-lg px-3 py-1.5 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 min-h-[36px]"
             >
-              <option value="OPERATIONAL">Active Operational (Pending, Confirmed, Arrived, Seated)</option>
+              <option value="OPERATIONAL">Active (Pending, Confirmed, Arrived, Seated)</option>
               <option value="ALL">All Statuses</option>
-              <option value="PENDING">PENDING</option>
-              <option value="CONFIRMED">CONFIRMED</option>
-              <option value="ARRIVED">ARRIVED</option>
-              <option value="SEATED">SEATED</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="CANCELLED">CANCELLED</option>
-              <option value="NO_SHOW">NO_SHOW</option>
-              <option value="DECLINED">DECLINED</option>
+              <option value="PENDING">Pending</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="ARRIVED">Arrived</option>
+              <option value="SEATED">Seated</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No-Show</option>
+              <option value="DECLINED">Declined</option>
             </select>
           </div>
         )}
       </div>
 
-      {/* RESERVATIONS CARDS LIST */}
+      {/* RESERVATIONS CARD GRID */}
       {(activeTab === 'today' || activeTab === 'upcoming') && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {displayedReservations.map((r) => {
             const assignments = activeAssignmentsMap[r.id] || [];
             return (
-              <div key={r.id} className="bg-white border rounded-xl p-5 shadow-sm space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start">
+              <div
+                key={r.id}
+                className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-3">
+                  {/* Top Row: Guest Name & Status Badge */}
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="text-xs font-mono font-bold text-amber-700">{r.confirmationCode}</span>
-                      <h3 className="text-base font-bold text-slate-900 mt-0.5">{r.guestName}</h3>
+                      <h3 className="text-base font-bold text-slate-900 leading-tight">{r.guestName}</h3>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">
+                        {r.confirmationCode} · {r.source}
+                      </p>
                     </div>
-                    <span
-                      className={`px-2.5 py-1 text-xs font-extrabold rounded border ${
-                        r.status === 'PENDING'
-                          ? 'bg-amber-50 text-amber-800 border-amber-300'
-                          : r.status === 'CONFIRMED'
-                          ? 'bg-blue-50 text-blue-800 border-blue-300'
-                          : r.status === 'ARRIVED'
-                          ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
-                          : r.status === 'SEATED'
-                          ? 'bg-purple-50 text-purple-800 border-purple-300'
-                          : r.status === 'COMPLETED'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : 'bg-slate-100 text-slate-600 border-slate-300'
-                      }`}
-                    >
+                    <span className={`px-2.5 py-1 text-xs font-bold rounded-md border ${getStatusBadgeClass(r.status)}`}>
                       {r.status}
                     </span>
                   </div>
 
-                  <div className="mt-3 text-xs text-slate-600 space-y-1 font-mono">
-                    <p>Party Size: <strong className="text-slate-900">{r.partySize} guests</strong></p>
-                    <p>Time: {new Date(r.reservationStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                    <p>Source: {r.source}</p>
-                    {hasContactView && r.guestPhone && <p>Phone: {r.guestPhone}</p>}
-                    {!hasContactView && r.guestPhoneMasked && <p>Phone: {r.guestPhoneMasked}</p>}
+                  {/* Primary Info: Time & Party Size */}
+                  <div className="flex items-center gap-3 text-xs font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <span>⏰ {new Date(r.reservationStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>👥 {r.partySize} Guests</span>
                   </div>
 
-                  {/* Table Assignment Display */}
-                  <div className="mt-3 pt-3 border-t">
-                    <span className="text-xs font-semibold text-slate-500 block mb-1">Table Assignment:</span>
-                    {assignments.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {assignments.map((a) => (
-                          <span key={a.id} className="px-2 py-1 text-xs font-bold bg-amber-100 text-amber-900 rounded border border-amber-300">
-                            {a.tableName || `Table ${a.tableNumber}`} ({a.assignmentType})
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs italic text-slate-400 block">No table assigned</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Canonical Action Matrix Footer */}
-                <div className="pt-3 border-t space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {hasAssignPermission && !['COMPLETED', 'CANCELLED', 'NO_SHOW', 'DECLINED'].includes(r.status) && (
-                      <>
-                        <button
-                          onClick={() => handleOpenAssignModal(r)}
-                          disabled={isPending}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[36px]"
-                        >
-                          {assignments.length > 0 ? 'Reassign' : 'Assign Table'}
-                        </button>
-                        {assignments.length === 0 && (
-                          <button
-                            onClick={() => handleAutoAssign(r)}
-                            disabled={isPending}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[36px]"
-                          >
-                            Auto Fit
-                          </button>
-                        )}
-                        {assignments.length > 0 && (
-                          <button
-                            onClick={() => handleRelease(r.id)}
-                            disabled={isPending}
-                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded text-xs font-semibold disabled:opacity-40 min-h-[36px]"
-                          >
-                            Release
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
-                    <div className="flex flex-wrap gap-1.5">
-                      {/* PENDING: Confirm, Decline, Cancel */}
-                      {r.status === 'PENDING' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusTransition(r.id, 'confirm')}
-                            disabled={isPending}
-                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeclineModalRes(r)}
-                            disabled={isPending}
-                            className="px-2.5 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                          >
-                            Decline
-                          </button>
-                        </>
-                      )}
-
-                      {/* CONFIRMED: Arrived, No-Show, Cancel */}
-                      {r.status === 'CONFIRMED' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusTransition(r.id, 'arrived')}
-                            disabled={isPending}
-                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                          >
-                            Arrived
-                          </button>
-                          <button
-                            onClick={() => handleStatusTransition(r.id, 'noshow')}
-                            disabled={isPending}
-                            className="px-2.5 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                          >
-                            No-Show
-                          </button>
-                        </>
-                      )}
-
-                      {/* ARRIVED: Seat, Cancel */}
-                      {r.status === 'ARRIVED' && (
-                        <button
-                          onClick={() => handleStatusTransition(r.id, 'seated')}
-                          disabled={isPending}
-                          className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                        >
-                          Seat
-                        </button>
-                      )}
-
-                      {/* SEATED: Complete */}
-                      {r.status === 'SEATED' && (
-                        <button
-                          onClick={() => handleStatusTransition(r.id, 'complete')}
-                          disabled={isPending}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                        >
-                          Complete
-                        </button>
-                      )}
-
-                      {/* CANCEL AVAILABLE FOR ACTIVE NON-TERMINAL STATES */}
-                      {['PENDING', 'CONFIRMED', 'ARRIVED'].includes(r.status) && (
-                        <button
-                          onClick={() => handleStatusTransition(r.id, 'cancel')}
-                          disabled={isPending}
-                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
-                        >
-                          Cancel
-                        </button>
+                  {/* Table Assignment & Contact Info */}
+                  <div className="text-xs text-slate-600 space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 font-medium">Table:</span>
+                      {assignments.length > 0 ? (
+                        <span className="font-bold text-slate-800">
+                          {assignments.map((a) => a.tableName || `T${a.tableNumber}`).join(', ')}
+                        </span>
+                      ) : (
+                        <span className="italic text-slate-400">No table assigned</span>
                       )}
                     </div>
 
+                    <div className="flex items-center justify-between text-slate-500">
+                      <span className="text-slate-400 font-medium">Contact:</span>
+                      <span className="font-mono text-slate-700">
+                        {hasContactView
+                          ? r.guestPhone || r.guestEmail || 'None'
+                          : r.guestPhoneMasked || r.guestEmailMasked || 'Masked'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions Footer */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
+                  {/* Primary & Secondary Action Button Row */}
+                  {r.status === 'PENDING' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleStatusTransition(r.id, 'confirm')}
+                        disabled={isPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setDeclineModalRes(r)}
+                        disabled={isPending}
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition min-h-[44px]"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+
+                  {r.status === 'CONFIRMED' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleStatusTransition(r.id, 'arrived')}
+                        disabled={isPending}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
+                      >
+                        Mark Arrived
+                      </button>
+                      {hasAssignPermission && (
+                        <button
+                          onClick={() => handleOpenAssignModal(r)}
+                          disabled={isPending}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition min-h-[44px]"
+                        >
+                          {assignments.length > 0 ? 'Reassign' : 'Assign Table'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {r.status === 'ARRIVED' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleStatusTransition(r.id, 'seated')}
+                        disabled={isPending}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
+                      >
+                        Seat Party
+                      </button>
+                      {hasAssignPermission && (
+                        <button
+                          onClick={() => handleOpenAssignModal(r)}
+                          disabled={isPending}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition min-h-[44px]"
+                        >
+                          {assignments.length > 0 ? 'Reassign' : 'Assign Table'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {r.status === 'SEATED' && (
+                    <button
+                      onClick={() => handleStatusTransition(r.id, 'complete')}
+                      disabled={isPending}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition disabled:opacity-50 min-h-[44px]"
+                    >
+                      Complete Session
+                    </button>
+                  )}
+
+                  {/* Secondary Action Row: Cancel / Details */}
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    {['PENDING', 'CONFIRMED', 'ARRIVED'].includes(r.status) ? (
+                      <button
+                        onClick={() => handleStatusTransition(r.id, 'cancel')}
+                        disabled={isPending}
+                        className="text-rose-600 hover:text-rose-800 font-medium text-xs py-1"
+                      >
+                        Cancel Booking
+                      </button>
+                    ) : (
+                      <span />
+                    )}
                     <button
                       onClick={() => handleOpenDetailModal(r)}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold border min-h-[32px]"
+                      className="text-slate-600 hover:text-slate-900 font-semibold text-xs py-1 ml-auto"
                     >
-                      Details & History
+                      View details →
                     </button>
                   </div>
                 </div>
               </div>
             );
           })}
+
           {displayedReservations.length === 0 && (
-            <div className="col-span-full bg-white p-8 rounded-xl text-center text-slate-500 border">
-              No reservations match the selected filter.
+            <div className="col-span-full bg-white p-12 rounded-xl text-center border border-slate-200 space-y-2">
+              <p className="text-sm font-semibold text-slate-700">No reservations found</p>
+              <p className="text-xs text-slate-400">Try adjusting your status filter or search query.</p>
             </div>
           )}
         </div>
@@ -790,34 +802,36 @@ export function ReservationManagementClient({
 
       {/* WAITLIST QUEUE */}
       {activeTab === 'waitlist' && (
-        <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-xs text-left text-slate-700">
-            <thead className="bg-slate-100 font-bold border-b">
+            <thead className="bg-slate-50 font-bold border-b text-slate-600">
               <tr>
-                <th className="p-3">Priority</th>
-                <th className="p-3">Guest Name</th>
-                <th className="p-3">Party Size</th>
-                <th className="p-3">Contact</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Created</th>
-                <th className="p-3">Action</th>
+                <th className="p-3.5">Priority</th>
+                <th className="p-3.5">Guest Name</th>
+                <th className="p-3.5">Party Size</th>
+                <th className="p-3.5">Contact</th>
+                <th className="p-3.5">Status</th>
+                <th className="p-3.5">Waiting Time</th>
+                <th className="p-3.5">Action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {waitlist.map((w) => (
-                <tr key={w.id} className="border-b hover:bg-slate-50 font-mono">
-                  <td className="p-3 font-bold text-amber-700">#{w.priority}</td>
-                  <td className="p-3 font-sans font-bold">{w.guestName}</td>
-                  <td className="p-3 font-bold">{w.partySize} guests</td>
-                  <td className="p-3">{w.guestPhoneMasked || w.guestPhone || '-'}</td>
-                  <td className="p-3 font-bold">{w.status}</td>
-                  <td className="p-3">{new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                  <td className="p-3 font-sans">
+                <tr key={w.id} className="hover:bg-slate-50/50">
+                  <td className="p-3.5 font-mono font-bold text-amber-700">#{w.priority}</td>
+                  <td className="p-3.5 font-bold text-slate-900">{w.guestName}</td>
+                  <td className="p-3.5 font-medium">{w.partySize} guests</td>
+                  <td className="p-3.5 font-mono">{w.guestPhoneMasked || w.guestPhone || '-'}</td>
+                  <td className="p-3.5 font-bold">{w.status}</td>
+                  <td className="p-3.5 font-mono text-slate-500">
+                    {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="p-3.5">
                     {w.status === 'WAITING' && hasWaitlistPermission && (
                       <button
                         onClick={() => handlePromoteWaitlist(w)}
                         disabled={isPending}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[36px]"
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold disabled:opacity-40 min-h-[36px]"
                       >
                         Promote & Seat
                       </button>
@@ -827,8 +841,8 @@ export function ReservationManagementClient({
               ))}
               {waitlist.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-slate-400">
-                    Waitlist queue is empty.
+                  <td colSpan={7} className="p-8 text-center text-slate-400 text-xs">
+                    No guests are currently waiting.
                   </td>
                 </tr>
               )}
@@ -837,12 +851,12 @@ export function ReservationManagementClient({
         </div>
       )}
 
-      {/* BRANCH SETTINGS PANEL */}
+      {/* GROUPED BRANCH SETTINGS PANEL */}
       {activeTab === 'settings' && branchSettings && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
           <div className="flex justify-between items-center border-b pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Branch Reservation Settings</h2>
+              <h2 className="text-base font-bold text-slate-900">Branch Reservation Settings</h2>
               <p className="text-xs text-slate-500">
                 Configure operational booking limits, turn buffer, party size bounds, and public rules.
               </p>
@@ -875,129 +889,193 @@ export function ReservationManagementClient({
                 }
               }}
               disabled={isPending}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow disabled:opacity-40 min-h-[44px]"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-sm disabled:opacity-40 min-h-[40px]"
             >
               Save Settings
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-xs text-slate-700">
-            {/* Reservations Enabled */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <input
-                id="reservationsEnabled"
-                type="checkbox"
-                checked={branchSettings.reservationsEnabled}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, reservationsEnabled: e.target.checked } : prev))
-                }
-                className="w-4 h-4 text-amber-600 rounded"
-              />
-              <label htmlFor="reservationsEnabled" className="font-bold text-slate-900 cursor-pointer">
-                Enable Public Reservations
-              </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Group 1: Availability Rules */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">1. Availability Policy</h3>
+              <div className="flex items-center gap-3">
+                <input
+                  id="reservationsEnabled"
+                  type="checkbox"
+                  checked={branchSettings.reservationsEnabled}
+                  onChange={(e) =>
+                    setBranchSettings((prev) => (prev ? { ...prev, reservationsEnabled: e.target.checked } : prev))
+                  }
+                  className="w-4 h-4 text-amber-600 rounded"
+                />
+                <label htmlFor="reservationsEnabled" className="text-xs font-bold text-slate-800 cursor-pointer">
+                  Enable Public Online Reservations
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  id="allowSameDay"
+                  type="checkbox"
+                  checked={branchSettings.allowSameDay}
+                  onChange={(e) =>
+                    setBranchSettings((prev) => (prev ? { ...prev, allowSameDay: e.target.checked } : prev))
+                  }
+                  className="w-4 h-4 text-amber-600 rounded"
+                />
+                <label htmlFor="allowSameDay" className="text-xs font-bold text-slate-800 cursor-pointer">
+                  Allow Same-Day Bookings
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Min Advance (Minutes)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={branchSettings.minimumAdvanceMinutes}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, minimumAdvanceMinutes: parseInt(e.target.value, 10) || 0 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Max Advance (Days)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={branchSettings.maximumAdvanceDays}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, maximumAdvanceDays: parseInt(e.target.value, 10) || 90 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Auto Confirm */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <input
-                id="autoConfirm"
-                type="checkbox"
-                checked={branchSettings.autoConfirm}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, autoConfirm: e.target.checked } : prev))
-                }
-                className="w-4 h-4 text-amber-600 rounded"
-              />
-              <label htmlFor="autoConfirm" className="font-bold text-slate-900 cursor-pointer">
-                Auto Confirm Bookings
-              </label>
+            {/* Group 2: Party Bounds & Timing */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">2. Party Bounds & Timing</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Default Duration (Min)</label>
+                  <input
+                    type="number"
+                    min={15}
+                    value={branchSettings.defaultDurationMinutes}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, defaultDurationMinutes: parseInt(e.target.value, 10) || 90 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Turnover Buffer (Min)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={branchSettings.tableTurnoverBufferMinutes || 15}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, tableTurnoverBufferMinutes: parseInt(e.target.value, 10) || 15 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Min Party Size</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={branchSettings.minimumPartySize}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, minimumPartySize: parseInt(e.target.value, 10) || 1 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block uppercase">Max Party Size</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={branchSettings.maximumPartySize}
+                    onChange={(e) =>
+                      setBranchSettings((prev) =>
+                        prev ? { ...prev, maximumPartySize: parseInt(e.target.value, 10) || 20 } : prev
+                      )
+                    }
+                    className="w-full text-xs font-bold border rounded px-2.5 py-1.5 bg-white"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Allow Same Day */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <input
-                id="allowSameDay"
-                type="checkbox"
-                checked={branchSettings.allowSameDay}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, allowSameDay: e.target.checked } : prev))
-                }
-                className="w-4 h-4 text-amber-600 rounded"
-              />
-              <label htmlFor="allowSameDay" className="font-bold text-slate-900 cursor-pointer">
-                Allow Same-Day Bookings
-              </label>
-            </div>
+            {/* Group 3: Automation & Contact Rules */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 col-span-full">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">3. Guest Policy & Automation</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="autoConfirm"
+                    type="checkbox"
+                    checked={branchSettings.autoConfirm}
+                    onChange={(e) =>
+                      setBranchSettings((prev) => (prev ? { ...prev, autoConfirm: e.target.checked } : prev))
+                    }
+                    className="w-4 h-4 text-amber-600 rounded"
+                  />
+                  <label htmlFor="autoConfirm" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Auto-Confirm Bookings
+                  </label>
+                </div>
 
-            {/* Require Phone */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <input
-                id="requireGuestPhone"
-                type="checkbox"
-                checked={branchSettings.requireGuestPhone}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, requireGuestPhone: e.target.checked } : prev))
-                }
-                className="w-4 h-4 text-amber-600 rounded"
-              />
-              <label htmlFor="requireGuestPhone" className="font-bold text-slate-900 cursor-pointer">
-                Require Guest Phone Number
-              </label>
-            </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="requireGuestPhone"
+                    type="checkbox"
+                    checked={branchSettings.requireGuestPhone}
+                    onChange={(e) =>
+                      setBranchSettings((prev) => (prev ? { ...prev, requireGuestPhone: e.target.checked } : prev))
+                    }
+                    className="w-4 h-4 text-amber-600 rounded"
+                  />
+                  <label htmlFor="requireGuestPhone" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Require Guest Phone
+                  </label>
+                </div>
 
-            {/* Require Email */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <input
-                id="requireGuestEmail"
-                type="checkbox"
-                checked={branchSettings.requireGuestEmail}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, requireGuestEmail: e.target.checked } : prev))
-                }
-                className="w-4 h-4 text-amber-600 rounded"
-              />
-              <label htmlFor="requireGuestEmail" className="font-bold text-slate-900 cursor-pointer">
-                Require Guest Email Address
-              </label>
-            </div>
-
-            {/* Default Duration */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Default Duration (Minutes)
-              </label>
-              <input
-                type="number"
-                min={15}
-                max={480}
-                value={branchSettings.defaultDurationMinutes}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, defaultDurationMinutes: parseInt(e.target.value, 10) || 90 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
-            </div>
-
-            {/* Turnover Buffer */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Table Turnover Buffer (Minutes)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={120}
-                value={branchSettings.tableTurnoverBufferMinutes || 15}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, tableTurnoverBufferMinutes: parseInt(e.target.value, 10) || 15 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
+                <div className="flex items-center gap-2">
+                  <input
+                    id="requireGuestEmail"
+                    type="checkbox"
+                    checked={branchSettings.requireGuestEmail}
+                    onChange={(e) =>
+                      setBranchSettings((prev) => (prev ? { ...prev, requireGuestEmail: e.target.checked } : prev))
+                    }
+                    className="w-4 h-4 text-amber-600 rounded"
+                  />
+                  <label htmlFor="requireGuestEmail" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Require Guest Email
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1009,12 +1087,12 @@ export function ReservationManagementClient({
           <form onSubmit={handleStaffCreateReservation} className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900 border-b pb-2">New Staff Reservation</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Name</label>
+                <label className="block font-semibold text-slate-700 mb-1">Guest Name</label>
                 <input
                   type="text"
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   value={staffCreateForm.guestName}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestName: e.target.value })}
                   required
@@ -1022,12 +1100,12 @@ export function ReservationManagementClient({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Party Size</label>
+                <label className="block font-semibold text-slate-700 mb-1">Party Size</label>
                 <input
                   type="number"
                   min="1"
                   max="30"
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   value={staffCreateForm.partySize}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, partySize: Number(e.target.value) })}
                   required
@@ -1035,30 +1113,30 @@ export function ReservationManagementClient({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Phone</label>
+                <label className="block font-semibold text-slate-700 mb-1">Guest Phone</label>
                 <input
                   type="text"
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   value={staffCreateForm.guestPhone}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestPhone: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Email</label>
+                <label className="block font-semibold text-slate-700 mb-1">Guest Email</label>
                 <input
                   type="email"
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   value={staffCreateForm.guestEmail}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestEmail: e.target.value })}
                 />
               </div>
 
               <div className="col-span-full">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Reservation Date & Time</label>
+                <label className="block font-semibold text-slate-700 mb-1">Reservation Date & Time</label>
                 <input
                   type="datetime-local"
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   value={staffCreateForm.reservationStartAt}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, reservationStartAt: e.target.value })}
                   required
@@ -1066,9 +1144,9 @@ export function ReservationManagementClient({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Occasion</label>
+                <label className="block font-semibold text-slate-700 mb-1">Occasion</label>
                 <select
-                  className="w-full text-xs border rounded px-3 py-2 bg-white"
+                  className="w-full border rounded px-3 py-2 bg-white"
                   value={staffCreateForm.occasion}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, occasion: e.target.value })}
                 >
@@ -1081,21 +1159,21 @@ export function ReservationManagementClient({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Special Requests</label>
+                <label className="block font-semibold text-slate-700 mb-1">Special Requests</label>
                 <input
                   type="text"
-                  className="w-full text-xs border rounded px-3 py-2"
-                  placeholder="Window table, highchair..."
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="Window table..."
                   value={staffCreateForm.specialRequests}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, specialRequests: e.target.value })}
                 />
               </div>
 
               <div className="col-span-full">
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Internal Note (Staff Only)</label>
+                <label className="block font-semibold text-slate-700 mb-1">Internal Staff Note</label>
                 <textarea
                   rows={2}
-                  className="w-full text-xs border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2"
                   placeholder="VIP guest, allergy note..."
                   value={staffCreateForm.internalNotes}
                   onChange={(e) => setStaffCreateForm({ ...staffCreateForm, internalNotes: e.target.value })}
@@ -1107,14 +1185,14 @@ export function ReservationManagementClient({
               <button
                 type="button"
                 onClick={() => setShowStaffCreateModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold min-h-[40px]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
                 Create Reservation
               </button>
@@ -1148,14 +1226,14 @@ export function ReservationManagementClient({
               <button
                 type="button"
                 onClick={() => setDeclineModalRes(null)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold min-h-[40px]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
                 Decline Booking
               </button>
@@ -1164,7 +1242,7 @@ export function ReservationManagementClient({
         </div>
       )}
 
-      {/* RESERVATION DETAIL & STATUS HISTORY MODAL */}
+      {/* RESERVATION DETAIL & HISTORY MODAL */}
       {detailModalRes && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
@@ -1183,29 +1261,29 @@ export function ReservationManagementClient({
 
             <div className="grid grid-cols-2 gap-4 text-xs font-mono text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Status</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">Status</span>
                 <strong className="text-slate-900 font-sans text-sm">{detailModalRes.status}</strong>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Party Size</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">Party Size</span>
                 <strong className="text-slate-900 font-sans text-sm">{detailModalRes.partySize} guests</strong>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Source</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">Source</span>
                 <span>{detailModalRes.source}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">CRM Customer Link</span>
-                <span className="font-bold text-emerald-700">
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">CRM Customer Link</span>
+                <span className="font-bold text-emerald-700 font-sans">
                   {detailModalRes.crmCustomerId ? '✓ Linked CRM Profile' : 'Guest Booking'}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Start Time</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">Start Time</span>
                 <span>{new Date(detailModalRes.reservationStartAt).toLocaleString()}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase">Contact</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-sans">Contact</span>
                 <span>
                   {hasContactView
                     ? detailModalRes.guestPhone || detailModalRes.guestEmail || 'No contact provided'
@@ -1214,13 +1292,13 @@ export function ReservationManagementClient({
               </div>
               {detailModalRes.specialRequests && (
                 <div className="col-span-full">
-                  <span className="text-[10px] text-slate-400 block uppercase">Special Requests</span>
+                  <span className="text-[10px] text-slate-400 block uppercase font-sans">Special Requests</span>
                   <span className="font-sans text-slate-800">{detailModalRes.specialRequests}</span>
                 </div>
               )}
               {detailModalRes.internalNotes && (
-                <div className="col-span-full bg-amber-50 p-2 rounded border border-amber-200">
-                  <span className="text-[10px] text-amber-800 font-bold block uppercase">Internal Staff Note</span>
+                <div className="col-span-full bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                  <span className="text-[10px] text-amber-800 font-bold block uppercase font-sans">Internal Staff Note</span>
                   <span className="font-sans text-amber-950">{detailModalRes.internalNotes}</span>
                 </div>
               )}
@@ -1231,7 +1309,7 @@ export function ReservationManagementClient({
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Lifecycle Status History</h4>
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {detailStatusHistory.map((ev) => (
-                  <div key={ev.id} className="p-2 bg-slate-50 border rounded text-xs font-mono flex items-center justify-between">
+                  <div key={ev.id} className="p-2 bg-slate-50 border rounded-lg text-xs font-mono flex items-center justify-between">
                     <div>
                       <span className="font-bold text-slate-800">
                         {ev.fromStatus ? `${ev.fromStatus} → ${ev.toStatus}` : ev.toStatus}
@@ -1250,7 +1328,7 @@ export function ReservationManagementClient({
             <div className="flex justify-end pt-3 border-t">
               <button
                 onClick={() => setDetailModalRes(null)}
-                className="px-4 py-2 bg-slate-900 text-white rounded text-xs font-bold"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold min-h-[40px]"
               >
                 Close
               </button>
@@ -1317,14 +1395,14 @@ export function ReservationManagementClient({
             <div className="flex justify-end gap-3 border-t pt-4">
               <button
                 onClick={() => setAssignmentModalRes(null)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold min-h-[40px]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmAssignment}
                 disabled={isPending || selectedTableIds.length === 0}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
                 Confirm Assignment
               </button>
@@ -1377,14 +1455,14 @@ export function ReservationManagementClient({
               <button
                 type="button"
                 onClick={() => setShowWalkInModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold min-h-[40px]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
                 Seat Walk-In
               </button>
@@ -1437,14 +1515,14 @@ export function ReservationManagementClient({
               <button
                 type="button"
                 onClick={() => setShowWaitlistModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold min-h-[40px]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold disabled:opacity-40"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
                 Add Guest
               </button>

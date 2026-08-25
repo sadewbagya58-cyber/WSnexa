@@ -183,6 +183,24 @@ export const resolveActiveBusinessContext = cache(
       activeBranchInfo = userAccessibleBranches.find((b) => b.id === requestedBranchId) || defaultBranchInfo;
     }
 
+    let subscriptionInfo = undefined;
+    try {
+      const { SubscriptionService } = await import('@/server/services/subscription.service');
+      const subContext = await SubscriptionService.resolveSubscriptionContext(business.id);
+      subscriptionInfo = {
+        planCode: subContext.subscription.plan_code,
+        status: subContext.subscription.status,
+        effectiveStatus: subContext.effectiveStatus,
+        trialEndsAt: subContext.subscription.trial_ends_at,
+        periodEndsAt: subContext.periodEndsAt ? subContext.periodEndsAt.toISOString() : null,
+        graceEndsAt: subContext.graceEndsAt ? subContext.graceEndsAt.toISOString() : null,
+        daysRemaining: subContext.daysRemaining,
+        effectiveLimits: subContext.effectiveLimits,
+      };
+    } catch (subErr) {
+      console.warn('[resolveActiveBusinessContext] Failed to resolve subscription context:', subErr);
+    }
+
     const duration = stopTimer(startTime);
     logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);
 
@@ -215,6 +233,7 @@ export const resolveActiveBusinessContext = cache(
         role: activeMembership.role,
         status: activeMembership.membership_status,
       },
+      subscription: subscriptionInfo,
     };
   }
 );

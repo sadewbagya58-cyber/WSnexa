@@ -258,6 +258,22 @@ export class OrderService {
       }
     }
 
+    if (targetBusinessId) {
+      try {
+        const { SubscriptionService } = await import('./subscription.service');
+        const subContext = await SubscriptionService.resolveSubscriptionContext(targetBusinessId);
+        if (subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED') {
+          return {
+            success: false,
+            message: 'Ordering is currently unavailable for this venue.',
+            errorType: 'SUBSCRIPTION_SUSPENDED',
+          };
+        }
+      } catch (subErr) {
+        console.warn('[createGuestOrder] Subscription check warning:', subErr);
+      }
+    }
+
     if (!targetBranchId) {
       return {
         success: false,

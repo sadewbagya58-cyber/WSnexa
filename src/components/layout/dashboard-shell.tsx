@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { ActiveBranchSwitcher } from '@/components/layout/active-branch-switcher';
 import { SidebarBranchPicker } from '@/components/layout/sidebar-branch-picker';
@@ -13,7 +13,7 @@ import {
 } from '@/lib/navigation/dashboard-navigation';
 import { getPageMetadata } from '@/lib/navigation/dashboard-page-metadata';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
-import { BranchInfo } from '@/types';
+import { BranchInfo, TenantSubscriptionInfo } from '@/types';
 
 import { NotificationBell } from '@/components/notifications/notification-bell';
 
@@ -29,6 +29,7 @@ interface DashboardShellProps {
   businessName: string;
   activeBranch: BranchInfo | null;
   branches: BranchInfo[];
+  subscription?: TenantSubscriptionInfo;
 }
 
 function formatRoleLabel(role: string): string {
@@ -56,10 +57,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   businessName,
   activeBranch,
   branches,
+  subscription,
 }) => {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Suspended Business Owner redirection to subscription settings
+  useEffect(() => {
+    const isSuspended = subscription?.effectiveStatus === 'SUSPENDED' || subscription?.effectiveStatus === 'CANCELLED';
+    if (isSuspended && userRole === 'business_owner' && pathname !== '/dashboard/settings/subscription') {
+      router.replace('/dashboard/settings/subscription');
+    }
+  }, [subscription?.effectiveStatus, userRole, pathname, router]);
 
   // Close drawer on path change (runs at render time to avoid effect-based setState lint)
   const [prevPathname, setPrevPathname] = useState(pathname);
@@ -386,6 +397,48 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           }
           return (
             <main className={mainClasses}>
+              {subscription?.effectiveStatus === 'GRACE_PERIOD' && (
+                <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">⚠️</span>
+                    <div>
+                      <p className="font-extrabold text-xs uppercase tracking-wider text-amber-900">Subscription Grace Period Active</p>
+                      <p className="text-xs text-amber-800 font-medium">
+                        Your subscription has expired. You have {subscription.daysRemaining} {subscription.daysRemaining === 1 ? 'day' : 'days'} remaining before service suspension.
+                      </p>
+                    </div>
+                  </div>
+                  {userRole === 'business_owner' && (
+                    <Link
+                      href="/dashboard/settings/subscription"
+                      className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+                    >
+                      Renew Plan
+                    </Link>
+                  )}
+                </div>
+              )}
+              {subscription?.effectiveStatus === 'TRIALING' && subscription.daysRemaining <= 3 && (
+                <div className="mb-4 rounded-xl border border-blue-300 bg-blue-50 p-4 text-blue-950 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">ℹ️</span>
+                    <div>
+                      <p className="font-extrabold text-xs uppercase tracking-wider text-blue-900">Free Trial Ending Soon</p>
+                      <p className="text-xs text-blue-800 font-medium">
+                        Your free trial ends in {subscription.daysRemaining} {subscription.daysRemaining === 1 ? 'day' : 'days'}. Upgrade your plan to maintain uninterrupted service.
+                      </p>
+                    </div>
+                  </div>
+                  {userRole === 'business_owner' && (
+                    <Link
+                      href="/dashboard/settings/subscription"
+                      className="shrink-0 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+                    >
+                      Upgrade Plan
+                    </Link>
+                  )}
+                </div>
+              )}
               {children}
             </main>
           );

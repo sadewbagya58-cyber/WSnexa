@@ -17,6 +17,23 @@ export interface BranchInfo {
   longitude?: number | null;
 }
 
+export interface TenantSubscriptionInfo {
+  planCode: string;
+  status: string;
+  effectiveStatus: 'TRIALING' | 'ACTIVE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
+  trialEndsAt: string;
+  periodEndsAt: string | null;
+  graceEndsAt: string | null;
+  daysRemaining: number;
+  effectiveLimits: {
+    maxBranches: number | null;
+    maxActiveStaff: number | null;
+    maxTables: number | null;
+    maxMenuItems: number | null;
+    maxCustomRoles: number | null;
+  };
+}
+
 export interface ActiveTenantContext {
   user: {
     id: string;
@@ -44,6 +61,7 @@ export interface ActiveTenantContext {
     role: string;
     status: string;
   };
+  subscription?: TenantSubscriptionInfo;
 }
 
 export * from './authorization.types';

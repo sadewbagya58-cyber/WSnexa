@@ -30,7 +30,19 @@ export default async function DashboardLayout({
     redirect(targetRoute);
   }
 
-  const { user, profile, business, activeBranch, branches, membership } = context;
+  const { user, profile, business, activeBranch, branches, membership, subscription } = context;
+
+  // 1. Platform Administrative Suspension Precedence (abuse, security, legal)
+  if (business.status === 'suspended' || business.status === 'archived') {
+    redirect('/account/pending-access?reason=platform_suspended');
+  }
+
+  // 2. Commercial Subscription Suspension Redirect for Non-Owner Staff
+  const isCommerciallySuspended = subscription?.effectiveStatus === 'SUSPENDED' || subscription?.effectiveStatus === 'CANCELLED';
+  if (isCommerciallySuspended && membership.role !== 'business_owner') {
+    redirect('/account/pending-access?reason=subscription_suspended');
+  }
+
   const userName = profile
     ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
     : '';
@@ -57,6 +69,7 @@ export default async function DashboardLayout({
       userName={userName || user.email || ''}
       userRole={membership.role}
       navSections={navSections}
+      subscription={subscription}
     >
       {children}
     </DashboardShell>

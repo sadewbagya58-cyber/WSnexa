@@ -200,6 +200,15 @@ export async function createDiningTableAction(
     return { success: false, message: 'Forbidden. Missing permission to create tables.' };
   }
 
+  const { SubscriptionService } = await import('@/server/services/subscription.service');
+  const limitRes = await SubscriptionService.validateLimit(authContext.businessId, 'tables');
+  if (!limitRes.allowed) {
+    return {
+      success: false,
+      message: limitRes.message || `Table limit reached (${limitRes.effectiveLimit}). Upgrade your plan to add more tables.`,
+    };
+  }
+
   const parsed = createDiningTableSchema.safeParse(formData);
   if (!parsed.success) {
     return {

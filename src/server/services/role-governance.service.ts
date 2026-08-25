@@ -196,6 +196,15 @@ export class RoleGovernanceService {
       );
     }
 
+    const { SubscriptionService } = await import('./subscription.service');
+    const limitRes = await SubscriptionService.validateLimit(businessId, 'customRoles');
+    if (!limitRes.allowed) {
+      throw new AuthorizationContextError(
+        'UNAUTHORIZED',
+        limitRes.message || `Custom role limit reached (${limitRes.effectiveLimit}). Upgrade your plan to add more custom roles.`
+      );
+    }
+
     // 2. Validate Reserved Role Names
     const normalizedName = input.name.trim();
     const normalizedLower = normalizedName.toLowerCase().replace(/[\s_-]+/g, '');

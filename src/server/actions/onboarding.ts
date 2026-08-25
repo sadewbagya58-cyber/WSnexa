@@ -194,6 +194,14 @@ export async function completeOnboardingAction(
 
   const result = rpcData as { business_id: string; slug: string };
 
+  // Provision initial 14-day Starter trial subscription
+  try {
+    const { SubscriptionService } = await import('@/server/services/subscription.service');
+    await SubscriptionService.createTrialSubscription(result.business_id, user.id);
+  } catch (subErr) {
+    console.warn('[completeOnboardingAction] Subscription trial provisioning warning:', subErr);
+  }
+
   // Set active business cookie
   const cookieStore = await cookies();
   cookieStore.set(ACTIVE_BUSINESS_COOKIE, result.business_id, {

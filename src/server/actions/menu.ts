@@ -240,6 +240,15 @@ export async function createMenuItemAction(
     return { success: false, message: 'Forbidden. Missing required permission menu.items.create.' };
   }
 
+  const { SubscriptionService } = await import('@/server/services/subscription.service');
+  const limitRes = await SubscriptionService.validateLimit(authContext.businessId, 'menuItems');
+  if (!limitRes.allowed) {
+    return {
+      success: false,
+      message: limitRes.message || `Menu item limit reached (${limitRes.effectiveLimit}). Upgrade your plan to add more menu items.`,
+    };
+  }
+
   const parsed = createMenuItemSchema.safeParse(formData);
   if (!parsed.success) {
     return {

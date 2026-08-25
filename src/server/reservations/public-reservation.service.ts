@@ -56,6 +56,16 @@ export class PublicReservationService {
     const settings = await ReservationSettingsService.getBranchSettings(venue.business_id, branchId);
     if (!settings.reservationsEnabled || (venue as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) return [];
 
+    try {
+      const { SubscriptionService } = await import('@/server/services/subscription.service');
+      const subContext = await SubscriptionService.resolveSubscriptionContext(venue.business_id);
+      if (subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED') {
+        return [];
+      }
+    } catch {
+      // Graceful fallback
+    }
+
     if (params.partySize < settings.minimumPartySize || params.partySize > settings.maximumPartySize) {
       return [];
     }
@@ -246,6 +256,18 @@ export class PublicReservationService {
     const settings = await ReservationSettingsService.getBranchSettings(venue.business_id, branchId);
     if (!settings.reservationsEnabled || (venue as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) {
       throw createDomainError('Reservations are currently disabled for this venue.', 'RESERVATIONS_DISABLED');
+    }
+
+    try {
+      const { SubscriptionService } = await import('@/server/services/subscription.service');
+      const subContext = await SubscriptionService.resolveSubscriptionContext(venue.business_id);
+      if (subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED') {
+        throw createDomainError('Table reservations are currently unavailable for this venue.', 'SUBSCRIPTION_SUSPENDED');
+      }
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === 'SUBSCRIPTION_SUSPENDED') {
+        throw err;
+      }
     }
 
     // Required contact validation

@@ -48,6 +48,7 @@ export const ROUTE_PERMISSION_MAP: RoutePermissionConfig[] = [
   { prefix: '/dashboard/inventory', permission: 'inventory.view' },
   { prefix: '/dashboard/settings/order-security', permission: 'order_security.view' },
   { prefix: '/dashboard/settings/payments', permission: 'branches.manage' },
+  { prefix: '/dashboard/settings/subscription', permission: 'business.settings.manage' },
   { prefix: '/dashboard/reservations', permission: 'reservations.view' },
   // Phase 30 Access Management Hub
   { prefix: '/dashboard/access/roles', permission: 'roles.view' },

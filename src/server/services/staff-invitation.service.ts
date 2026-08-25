@@ -63,6 +63,15 @@ export class StaffInvitationService {
       return { success: false, message: 'Forbidden. Staff invitation permission required.' };
     }
 
+    const { SubscriptionService } = await import('./subscription.service');
+    const limitRes = await SubscriptionService.validateLimit(businessId, 'staff');
+    if (!limitRes.allowed) {
+      return {
+        success: false,
+        message: limitRes.message || `Active staff limit reached (${limitRes.effectiveLimit}). Upgrade your plan to invite more staff.`,
+      };
+    }
+
     const admin = createAdminClient();
 
     // 2. Verify branch belongs to the business

@@ -404,3 +404,27 @@ export async function updateReservationSettingsAction(
     );
   });
 }
+
+/**
+ * Staff-authenticated branch reservation settings fetch.
+ */
+export async function getReservationSettingsAction(
+  branchId: string
+): Promise<ReservationActionResult<ReservationSettingsDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
+
+    if (
+      authContext.authorizedBranchIds &&
+      authContext.authorizedBranchIds.length > 0 &&
+      !authContext.authorizedBranchIds.includes(branchId)
+    ) {
+      throw new Error('Forbidden: Requested branch is outside your authorized property scope.');
+    }
+
+    return ReservationSettingsService.getBranchSettings(authContext.businessId, branchId);
+  });
+}

@@ -53,13 +53,18 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [menuPreview, reviews, isFav, reviewEligibility] = await Promise.all([
+  const { ReservationSettingsService } = await import('@/server/reservations/reservation-settings.service');
+
+  const [menuPreview, reviews, isFav, reviewEligibility, reservationSettings] = await Promise.all([
     VenueDiscoveryService.getVenueMenuPreview(venue.business_id, venue.featured_branch_id),
     VenueReviewService.getVenueReviews(venue.id),
     user ? VenueFavoriteService.isFavorite(user.id, venue.id) : false,
     user
       ? VenueReviewService.checkEligibility(user.id, venue.id)
       : { eligible: false, reason: 'Please log in to submit a review.' },
+    venue.featured_branch_id
+      ? ReservationSettingsService.getBranchSettings(venue.business_id, venue.featured_branch_id)
+      : Promise.resolve(null),
   ]);
 
   const priceDisplay = '$'.repeat(venue.price_level || 2);
@@ -208,12 +213,18 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               </a>
             )}
 
+            {reservationSettings?.reservationsEnabled && (
+              <Link href={`/venues/${venue.slug}/reserve`} className={ctaDark}>
+                <span aria-hidden>📅</span> Reserve Table
+              </Link>
+            )}
+
             {(venue.booking_url || venue.external_booking_url || venue.agoda_url) && (
               <a
                 href={venue.booking_url || venue.external_booking_url || venue.agoda_url!}
                 target="_blank"
                 rel="noreferrer"
-                className={ctaDark}
+                className={ctaOutline}
               >
                 <span aria-hidden>🏨</span> Book a Stay ↗
               </a>

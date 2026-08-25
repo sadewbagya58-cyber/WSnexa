@@ -8,6 +8,8 @@ import {
   markReservationSeatedAction,
   markReservationCompletedAction,
   markReservationNoShowAction,
+  updateReservationSettingsAction,
+  getReservationSettingsAction,
 } from '@/server/actions/reservation';
 import {
   getAvailableTablesAction,
@@ -19,6 +21,7 @@ import {
   promoteWaitlistEntryAction,
 } from '@/server/actions/reservation-allocation';
 import {
+  DiningTableDTO,
   ReservationTableAssignmentDTO,
   TableAvailabilityResultDTO,
   WaitlistEntryDTO,
@@ -26,6 +29,7 @@ import {
 import {
   PaginatedReservationsDTO,
   ReservationDTO,
+  ReservationSettingsDTO,
 } from '@/lib/reservations/reservation-types';
 
 interface BranchOption {
@@ -58,9 +62,10 @@ export function ReservationManagementClient({
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
     branches.length > 0 ? branches[0].id : ''
   );
-  const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'waitlist'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'waitlist' | 'settings'>('today');
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState<boolean>(false);
+  const [branchSettings, setBranchSettings] = useState<ReservationSettingsDTO | null>(null);
 
   // Data states
   const [reservations, setReservations] = useState<PaginatedReservationsDTO>(initialReservations);
@@ -405,6 +410,26 @@ export function ReservationManagementClient({
         >
           Waitlist Queue ({waitlist.filter((w) => w.status === 'WAITING').length})
         </button>
+        {hasManagePermission && (
+          <button
+            onClick={async () => {
+              setActiveTab('settings');
+              if (selectedBranchId) {
+                setIsPending(true);
+                const res = await getReservationSettingsAction(selectedBranchId);
+                setIsPending(false);
+                if (res.ok) {
+                  setBranchSettings(res.data);
+                }
+              }
+            }}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
+              activeTab === 'settings' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ⚙️ Branch Settings
+          </button>
+        )}
       </div>
 
       {/* RESERVATIONS CARDS LIST */}
@@ -592,6 +617,267 @@ export function ReservationManagementClient({
         </div>
       )}
 
+      {/* BRANCH SETTINGS PANEL */}
+      {activeTab === 'settings' && branchSettings && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+          <div className="flex justify-between items-center border-b pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Branch Reservation Settings</h2>
+              <p className="text-xs text-slate-500">
+                Configure operational booking limits, turn buffer, party size bounds, and public rules.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setIsPending(true);
+                const res = await updateReservationSettingsAction({
+                  branchId: selectedBranchId,
+                  reservationsEnabled: branchSettings.reservationsEnabled,
+                  defaultDurationMinutes: branchSettings.defaultDurationMinutes,
+                  minimumPartySize: branchSettings.minimumPartySize,
+                  maximumPartySize: branchSettings.maximumPartySize,
+                  minimumAdvanceMinutes: branchSettings.minimumAdvanceMinutes,
+                  maximumAdvanceDays: branchSettings.maximumAdvanceDays,
+                  allowSameDay: branchSettings.allowSameDay,
+                  requireGuestPhone: branchSettings.requireGuestPhone,
+                  requireGuestEmail: branchSettings.requireGuestEmail,
+                  autoConfirm: branchSettings.autoConfirm,
+                  tableTurnoverBufferMinutes: branchSettings.tableTurnoverBufferMinutes,
+                  maxTableCombination: branchSettings.maxTableCombination,
+                });
+                setIsPending(false);
+                if (res.ok) {
+                  setBranchSettings(res.data);
+                  setLastMessage('✅ Branch reservation settings updated successfully');
+                } else {
+                  setLastMessage(`❌ Failed to update settings: ${res.error.message}`);
+                }
+              }}
+              disabled={isPending}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow disabled:opacity-40 min-h-[44px]"
+            >
+              Save Settings
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-xs text-slate-700">
+            {/* Reservations Enabled */}
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <input
+                id="reservationsEnabled"
+                type="checkbox"
+                checked={branchSettings.reservationsEnabled}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, reservationsEnabled: e.target.checked } : prev))
+                }
+                className="w-4 h-4 text-amber-600 rounded"
+              />
+              <label htmlFor="reservationsEnabled" className="font-bold text-slate-900 cursor-pointer">
+                Enable Public Reservations
+              </label>
+            </div>
+
+            {/* Auto Confirm */}
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <input
+                id="autoConfirm"
+                type="checkbox"
+                checked={branchSettings.autoConfirm}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, autoConfirm: e.target.checked } : prev))
+                }
+                className="w-4 h-4 text-amber-600 rounded"
+              />
+              <label htmlFor="autoConfirm" className="font-bold text-slate-900 cursor-pointer">
+                Auto Confirm Bookings
+              </label>
+            </div>
+
+            {/* Allow Same Day */}
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <input
+                id="allowSameDay"
+                type="checkbox"
+                checked={branchSettings.allowSameDay}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, allowSameDay: e.target.checked } : prev))
+                }
+                className="w-4 h-4 text-amber-600 rounded"
+              />
+              <label htmlFor="allowSameDay" className="font-bold text-slate-900 cursor-pointer">
+                Allow Same-Day Bookings
+              </label>
+            </div>
+
+            {/* Require Phone */}
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <input
+                id="requireGuestPhone"
+                type="checkbox"
+                checked={branchSettings.requireGuestPhone}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, requireGuestPhone: e.target.checked } : prev))
+                }
+                className="w-4 h-4 text-amber-600 rounded"
+              />
+              <label htmlFor="requireGuestPhone" className="font-bold text-slate-900 cursor-pointer">
+                Require Guest Phone Number
+              </label>
+            </div>
+
+            {/* Require Email */}
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <input
+                id="requireGuestEmail"
+                type="checkbox"
+                checked={branchSettings.requireGuestEmail}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) => (prev ? { ...prev, requireGuestEmail: e.target.checked } : prev))
+                }
+                className="w-4 h-4 text-amber-600 rounded"
+              />
+              <label htmlFor="requireGuestEmail" className="font-bold text-slate-900 cursor-pointer">
+                Require Guest Email Address
+              </label>
+            </div>
+
+            {/* Default Duration */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Default Duration (Minutes)
+              </label>
+              <input
+                type="number"
+                min={15}
+                max={480}
+                value={branchSettings.defaultDurationMinutes}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, defaultDurationMinutes: parseInt(e.target.value, 10) || 90 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Minimum Party Size */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Minimum Party Size
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={branchSettings.minimumPartySize}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, minimumPartySize: parseInt(e.target.value, 10) || 1 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Maximum Party Size */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Maximum Party Size
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={branchSettings.maximumPartySize}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, maximumPartySize: parseInt(e.target.value, 10) || 20 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Minimum Advance Minutes */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Minimum Advance Booking (Minutes)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={10080}
+                value={branchSettings.minimumAdvanceMinutes}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, minimumAdvanceMinutes: parseInt(e.target.value, 10) || 0 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Maximum Advance Days */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Maximum Advance Booking (Days)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={branchSettings.maximumAdvanceDays}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, maximumAdvanceDays: parseInt(e.target.value, 10) || 90 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Turnover Buffer */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Table Turnover Buffer (Minutes)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={120}
+                value={branchSettings.tableTurnoverBufferMinutes || 15}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, tableTurnoverBufferMinutes: parseInt(e.target.value, 10) || 15 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+
+            {/* Max Table Combination */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
+                Max Table Combination Count
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={branchSettings.maxTableCombination || 3}
+                onChange={(e) =>
+                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
+                    prev ? { ...prev, maxTableCombination: parseInt(e.target.value, 10) || 3 } : prev
+                  )
+                }
+                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ASSIGNMENT MODAL */}
       {assignmentModalRes && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -615,14 +901,14 @@ export function ReservationManagementClient({
               <div className="space-y-4">
                 <div className="text-xs font-semibold text-slate-700">Available Tables:</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {availabilityResult.availableTables.map((t) => {
+                  {availabilityResult.availableTables.map((t: DiningTableDTO) => {
                     const isSelected = selectedTableIds.includes(t.id);
                     return (
                       <button
                         key={t.id}
                         onClick={() => {
                           if (isSelected) {
-                            setSelectedTableIds(selectedTableIds.filter((id) => id !== t.id));
+                            setSelectedTableIds(selectedTableIds.filter((id: string) => id !== t.id));
                           } else {
                             setSelectedTableIds([...selectedTableIds, t.id]);
                           }

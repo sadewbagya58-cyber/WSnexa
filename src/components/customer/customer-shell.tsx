@@ -18,6 +18,7 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
   const desktopNavItems = [
     { label: 'Home', href: '/customer' },
     { label: 'Explore', href: '/explore' },
+    { label: 'Reservations', href: '/customer/reservations' },
     { label: 'Orders', href: '/customer/orders' },
     { label: 'Favorites', href: '/customer/favorites' },
     { label: 'Loyalty', href: '/customer/loyalty' },
@@ -27,6 +28,7 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, children 
   const mobileNavItems = [
     { label: 'Home', href: '/customer', icon: '🏠' },
     { label: 'Explore', href: '/explore', icon: '🔍' },
+    { label: 'Reservations', href: '/customer/reservations', icon: '📅' },
     { label: 'Orders', href: '/customer/orders', icon: '🧾' },
     { label: 'Loyalty', href: '/customer/loyalty', icon: '🎁' },
     { label: 'Profile', href: '/customer/profile', icon: '👤' },

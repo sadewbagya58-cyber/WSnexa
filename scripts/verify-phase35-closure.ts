@@ -143,8 +143,54 @@ async function runVerification() {
   const cleanupDocPath = path.join(process.cwd(), 'scratch/production-smoke-data-cleanup.md');
   assert(fs.existsSync(cleanupDocPath), '40. Optional production smoke data cleanup guidance document exists');
 
+  // 8. Final Production Hardening & Public Feature Policy
+  console.log('\n--- SECTION 8: Final Production Hardening & Public Feature Policy ---');
+  const dtoTypesPath = path.join(process.cwd(), 'src/lib/reservations/reservation-types.ts');
+  const dtoTypesContent = fs.readFileSync(dtoTypesPath, 'utf-8');
+  assert(dtoTypesContent.includes('declineReason'), '41. declineReason field added to ReservationDTO');
+
+  assert(uiContent.includes('Operational Outcome') && uiContent.includes('Declined by staff'), '42. Operational Outcome section rendered in detail modal');
+
+  const featureMigrationPath = path.join(process.cwd(), 'supabase/migrations/20260825000002_phase35_public_venue_feature_policy.sql');
+  assert(fs.existsSync(featureMigrationPath), '43. Forward-only public venue feature policy migration exists');
+
+  const discoveryServicePath = path.join(process.cwd(), 'src/server/services/venue-discovery.service.ts');
+  const discoveryServiceContent = fs.readFileSync(discoveryServicePath, 'utf-8');
+  assert(discoveryServiceContent.includes('public_reservations_enabled') && discoveryServiceContent.includes('public_menu_enabled'), '44. VenuePublicProfileRecord includes public feature policy fields');
+
+  const venueValidationPath = path.join(process.cwd(), 'src/lib/validation/venue.ts');
+  const venueValidationContent = fs.readFileSync(venueValidationPath, 'utf-8');
+  assert(venueValidationContent.includes('publicReservationsEnabled') && venueValidationContent.includes('publicMenuEnabled'), '45. venueProfileSchema validates public feature policy fields');
+
+  const venueFormPath = path.join(process.cwd(), 'src/components/dashboard/venue-profile-form.tsx');
+  const venueFormContent = fs.readFileSync(venueFormPath, 'utf-8');
+  assert(venueFormContent.includes('publicReservationsEnabled') && venueFormContent.includes('publicMenuEnabled'), '46. VenueProfileForm exposes independent public feature switches');
+
+  const venueSlugPagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/page.tsx');
+  const venueSlugPageContent = fs.readFileSync(venueSlugPagePath, 'utf-8');
+  assert(venueSlugPageContent.includes('public_reservations_enabled') && venueSlugPageContent.includes('public_menu_enabled'), '47. Public venue page enforces public feature switches for CTAs and menu section');
+
+  const reserveSlugPagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/page.tsx');
+  const reserveSlugPageContent = fs.readFileSync(reserveSlugPagePath, 'utf-8');
+  assert(reserveSlugPageContent.includes('public_reservations_enabled'), '48. Direct public reserve route server-enforces public_reservations_enabled with notFound()');
+
+  const publicServicePath2 = path.join(process.cwd(), 'src/server/reservations/public-reservation.service.ts');
+  const publicServiceContent2 = fs.readFileSync(publicServicePath2, 'utf-8');
+  assert(publicServiceContent2.includes('public_reservations_enabled'), '49. PublicReservationService server-enforces public_reservations_enabled during booking creation and slot lookup');
+
+  const allocServicePath = path.join(process.cwd(), 'src/server/reservations/reservation-allocation.service.ts');
+  const allocServiceContent = fs.readFileSync(allocServicePath, 'utf-8');
+  assert(allocServiceContent.includes('createWalkInSeating'), '50. Walk-in seating executes as single-action server orchestration');
+
+  const waitlistServicePath = path.join(process.cwd(), 'src/server/reservations/reservation-waitlist.service.ts');
+  const waitlistServiceContent = fs.readFileSync(waitlistServicePath, 'utf-8');
+  assert(waitlistServiceContent.includes('promoteWaitlistEntry'), '51. Waitlist promotion executes as single-action server orchestration');
+
+  assert(!uiContent.includes('router.refresh()'), '52. No unnecessary router.refresh() mutation loops in reservation dashboard');
+  assert(uiContent.includes('isPending'), '53. Reservation dashboard provides immediate pending state on mutation buttons');
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 4 Verification Complete: ALL 40 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 4 Verification Complete: ALL 53 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

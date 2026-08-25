@@ -197,7 +197,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
            * click failures on mobile Safari and some Android browsers.
            */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
-            {venue.qr_token && hasOrdering && (
+            {venue.qr_token && hasOrdering && (venue.public_menu_enabled ?? true) && (
               <Link href={`/m/${venue.qr_token}`} className={ctaPrimary}>
                 <span aria-hidden>📖</span> View Menu &amp; Order
               </Link>
@@ -213,7 +213,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               </a>
             )}
 
-            {reservationSettings?.reservationsEnabled && (
+            {reservationSettings?.reservationsEnabled && (venue.public_reservations_enabled ?? true) && (
               <Link href={`/venues/${venue.slug}/reserve`} className={ctaDark}>
                 <span aria-hidden>📅</span> Reserve Table
               </Link>
@@ -249,7 +249,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
             )}
 
             {/* Menu Preview */}
-            {menuPreview.length > 0 && (
+            {menuPreview.length > 0 && (venue.public_menu_enabled ?? true) && (
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-black text-zinc-950">Popular Menu Items</h3>

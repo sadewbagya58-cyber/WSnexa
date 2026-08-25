@@ -34,6 +34,8 @@ export interface VenuePublicProfileRecord {
   price_level: number;
   is_published: boolean;
   is_accepting_orders: boolean;
+  public_reservations_enabled?: boolean;
+  public_menu_enabled?: boolean;
   featured_branch_id: string | null;
   created_at: string;
   updated_at: string;

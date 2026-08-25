@@ -31,6 +31,8 @@ interface ReservationRow {
   cancelled_at?: string | null;
   cancelled_by_user_id?: string | null;
   cancellation_reason?: string | null;
+  declined_at?: string | null;
+  decline_reason?: string | null;
   arrived_at?: string | null;
   seated_at?: string | null;
   completed_at?: string | null;
@@ -201,6 +203,8 @@ export class ReservationQueryService {
       cancelledAt: row.cancelled_at || null,
       cancelledByUserId: row.cancelled_by_user_id || null,
       cancellationReason: row.cancellation_reason || null,
+      declinedAt: row.declined_at || null,
+      declineReason: row.decline_reason || null,
       arrivedAt: row.arrived_at || null,
       seatedAt: row.seated_at || null,
       completedAt: row.completed_at || null,

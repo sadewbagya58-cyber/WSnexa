@@ -80,6 +80,8 @@ export const venueProfileSchema = z.object({
   priceLevel: z.number().int().min(1).max(4).default(2),
   isPublished: z.boolean().default(false),
   isAcceptingOrders: z.boolean().default(true),
+  publicReservationsEnabled: z.boolean().default(true),
+  publicMenuEnabled: z.boolean().default(true),
   featuredBranchId: z.string().uuid('Invalid featured branch ID').optional().nullable(),
   bookingUrl: z.string().url('Invalid Booking.com URL').optional().nullable().or(z.literal('')),
   agodaUrl: z.string().url('Invalid Agoda URL').optional().nullable().or(z.literal('')),

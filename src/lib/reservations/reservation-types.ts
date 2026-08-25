@@ -46,6 +46,8 @@ export interface ReservationDTO {
   cancelledAt: string | null;
   cancelledByUserId: string | null;
   cancellationReason: string | null;
+  declinedAt?: string | null;
+  declineReason?: string | null;
   arrivedAt: string | null;
   seatedAt: string | null;
   completedAt: string | null;

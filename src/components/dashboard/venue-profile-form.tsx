@@ -40,6 +40,8 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     priceLevel: initialProfile?.price_level || 2,
     isPublished: initialProfile?.is_published || false,
     isAcceptingOrders: initialProfile?.is_accepting_orders ?? true,
+    publicReservationsEnabled: initialProfile?.public_reservations_enabled ?? true,
+    publicMenuEnabled: initialProfile?.public_menu_enabled ?? true,
     featuredBranchId: initialProfile?.featured_branch_id || '',
     bookingUrl: initialProfile?.booking_url || '',
     agodaUrl: initialProfile?.agoda_url || '',
@@ -560,6 +562,43 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
                 className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Public Features Section */}
+        <div className="border-t border-zinc-100 pt-4 space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Public Features</h3>
+          <p className="text-xs text-zinc-500">
+            Choose which guest-facing features appear on your public venue profile. Neither setting is required to publish your venue profile.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <label className="flex items-start gap-3 p-3 rounded-2xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 cursor-pointer">
+              <input
+                type="checkbox"
+                name="publicReservationsEnabled"
+                checked={formData.publicReservationsEnabled}
+                onChange={handleChange}
+                className="w-4 h-4 text-amber-600 rounded mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-bold text-zinc-900 block">Allow guests to reserve a table</span>
+                <span className="text-[11px] text-zinc-500">Exposes the &quot;Reserve Table&quot; CTA and public booking flow on your profile.</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 p-3 rounded-2xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 cursor-pointer">
+              <input
+                type="checkbox"
+                name="publicMenuEnabled"
+                checked={formData.publicMenuEnabled}
+                onChange={handleChange}
+                className="w-4 h-4 text-amber-600 rounded mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-bold text-zinc-900 block">Show menu on public venue</span>
+                <span className="text-[11px] text-zinc-500">Exposes published active menu items and ordering CTAs on your profile.</span>
+              </div>
+            </label>
           </div>
         </div>
 

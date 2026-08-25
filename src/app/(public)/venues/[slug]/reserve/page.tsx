@@ -43,7 +43,7 @@ export default async function ReservePage({ params }: ReservePageProps) {
     venue.featured_branch_id
   );
 
-  if (!settings.reservationsEnabled) {
+  if (!settings.reservationsEnabled || (venue as unknown as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) {
     notFound();
   }
 

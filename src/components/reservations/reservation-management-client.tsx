@@ -1304,6 +1304,87 @@ export function ReservationManagementClient({
               )}
             </div>
 
+            {/* Operational Outcome Section */}
+            {['DECLINED', 'CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(detailModalRes.status) && (
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1 text-xs font-sans">
+                <div className="font-bold text-slate-900 uppercase tracking-wider text-[10px] pb-1 border-b border-slate-200">
+                  Operational Outcome
+                </div>
+
+                {detailModalRes.status === 'DECLINED' && (
+                  <>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-slate-500 font-medium">Outcome:</span>
+                      <span className="font-bold text-rose-700">Declined by staff</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-medium">Reason:</span>
+                      <span className="font-semibold text-slate-800">{detailModalRes.declineReason || 'No reason provided'}</span>
+                    </div>
+                    {detailModalRes.declinedAt && (
+                      <div className="flex justify-between text-slate-500 text-[11px]">
+                        <span>Time:</span>
+                        <span>{new Date(detailModalRes.declinedAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {detailModalRes.status === 'CANCELLED' && (
+                  <>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-slate-500 font-medium">Outcome:</span>
+                      <span className="font-bold text-rose-700">Cancelled</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-medium">Reason:</span>
+                      <span className="font-semibold text-slate-800">{detailModalRes.cancellationReason || 'No reason provided'}</span>
+                    </div>
+                    {detailModalRes.cancelledAt && (
+                      <div className="flex justify-between text-slate-500 text-[11px]">
+                        <span>Time:</span>
+                        <span>{new Date(detailModalRes.cancelledAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {detailModalRes.status === 'NO_SHOW' && (
+                  <>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-slate-500 font-medium">Outcome:</span>
+                      <span className="font-bold text-slate-700">No-Show</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-medium">Reason:</span>
+                      <span className="font-semibold text-slate-800">{detailModalRes.cancellationReason || 'No reason provided'}</span>
+                    </div>
+                    {detailModalRes.noShowAt && (
+                      <div className="flex justify-between text-slate-500 text-[11px]">
+                        <span>Time:</span>
+                        <span>{new Date(detailModalRes.noShowAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {detailModalRes.status === 'COMPLETED' && (
+                  <>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-slate-500 font-medium">Outcome:</span>
+                      <span className="font-bold text-emerald-700">Completed Session</span>
+                    </div>
+                    {detailModalRes.completedAt && (
+                      <div className="flex justify-between text-slate-500 text-[11px]">
+                        <span>Time:</span>
+                        <span>{new Date(detailModalRes.completedAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Status Event Timeline Audit */}
             <div className="space-y-2 pt-2 border-t">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Lifecycle Status History</h4>

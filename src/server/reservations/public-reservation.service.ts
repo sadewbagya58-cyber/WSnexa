@@ -54,7 +54,7 @@ export class PublicReservationService {
     // Lock to published branch strictly
     const branchId = venue.featured_branch_id;
     const settings = await ReservationSettingsService.getBranchSettings(venue.business_id, branchId);
-    if (!settings.reservationsEnabled) return [];
+    if (!settings.reservationsEnabled || (venue as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) return [];
 
     if (params.partySize < settings.minimumPartySize || params.partySize > settings.maximumPartySize) {
       return [];
@@ -244,7 +244,7 @@ export class PublicReservationService {
     }
 
     const settings = await ReservationSettingsService.getBranchSettings(venue.business_id, branchId);
-    if (!settings.reservationsEnabled) {
+    if (!settings.reservationsEnabled || (venue as { public_reservations_enabled?: boolean }).public_reservations_enabled === false) {
       throw createDomainError('Reservations are currently disabled for this venue.', 'RESERVATIONS_DISABLED');
     }
 

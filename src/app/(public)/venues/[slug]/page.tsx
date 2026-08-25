@@ -76,7 +76,6 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (l) => l.toUpperCase());
 
-  const hasOrdering = venue.has_wsnexa_ordering ?? venue.is_accepting_orders;
   const directionsUrl = getGoogleMapsDirectionsUrl(
     venue.latitude,
     venue.longitude,
@@ -391,12 +390,6 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
           <div className="hidden lg:block lg:sticky lg:top-24 space-y-4">
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
               <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">Venue &amp; Booking Options</h3>
-
-              {venue.qr_token && hasOrdering && (
-                <Link href={`/m/${venue.qr_token}`} className={ctaPrimary}>
-                  <span aria-hidden>📖</span> View Menu &amp; Order Online
-                </Link>
-              )}
 
               <a href={directionsUrl} target="_blank" rel="noreferrer" className={ctaOutline}>
                 <span aria-hidden>🧭</span> Get Directions in Google Maps

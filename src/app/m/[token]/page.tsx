@@ -54,8 +54,14 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const availableRewards = await LoyaltyService.getAvailableRewards(businessId);
-  const loyaltyAccount = user ? await LoyaltyService.getCustomerAccount(user.id, businessId) : null;
+  const { SubscriptionService } = await import('@/server/services/subscription.service');
+  const [availableRewards, loyaltyAccount, subContext] = await Promise.all([
+    LoyaltyService.getAvailableRewards(businessId),
+    user ? LoyaltyService.getCustomerAccount(user.id, businessId) : Promise.resolve(null),
+    SubscriptionService.resolveSubscriptionContext(businessId),
+  ]);
+
+  const isOrderingUnavailable = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
 
   return (
     <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
@@ -70,6 +76,7 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
         isAuthenticated={!!user}
         loyaltyAccount={loyaltyAccount}
         availableRewards={availableRewards}
+        isOrderingUnavailable={isOrderingUnavailable}
       />
     </CartProvider>
   );

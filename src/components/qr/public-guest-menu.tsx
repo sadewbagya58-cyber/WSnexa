@@ -90,6 +90,7 @@ interface PublicGuestMenuProps {
   isAuthenticated?: boolean;
   loyaltyAccount?: CustomerLoyaltyAccountRecord | null;
   availableRewards?: LoyaltyRewardRecord[];
+  isOrderingUnavailable?: boolean;
 }
 
 export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
@@ -103,6 +104,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   isAuthenticated = false,
   loyaltyAccount = null,
   availableRewards = [],
+  isOrderingUnavailable = false,
 }) => {
   const { state, addLine, editLine, setConfirmedTable } = useCart();
 
@@ -304,6 +306,18 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       />
 
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
+        {isOrderingUnavailable && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3 text-xs text-amber-950">
+            <span className="text-xl">💳</span>
+            <div>
+              <span className="font-extrabold uppercase tracking-wider text-[10px] block text-amber-900">Ordering Unavailable</span>
+              <p className="text-amber-950 font-medium leading-relaxed">
+                Ordering is currently unavailable for this venue. Menu is view-only.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Table Selection Prompt Banner */}
         {branch.require_table_selection && !isTableAccessVerified(state.confirmedTable) && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">

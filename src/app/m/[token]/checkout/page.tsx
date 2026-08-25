@@ -54,10 +54,30 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { data: { user } } = await supabase.auth.getUser();
   const isLoggedIn = Boolean(user);
 
-  const [paymentMethods, securitySettings] = await Promise.all([
+  const { SubscriptionService } = await import('@/server/services/subscription.service');
+  const [paymentMethods, securitySettings, subContext] = await Promise.all([
     BranchPaymentService.getBranchPaymentMethods(branchId),
     OrderSecurityService.getBranchSecuritySettings(branchId),
+    SubscriptionService.resolveSubscriptionContext((payload as unknown as { business: { id: string } }).business.id),
   ]);
+
+  const isOrderingUnavailable = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
+
+  if (isOrderingUnavailable) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 antialiased">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg border border-zinc-200 space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-3xl">
+            💳
+          </div>
+          <h1 className="text-xl font-bold text-zinc-950">Ordering Unavailable</h1>
+          <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+            Ordering is currently unavailable for this venue. Please ask your server for assistance.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const enabledPaymentMethods = paymentMethods.filter((m) => m.is_enabled);
 

@@ -54,8 +54,9 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
   } = await supabase.auth.getUser();
 
   const { ReservationSettingsService } = await import('@/server/reservations/reservation-settings.service');
+  const { SubscriptionService } = await import('@/server/services/subscription.service');
 
-  const [menuPreview, reviews, isFav, reviewEligibility, reservationSettings] = await Promise.all([
+  const [menuPreview, reviews, isFav, reviewEligibility, reservationSettings, subContext] = await Promise.all([
     VenueDiscoveryService.getVenueMenuPreview(venue.business_id, venue.featured_branch_id),
     VenueReviewService.getVenueReviews(venue.id),
     user ? VenueFavoriteService.isFavorite(user.id, venue.id) : false,
@@ -65,7 +66,10 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
     venue.featured_branch_id
       ? ReservationSettingsService.getBranchSettings(venue.business_id, venue.featured_branch_id)
       : Promise.resolve(null),
+    SubscriptionService.resolveSubscriptionContext(venue.business_id),
   ]);
+
+  const isCommerciallySuspended = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
 
   const priceDisplay = '$'.repeat(venue.price_level || 2);
   const typeFormatted = venue.venue_type
@@ -214,9 +218,15 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
             )}
 
             {reservationSettings?.reservationsEnabled && (venue.public_reservations_enabled ?? true) && (
-              <Link href={`/venues/${venue.slug}/reserve`} className={ctaDark}>
-                <span aria-hidden>📅</span> Reserve Table
-              </Link>
+              isCommerciallySuspended ? (
+                <span className="w-full flex items-center justify-center gap-1.5 min-h-[48px] px-4 py-3 rounded-2xl bg-zinc-200 text-zinc-500 font-extrabold text-xs cursor-not-allowed opacity-75">
+                  <span aria-hidden>📅</span> Reservations Unavailable
+                </span>
+              ) : (
+                <Link href={`/venues/${venue.slug}/reserve`} className={ctaDark}>
+                  <span aria-hidden>📅</span> Reserve Table
+                </Link>
+              )
             )}
 
             {(venue.booking_url || venue.external_booking_url || venue.agoda_url) && (

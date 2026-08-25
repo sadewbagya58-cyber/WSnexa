@@ -300,8 +300,28 @@ async function runVerification() {
   assert(pendingScreenContent.includes('reason === \'platform_suspended\''), '54. PendingAccessScreen handles platform_suspended reason');
   assert(pendingScreenContent.includes('Sign Out / Switch Account'), '55. PendingAccessScreen exposes Sign Out button');
 
+  // 11. Step 2 Public Suspension UX Hotfix Verification
+  console.log('\n--- SECTION 11: Public Suspension UX Hotfix ---');
+  const venuePagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/page.tsx');
+  const venuePageContent = fs.readFileSync(venuePagePath, 'utf-8');
+  assert(venuePageContent.includes('isCommerciallySuspended'), '56. Public venue page checks isCommerciallySuspended');
+  assert(venuePageContent.includes('Reservations Unavailable'), '57. Public venue page renders Reservations Unavailable CTA when suspended');
+
+  const reservePagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/page.tsx');
+  const reservePageContent = fs.readFileSync(reservePagePath, 'utf-8');
+  assert(reservePageContent.includes('isCommerciallySuspended'), '58. Public reserve page checks isCommerciallySuspended');
+  assert(reservePageContent.includes('Table reservations are currently unavailable for this venue.'), '59. Public reserve page renders Reservations Unavailable card when suspended');
+
+  const qrPagePath = path.join(process.cwd(), 'src/app/m/[token]/page.tsx');
+  const qrPageContent = fs.readFileSync(qrPagePath, 'utf-8');
+  assert(qrPageContent.includes('isOrderingUnavailable'), '60. Public QR page checks isOrderingUnavailable');
+
+  const checkoutPagePath = path.join(process.cwd(), 'src/app/m/[token]/checkout/page.tsx');
+  const checkoutPageContent = fs.readFileSync(checkoutPagePath, 'utf-8');
+  assert(checkoutPageContent.includes('Ordering is currently unavailable for this venue.'), '61. Public QR checkout page renders Ordering Unavailable card when suspended');
+
   console.log('\n================================================================');
-  console.log('  V1 Subscription Core Step 2: ALL 55 ASSERTIONS PASSED');
+  console.log('  V1 Subscription Core Step 2: ALL 61 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

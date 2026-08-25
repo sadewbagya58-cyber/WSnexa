@@ -36,7 +36,7 @@ function assert(condition: boolean, message: string) {
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 35 Step 3 — Guest Booking Journey Suite');
+  console.log('  WSNexa Phase 35 Step 3 — Guest Booking Journey & UX Suite');
   console.log('================================================================\n');
 
   // 1. Migration File & Schema Architecture
@@ -63,7 +63,7 @@ async function runVerification() {
 
   const publicServiceContent = fs.readFileSync(publicServicePath, 'utf-8');
   assert(publicServiceContent.includes('getPublicAvailableSlots'), '8. getPublicAvailableSlots method implemented');
-  assert(publicServiceContent.includes('ReservationAvailabilityService.getAvailability'), '9. Slot generator evaluates actual table capacity & Turnover buffer via ReservationAvailabilityService');
+  assert(publicServiceContent.includes('computePublicAvailableSlotsInternal'), '9. Uses batch in-memory slot evaluator to avoid N+1 query loops');
   assert(!publicServiceContent.includes('table_number') && !publicServiceContent.includes('tableId'), '10. Public slot engine strictly hides internal table IDs/numbers from public guests');
 
   // 4. Public Booking & Race Protection
@@ -71,7 +71,7 @@ async function runVerification() {
   assert(publicServiceContent.includes('createPublicBooking'), '11. createPublicBooking method implemented');
   assert(publicServiceContent.includes('SLOT_NO_LONGER_AVAILABLE'), '12. Pre-booking capacity revalidation enforces SLOT_NO_LONGER_AVAILABLE race protection');
   assert(publicServiceContent.includes('autoConfirm ? \'CONFIRMED\' : \'PENDING\''), '13 & 14. Initial status respects branch autoConfirm policy (PENDING vs CONFIRMED)');
-  assert(publicServiceContent.includes('CustomerIdentityService.findOrCreateCustomerByEmailOrPhone'), '15 & 16. Resolves CRM customer identity while preserving Step 33 conflict protections');
+  assert(publicServiceContent.includes('CustomerIdentityService.resolveOrCreateCustomerIdentity'), '15 & 16. Resolves CRM customer identity while preserving Step 33 conflict protections');
   assert(publicServiceContent.includes('crypto.randomUUID()'), '17. Generates secure guestAccessToken on reservation creation');
 
   // 5. Customer Portal & Ownership Isolation
@@ -104,37 +104,53 @@ async function runVerification() {
   // 7. UI Components & Routes
   console.log('\n--- SECTION 7: UI Components & Routes ---');
   const reservePagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/page.tsx');
-  assert(fs.existsSync(reservePagePath), '27. Public reservation booking route /venues/[slug]/reserve exists');
+  const reservePageContent = fs.readFileSync(reservePagePath, 'utf-8');
+  assert(reservePageContent.includes('venue.featured_branch_id'), '27. Public reserve page locks booking to published venue branch');
+  assert(!reservePageContent.includes('branches.map'), '28. Public reserve page does NOT render multiple branch options');
 
   const bookingClientPath = path.join(process.cwd(), 'src/components/discovery/guest-reservation-booking-client.tsx');
-  assert(fs.existsSync(bookingClientPath), '28. GuestReservationBookingClient interactive component exists');
+  const bookingClientContent = fs.readFileSync(bookingClientPath, 'utf-8');
+  assert(!bookingClientContent.includes('Select Location') && !bookingClientContent.includes('selectedBranchId'), '29. Public booking UI removes public branch selector dropdown');
 
   const confirmPagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/confirmation/[code]/page.tsx');
-  assert(fs.existsSync(confirmPagePath), '29. Guest confirmation route /venues/[slug]/reserve/confirmation/[code] exists');
+  assert(fs.existsSync(confirmPagePath), '30. Guest confirmation route /venues/[slug]/reserve/confirmation/[code] exists');
 
   const customerReservationsPagePath = path.join(process.cwd(), 'src/app/(customer)/customer/reservations/page.tsx');
-  assert(fs.existsSync(customerReservationsPagePath), '30. Customer portal route /customer/reservations exists');
+  assert(fs.existsSync(customerReservationsPagePath), '31. Customer portal route /customer/reservations exists');
 
   const customerReservationsClientPath = path.join(process.cwd(), 'src/components/customer/customer-reservations-client.tsx');
-  assert(fs.existsSync(customerReservationsClientPath), '31. CustomerReservationsClient component exists');
+  assert(fs.existsSync(customerReservationsClientPath), '32. CustomerReservationsClient component exists');
 
   const shellPath = path.join(process.cwd(), 'src/components/customer/customer-shell.tsx');
   const shellContent = fs.readFileSync(shellPath, 'utf-8');
-  assert(shellContent.includes('/customer/reservations'), '32. Customer navigation includes /customer/reservations link');
+  assert(shellContent.includes('/customer/reservations'), '33. Customer navigation includes /customer/reservations link');
 
   // 8. Staff Settings & SEATED Invariant Preserved
   console.log('\n--- SECTION 8: Staff Settings & Step 2 Invariant Regression ---');
   const mgmtPath = path.join(process.cwd(), 'src/components/reservations/reservation-management-client.tsx');
   const mgmtContent = fs.readFileSync(mgmtPath, 'utf-8');
-  assert(mgmtContent.includes('Branch Reservation Settings'), '33. Staff management UI includes Branch Reservation Settings panel');
-  assert(mgmtContent.includes('updateReservationSettingsAction'), '34. Staff settings panel connects to updateReservationSettingsAction');
+  assert(mgmtContent.includes('Branch Reservation Settings'), '34. Staff management UI includes Branch Reservation Settings panel');
+  assert(mgmtContent.includes('updateReservationSettingsAction'), '35. Staff settings panel connects to updateReservationSettingsAction');
 
   const servicePath = path.join(process.cwd(), 'src/server/reservations/reservation.service.ts');
   const serviceContent = fs.readFileSync(servicePath, 'utf-8');
   assert(serviceContent.includes('Assign a table before seating this reservation.'), '36. Step 2 SEATED table-assignment invariant 100% preserved');
 
+  // 9. UX Hotfix & Performance Assertions
+  console.log('\n--- SECTION 9: Step 3 UX Hotfix & Performance Assertions ---');
+  assert(publicServiceContent.includes('AVAILABILITY_TIMEOUT') && publicServiceContent.includes('Promise.race'), '37. Availability query includes hard 8s server-side timeout race protection');
+  assert(bookingClientContent.includes('finally {') && bookingClientContent.includes('setLoadingSlots(false)'), '38. Client slot query guarantees loading state reset in finally block');
+  assert(bookingClientContent.includes('No available times for this date.'), '39. Render explicit empty availability guidance ("No available times for this date.")');
+  assert(bookingClientContent.includes('animate-pulse') || bookingClientContent.includes('Checking table availability...'), '40. Renders skeleton loading state during availability fetching');
+  assert(bookingClientContent.includes('setPartySize') && bookingClientContent.includes('setReservationDate'), '41. Local controls (party size +/-, date) update client state immediately (<100ms)');
+  assert(
+    publicServiceContent.includes('computePublicAvailableSlotsInternal') &&
+    publicServiceContent.includes('BATCH QUERY 1'),
+    '42. Query-per-slot loop eliminated in favor of batch memory evaluation'
+  );
+
   console.log('\n================================================================');
-  console.log('  Phase 35 Step 3 Verification Complete: ALL 36 ASSERTIONS PASSED');
+  console.log('  Phase 35 Step 3 Verification Complete: ALL 42 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

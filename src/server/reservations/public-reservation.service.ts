@@ -15,7 +15,8 @@ import {
 export class PublicReservationService {
   /**
    * Generates bookable public time slots for a venue/branch, date, and party size.
-   * Evaluates branch operational rules and capacity via ReservationAvailabilityService.
+   * Uses bounded batch queries (3 total) and evaluates capacity in memory to avoid N+1 query loops.
+   * Wraps calculation in a hard 8-second timeout for server responsiveness.
    */
   static async getPublicAvailableSlots(params: {
     venueSlug: string;
@@ -23,12 +24,35 @@ export class PublicReservationService {
     reservationDate: string; // YYYY-MM-DD
     partySize: number;
   }): Promise<TimeSlotDTO[]> {
+    const timeoutMs = 8000;
+    const timeoutPromise = new Promise<TimeSlotDTO[]>((_, reject) => {
+      setTimeout(() => {
+        reject(
+          createDomainError(
+            'We couldn\'t load available times. Please try again.',
+            'AVAILABILITY_TIMEOUT'
+          )
+        );
+      }, timeoutMs);
+    });
+
+    return Promise.race([
+      this.computePublicAvailableSlotsInternal(params),
+      timeoutPromise,
+    ]);
+  }
+
+  private static async computePublicAvailableSlotsInternal(params: {
+    venueSlug: string;
+    branchId?: string | null;
+    reservationDate: string;
+    partySize: number;
+  }): Promise<TimeSlotDTO[]> {
     const venue = await VenueDiscoveryService.getVenueBySlug(params.venueSlug);
-    if (!venue) return [];
+    if (!venue || !venue.featured_branch_id) return [];
 
-    const branchId = params.branchId || venue.featured_branch_id;
-    if (!branchId) return [];
-
+    // Lock to published branch strictly
+    const branchId = venue.featured_branch_id;
     const settings = await ReservationSettingsService.getBranchSettings(venue.business_id, branchId);
     if (!settings.reservationsEnabled) return [];
 
@@ -52,45 +76,134 @@ export class PublicReservationService {
       return [];
     }
 
+    const admin = createAdminClient();
+
+    // BATCH QUERY 1: Fetch candidate tables for business & branch
+    const { data: rawTables, error: tableErr } = await admin
+      .from('dining_tables')
+      .select('id, business_id, branch_id, service_area_id, name, capacity, min_capacity, reservations_enabled, status, is_active')
+      .eq('business_id', venue.business_id)
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('capacity', { ascending: true })
+      .order('display_order', { ascending: true });
+
+    if (tableErr || !rawTables) return [];
+
+    const candidateTables = rawTables.map((t) => ({
+      id: t.id,
+      businessId: t.business_id,
+      branchId: t.branch_id,
+      serviceAreaId: t.service_area_id,
+      name: t.name,
+      code: '',
+      tableNumber: 0,
+      capacity: t.capacity || 4,
+      minCapacity: t.min_capacity || 1,
+      reservationsEnabled: t.reservations_enabled !== false,
+      status: t.status,
+      isActive: t.is_active,
+    }));
+
+    const reservableTables = candidateTables.filter((t) => t.reservationsEnabled);
+    if (reservableTables.length === 0) return [];
+
+    // BATCH QUERY 2: Fetch active (unreleased) table assignments
+    const { data: activeAssignments } = await admin
+      .from('reservation_table_assignments')
+      .select('table_id, reservation_id')
+      .eq('business_id', venue.business_id)
+      .eq('branch_id', branchId)
+      .is('released_at', null);
+
+    const assignments = activeAssignments || [];
+    const activeResIds = Array.from(new Set(assignments.map((a) => a.reservation_id)));
+
+    // BATCH QUERY 3: Fetch all blocking reservations for requested date window
+    const dayStartIso = `${params.reservationDate}T00:00:00.000Z`;
+    const dayEndIso = `${params.reservationDate}T23:59:59.999Z`;
+    const blockingStatuses = ['PENDING', 'CONFIRMED', 'ARRIVED', 'SEATED'];
+
+    let blockingReservations: Array<{ id: string; reservation_start_at: string; reservation_end_at: string }> = [];
+
+    if (activeResIds.length > 0) {
+      const { data: resData } = await admin
+        .from('reservations')
+        .select('id, reservation_start_at, reservation_end_at')
+        .eq('business_id', venue.business_id)
+        .eq('branch_id', branchId)
+        .in('id', activeResIds)
+        .in('status', blockingStatuses)
+        .lt('reservation_start_at', dayEndIso)
+        .gt('reservation_end_at', dayStartIso);
+
+      blockingReservations = resData || [];
+    }
+
     const durationMinutes = settings.defaultDurationMinutes || 90;
+    const bufferMinutes = settings.tableTurnoverBufferMinutes || 15;
+    const maxCombinations = settings.maxTableCombination || 3;
+    const minAdvanceMs = settings.minimumAdvanceMinutes * 60 * 1000;
+
     const slots: TimeSlotDTO[] = [];
 
-    // Generate slots from 09:00 to 22:00 at 30-minute intervals
+    // IN-MEMORY SLOT GENERATION (09:00 to 22:00 at 30-minute intervals)
     for (let hour = 9; hour <= 21; hour++) {
       for (const min of [0, 30]) {
         const hourStr = hour.toString().padStart(2, '0');
         const minStr = min.toString().padStart(2, '0');
         const timeStr = `${hourStr}:${minStr}`;
 
-        // Construct ISO start timestamp
-        const startAtIso = new Date(
-          `${params.reservationDate}T${hourStr}:${minStr}:00.000Z`
-        ).toISOString();
+        const startAtIso = `${params.reservationDate}T${hourStr}:${minStr}:00.000Z`;
         const startAtMs = new Date(startAtIso).getTime();
 
-        // Enforce minimum advance minutes
-        const minAdvanceMs = settings.minimumAdvanceMinutes * 60 * 1000;
         if (startAtMs < now.getTime() + minAdvanceMs) {
           continue;
         }
 
         const endAtIso = new Date(startAtMs + durationMinutes * 60 * 1000).toISOString();
+        const reqEndWithBufferMs = new Date(endAtIso).getTime() + bufferMinutes * 60 * 1000;
 
-        // Check actual dining table capacity & overlap
-        const availability = await ReservationAvailabilityService.getAvailability({
-          businessId: venue.business_id,
-          branchId,
-          partySize: params.partySize,
-          reservationStartAt: startAtIso,
-          reservationEndAt: endAtIso,
-        });
+        // In-memory overlap evaluation
+        const overlappingResIdSet = new Set(
+          blockingReservations
+            .filter((r) => {
+              const rStart = new Date(r.reservation_start_at).getTime();
+              const rEnd = new Date(r.reservation_end_at).getTime();
+              return rStart < reqEndWithBufferMs && rEnd > startAtMs;
+            })
+            .map((r) => r.id)
+        );
 
-        const isAvailable =
-          availability.availableTables.length > 0 ||
-          availability.recommendedSingleTable !== null ||
-          availability.recommendedCombination !== null;
+        const occupiedTableIdSet = new Set(
+          assignments
+            .filter((a) => overlappingResIdSet.has(a.reservation_id))
+            .map((a) => a.table_id)
+        );
 
-        // Format 12-hour display time (e.g. 6:00 PM)
+        const availableTables = reservableTables.filter((t) => !occupiedTableIdSet.has(t.id));
+
+        // Evaluate single table fit
+        let recommendedSingleTable =
+          availableTables.find((t) => params.partySize >= t.minCapacity && params.partySize <= t.capacity) || null;
+        if (!recommendedSingleTable) {
+          recommendedSingleTable = availableTables.find((t) => t.capacity >= params.partySize) || null;
+        }
+
+        // Evaluate multi-table combination if single table fit unavailable
+        let recommendedCombination = null;
+        if (!recommendedSingleTable && maxCombinations >= 2) {
+          const combinations = ReservationAvailabilityService.computeMultiTableCombinations(
+            availableTables,
+            params.partySize,
+            maxCombinations
+          );
+          recommendedCombination = combinations.length > 0 ? combinations[0] : null;
+        }
+
+        const isAvailable = recommendedSingleTable !== null || recommendedCombination !== null;
+
         const hourNum = parseInt(hourStr, 10);
         const ampm = hourNum >= 12 ? 'PM' : 'AM';
         const displayHour = hourNum % 12 === 0 ? 12 : hourNum % 12;
@@ -113,17 +226,19 @@ export class PublicReservationService {
   /**
    * Processes a public guest booking.
    * Re-evaluates slot capacity for race protection before final DB insertion.
+   * Derives and locks branch to published venue branch.
    */
   static async createPublicBooking(
     input: PublicBookingInput,
     actorUserId?: string | null
   ): Promise<PublicBookingResultDTO> {
     const venue = await VenueDiscoveryService.getVenueBySlug(input.venueSlug);
-    if (!venue) {
-      throw createDomainError('Venue not found.', 'NOT_FOUND');
+    if (!venue || !venue.featured_branch_id) {
+      throw createDomainError('Venue not found or not published.', 'NOT_FOUND');
     }
 
-    const branchId = input.branchId || venue.featured_branch_id;
+    // Lock to published branch strictly
+    const branchId = venue.featured_branch_id;
     if (!branchId) {
       throw createDomainError('No valid branch selected.', 'INVALID_INPUT');
     }

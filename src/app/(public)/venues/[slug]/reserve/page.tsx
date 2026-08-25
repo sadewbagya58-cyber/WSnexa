@@ -26,20 +26,24 @@ export default async function ReservePage({ params }: ReservePageProps) {
   const { slug } = await params;
   const venue = await VenueDiscoveryService.getVenueBySlug(slug);
 
-  if (!venue) notFound();
+  if (!venue || !venue.featured_branch_id) notFound();
 
   const admin = createAdminClient();
-  const { data: branches } = await admin
+  const { data: branch } = await admin
     .from('branches')
     .select('id, name')
-    .eq('business_id', venue.business_id);
+    .eq('id', venue.featured_branch_id)
+    .eq('business_id', venue.business_id)
+    .single();
 
-  const featuredBranchId = venue.featured_branch_id || (branches && branches[0]?.id);
-  const settings = featuredBranchId
-    ? await ReservationSettingsService.getBranchSettings(venue.business_id, featuredBranchId)
-    : null;
+  if (!branch) notFound();
 
-  if (settings && !settings.reservationsEnabled) {
+  const settings = await ReservationSettingsService.getBranchSettings(
+    venue.business_id,
+    venue.featured_branch_id
+  );
+
+  if (!settings.reservationsEnabled) {
     notFound();
   }
 
@@ -66,11 +70,11 @@ export default async function ReservePage({ params }: ReservePageProps) {
         venue={{
           display_name: venue.display_name,
           slug: venue.slug,
-          featured_branch_id: featuredBranchId || '',
+          featured_branch_id: venue.featured_branch_id,
           logo_url: venue.logo_url,
           cover_image_url: venue.cover_image_url,
         }}
-        branches={branches || []}
+        branchName={branch.name}
         initialSettings={settings}
         currentUser={currentUser}
       />

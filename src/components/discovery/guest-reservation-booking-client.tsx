@@ -14,23 +14,18 @@ interface GuestReservationBookingClientProps {
     logo_url?: string | null;
     cover_image_url?: string | null;
   };
-  branches: Array<{ id: string; name: string }>;
+  branchName: string;
   initialSettings: ReservationSettingsDTO | null;
   currentUser: { id: string; name?: string; email?: string; phone?: string } | null;
 }
 
 export function GuestReservationBookingClient({
   venue,
-  branches,
+  branchName,
   initialSettings,
   currentUser,
 }: GuestReservationBookingClientProps) {
   const router = useRouter();
-
-  // State
-  const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    branches.length > 0 ? branches[0].id : venue.featured_branch_id
-  );
 
   const todayStr = new Date().toISOString().split('T')[0];
   const [reservationDate, setReservationDate] = useState<string>(todayStr);
@@ -51,29 +46,43 @@ export function GuestReservationBookingClient({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Load available time slots when branch, date, or partySize changes
+  // Load available time slots when date or partySize changes
   useEffect(() => {
     let active = true;
+
     async function loadSlots() {
       setLoadingSlots(true);
       setErrorMsg(null);
       setSelectedSlot(null);
 
-      const res = await getPublicAvailableSlotsAction({
-        venueSlug: venue.slug,
-        branchId: selectedBranchId,
-        reservationDate,
-        partySize,
-      });
+      try {
+        const res = await getPublicAvailableSlotsAction({
+          venueSlug: venue.slug,
+          reservationDate,
+          partySize,
+        });
 
-      if (active) {
-        if (res.ok) {
-          setSlots(res.data);
-        } else {
-          setSlots([]);
-          setErrorMsg(res.error.message);
+        if (active) {
+          if (res.ok) {
+            setSlots(res.data);
+          } else {
+            setSlots([]);
+            setErrorMsg(res.error.message);
+          }
         }
-        setLoadingSlots(false);
+      } catch (err: unknown) {
+        if (active) {
+          setSlots([]);
+          setErrorMsg(
+            typeof err === 'object' && err && 'message' in err
+              ? (err as { message: string }).message
+              : 'We couldn\'t load available times. Please try again.'
+          );
+        }
+      } finally {
+        if (active) {
+          setLoadingSlots(false);
+        }
       }
     }
 
@@ -82,7 +91,7 @@ export function GuestReservationBookingClient({
     return () => {
       active = false;
     };
-  }, [venue.slug, selectedBranchId, reservationDate, partySize]);
+  }, [venue.slug, reservationDate, partySize]);
 
   async function handleSubmitBooking(e: React.FormEvent) {
     e.preventDefault();
@@ -111,7 +120,7 @@ export function GuestReservationBookingClient({
 
     const result = await createPublicBookingAction({
       venueSlug: venue.slug,
-      branchId: selectedBranchId,
+      branchId: venue.featured_branch_id,
       guestName: guestName.trim(),
       guestEmail: guestEmail.trim() || undefined,
       guestPhone: guestPhone.trim() || undefined,
@@ -149,19 +158,29 @@ export function GuestReservationBookingClient({
         <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight">
           Reserve a Table at {venue.display_name}
         </h1>
-        <p className="text-xs font-medium text-zinc-600">
-          Book your dining experience in real-time with instant verification.
-        </p>
+        <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
+          <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+            📍 {branchName}
+          </span>
+          <span>• Instant Verification</span>
+        </div>
       </div>
 
       {errorMsg && (
-        <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-extrabold">
-          ⚠️ {errorMsg}
+        <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-extrabold flex items-center justify-between">
+          <span>⚠️ {errorMsg}</span>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="text-rose-500 hover:text-rose-700 font-black text-sm ml-2"
+          >
+            ✕
+          </button>
         </div>
       )}
 
       <form onSubmit={handleSubmitBooking} className="space-y-8">
-        {/* Step 1: Branch, Party Size, Date */}
+        {/* Step 1: Party Size & Date */}
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-5">
           <h2 className="text-base font-black text-zinc-950 flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-amber-500 text-black text-xs font-black flex items-center justify-center">
@@ -169,24 +188,6 @@ export function GuestReservationBookingClient({
             </span>
             Party &amp; Date
           </h2>
-
-          {/* Branch selector if multi-branch */}
-          {branches.length > 1 && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-zinc-700 uppercase tracking-wider">Select Location</label>
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-zinc-300 bg-white text-xs font-extrabold text-zinc-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Party Size Selector */}
@@ -197,7 +198,7 @@ export function GuestReservationBookingClient({
                   type="button"
                   onClick={() => setPartySize((p) => Math.max(minParty, p - 1))}
                   disabled={partySize <= minParty}
-                  className="w-12 h-12 rounded-2xl border border-zinc-300 bg-zinc-100 disabled:opacity-40 text-zinc-900 font-black text-lg flex items-center justify-center touch-manipulation"
+                  className="w-12 h-12 rounded-2xl border border-zinc-300 bg-zinc-100 disabled:opacity-40 text-zinc-900 font-black text-lg flex items-center justify-center touch-manipulation hover:bg-zinc-200 active:bg-zinc-300 transition-colors"
                 >
                   -
                 </button>
@@ -208,7 +209,7 @@ export function GuestReservationBookingClient({
                   type="button"
                   onClick={() => setPartySize((p) => Math.min(maxParty, p + 1))}
                   disabled={partySize >= maxParty}
-                  className="w-12 h-12 rounded-2xl border border-zinc-300 bg-zinc-100 disabled:opacity-40 text-zinc-900 font-black text-lg flex items-center justify-center touch-manipulation"
+                  className="w-12 h-12 rounded-2xl border border-zinc-300 bg-zinc-100 disabled:opacity-40 text-zinc-900 font-black text-lg flex items-center justify-center touch-manipulation hover:bg-zinc-200 active:bg-zinc-300 transition-colors"
                 >
                   +
                 </button>
@@ -239,12 +240,26 @@ export function GuestReservationBookingClient({
           </h2>
 
           {loadingSlots ? (
-            <div className="py-8 text-center text-xs font-extrabold text-zinc-400 animate-pulse">
-              Checking table availability...
+            <div className="py-6 space-y-3">
+              <div className="text-center text-xs font-extrabold text-amber-700 flex items-center justify-center gap-2 animate-pulse">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                Checking table availability...
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div
+                    key={i}
+                    className="min-h-[48px] rounded-2xl bg-zinc-100 border border-zinc-200 animate-pulse"
+                  />
+                ))}
+              </div>
             </div>
           ) : slots.length === 0 ? (
-            <div className="py-8 text-center text-xs font-extrabold text-zinc-500 bg-zinc-50 rounded-2xl border border-dashed border-zinc-300">
-              No available time slots for {partySize} guests on this date. Please try another date or party size.
+            <div className="py-8 text-center text-xs font-extrabold text-zinc-600 bg-zinc-50 rounded-2xl border border-dashed border-zinc-300 space-y-1.5 p-4">
+              <p className="text-sm font-black text-zinc-800">No available times for this date.</p>
+              <p className="text-zinc-500 text-xs">
+                Please try choosing another date or changing the party size ({partySize} guests).
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-72 overflow-y-auto pr-1">
@@ -258,7 +273,7 @@ export function GuestReservationBookingClient({
                     onClick={() => setSelectedSlot(slot)}
                     className={`min-h-[48px] px-3 py-2.5 rounded-2xl border text-xs font-extrabold transition-all touch-manipulation ${
                       isSelected
-                        ? 'bg-amber-500 text-black border-amber-500 ring-2 ring-amber-400 shadow-xs'
+                        ? 'bg-amber-500 text-black border-amber-500 ring-2 ring-amber-400 shadow-xs scale-[1.02]'
                         : slot.available
                         ? 'bg-white text-zinc-950 border-zinc-300 hover:border-amber-400 active:bg-amber-50'
                         : 'bg-zinc-100 text-zinc-400 border-zinc-200 line-through opacity-50 cursor-not-allowed'

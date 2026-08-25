@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toggleAdminBusinessStatusAction } from '@/server/actions/super-admin';
+import { AdminSubscriptionControl } from '@/components/admin/admin-subscription-control';
+import { ResolvedSubscriptionContext, ResourceUsageSnapshot } from '@/server/services/subscription.service';
 
 interface BranchItem {
   id: string;
@@ -51,9 +53,27 @@ interface BusinessDetailProps {
       is_published: boolean;
     } | null;
   };
+  initialSubContext: ResolvedSubscriptionContext;
+  initialUsage: ResourceUsageSnapshot;
+  initialHistory: Array<{
+    id: string;
+    event_type: string;
+    previous_status: string;
+    new_status: string;
+    previous_plan: string;
+    new_plan: string;
+    reason: string;
+    created_at: string;
+    actor_type: string;
+  }>;
 }
 
-export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
+export function AdminBusinessDetailClient({
+  business,
+  initialSubContext,
+  initialUsage,
+  initialHistory,
+}: BusinessDetailProps) {
   const [status, setStatus] = useState(business.status);
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; text: string } | null>(null);
@@ -141,6 +161,14 @@ export function AdminBusinessDetailClient({ business }: BusinessDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* Super Admin Subscription Management Control */}
+      <AdminSubscriptionControl
+        businessId={business.id}
+        initialSubContext={initialSubContext}
+        initialUsage={initialUsage}
+        initialHistory={initialHistory}
+      />
 
       {/* Grid: Details & Associated Resources */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

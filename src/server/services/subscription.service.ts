@@ -440,4 +440,597 @@ export class SubscriptionService {
 
     return created as BusinessSubscriptionRecord;
   }
+
+  // ── SUPER ADMIN MANAGEMENT METHODS ──────────────────────────────────────────
+
+  /**
+   * Helper to record a subscription event and Super Admin audit log.
+   */
+  static async recordSubscriptionEventAndAudit({
+    businessId,
+    actorId,
+    actorType = 'super_admin',
+    eventType,
+    previousStatus,
+    newStatus,
+    previousPlan,
+    newPlan,
+    reason,
+    metadata = {},
+  }: {
+    businessId: string;
+    actorId: string;
+    actorType?: 'super_admin' | 'business_owner' | 'system_reconciliation';
+    eventType: string;
+    previousStatus: string;
+    newStatus: string;
+    previousPlan: string;
+    newPlan: string;
+    reason: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    const admin = createAdminClient();
+    const dedupeKey = `sub_evt_${businessId}_${eventType}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    await admin.from('business_subscription_events').insert({
+      business_id: businessId,
+      actor_id: actorId,
+      actor_type: actorType,
+      event_type: eventType,
+      previous_status: previousStatus,
+      new_status: newStatus,
+      previous_plan: previousPlan,
+      new_plan: newPlan,
+      reason: reason,
+      metadata,
+      dedupe_key: dedupeKey,
+    });
+
+    try {
+      await admin.from('audit_logs').insert({
+        business_id: businessId,
+        actor_id: actorId,
+        action: `SUBSCRIPTION_${eventType.toUpperCase()}`,
+        entity_type: 'business_subscription',
+        entity_id: businessId,
+        details: { previousStatus, newStatus, previousPlan, newPlan, reason, ...metadata },
+      });
+    } catch {
+      // Audit log creation fail-safe
+    }
+  }
+
+  /**
+   * Emits in-app notification to Business Owner(s) for subscription state changes.
+   */
+  static async notifyBusinessOwner(
+    businessId: string,
+    notificationType: string,
+    title: string,
+    message: string
+  ): Promise<void> {
+    const admin = createAdminClient();
+    const { data: owners } = await admin
+      .from('business_memberships')
+      .select('user_id')
+      .eq('business_id', businessId)
+      .eq('role', 'business_owner')
+      .eq('membership_status', 'active');
+
+    if (!owners || owners.length === 0) return;
+
+    const rows = owners.map((o) => ({
+      business_id: businessId,
+      recipient_user_id: o.user_id,
+      notification_type: notificationType,
+      priority: 'high',
+      title,
+      message,
+      entity_type: 'subscription',
+      entity_id: businessId,
+      action_url: '/dashboard/settings/subscription',
+      dedupe_key: `${notificationType}:${businessId}:${o.user_id}:${Date.now()}`,
+      metadata: { timestamp: new Date().toISOString() },
+    }));
+
+    await admin.from('notifications').upsert(rows, { onConflict: 'dedupe_key', ignoreDuplicates: true });
+  }
+
+  /**
+   * Manually activates a commercial subscription for a business.
+   */
+  static async manualActivateSubscription({
+    businessId,
+    planCode,
+    periodEnd,
+    reason,
+    notes,
+    actorId,
+  }: {
+    businessId: string;
+    planCode: SubscriptionPlanCode;
+    periodEnd: Date;
+    reason: string;
+    notes?: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!['bank_transfer', 'pilot_account', 'complimentary', 'gateway_issue', 'other'].includes(reason)) {
+      throw new Error('Invalid manual activation reason.');
+    }
+    if (reason === 'other' && (!notes || !notes.trim())) {
+      throw new Error('Notes are required when selecting "other" as activation reason.');
+    }
+    if (periodEnd <= new Date()) {
+      throw new Error('Subscription period end must be a future date.');
+    }
+
+    const admin = createAdminClient();
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const updatePayload = {
+      business_id: businessId,
+      plan_code: planCode,
+      status: 'active' as const,
+      current_period_starts_at: now.toISOString(),
+      current_period_ends_at: periodEnd.toISOString(),
+      grace_ends_at: null,
+      suspended_at: null,
+      cancelled_at: null,
+      activation_source: reason,
+      notes: notes?.trim() || null,
+      updated_at: now.toISOString(),
+    };
+
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .upsert(updatePayload, { onConflict: 'business_id' })
+      .select('*')
+      .single();
+
+    if (error || !updated) {
+      throw new Error(`Failed to activate subscription: ${error?.message || 'Database update error'}`);
+    }
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'activated',
+      previousStatus: oldSub.status,
+      newStatus: 'active',
+      previousPlan: oldSub.plan_code,
+      newPlan: planCode,
+      reason: `Manual activation: ${reason}${notes ? ` (${notes})` : ''}`,
+      metadata: { periodEnd: periodEnd.toISOString(), activationSource: reason },
+    });
+
+    await this.notifyBusinessOwner(
+      businessId,
+      'SUBSCRIPTION_ACTIVATED',
+      'Subscription Activated',
+      `Your WSNexa ${getPlanDefinition(planCode).name} subscription has been activated until ${periodEnd.toLocaleDateString()}.`
+    );
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Extends business trial end date.
+   */
+  static async extendTrial({
+    businessId,
+    newTrialEnd,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    newTrialEnd: Date;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for trial extension.');
+    if (newTrialEnd <= new Date()) throw new Error('New trial end date must be in the future.');
+
+    const admin = createAdminClient();
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const newStatus = oldSub.status === 'trialing' || newTrialEnd > now ? 'trialing' : oldSub.status;
+
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        trial_ends_at: newTrialEnd.toISOString(),
+        status: newStatus,
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to extend trial: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'trial_extended',
+      previousStatus: oldSub.status,
+      newStatus,
+      previousPlan: oldSub.plan_code,
+      newPlan: oldSub.plan_code,
+      reason,
+      metadata: { newTrialEnd: newTrialEnd.toISOString() },
+    });
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Extends commercial grace period.
+   */
+  static async extendGracePeriod({
+    businessId,
+    newGraceEnd,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    newGraceEnd: Date;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for grace period extension.');
+    if (newGraceEnd <= new Date()) throw new Error('New grace period end date must be in the future.');
+
+    const admin = createAdminClient();
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        grace_ends_at: newGraceEnd.toISOString(),
+        status: 'grace_period',
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to extend grace period: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'grace_extended',
+      previousStatus: oldSub.status,
+      newStatus: 'grace_period',
+      previousPlan: oldSub.plan_code,
+      newPlan: oldSub.plan_code,
+      reason,
+      metadata: { newGraceEnd: newGraceEnd.toISOString() },
+    });
+
+    await this.notifyBusinessOwner(
+      businessId,
+      'SUBSCRIPTION_GRACE_STARTED',
+      'Subscription Grace Period Extended',
+      `Your WSNexa subscription grace period has been extended until ${newGraceEnd.toLocaleDateString()}.`
+    );
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Changes subscription plan with downgrade eligibility validation.
+   */
+  static async changeSubscriptionPlan({
+    businessId,
+    newPlanCode,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    newPlanCode: SubscriptionPlanCode;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for plan change.');
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+
+    if (oldSub.plan_code === newPlanCode) {
+      return oldSub;
+    }
+
+    // Downgrade Eligibility Check
+    const eligibility = await this.validateDowngradeEligibility(businessId, newPlanCode);
+    if (!eligibility.allowed) {
+      const conflictMsg = eligibility.conflicts.map((c) => `${c.resourceType}: ${c.currentUsage}/${c.planLimit}`).join('; ');
+      throw new Error(`Plan downgrade blocked. Resource usage exceeds target plan limits (${conflictMsg}).`);
+    }
+
+    const admin = createAdminClient();
+    const now = new Date();
+
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        plan_code: newPlanCode,
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to change plan: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'plan_changed',
+      previousStatus: oldSub.status,
+      newStatus: oldSub.status,
+      previousPlan: oldSub.plan_code,
+      newPlan: newPlanCode,
+      reason,
+    });
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Sets finite Enterprise overrides.
+   */
+  static async setEnterpriseOverrides({
+    businessId,
+    overrides,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    overrides: {
+      maxBranches?: number | null;
+      maxActiveStaff?: number | null;
+      maxTables?: number | null;
+      maxMenuItems?: number | null;
+      maxCustomRoles?: number | null;
+    };
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for custom limit overrides.');
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const usage = await this.getUsageSnapshot(businessId);
+
+    // Validate integer bounds & capacity vs usage
+    const validateOverride = (val: number | null | undefined, currentUsage: number, name: string) => {
+      if (val === undefined) return undefined;
+      if (val !== null) {
+        if (!Number.isInteger(val) || val < 0) {
+          throw new Error(`${name} override must be a non-negative integer.`);
+        }
+        if (val < currentUsage) {
+          throw new Error(`${name} override (${val}) cannot be below current usage (${currentUsage}).`);
+        }
+      }
+      return val;
+    };
+
+    const updateFields = {
+      max_branches_override: validateOverride(overrides.maxBranches, usage.branches, 'Branches'),
+      max_staff_override: validateOverride(overrides.maxActiveStaff, usage.staff, 'Active Staff'),
+      max_tables_override: validateOverride(overrides.maxTables, usage.tables, 'Dining Tables'),
+      max_menu_items_override: validateOverride(overrides.maxMenuItems, usage.menuItems, 'Menu Items'),
+      max_custom_roles_override: validateOverride(overrides.maxCustomRoles, usage.customRoles, 'Custom Roles'),
+      updated_at: new Date().toISOString(),
+    };
+
+    const admin = createAdminClient();
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update(updateFields)
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to update overrides: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'manual_override',
+      previousStatus: oldSub.status,
+      newStatus: oldSub.status,
+      previousPlan: oldSub.plan_code,
+      newPlan: oldSub.plan_code,
+      reason,
+      metadata: { overrides },
+    });
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Commercially suspends a subscription (does NOT alter platform businesses.status).
+   */
+  static async suspendSubscription({
+    businessId,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for subscription suspension.');
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const admin = createAdminClient();
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        status: 'suspended',
+        suspended_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to suspend subscription: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'suspended',
+      previousStatus: oldSub.status,
+      newStatus: 'suspended',
+      previousPlan: oldSub.plan_code,
+      newPlan: oldSub.plan_code,
+      reason,
+    });
+
+    await this.notifyBusinessOwner(
+      businessId,
+      'SUBSCRIPTION_SUSPENDED',
+      'Subscription Suspended',
+      'Your WSNexa commercial subscription has been suspended. Operational modules are restricted. Contact support for assistance.'
+    );
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Reactivates a suspended/grace commercial subscription.
+   */
+  static async reactivateSubscription({
+    businessId,
+    planCode,
+    periodEnd,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    planCode: SubscriptionPlanCode;
+    periodEnd: Date;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for subscription reactivation.');
+    if (periodEnd <= new Date()) throw new Error('Subscription period end must be a future date.');
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const admin = createAdminClient();
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        status: 'active',
+        plan_code: planCode,
+        current_period_starts_at: now.toISOString(),
+        current_period_ends_at: periodEnd.toISOString(),
+        suspended_at: null,
+        grace_ends_at: null,
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to reactivate subscription: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'reactivated',
+      previousStatus: oldSub.status,
+      newStatus: 'active',
+      previousPlan: oldSub.plan_code,
+      newPlan: planCode,
+      reason,
+      metadata: { periodEnd: periodEnd.toISOString() },
+    });
+
+    await this.notifyBusinessOwner(
+      businessId,
+      'SUBSCRIPTION_REACTIVATED',
+      'Subscription Reactivated',
+      `Your WSNexa subscription has been reactivated on the ${getPlanDefinition(planCode).name} plan until ${periodEnd.toLocaleDateString()}.`
+    );
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Explicitly cancels a commercial subscription (preserves all tenant data).
+   */
+  static async cancelSubscription({
+    businessId,
+    reason,
+    actorId,
+  }: {
+    businessId: string;
+    reason: string;
+    actorId: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    if (!reason || !reason.trim()) throw new Error('Reason is mandatory for subscription cancellation.');
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+
+    const admin = createAdminClient();
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .update({
+        status: 'cancelled',
+        cancelled_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('business_id', businessId)
+      .select('*')
+      .single();
+
+    if (error || !updated) throw new Error(`Failed to cancel subscription: ${error?.message}`);
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'cancelled',
+      previousStatus: oldSub.status,
+      newStatus: 'cancelled',
+      previousPlan: oldSub.plan_code,
+      newPlan: oldSub.plan_code,
+      reason,
+    });
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
+   * Fetches event history for a business subscription.
+   */
+  static async getSubscriptionEventHistory(businessId: string) {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('business_subscription_events')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(`Failed to fetch subscription history: ${error.message}`);
+    return data || [];
+  }
 }

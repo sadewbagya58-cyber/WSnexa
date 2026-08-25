@@ -38,7 +38,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa V1 Subscription Core — Step 2 Verification');
+  console.log('  WSNexa V1 Subscription Core — Step 3 Final Verification');
   console.log('================================================================\n');
 
   const { SubscriptionService } = await import('../src/server/services/subscription.service');
@@ -320,8 +320,38 @@ async function runVerification() {
   const checkoutPageContent = fs.readFileSync(checkoutPagePath, 'utf-8');
   assert(checkoutPageContent.includes('Ordering is currently unavailable for this venue.'), '61. Public QR checkout page renders Ordering Unavailable card when suspended');
 
+  // 12. Step 3 Super Admin Subscription Management & Final Closure Verification
+  console.log('\n--- SECTION 12: Step 3 Super Admin Controls & Final Closure ---');
+  const superAdminActionPath = path.join(process.cwd(), 'src/server/actions/super-admin-subscription.ts');
+  assert(fs.existsSync(superAdminActionPath), '62. Super Admin subscription server actions exist in super-admin-subscription.ts');
+
+  const superAdminActionContent = fs.readFileSync(superAdminActionPath, 'utf-8');
+  assert(superAdminActionContent.includes('requireSuperAdmin()'), '63. Super Admin subscription server actions enforce requireSuperAdmin()');
+
+  assert(typeof SubscriptionService.manualActivateSubscription === 'function', '64. SubscriptionService.manualActivateSubscription method exists');
+  assert(typeof SubscriptionService.extendTrial === 'function', '65. SubscriptionService.extendTrial method exists');
+  assert(typeof SubscriptionService.extendGracePeriod === 'function', '66. SubscriptionService.extendGracePeriod method exists');
+  assert(typeof SubscriptionService.changeSubscriptionPlan === 'function', '67. SubscriptionService.changeSubscriptionPlan method exists');
+  assert(typeof SubscriptionService.setEnterpriseOverrides === 'function', '68. SubscriptionService.setEnterpriseOverrides method exists');
+  assert(typeof SubscriptionService.suspendSubscription === 'function', '69. SubscriptionService.suspendSubscription method exists');
+  assert(typeof SubscriptionService.reactivateSubscription === 'function', '70. SubscriptionService.reactivateSubscription method exists');
+  assert(typeof SubscriptionService.cancelSubscription === 'function', '71. SubscriptionService.cancelSubscription method exists');
+
+  const adminControlPath = path.join(process.cwd(), 'src/components/admin/admin-subscription-control.tsx');
+  assert(fs.existsSync(adminControlPath), '72. AdminSubscriptionControl component exists in admin-subscription-control.tsx');
+
+  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-subscription-client.tsx');
+  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
+  assert(ownerClientContent.includes('LKR 4,499'), '73. Owner subscription UI displays LKR 4,499 Starter pricing');
+  assert(ownerClientContent.includes('LKR 8,999'), '74. Owner subscription UI displays LKR 8,999 Growth pricing');
+  assert(ownerClientContent.includes('Manual Activation Required'), '75. Owner subscription UI displays manual activation notice for payment CTAs');
+
+  const docPath = path.join(process.cwd(), 'docs/v1-subscription-core.md');
+  assert(fs.existsSync(docPath), '76. Documentation file docs/v1-subscription-core.md exists');
+
   console.log('\n================================================================');
-  console.log('  V1 Subscription Core Step 2: ALL 61 ASSERTIONS PASSED');
+  console.log('  V1 Subscription Core Step 3: ALL 76 ASSERTIONS PASSED');
+  console.log('  Status: V1 SUBSCRIPTION CORE CLOSED');
   console.log('================================================================\n');
 }
 

@@ -323,6 +323,17 @@ export class SubscriptionService {
       customRoles: 'maxCustomRoles',
     };
 
+    if (context.effectiveStatus === 'SUSPENDED' || context.effectiveStatus === 'CANCELLED') {
+      return {
+        allowed: false,
+        currentUsage,
+        effectiveLimit: 0,
+        planCode: context.subscription.plan_code,
+        remainingCapacity: 0,
+        message: `Subscription is ${context.effectiveStatus.toLowerCase()}. Operational mutations are restricted.`,
+      };
+    }
+
     const effectiveLimit = context.effectiveLimits[limitKeyMap[resourceType]];
 
     if (effectiveLimit === null) {
@@ -616,6 +627,20 @@ export class SubscriptionService {
   }
 
   /**
+   * Authoritative server-side subscription operational assertion guard.
+   * Resolves effective subscription state and throws Error if SUSPENDED or CANCELLED.
+   */
+  static async assertOperationalSubscription(businessId: string): Promise<ResolvedSubscriptionContext> {
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    if (subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED') {
+      throw new Error(
+        `Subscription is ${subContext.effectiveStatus.toLowerCase()}. Operational mutations are restricted. Contact business owner or WSNexa support.`
+      );
+    }
+    return subContext;
+  }
+
+  /**
    * Extends business trial end date.
    */
   static async extendTrial({
@@ -632,9 +657,11 @@ export class SubscriptionService {
     if (!reason || !reason.trim()) throw new Error('Reason is mandatory for trial extension.');
     if (newTrialEnd <= new Date()) throw new Error('New trial end date must be in the future.');
 
-    const admin = createAdminClient();
     const subContext = await this.resolveSubscriptionContext(businessId);
     const oldSub = subContext.subscription;
+    if (oldSub.status === 'cancelled') throw new Error('Cannot extend trial for a cancelled subscription.');
+    if (oldSub.status === 'suspended') throw new Error('Cannot extend trial for a suspended subscription.');
+    const admin = createAdminClient();
     const now = new Date();
 
     const newStatus = oldSub.status === 'trialing' || newTrialEnd > now ? 'trialing' : oldSub.status;
@@ -684,9 +711,10 @@ export class SubscriptionService {
     if (!reason || !reason.trim()) throw new Error('Reason is mandatory for grace period extension.');
     if (newGraceEnd <= new Date()) throw new Error('New grace period end date must be in the future.');
 
-    const admin = createAdminClient();
     const subContext = await this.resolveSubscriptionContext(businessId);
     const oldSub = subContext.subscription;
+    if (oldSub.status === 'cancelled') throw new Error('Cannot extend grace period for a cancelled subscription.');
+    const admin = createAdminClient();
     const now = new Date();
 
     const { data: updated, error } = await admin
@@ -873,6 +901,8 @@ export class SubscriptionService {
 
     const subContext = await this.resolveSubscriptionContext(businessId);
     const oldSub = subContext.subscription;
+    if (oldSub.status === 'cancelled') throw new Error('Cannot suspend a subscription that is already cancelled.');
+    if (oldSub.status === 'suspended') throw new Error('Subscription is already suspended.');
     const now = new Date();
 
     const admin = createAdminClient();
@@ -989,6 +1019,7 @@ export class SubscriptionService {
 
     const subContext = await this.resolveSubscriptionContext(businessId);
     const oldSub = subContext.subscription;
+    if (oldSub.status === 'cancelled') throw new Error('Subscription is already cancelled.');
     const now = new Date();
 
     const admin = createAdminClient();

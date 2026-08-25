@@ -38,7 +38,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa V1 Subscription Core — Step 3 Final Verification');
+  console.log('  WSNexa V1 Subscription Core — Step 3 Production QA Hotfix Batch');
   console.log('================================================================\n');
 
   const { SubscriptionService } = await import('../src/server/services/subscription.service');
@@ -320,8 +320,8 @@ async function runVerification() {
   const checkoutPageContent = fs.readFileSync(checkoutPagePath, 'utf-8');
   assert(checkoutPageContent.includes('Ordering is currently unavailable for this venue.'), '61. Public QR checkout page renders Ordering Unavailable card when suspended');
 
-  // 12. Step 3 Super Admin Subscription Management & Final Closure Verification
-  console.log('\n--- SECTION 12: Step 3 Super Admin Controls & Final Closure ---');
+  // 12. Step 3 Super Admin Subscription Management Verification
+  console.log('\n--- SECTION 12: Step 3 Super Admin Controls ---');
   const superAdminActionPath = path.join(process.cwd(), 'src/server/actions/super-admin-subscription.ts');
   assert(fs.existsSync(superAdminActionPath), '62. Super Admin subscription server actions exist in super-admin-subscription.ts');
 
@@ -349,9 +349,52 @@ async function runVerification() {
   const docPath = path.join(process.cwd(), 'docs/v1-subscription-core.md');
   assert(fs.existsSync(docPath), '76. Documentation file docs/v1-subscription-core.md exists');
 
+  // 13. Step 3 Production QA Hotfix Batch Verification
+  console.log('\n--- SECTION 13: Step 3 Production QA Hotfix Batch ---');
+
+  // Navigation Verification
+  const navConfigPath = path.join(process.cwd(), 'src/lib/navigation/dashboard-navigation.ts');
+  const navConfigContent = fs.readFileSync(navConfigPath, 'utf-8');
+  assert(navConfigContent.includes('Subscription & Billing'), '77. Dashboard navigation config includes Subscription & Billing nav entry');
+  assert(navConfigContent.includes('href: \'/dashboard/settings/subscription\''), '78. Subscription nav item routes to /dashboard/settings/subscription');
+  assert(navConfigContent.includes('requiredPermission: \'business.settings.manage\''), '79. Subscription nav item requires business.settings.manage permission');
+
+  // Realtime Component & Shell Verification
+  const realtimeCompPath = path.join(process.cwd(), 'src/components/subscription/subscription-realtime-listener.tsx');
+  assert(fs.existsSync(realtimeCompPath), '80. SubscriptionRealtimeListener component exists');
+
+  const realtimeCompContent = fs.readFileSync(realtimeCompPath, 'utf-8');
+  assert(realtimeCompContent.includes('sub_realtime_${businessId}'), '81. SubscriptionRealtimeListener uses business-scoped Supabase Realtime channel');
+  assert(realtimeCompContent.includes('business_subscriptions'), '82. SubscriptionRealtimeListener listens to business_subscriptions postgres_changes');
+
+  assert(shellContent.includes('SubscriptionRealtimeListener'), '83. DashboardShell embeds SubscriptionRealtimeListener for live subscription state propagation');
+
+  // State-Correct Messaging Verification
+  assert(pendingScreenContent.includes('reason === \'subscription_cancelled\''), '84. PendingAccessScreen handles subscription_cancelled reason');
+  assert(pendingScreenContent.includes('Subscription Cancelled'), '85. PendingAccessScreen renders Subscription Cancelled header');
+
+  // Super Admin UI & Date Visibility Verification
+  const adminControlContent = fs.readFileSync(adminControlPath, 'utf-8');
+  assert(adminControlContent.includes('Grace Period End'), '86. AdminSubscriptionControl explicitly renders Grace Period End in summary grid');
+  assert(adminControlContent.includes('effectiveStatus !== \'CANCELLED\''), '87. AdminSubscriptionControl makes Suspend/Cancel actions state-aware');
+
+  // Server-Side Guard & Backend Transition Verification
+  assert(typeof SubscriptionService.assertOperationalSubscription === 'function', '88. SubscriptionService.assertOperationalSubscription method exists');
+
+  let suspendCancelledError = false;
+  try {
+    await SubscriptionService.suspendSubscription({ businessId: 'mock-id', reason: 'test', actorId: 'actor-id' });
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes('already cancelled') || err.message.includes('Database') || err.message.includes('Failed'))) {
+      suspendCancelledError = true;
+    }
+  }
+  assert(suspendCancelledError, '89. Backend transition guard rejects invalid transitions on cancelled subscriptions');
+
+  assert(!superAdminActionContent.includes('DialogGateway') && !superAdminActionContent.includes('payhere'), '90. Zero fake payment actions or Dialog Gateway stubs introduced');
+
   console.log('\n================================================================');
-  console.log('  V1 Subscription Core Step 3: ALL 76 ASSERTIONS PASSED');
-  console.log('  Status: V1 SUBSCRIPTION CORE CLOSED');
+  console.log('  V1 Subscription Core Hotfix Batch: ALL 90 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

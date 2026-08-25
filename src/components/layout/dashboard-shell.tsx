@@ -16,6 +16,7 @@ import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions'
 import { BranchInfo, TenantSubscriptionInfo } from '@/types';
 
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { SubscriptionRealtimeListener } from '@/components/subscription/subscription-realtime-listener';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -208,6 +209,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
+      {businessId && (
+        <SubscriptionRealtimeListener
+          businessId={businessId}
+          userRole={userRole}
+          subscription={subscription}
+        />
+      )}
 
       {/* ── Top Bar Header ──────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 pt-[env(safe-area-inset-top,0px)] pb-1 sm:pb-0">

@@ -132,6 +132,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
     id: 'settings',
     title: 'SETTINGS',
     items: [
+      { id: 'subscription', label: 'Subscription & Billing', href: '/dashboard/settings/subscription', requiredPermission: 'business.settings.manage', context: 'ORGANIZATION' },
       { id: 'order-security', label: 'Order Security', href: '/dashboard/settings/order-security', requiredPermission: 'order_security.manage', context: 'ORGANIZATION' },
       { id: 'payments', label: 'Payment Methods', href: '/dashboard/settings/payments', requiredPermission: 'branches.manage', context: 'PROPERTY' },
     ],

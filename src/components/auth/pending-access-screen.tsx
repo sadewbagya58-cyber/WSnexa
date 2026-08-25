@@ -60,6 +60,48 @@ export function PendingAccessScreen({ intent, userEmail, reason }: PendingAccess
     );
   }
 
+  // 1b. Subscription Cancelled View (Commercially Cancelled Workspace for Staff)
+  if (reason === 'subscription_cancelled') {
+    return (
+      <div className="max-w-md mx-auto bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl text-center">
+        <div className="w-16 h-16 bg-zinc-100 border border-zinc-300 rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-xs">
+          🛑
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-xl font-black text-zinc-950 uppercase tracking-wider">Subscription Cancelled</h1>
+          <p className="text-xs text-zinc-600 leading-relaxed">
+            Your workspace account <span className="text-zinc-950 font-mono font-bold">{userEmail}</span> is currently inactive.
+          </p>
+        </div>
+
+        <div className="p-4 bg-zinc-100/80 rounded-xl border border-zinc-200 text-left text-xs space-y-2">
+          <div className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wider">Workspace Access Notice</div>
+          <p className="text-zinc-700 leading-relaxed font-medium">
+            This workspace is currently inactive because the business subscription has been cancelled. Please contact your business owner or administrator.
+          </p>
+        </div>
+
+        <div className="border-t border-zinc-100 pt-4 flex flex-col gap-2.5">
+          <Link
+            href="/customer"
+            className="py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase tracking-wider rounded-xl transition-all block text-center"
+          >
+            Continue as Customer
+          </Link>
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm"
+            >
+              Sign Out / Switch Account
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   // 2. Platform Administrative Suspended View (Abuse/Security Platform Suspension)
   if (reason === 'platform_suspended') {
     return (

@@ -345,7 +345,7 @@ export function AdminSubscriptionControl({
       )}
 
       {/* Subscription Summary Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-zinc-50/70 p-4 rounded-2xl border border-zinc-200/80 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-zinc-50/70 p-4 rounded-2xl border border-zinc-200/80 text-xs">
         <div>
           <span className="text-zinc-500 font-bold uppercase text-[10px] block">Current Plan</span>
           <span className="font-extrabold text-zinc-950 text-sm">
@@ -353,21 +353,32 @@ export function AdminSubscriptionControl({
           </span>
         </div>
         <div>
-          <span className="text-zinc-500 font-bold uppercase text-[10px] block">Stored Status</span>
-          <span className="font-extrabold text-zinc-900 capitalize">{subscription.status}</span>
+          <span className="text-zinc-500 font-bold uppercase text-[10px] block">Stored / Effective</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="font-extrabold text-zinc-900 capitalize">{subscription.status}</span>
+            <span className="text-zinc-400 font-mono">({effectiveStatus})</span>
+          </div>
         </div>
         <div>
           <span className="text-zinc-500 font-bold uppercase text-[10px] block">Activation Source</span>
           <span className="font-mono text-zinc-800">{subscription.activation_source || 'system'}</span>
         </div>
         <div>
-          <span className="text-zinc-500 font-bold uppercase text-[10px] block">Period / Expiration</span>
+          <span className="text-zinc-500 font-bold uppercase text-[10px] block">Trial / Period End</span>
           <span className="font-bold text-zinc-800">
             {subscription.current_period_ends_at
               ? new Date(subscription.current_period_ends_at).toLocaleDateString()
               : subscription.trial_ends_at
               ? `Trial: ${new Date(subscription.trial_ends_at).toLocaleDateString()}`
               : 'N/A'}
+          </span>
+        </div>
+        <div>
+          <span className="text-zinc-500 font-bold uppercase text-[10px] block">Grace Period End</span>
+          <span className={`font-bold ${subscription.grace_ends_at || effectiveStatus === 'GRACE_PERIOD' ? 'text-amber-700 font-extrabold' : 'text-zinc-400'}`}>
+            {subscription.grace_ends_at
+              ? new Date(subscription.grace_ends_at).toLocaleDateString()
+              : 'None'}
           </span>
         </div>
       </div>
@@ -395,33 +406,47 @@ export function AdminSubscriptionControl({
 
       {/* Super Admin Action Controls */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100">
-        <Button size="sm" onClick={() => setActiveModal('manual_activate')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs">
-          ⚡ Manual Activate
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setActiveModal('extend_trial')} className="font-bold text-xs">
-          ⏳ Extend Trial
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setActiveModal('extend_grace')} className="font-bold text-xs">
-          🛡️ Extend Grace
-        </Button>
+        {effectiveStatus === 'SUSPENDED' || effectiveStatus === 'CANCELLED' ? (
+          <Button size="sm" onClick={() => setActiveModal('reactivate')} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs">
+            ✅ Reactivate Subscription
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => setActiveModal('manual_activate')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs">
+            ⚡ Manual Activate
+          </Button>
+        )}
+
+        {(effectiveStatus === 'TRIALING' || subscription.status === 'trialing') && effectiveStatus !== 'CANCELLED' && (
+          <Button size="sm" variant="outline" onClick={() => setActiveModal('extend_trial')} className="font-bold text-xs">
+            ⏳ Extend Trial
+          </Button>
+        )}
+
+        {(effectiveStatus === 'GRACE_PERIOD' || subscription.status === 'grace_period' || subscription.grace_ends_at) && effectiveStatus !== 'CANCELLED' && (
+          <Button size="sm" variant="outline" onClick={() => setActiveModal('extend_grace')} className="font-bold text-xs">
+            🛡️ Extend Grace
+          </Button>
+        )}
+
         <Button size="sm" variant="outline" onClick={() => setActiveModal('change_plan')} className="font-bold text-xs">
           🔄 Change Plan
         </Button>
+
         <Button size="sm" variant="outline" onClick={() => setActiveModal('enterprise_overrides')} className="font-bold text-xs">
           ⚙️ Custom Limits
         </Button>
-        {effectiveStatus !== 'SUSPENDED' ? (
+
+        {effectiveStatus !== 'SUSPENDED' && effectiveStatus !== 'CANCELLED' && (
           <Button size="sm" variant="destructive" onClick={() => setActiveModal('suspend')} className="font-bold text-xs">
             🚫 Suspend
           </Button>
-        ) : (
-          <Button size="sm" onClick={() => setActiveModal('reactivate')} className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs">
-            ✅ Reactivate
+        )}
+
+        {effectiveStatus !== 'CANCELLED' && (
+          <Button size="sm" variant="outline" onClick={() => setActiveModal('cancel')} className="text-zinc-600 font-bold text-xs">
+            ❌ Cancel
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={() => setActiveModal('cancel')} className="text-zinc-600 font-bold text-xs">
-          ❌ Cancel
-        </Button>
       </div>
 
       {/* Subscription Event History */}

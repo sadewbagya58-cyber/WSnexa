@@ -37,10 +37,12 @@ export default async function DashboardLayout({
     redirect('/account/pending-access?reason=platform_suspended');
   }
 
-  // 2. Commercial Subscription Suspension Redirect for Non-Owner Staff
-  const isCommerciallySuspended = subscription?.effectiveStatus === 'SUSPENDED' || subscription?.effectiveStatus === 'CANCELLED';
-  if (isCommerciallySuspended && membership.role !== 'business_owner') {
-    redirect('/account/pending-access?reason=subscription_suspended');
+  // 2. Commercial Subscription Suspension / Cancellation Redirect for Non-Owner Staff
+  const isCommerciallySuspended = subscription?.effectiveStatus === 'SUSPENDED';
+  const isCommerciallyCancelled = subscription?.effectiveStatus === 'CANCELLED';
+  if ((isCommerciallySuspended || isCommerciallyCancelled) && membership.role !== 'business_owner') {
+    const reason = isCommerciallyCancelled ? 'subscription_cancelled' : 'subscription_suspended';
+    redirect(`/account/pending-access?reason=${reason}`);
   }
 
   const userName = profile

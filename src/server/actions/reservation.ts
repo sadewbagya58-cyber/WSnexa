@@ -246,6 +246,36 @@ export async function confirmReservationAction(
 }
 
 /**
+ * Staff-authenticated declining of a pending reservation.
+ */
+export async function declineReservationAction(params: {
+  reservationId: string;
+  reason?: string | null;
+}): Promise<ReservationActionResult<ReservationDTO>> {
+  return handleAction(async () => {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      throw new Error('Unauthorized');
+    }
+
+    const hasCancel = await can({ context: authContext, permission: 'reservations.cancel' });
+    const hasManage = await can({ context: authContext, permission: 'reservations.manage' });
+
+    if (!hasCancel && !hasManage) {
+      throw new Error('Forbidden: missing reservations.manage or reservations.cancel permission');
+    }
+
+    return ReservationService.declineReservation(
+      authContext.businessId,
+      params.reservationId,
+      authContext.userId,
+      'STAFF',
+      params.reason
+    );
+  });
+}
+
+/**
  * Staff-authenticated cancellation of a reservation.
  */
 export async function cancelReservationAction(

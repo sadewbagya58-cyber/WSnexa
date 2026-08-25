@@ -97,6 +97,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
     id: 'operations',
     title: 'OPERATIONS',
     items: [
+      { id: 'reservations', label: 'Table Reservations', href: '/dashboard/reservations', requiredPermission: 'reservations.view', context: 'PROPERTY' },
       { id: 'cashier', label: 'Cashier POS', href: '/dashboard/cashier', requiredPermission: 'cashier.access', context: 'PROPERTY' },
       { id: 'kitchen', label: 'Kitchen Queue', href: '/dashboard/kitchen', requiredPermission: 'kitchen.access', context: 'PROPERTY' },
       { id: 'waiter', label: 'Waiter Assistance', href: '/dashboard/waiter', requiredPermission: 'waiter.requests.view', context: 'PROPERTY' },

@@ -198,6 +198,46 @@ export class ReservationService {
   }
 
   /**
+   * Declines a pending reservation with a reason.
+   */
+  static async declineReservation(
+    businessId: string,
+    reservationId: string,
+    actorUserId: string | null,
+    actorType: StatusActorType,
+    reason?: string | null
+  ): Promise<ReservationDTO> {
+    const updated = await this.transitionStatus({
+      businessId,
+      reservationId,
+      targetStatus: 'DECLINED',
+      actorUserId,
+      actorType,
+      reason: reason || 'Reservation declined by staff',
+      timestampField: 'declined_at',
+      declineReason: reason,
+    });
+
+    const { ReservationAllocationService } = await import('./reservation-allocation.service');
+    await ReservationAllocationService.releaseReservationTables(businessId, reservationId);
+
+    const { ReservationNotificationService } = await import('./reservation-notification.service');
+    await ReservationNotificationService.queueNotificationEvent({
+      businessId,
+      branchId: updated.branchId,
+      reservationId: updated.id,
+      eventType: 'RESERVATION_DECLINED',
+      recipientName: updated.guestName,
+      recipientEmail: updated.guestEmail,
+      recipientPhone: updated.guestPhone,
+      consentPromotional: updated.consentPromotional,
+      payload: { declineReason: reason },
+    });
+
+    return updated;
+  }
+
+  /**
    * Marks guest arrival.
    */
   static async markArrived(
@@ -334,11 +374,12 @@ export class ReservationService {
     actorUserId: string | null;
     actorType: StatusActorType;
     reason: string;
-    timestampField?: 'arrived_at' | 'seated_at' | 'completed_at' | 'no_show_at' | 'cancelled_at';
+    timestampField?: 'arrived_at' | 'seated_at' | 'completed_at' | 'no_show_at' | 'cancelled_at' | 'declined_at';
     cancellationReason?: string | null;
+    declineReason?: string | null;
   }): Promise<ReservationDTO> {
     const admin = createAdminClient();
-    const { businessId, reservationId, targetStatus, actorUserId, actorType, reason, timestampField, cancellationReason } = options;
+    const { businessId, reservationId, targetStatus, actorUserId, actorType, reason, timestampField, cancellationReason, declineReason } = options;
 
     const existing = await ReservationQueryService.getReservationById(businessId, reservationId, null, true);
     if (!existing) {
@@ -376,6 +417,9 @@ export class ReservationService {
         updatePayload.cancellation_reason = cancellationReason ? cancellationReason.trim() : null;
       }
     }
+    if (targetStatus === 'DECLINED' && declineReason !== undefined) {
+      updatePayload.decline_reason = declineReason ? declineReason.trim() : null;
+    }
 
     // 2. Concurrency-resistant update checking existing.status
     const { data: updatedRows, error } = await admin
@@ -393,7 +437,7 @@ export class ReservationService {
     }
 
     // 2b. Auto Release Tables (Part K): Release assignments on terminal / departure transitions
-    if (['CANCELLED', 'NO_SHOW', 'COMPLETED'].includes(targetStatus)) {
+    if (['CANCELLED', 'NO_SHOW', 'COMPLETED', 'DECLINED'].includes(targetStatus)) {
       try {
         const { ReservationAllocationService } = await import('./reservation-allocation.service');
         await ReservationAllocationService.releaseReservationTables(businessId, reservationId);

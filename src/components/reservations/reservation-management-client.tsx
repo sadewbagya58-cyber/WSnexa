@@ -3,11 +3,14 @@
 import React, { useState } from 'react';
 import {
   confirmReservationAction,
+  declineReservationAction,
   cancelReservationAction,
   markReservationArrivedAction,
   markReservationSeatedAction,
   markReservationCompletedAction,
   markReservationNoShowAction,
+  createStaffReservationAction,
+  getReservationStatusHistoryAction,
   updateReservationSettingsAction,
   getReservationSettingsAction,
 } from '@/server/actions/reservation';
@@ -30,6 +33,7 @@ import {
   PaginatedReservationsDTO,
   ReservationDTO,
   ReservationSettingsDTO,
+  ReservationStatusEventDTO,
 } from '@/lib/reservations/reservation-types';
 
 interface BranchOption {
@@ -42,6 +46,7 @@ interface ReservationManagementClientProps {
   businessId: string;
   branches: BranchOption[];
   hasManagePermission: boolean;
+  hasCreatePermission?: boolean;
   hasAssignPermission: boolean;
   hasWaitlistPermission: boolean;
   hasContactView: boolean;
@@ -53,6 +58,7 @@ export function ReservationManagementClient({
   businessId,
   branches,
   hasManagePermission,
+  hasCreatePermission = true,
   hasAssignPermission,
   hasWaitlistPermission,
   hasContactView,
@@ -63,6 +69,7 @@ export function ReservationManagementClient({
     branches.length > 0 ? branches[0].id : ''
   );
   const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'waitlist' | 'settings'>('today');
+  const [statusFilter, setStatusFilter] = useState<string>('OPERATIONAL');
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState<boolean>(false);
   const [branchSettings, setBranchSettings] = useState<ReservationSettingsDTO | null>(null);
@@ -76,6 +83,27 @@ export function ReservationManagementClient({
   const [assignmentModalRes, setAssignmentModalRes] = useState<ReservationDTO | null>(null);
   const [availabilityResult, setAvailabilityResult] = useState<TableAvailabilityResultDTO | null>(null);
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
+
+  // Staff Create Modal State
+  const [showStaffCreateModal, setShowStaffCreateModal] = useState<boolean>(false);
+  const [staffCreateForm, setStaffCreateForm] = useState({
+    guestName: '',
+    guestPhone: '',
+    guestEmail: '',
+    partySize: 2,
+    reservationStartAt: '',
+    occasion: '',
+    specialRequests: '',
+    internalNotes: '',
+  });
+
+  // Decline Modal State
+  const [declineModalRes, setDeclineModalRes] = useState<ReservationDTO | null>(null);
+  const [declineReason, setDeclineReason] = useState<string>('');
+
+  // Detail Modal State
+  const [detailModalRes, setDetailModalRes] = useState<ReservationDTO | null>(null);
+  const [detailStatusHistory, setDetailStatusHistory] = useState<ReservationStatusEventDTO[]>([]);
 
   // Walk-In Modal State
   const [showWalkInModal, setShowWalkInModal] = useState<boolean>(false);
@@ -99,6 +127,19 @@ export function ReservationManagementClient({
   // Actions & Handlers
   // ------------------------------------------------------------------
 
+  const handleOpenDetailModal = async (res: ReservationDTO) => {
+    setDetailModalRes(res);
+    setDetailStatusHistory([]);
+    try {
+      const historyRes = await getReservationStatusHistoryAction(res.id);
+      if (historyRes.ok) {
+        setDetailStatusHistory(historyRes.data);
+      }
+    } catch (err: unknown) {
+      console.warn('Failed to load status history:', (err as Error).message);
+    }
+  };
+
   const handleOpenAssignModal = async (res: ReservationDTO) => {
     setAssignmentModalRes(res);
     setSelectedTableIds([]);
@@ -120,10 +161,10 @@ export function ReservationManagementClient({
           setSelectedTableIds(availRes.data.recommendedCombination.tables.map((t) => t.id));
         }
       } else {
-        setLastMessage(`❌ Failed to check availability: ${availRes.error.message}`);
+        setLastMessage(`❌ Availability lookup error: ${availRes.error.message}`);
       }
     } catch (err: unknown) {
-      setLastMessage(`❌ Error: ${(err as Error).message}`);
+      setLastMessage(`❌ Failed to check availability: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
@@ -146,10 +187,10 @@ export function ReservationManagementClient({
         setLastMessage(`✅ Assigned ${res.data.length} table(s) to ${assignmentModalRes.guestName}`);
         setAssignmentModalRes(null);
       } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        setLastMessage(`❌ Assignment failed: ${res.error.message}`);
       }
     } catch (err: unknown) {
-      setLastMessage(`❌ Error: ${(err as Error).message}`);
+      setLastMessage(`❌ Assignment error: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
@@ -159,31 +200,37 @@ export function ReservationManagementClient({
     setIsPending(true);
     try {
       const result = await autoAllocateReservationTablesAction(res.id);
+
       if (result.ok) {
         setActiveAssignmentsMap((prev) => ({
           ...prev,
           [res.id]: result.data,
         }));
-        setLastMessage(`✅ Auto-allocated ${result.data.length} table(s)`);
+        const count = result.data.length;
+        setLastMessage(`✅ Auto-fitted ${count} table(s) for ${res.guestName}`);
       } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${result.error.message}`);
+        setLastMessage(`❌ Auto-fit failed: ${result.error.message}`);
       }
     } catch (err: unknown) {
-      setLastMessage(`❌ Auto-allocate error: ${(err as Error).message}`);
+      setLastMessage(`❌ Auto-fit error: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
   };
 
-  const handleRelease = async (resId: string) => {
+  const handleRelease = async (reservationId: string) => {
     setIsPending(true);
     try {
-      const result = await releaseReservationTablesAction(resId);
-      if (result.ok) {
-        setActiveAssignmentsMap((prev) => ({ ...prev, [resId]: [] }));
+      const res = await releaseReservationTablesAction(reservationId);
+      if (res.ok) {
+        setActiveAssignmentsMap((prev) => {
+          const updated = { ...prev };
+          delete updated[reservationId];
+          return updated;
+        });
         setLastMessage('✅ Table assignments released');
       } else {
-        setLastMessage(`❌ Release error: ${result.error.message}`);
+        setLastMessage(`❌ Release failed: ${res.error.message}`);
       }
     } catch (err: unknown) {
       setLastMessage(`❌ Release error: ${(err as Error).message}`);
@@ -193,31 +240,106 @@ export function ReservationManagementClient({
   };
 
   const handleStatusTransition = async (
-    resId: string,
-    action: 'confirm' | 'arrived' | 'seated' | 'complete' | 'cancel' | 'no_show'
+    reservationId: string,
+    action: 'confirm' | 'arrived' | 'seated' | 'complete' | 'cancel' | 'noshow'
   ) => {
     setIsPending(true);
-    setLastMessage(null);
     try {
-      let result;
-      if (action === 'confirm') result = await confirmReservationAction(resId);
-      else if (action === 'arrived') result = await markReservationArrivedAction(resId);
-      else if (action === 'seated') result = await markReservationSeatedAction(resId);
-      else if (action === 'complete') result = await markReservationCompletedAction(resId);
-      else if (action === 'cancel') result = await cancelReservationAction({ reservationId: resId, reason: 'Staff cancelled' });
-      else result = await markReservationNoShowAction(resId);
+      let res;
+      if (action === 'confirm') res = await confirmReservationAction(reservationId);
+      else if (action === 'arrived') res = await markReservationArrivedAction(reservationId);
+      else if (action === 'seated') res = await markReservationSeatedAction(reservationId);
+      else if (action === 'complete') res = await markReservationCompletedAction(reservationId);
+      else if (action === 'cancel') res = await cancelReservationAction({ reservationId, reason: 'Staff cancelled' });
+      else if (action === 'noshow') res = await markReservationNoShowAction(reservationId);
 
-      if (result.ok) {
+      if (res && res.ok) {
         setReservations((prev) => ({
           ...prev,
-          items: prev.items.map((r) => (r.id === resId ? result.data : r)),
+          items: prev.items.map((r) => (r.id === reservationId ? res.data : r)),
         }));
-        setLastMessage(`✅ Status updated to '${result.data.status}'`);
-      } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${result.error.message}`);
+        if (['complete', 'cancel', 'noshow'].includes(action)) {
+          setActiveAssignmentsMap((prev) => {
+            const updated = { ...prev };
+            delete updated[reservationId];
+            return updated;
+          });
+        }
+        setLastMessage(`✅ Reservation marked as ${res.data.status}`);
+      } else if (res) {
+        setLastMessage(`❌ Action failed: ${res.error.message}`);
       }
     } catch (err: unknown) {
-      setLastMessage(`❌ Error: ${(err as Error).message}`);
+      setLastMessage(`❌ Transition error: ${(err as Error).message}`);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleDeclineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!declineModalRes) return;
+    setIsPending(true);
+    try {
+      const res = await declineReservationAction({
+        reservationId: declineModalRes.id,
+        reason: declineReason || 'Declined by staff',
+      });
+      if (res.ok) {
+        setReservations((prev) => ({
+          ...prev,
+          items: prev.items.map((r) => (r.id === declineModalRes.id ? res.data : r)),
+        }));
+        setActiveAssignmentsMap((prev) => {
+          const updated = { ...prev };
+          delete updated[declineModalRes.id];
+          return updated;
+        });
+        setDeclineModalRes(null);
+        setDeclineReason('');
+        setLastMessage(`✅ Reservation declined: ${declineModalRes.guestName}`);
+      } else {
+        setLastMessage(`❌ Decline failed: ${res.error.message}`);
+      }
+    } catch (err: unknown) {
+      setLastMessage(`❌ Decline error: ${(err as Error).message}`);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleStaffCreateReservation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsPending(true);
+    try {
+      const startAtIso = new Date(staffCreateForm.reservationStartAt).toISOString();
+      const res = await createStaffReservationAction({
+        businessId,
+        branchId: selectedBranchId,
+        guestName: staffCreateForm.guestName,
+        guestPhone: staffCreateForm.guestPhone || null,
+        guestEmail: staffCreateForm.guestEmail || null,
+        partySize: Number(staffCreateForm.partySize),
+        reservationStartAt: startAtIso,
+        durationMinutes: 90,
+        occasion: staffCreateForm.occasion || null,
+        specialRequests: staffCreateForm.specialRequests || null,
+        internalNotes: staffCreateForm.internalNotes || null,
+        source: 'STAFF',
+      });
+
+      if (res.ok) {
+        setReservations((prev) => ({
+          ...prev,
+          items: [res.data, ...prev.items],
+        }));
+        setShowStaffCreateModal(false);
+        setLastMessage(`✅ Reservation created for ${res.data.guestName} (${res.data.confirmationCode})`);
+      } else {
+        setLastMessage(`❌ Creation failed: ${res.error.message}`);
+      }
+    } catch (err: unknown) {
+      setLastMessage(`❌ Creation error: ${(err as Error).message}`);
     } finally {
       setIsPending(false);
     }
@@ -231,8 +353,8 @@ export function ReservationManagementClient({
         businessId,
         branchId: selectedBranchId,
         guestName: walkInForm.guestName,
-        guestPhone: walkInForm.guestPhone || null,
         partySize: Number(walkInForm.partySize),
+        guestPhone: walkInForm.guestPhone || null,
         specialRequests: walkInForm.specialRequests || null,
       });
 
@@ -241,14 +363,16 @@ export function ReservationManagementClient({
           ...prev,
           items: [res.data.reservation, ...prev.items],
         }));
-        setActiveAssignmentsMap((prev) => ({
-          ...prev,
-          [res.data.reservation.id]: res.data.assignments,
-        }));
+        if (res.data.assignments && res.data.assignments.length > 0) {
+          setActiveAssignmentsMap((prev) => ({
+            ...prev,
+            [res.data.reservation.id]: res.data.assignments,
+          }));
+        }
         setShowWalkInModal(false);
-        setLastMessage(`✅ Walk-in guest ${res.data.reservation.guestName} seated successfully!`);
+        setLastMessage(`✅ Walk-in seated for ${res.data.reservation.guestName}!`);
       } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        setLastMessage(`❌ Walk-in rejected: ${res.error.message}`);
       }
     } catch (err: unknown) {
       setLastMessage(`❌ Walk-in error: ${(err as Error).message}`);
@@ -276,7 +400,7 @@ export function ReservationManagementClient({
         setShowWaitlistModal(false);
         setLastMessage(`✅ Added ${res.data.guestName} to waitlist`);
       } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        setLastMessage(`❌ Waitlist failed: ${res.error.message}`);
       }
     } catch (err: unknown) {
       setLastMessage(`❌ Waitlist error: ${(err as Error).message}`);
@@ -306,13 +430,9 @@ export function ReservationManagementClient({
             [res.data.reservation.id]: res.data.assignments,
           }));
         }
-        const count = res.data.assignments?.length || 0;
-        const tablesText = count === 1
-          ? `and seated at ${res.data.assignments[0].tableName || `Table ${res.data.assignments[0].tableNumber}`}`
-          : `and seated using ${count} tables`;
-        setLastMessage(`✅ Promoted waitlist guest ${entry.guestName} ${tablesText}!`);
+        setLastMessage(`✅ Promoted waitlist guest ${entry.guestName}!`);
       } else {
-        setLastMessage(`✅ SAFELY REJECTED: ${res.error.message}`);
+        setLastMessage(`❌ Promotion error: ${res.error.message}`);
       }
     } catch (err: unknown) {
       setLastMessage(`❌ Promotion error: ${(err as Error).message}`);
@@ -321,23 +441,34 @@ export function ReservationManagementClient({
     }
   };
 
+  // Filter reservations based on active tab and status filter
+  const displayedReservations = reservations.items.filter((r) => {
+    if (statusFilter === 'OPERATIONAL') {
+      return ['PENDING', 'CONFIRMED', 'ARRIVED', 'SEATED'].includes(r.status);
+    }
+    if (statusFilter !== 'ALL') {
+      return r.status === statusFilter;
+    }
+    return true;
+  });
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header & Controls */}
+      {/* Header & Operational Action Bar */}
       <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <span className="px-2.5 py-1 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
-            PHASE 35 STEP 2
+            RESERVATION OPERATIONS
           </span>
-          <h1 className="text-2xl font-bold mt-1">Reservations & Table Allocation</h1>
+          <h1 className="text-2xl font-bold mt-1">Dining Reservations & Allocation</h1>
           <p className="text-sm text-slate-400">
-            Real-time dining table assignment, walk-in seating, & waitlist management.
+            Real-time table assignment, guest seating, waitlist, & operational workflow.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-            <label className="block text-xs text-slate-300 mb-1">Branch</label>
+            <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Branch</label>
             <select
               className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded border border-slate-600 focus:outline-none"
               value={selectedBranchId}
@@ -351,10 +482,19 @@ export function ReservationManagementClient({
             </select>
           </div>
 
+          {hasCreatePermission && (
+            <button
+              onClick={() => setShowStaffCreateModal(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
+            >
+              + New Reservation
+            </button>
+          )}
+
           {hasManagePermission && (
             <button
               onClick={() => setShowWalkInModal(true)}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow min-h-[44px]"
             >
               + Walk-In Seating
             </button>
@@ -384,58 +524,88 @@ export function ReservationManagementClient({
         </div>
       )}
 
-      {/* View Tabs */}
-      <div className="flex gap-2 border-b">
-        <button
-          onClick={() => setActiveTab('today')}
-          className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-            activeTab === 'today' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Today Reservations
-        </button>
-        <button
-          onClick={() => setActiveTab('upcoming')}
-          className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-            activeTab === 'upcoming' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          All Reservations ({reservations.items.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('waitlist')}
-          className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-            activeTab === 'waitlist' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          Waitlist Queue ({waitlist.filter((w) => w.status === 'WAITING').length})
-        </button>
-        {hasManagePermission && (
+      {/* View Tabs & Operational Filter */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b gap-4">
+        <div className="flex gap-2">
           <button
-            onClick={async () => {
-              setActiveTab('settings');
-              if (selectedBranchId) {
-                setIsPending(true);
-                const res = await getReservationSettingsAction(selectedBranchId);
-                setIsPending(false);
-                if (res.ok) {
-                  setBranchSettings(res.data);
-                }
-              }
+            onClick={() => {
+              setActiveTab('today');
+              setStatusFilter('OPERATIONAL');
             }}
             className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
-              activeTab === 'settings' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+              activeTab === 'today' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            ⚙️ Branch Settings
+            Today Operations
           </button>
+          <button
+            onClick={() => {
+              setActiveTab('upcoming');
+              setStatusFilter('ALL');
+            }}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
+              activeTab === 'upcoming' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            All Reservations ({reservations.items.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('waitlist')}
+            className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
+              activeTab === 'waitlist' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Waitlist Queue ({waitlist.filter((w) => w.status === 'WAITING').length})
+          </button>
+          {hasManagePermission && (
+            <button
+              onClick={async () => {
+                setActiveTab('settings');
+                if (selectedBranchId) {
+                  setIsPending(true);
+                  const res = await getReservationSettingsAction(selectedBranchId);
+                  setIsPending(false);
+                  if (res.ok) {
+                    setBranchSettings(res.data);
+                  }
+                }
+              }}
+              className={`px-4 py-2 text-sm font-bold border-b-2 transition ${
+                activeTab === 'settings' ? 'border-amber-600 text-amber-700' : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              ⚙️ Settings
+            </button>
+          )}
+        </div>
+
+        {(activeTab === 'today' || activeTab === 'upcoming') && (
+          <div className="flex items-center gap-2 mb-2 md:mb-0">
+            <span className="text-xs text-slate-500 font-semibold">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="text-xs bg-white border border-slate-300 rounded px-2.5 py-1 font-semibold text-slate-800"
+            >
+              <option value="OPERATIONAL">Active Operational (Pending, Confirmed, Arrived, Seated)</option>
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">PENDING</option>
+              <option value="CONFIRMED">CONFIRMED</option>
+              <option value="ARRIVED">ARRIVED</option>
+              <option value="SEATED">SEATED</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="CANCELLED">CANCELLED</option>
+              <option value="NO_SHOW">NO_SHOW</option>
+              <option value="DECLINED">DECLINED</option>
+            </select>
+          </div>
         )}
       </div>
 
       {/* RESERVATIONS CARDS LIST */}
       {(activeTab === 'today' || activeTab === 'upcoming') && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {reservations.items.map((r) => {
+          {displayedReservations.map((r) => {
             const assignments = activeAssignmentsMap[r.id] || [];
             return (
               <div key={r.id} className="bg-white border rounded-xl p-5 shadow-sm space-y-3 flex flex-col justify-between">
@@ -445,7 +615,21 @@ export function ReservationManagementClient({
                       <span className="text-xs font-mono font-bold text-amber-700">{r.confirmationCode}</span>
                       <h3 className="text-base font-bold text-slate-900 mt-0.5">{r.guestName}</h3>
                     </div>
-                    <span className="px-2.5 py-1 text-xs font-extrabold rounded bg-slate-100 text-slate-800 border">
+                    <span
+                      className={`px-2.5 py-1 text-xs font-extrabold rounded border ${
+                        r.status === 'PENDING'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300'
+                          : r.status === 'CONFIRMED'
+                          ? 'bg-blue-50 text-blue-800 border-blue-300'
+                          : r.status === 'ARRIVED'
+                          ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+                          : r.status === 'SEATED'
+                          ? 'bg-purple-50 text-purple-800 border-purple-300'
+                          : r.status === 'COMPLETED'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-slate-100 text-slate-600 border-slate-300'
+                      }`}
+                    >
                       {r.status}
                     </span>
                   </div>
@@ -475,14 +659,14 @@ export function ReservationManagementClient({
                   </div>
                 </div>
 
-                {/* Actions Footer */}
+                {/* Canonical Action Matrix Footer */}
                 <div className="pt-3 border-t space-y-2">
                   <div className="flex flex-wrap gap-2">
-                    {hasAssignPermission && (
+                    {hasAssignPermission && !['COMPLETED', 'CANCELLED', 'NO_SHOW', 'DECLINED'].includes(r.status) && (
                       <>
                         <button
                           onClick={() => handleOpenAssignModal(r)}
-                          disabled={isPending || r.status === 'COMPLETED' || r.status === 'CANCELLED'}
+                          disabled={isPending}
                           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[36px]"
                         >
                           {assignments.length > 0 ? 'Reassign' : 'Assign Table'}
@@ -490,7 +674,7 @@ export function ReservationManagementClient({
                         {assignments.length === 0 && (
                           <button
                             onClick={() => handleAutoAssign(r)}
-                            disabled={isPending || r.status === 'COMPLETED' || r.status === 'CANCELLED'}
+                            disabled={isPending}
                             className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[36px]"
                           >
                             Auto Fit
@@ -509,60 +693,96 @@ export function ReservationManagementClient({
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {r.status === 'PENDING' && (
-                      <button
-                        onClick={() => handleStatusTransition(r.id, 'confirm')}
-                        disabled={isPending}
-                        className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs font-bold disabled:opacity-40"
-                      >
-                        Confirm
-                      </button>
-                    )}
-                    {r.status === 'CONFIRMED' && (
-                      <button
-                        onClick={() => handleStatusTransition(r.id, 'arrived')}
-                        disabled={isPending}
-                        className="px-2.5 py-1 bg-indigo-600 text-white rounded text-xs font-bold disabled:opacity-40"
-                      >
-                        Arrived
-                      </button>
-                    )}
-                    {r.status === 'ARRIVED' && (
-                      <button
-                        onClick={() => handleStatusTransition(r.id, 'seated')}
-                        disabled={isPending}
-                        className="px-2.5 py-1 bg-purple-600 text-white rounded text-xs font-bold disabled:opacity-40"
-                      >
-                        Seat
-                      </button>
-                    )}
-                    {r.status === 'SEATED' && (
-                      <button
-                        onClick={() => handleStatusTransition(r.id, 'complete')}
-                        disabled={isPending}
-                        className="px-2.5 py-1 bg-emerald-600 text-white rounded text-xs font-bold disabled:opacity-40"
-                      >
-                        Complete
-                      </button>
-                    )}
-                    {['PENDING', 'CONFIRMED', 'ARRIVED'].includes(r.status) && (
-                      <button
-                        onClick={() => handleStatusTransition(r.id, 'cancel')}
-                        disabled={isPending}
-                        className="px-2.5 py-1 bg-rose-600 text-white rounded text-xs font-bold disabled:opacity-40"
-                      >
-                        Cancel
-                      </button>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5">
+                      {/* PENDING: Confirm, Decline, Cancel */}
+                      {r.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => handleStatusTransition(r.id, 'confirm')}
+                            disabled={isPending}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setDeclineModalRes(r)}
+                            disabled={isPending}
+                            className="px-2.5 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                          >
+                            Decline
+                          </button>
+                        </>
+                      )}
+
+                      {/* CONFIRMED: Arrived, No-Show, Cancel */}
+                      {r.status === 'CONFIRMED' && (
+                        <>
+                          <button
+                            onClick={() => handleStatusTransition(r.id, 'arrived')}
+                            disabled={isPending}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                          >
+                            Arrived
+                          </button>
+                          <button
+                            onClick={() => handleStatusTransition(r.id, 'noshow')}
+                            disabled={isPending}
+                            className="px-2.5 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                          >
+                            No-Show
+                          </button>
+                        </>
+                      )}
+
+                      {/* ARRIVED: Seat, Cancel */}
+                      {r.status === 'ARRIVED' && (
+                        <button
+                          onClick={() => handleStatusTransition(r.id, 'seated')}
+                          disabled={isPending}
+                          className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                        >
+                          Seat
+                        </button>
+                      )}
+
+                      {/* SEATED: Complete */}
+                      {r.status === 'SEATED' && (
+                        <button
+                          onClick={() => handleStatusTransition(r.id, 'complete')}
+                          disabled={isPending}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                        >
+                          Complete
+                        </button>
+                      )}
+
+                      {/* CANCEL AVAILABLE FOR ACTIVE NON-TERMINAL STATES */}
+                      {['PENDING', 'CONFIRMED', 'ARRIVED'].includes(r.status) && (
+                        <button
+                          onClick={() => handleStatusTransition(r.id, 'cancel')}
+                          disabled={isPending}
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[32px]"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenDetailModal(r)}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold border min-h-[32px]"
+                    >
+                      Details & History
+                    </button>
                   </div>
                 </div>
               </div>
             );
           })}
-          {reservations.items.length === 0 && (
+          {displayedReservations.length === 0 && (
             <div className="col-span-full bg-white p-8 rounded-xl text-center text-slate-500 border">
-              No reservations found.
+              No reservations match the selected filter.
             </div>
           )}
         </div>
@@ -761,82 +981,6 @@ export function ReservationManagementClient({
               />
             </div>
 
-            {/* Minimum Party Size */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Minimum Party Size
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={branchSettings.minimumPartySize}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, minimumPartySize: parseInt(e.target.value, 10) || 1 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
-            </div>
-
-            {/* Maximum Party Size */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Maximum Party Size
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={branchSettings.maximumPartySize}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, maximumPartySize: parseInt(e.target.value, 10) || 20 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
-            </div>
-
-            {/* Minimum Advance Minutes */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Minimum Advance Booking (Minutes)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={10080}
-                value={branchSettings.minimumAdvanceMinutes}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, minimumAdvanceMinutes: parseInt(e.target.value, 10) || 0 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
-            </div>
-
-            {/* Maximum Advance Days */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Maximum Advance Booking (Days)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={branchSettings.maximumAdvanceDays}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, maximumAdvanceDays: parseInt(e.target.value, 10) || 90 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
-              />
-            </div>
-
             {/* Turnover Buffer */}
             <div className="space-y-1">
               <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
@@ -855,24 +999,261 @@ export function ReservationManagementClient({
                 className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
               />
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Max Table Combination */}
-            <div className="space-y-1">
-              <label className="font-bold text-slate-900 block uppercase tracking-wider text-[10px]">
-                Max Table Combination Count
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={5}
-                value={branchSettings.maxTableCombination || 3}
-                onChange={(e) =>
-                  setBranchSettings((prev: ReservationSettingsDTO | null) =>
-                    prev ? { ...prev, maxTableCombination: parseInt(e.target.value, 10) || 3 } : prev
-                  )
-                }
-                className="w-full px-3 py-2 border rounded-lg bg-white text-xs font-bold"
+      {/* STAFF CREATE RESERVATION MODAL */}
+      {showStaffCreateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleStaffCreateReservation} className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900 border-b pb-2">New Staff Reservation</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Name</label>
+                <input
+                  type="text"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  value={staffCreateForm.guestName}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestName: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Party Size</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  value={staffCreateForm.partySize}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, partySize: Number(e.target.value) })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Phone</label>
+                <input
+                  type="text"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  value={staffCreateForm.guestPhone}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestPhone: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Guest Email</label>
+                <input
+                  type="email"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  value={staffCreateForm.guestEmail}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, guestEmail: e.target.value })}
+                />
+              </div>
+
+              <div className="col-span-full">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reservation Date & Time</label>
+                <input
+                  type="datetime-local"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  value={staffCreateForm.reservationStartAt}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, reservationStartAt: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Occasion</label>
+                <select
+                  className="w-full text-xs border rounded px-3 py-2 bg-white"
+                  value={staffCreateForm.occasion}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, occasion: e.target.value })}
+                >
+                  <option value="">None</option>
+                  <option value="Birthday">Birthday</option>
+                  <option value="Anniversary">Anniversary</option>
+                  <option value="Business Meal">Business Meal</option>
+                  <option value="Date Night">Date Night</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Special Requests</label>
+                <input
+                  type="text"
+                  className="w-full text-xs border rounded px-3 py-2"
+                  placeholder="Window table, highchair..."
+                  value={staffCreateForm.specialRequests}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, specialRequests: e.target.value })}
+                />
+              </div>
+
+              <div className="col-span-full">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Internal Note (Staff Only)</label>
+                <textarea
+                  rows={2}
+                  className="w-full text-xs border rounded px-3 py-2"
+                  placeholder="VIP guest, allergy note..."
+                  value={staffCreateForm.internalNotes}
+                  onChange={(e) => setStaffCreateForm({ ...staffCreateForm, internalNotes: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setShowStaffCreateModal(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40"
+              >
+                Create Reservation
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* DECLINE RESERVATION MODAL */}
+      {declineModalRes && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleDeclineSubmit} className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-slate-900 border-b pb-2">Decline Reservation</h3>
+            <p className="text-xs text-slate-600">
+              Decline booking request for <strong>{declineModalRes.guestName}</strong> ({declineModalRes.confirmationCode}).
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Decline Reason</label>
+              <textarea
+                rows={3}
+                className="w-full text-xs border rounded px-3 py-2"
+                placeholder="Fully booked, private event..."
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                required
               />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setDeclineModalRes(null)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40"
+              >
+                Decline Booking
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* RESERVATION DETAIL & STATUS HISTORY MODAL */}
+      {detailModalRes && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <span className="text-xs font-mono font-bold text-amber-700">{detailModalRes.confirmationCode}</span>
+                <h3 className="text-lg font-bold text-slate-900">{detailModalRes.guestName}</h3>
+              </div>
+              <button
+                onClick={() => setDetailModalRes(null)}
+                className="text-slate-400 hover:text-slate-600 text-xl font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs font-mono text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Status</span>
+                <strong className="text-slate-900 font-sans text-sm">{detailModalRes.status}</strong>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Party Size</span>
+                <strong className="text-slate-900 font-sans text-sm">{detailModalRes.partySize} guests</strong>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Source</span>
+                <span>{detailModalRes.source}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">CRM Customer Link</span>
+                <span className="font-bold text-emerald-700">
+                  {detailModalRes.crmCustomerId ? '✓ Linked CRM Profile' : 'Guest Booking'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Start Time</span>
+                <span>{new Date(detailModalRes.reservationStartAt).toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Contact</span>
+                <span>
+                  {hasContactView
+                    ? detailModalRes.guestPhone || detailModalRes.guestEmail || 'No contact provided'
+                    : detailModalRes.guestPhoneMasked || detailModalRes.guestEmailMasked || 'Masked contact'}
+                </span>
+              </div>
+              {detailModalRes.specialRequests && (
+                <div className="col-span-full">
+                  <span className="text-[10px] text-slate-400 block uppercase">Special Requests</span>
+                  <span className="font-sans text-slate-800">{detailModalRes.specialRequests}</span>
+                </div>
+              )}
+              {detailModalRes.internalNotes && (
+                <div className="col-span-full bg-amber-50 p-2 rounded border border-amber-200">
+                  <span className="text-[10px] text-amber-800 font-bold block uppercase">Internal Staff Note</span>
+                  <span className="font-sans text-amber-950">{detailModalRes.internalNotes}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Status Event Timeline Audit */}
+            <div className="space-y-2 pt-2 border-t">
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Lifecycle Status History</h4>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {detailStatusHistory.map((ev) => (
+                  <div key={ev.id} className="p-2 bg-slate-50 border rounded text-xs font-mono flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-800">
+                        {ev.fromStatus ? `${ev.fromStatus} → ${ev.toStatus}` : ev.toStatus}
+                      </span>
+                      <span className="text-[10px] text-slate-500 ml-2">via {ev.actorType}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{new Date(ev.createdAt).toLocaleTimeString()}</span>
+                  </div>
+                ))}
+                {detailStatusHistory.length === 0 && (
+                  <div className="text-xs text-slate-400 italic">No history records loaded.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t">
+              <button
+                onClick={() => setDetailModalRes(null)}
+                className="px-4 py-2 bg-slate-900 text-white rounded text-xs font-bold"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

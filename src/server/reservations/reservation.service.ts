@@ -153,6 +153,20 @@ export class ReservationService {
       throw new Error('Reservation creation succeeded but failed to load inserted DTO');
     }
 
+    const { NotificationService } = await import('../services/notification.service');
+    NotificationService.createNotificationsForCapability({
+      businessId: fullDTO.businessId,
+      branchId: fullDTO.branchId,
+      capability: 'reservations.view',
+      notificationType: 'RESERVATION_CREATED',
+      priority: 'high',
+      title: 'New Reservation',
+      message: `Reservation for ${fullDTO.guestName} (${fullDTO.partySize} guests) on ${fullDTO.reservationDate}`,
+      entityType: 'reservation',
+      entityId: fullDTO.id,
+      actionUrl: '/dashboard/reservations',
+    }).catch((err) => console.warn('[ReservationService] Notification dispatch failed:', err));
+
     return fullDTO;
   }
 
@@ -185,7 +199,7 @@ export class ReservationService {
     actorType: StatusActorType,
     reason?: string | null
   ): Promise<ReservationDTO> {
-    return this.transitionStatus({
+    const updated = await this.transitionStatus({
       businessId,
       reservationId,
       targetStatus: 'CANCELLED',
@@ -195,6 +209,22 @@ export class ReservationService {
       timestampField: 'cancelled_at',
       cancellationReason: reason,
     });
+
+    const { NotificationService } = await import('../services/notification.service');
+    NotificationService.createNotificationsForCapability({
+      businessId: updated.businessId,
+      branchId: updated.branchId,
+      capability: 'reservations.view',
+      notificationType: 'RESERVATION_CANCELLED',
+      priority: 'high',
+      title: 'Reservation Cancelled',
+      message: `Reservation for ${updated.guestName} (${updated.partySize} guests) on ${updated.reservationDate} was cancelled`,
+      entityType: 'reservation',
+      entityId: updated.id,
+      actionUrl: '/dashboard/reservations',
+    }).catch((err) => console.warn('[ReservationService] Notification dispatch failed:', err));
+
+    return updated;
   }
 
   /**

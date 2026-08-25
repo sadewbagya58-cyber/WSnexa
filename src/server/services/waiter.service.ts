@@ -76,6 +76,41 @@ export class WaiterService {
       };
     }
 
+    if (res.success && res.request_id && tableId) {
+      const { NotificationService } = await import('./notification.service');
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      const admin = createAdminClient();
+      const { data: tableData } = await admin
+        .from('dining_tables')
+        .select('business_id, branch_id, service_area_id, name')
+        .eq('id', tableId)
+        .maybeSingle();
+
+      if (tableData) {
+        const isBillReq = requestType === 'need_bill';
+        const notificationType = isBillReq ? 'BILL_REQUESTED' : 'WAITER_REQUEST_CREATED';
+        const capability = isBillReq ? 'cashier.access' : 'waiter.requests.view';
+        const title = isBillReq ? 'Bill Requested' : 'Waiter Assistance Requested';
+        const tableName = res.table_name || tableData.name || 'Table';
+        const message = `${tableName}: ${notes || (isBillReq ? 'Guest requested bill' : 'Guest requested assistance')}`;
+        const actionUrl = isBillReq ? '/dashboard/cashier' : '/dashboard/waiter';
+
+        NotificationService.createNotificationsForCapability({
+          businessId: tableData.business_id,
+          branchId: tableData.branch_id,
+          capability,
+          notificationType,
+          priority: isBillReq ? 'urgent' : 'high',
+          title,
+          message,
+          entityType: 'waiter_request',
+          entityId: res.request_id,
+          actionUrl,
+          areaId: tableData.service_area_id || null,
+        }).catch((err) => console.warn('[WaiterService] Notification dispatch failed:', err));
+      }
+    }
+
     return {
       success: true,
       data: {

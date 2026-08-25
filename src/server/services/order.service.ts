@@ -455,6 +455,23 @@ export class OrderService {
       };
     }
 
+    if (payload.success && payload.order_id && targetBusinessId && targetBranchId) {
+      const { NotificationService } = await import('./notification.service');
+      const orderNum = payload.order_number_formatted || payload.order_id.slice(0, 6);
+      NotificationService.createNotificationsForCapability({
+        businessId: targetBusinessId,
+        branchId: targetBranchId,
+        capability: 'orders.view',
+        notificationType: 'ORDER_CREATED',
+        priority: 'high',
+        title: 'New Guest Order',
+        message: `Order #${orderNum} placed`,
+        entityType: 'order',
+        entityId: payload.order_id,
+        actionUrl: '/dashboard/kitchen',
+      }).catch((err) => console.warn('[OrderService] Notification dispatch failed:', err));
+    }
+
     return {
       success: true,
       message: 'Order created successfully.',

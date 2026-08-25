@@ -74,7 +74,8 @@
     "verify:phase35-reservation-foundation": "tsx scripts/verify-phase35-reservation-foundation.ts",
     "verify:phase35-table-allocation": "tsx scripts/verify-phase35-table-allocation.ts",
     "verify:phase35-guest-booking-journey": "tsx scripts/verify-phase35-guest-booking-journey.ts",
-    "verify:phase35-closure": "tsx scripts/verify-phase35-closure.ts"
+    "verify:phase35-closure": "tsx scripts/verify-phase35-closure.ts",
+    "verify:v1-notifications": "tsx scripts/verify-v1-notifications.ts"
   },
 
   "dependencies": {

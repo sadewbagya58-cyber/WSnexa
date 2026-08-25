@@ -48,6 +48,8 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell
+      userId={user.id}
+      businessId={business.id}
       businessName={business.name}
       activeBranch={activeBranch}
       branches={branches}

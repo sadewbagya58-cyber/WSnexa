@@ -15,8 +15,12 @@ import { getPageMetadata } from '@/lib/navigation/dashboard-page-metadata';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo } from '@/types';
 
+import { NotificationBell } from '@/components/notifications/notification-bell';
+
 interface DashboardShellProps {
   children: React.ReactNode;
+  userId?: string;
+  businessId?: string;
   userRole: string;
   userPermissions?: string[];
   navSections?: DashboardNavSectionDTO[];
@@ -42,6 +46,8 @@ function formatRoleLabel(role: string): string {
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({
   children,
+  userId,
+  businessId,
   userRole,
   userPermissions = [],
   navSections,
@@ -223,8 +229,11 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
 
-        {/* Right: Desktop profile dropdown + mobile hamburger */}
+        {/* Right: Notification Bell + Desktop profile dropdown + mobile hamburger */}
         <div className="flex items-center gap-2 shrink-0">
+          {userId && businessId && (
+            <NotificationBell userId={userId} businessId={businessId} />
+          )}
 
           {/* Desktop user profile dropdown */}
           <div className="relative hidden lg:block">

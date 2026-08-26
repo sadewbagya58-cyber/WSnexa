@@ -93,6 +93,7 @@ export class SubscriptionPaymentQueryService {
 
   /**
    * List subscription payment records platform-wide for Super Admin with search & filters.
+   * Safely handles short payment references (e.g. #55edde45), UUIDs, transaction IDs, and references without crashing.
    */
   static async listAdminSubscriptionPayments({
     page = 1,
@@ -109,67 +110,99 @@ export class SubscriptionPaymentQueryService {
     const safeLimit = Math.min(100, Math.max(1, limit));
     const offset = (safePage - 1) * safeLimit;
 
-    let baseQuery = admin
-      .from('business_subscription_payments')
-      .select(
-        `
-        *,
-        business:businesses(id, name, slug, status)
-      `,
-        { count: 'exact' }
-      );
+    try {
+      let baseQuery = admin
+        .from('business_subscription_payments')
+        .select(
+          `
+          *,
+          business:businesses(id, name, slug, status)
+        `,
+          { count: 'exact' }
+        );
 
-    if (businessId) {
-      baseQuery = baseQuery.eq('business_id', businessId);
-    }
-
-    if (status && status !== 'all') {
-      baseQuery = baseQuery.eq('status', status as SubscriptionPaymentStatus);
-    }
-
-    if (provider && provider !== 'all') {
-      if (provider === 'none') {
-        baseQuery = baseQuery.is('provider', null);
-      } else {
-        baseQuery = baseQuery.eq('provider', provider as SubscriptionPaymentProviderCode);
+      if (businessId) {
+        baseQuery = baseQuery.eq('business_id', businessId);
       }
+
+      if (status && status !== 'all') {
+        baseQuery = baseQuery.eq('status', status as SubscriptionPaymentStatus);
+      }
+
+      if (provider && provider !== 'all') {
+        if (provider === 'none') {
+          baseQuery = baseQuery.is('provider', null);
+        } else {
+          baseQuery = baseQuery.eq('provider', provider as SubscriptionPaymentProviderCode);
+        }
+      }
+
+      if (purpose && purpose !== 'all') {
+        baseQuery = baseQuery.eq('payment_purpose', purpose as PaymentPurpose);
+      }
+
+      if (plan && plan !== 'all') {
+        baseQuery = baseQuery.eq('plan_code', plan);
+      }
+
+      if (search && search.trim()) {
+        // Strip leading # if present and sanitize special PostgREST characters
+        const cleanQ = search.trim().replace(/^#/, '').replace(/[^a-zA-Z0-9\-_]/g, '');
+
+        if (cleanQ) {
+          // Check if cleanQ is a full valid UUID
+          const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(cleanQ);
+
+          if (isUuid) {
+            baseQuery = baseQuery.or(
+              `id.eq.${cleanQ},provider_transaction_id.ilike.%${cleanQ}%,provider_reference.ilike.%${cleanQ}%`
+            );
+          } else {
+            // Safely search id_text generated column, provider_transaction_id, and provider_reference
+            baseQuery = baseQuery.or(
+              `id_text.ilike.%${cleanQ}%,provider_transaction_id.ilike.%${cleanQ}%,provider_reference.ilike.%${cleanQ}%`
+            );
+          }
+        }
+      }
+
+      baseQuery = baseQuery
+        .order('created_at', { ascending: false })
+        .range(offset, offset + safeLimit - 1);
+
+      const { data, count, error } = await baseQuery;
+
+      if (error) {
+        console.error('Admin subscription payment query error:', error.message);
+        return {
+          data: [],
+          total: 0,
+          page: safePage,
+          limit: safeLimit,
+          totalPages: 1,
+        };
+      }
+
+      const total = count || 0;
+      const totalPages = Math.ceil(total / safeLimit) || 1;
+
+      return {
+        data: data || [],
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages,
+      };
+    } catch (err: unknown) {
+      console.error('Unexpected error in listAdminSubscriptionPayments:', err);
+      return {
+        data: [],
+        total: 0,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: 1,
+      };
     }
-
-    if (purpose && purpose !== 'all') {
-      baseQuery = baseQuery.eq('payment_purpose', purpose as PaymentPurpose);
-    }
-
-    if (plan && plan !== 'all') {
-      baseQuery = baseQuery.eq('plan_code', plan);
-    }
-
-    if (search && search.trim()) {
-      const q = search.trim();
-      baseQuery = baseQuery.or(
-        `id.ilike.%${q}%,provider_transaction_id.ilike.%${q}%,provider_reference.ilike.%${q}%`
-      );
-    }
-
-    baseQuery = baseQuery
-      .order('created_at', { ascending: false })
-      .range(offset, offset + safeLimit - 1);
-
-    const { data, count, error } = await baseQuery;
-
-    if (error) {
-      throw new Error(`Failed to list admin payment records: ${error.message}`);
-    }
-
-    const total = count || 0;
-    const totalPages = Math.ceil(total / safeLimit) || 1;
-
-    return {
-      data: data || [],
-      total,
-      page: safePage,
-      limit: safeLimit,
-      totalPages,
-    };
   }
 
   /**

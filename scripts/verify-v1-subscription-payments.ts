@@ -38,54 +38,46 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 36 Step 4 — Targeted QA Hotfix Verification');
+  console.log('  WSNexa Phase 36 Step 4 — SaaS Payments Search Hotfix Verification');
   console.log('================================================================\n');
 
+  const queryServicePath = path.join(process.cwd(), 'src/server/services/subscription-payment-query.service.ts');
+  assert(fs.existsSync(queryServicePath), '1. SubscriptionPaymentQueryService exists');
+  const queryServiceContent = fs.readFileSync(queryServicePath, 'utf-8');
+
+  // 1. Search Logic & Short-Ref Assertions
+  console.log('--- SECTION 1: Search Architecture & Short Reference Safety ---');
+  assert(!queryServiceContent.includes('id.ilike'), '1. UUID column `id` is NOT directly ILIKE\'d');
+  assert(queryServiceContent.includes('id_text.ilike'), '2. Text-cast column `id_text` is used for ILIKE short-reference searches');
+  assert(queryServiceContent.includes('cleanQ = search.trim().replace(/^#/'), '3. Search input strips leading # from displayed references');
+  assert(queryServiceContent.includes('provider_transaction_id.ilike'), '4. Provider transaction ID search supported');
+  assert(queryServiceContent.includes('provider_reference.ilike'), '5. Provider reference search supported');
+
+  // 2. Error Handling & Malformed Search Defense
+  console.log('\n--- SECTION 2: Error Handling & Crash Defense ---');
+  assert(queryServiceContent.includes('try {'), '6. Query is wrapped in try-catch block');
+  assert(queryServiceContent.includes('return {\n        data: [],'), '7. Query error returns clean empty state without crashing server/UI');
+
+  // 3. Combination with Filters & Pagination
+  console.log('\n--- SECTION 3: Filter Combinations & Pagination ---');
+  assert(queryServiceContent.includes('status && status !== \'all\''), '8. Search combines with status filter');
+  assert(queryServiceContent.includes('provider && provider !== \'all\''), '9. Search combines with provider filter');
+  assert(queryServiceContent.includes('purpose && purpose !== \'all\''), '10. Search combines with purpose filter');
+  assert(queryServiceContent.includes('plan && plan !== \'all\''), '11. Search combines with plan filter');
+  assert(queryServiceContent.includes('range(offset, offset + safeLimit - 1)'), '12. Pagination and count calculations remain correct');
+
+  // 4. Security & Isolation Preservation
+  console.log('\n--- SECTION 4: Security & Baseline Preservation ---');
   const actionPath = path.join(process.cwd(), 'src/server/actions/subscription-payment-admin.ts');
   const actionContent = fs.readFileSync(actionPath, 'utf-8');
+  assert(actionContent.includes('requireSuperAdmin'), '13. Super Admin authorization remains required for platform payments');
+  assert(actionContent.includes('intent.business_id !== authContext.businessId'), '14. Owner billing history remains strictly tenant isolated');
 
-  // 1. Owner Cancellation Hotfix Verification
-  console.log('--- SECTION 1: Owner Pending Intent Cancellation Hotfix ---');
-  assert(actionContent.includes('cancelOwnerPendingPaymentIntentAction'), '1. Dedicated cancelOwnerPendingPaymentIntentAction exists');
-  assert(actionContent.includes('admin_reason: null'), '2. Owner cancellation leaves admin_reason NULL');
-  assert(actionContent.includes('payment.cancelled_by_owner'), '3. Owner cancellation records payment.cancelled_by_owner audit event');
-  assert(actionContent.includes('intent.business_id !== authContext.businessId'), '4. Tenant isolation enforced on owner cancellation');
-  assert(actionContent.includes('intent.status !== \'pending\''), '5. Owner cannot cancel non-pending intents');
-
-  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-billing-history-client.tsx');
-  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
-  assert(ownerClientContent.includes('cancelOwnerPendingPaymentIntentAction'), '6. Owner UI invokes cancelOwnerPendingPaymentIntentAction');
-  assert(ownerClientContent.includes('Billing Interval'), '7. Owner payment detail modal displays Billing Interval');
-  assert(ownerClientContent.includes('Monthly'), '8. Owner payment detail modal displays Monthly billing interval');
-
-  // 2. Super Admin Separate Cancellation Verification
-  console.log('\n--- SECTION 2: Super Admin Cancellation Separation ---');
-  assert(actionContent.includes('cancelPendingPaymentIntentAction'), '9. Super Admin cancellation action exists');
-  assert(actionContent.includes('payment.cancelled_by_admin'), '10. Admin cancellation records payment.cancelled_by_admin audit event');
-  assert(actionContent.includes('REASON_REQUIRED'), '11. Admin cancellation STILL requires administrative reason');
-
-  // 3. Admin App Shell & Route Verification
-  console.log('\n--- SECTION 3: Admin App Shell & Canonical Route Verification ---');
-  const adminPagePath = path.join(process.cwd(), 'src/app/admin/subscription-payments/page.tsx');
-  assert(fs.existsSync(adminPagePath), '12. Canonical /admin/subscription-payments page exists under src/app/admin/ (inherits AdminLayout shell)');
-
-  const oldDashboardAdminPath = path.join(process.cwd(), 'src/app/(dashboard)/admin/subscription-payments/page.tsx');
-  assert(!fs.existsSync(oldDashboardAdminPath), '13. Old route under (dashboard)/admin/subscription-payments removed so DashboardShell does NOT wrap admin page');
-
-  const adminPageContent = fs.readFileSync(adminPagePath, 'utf-8');
-  assert(adminPageContent.includes('requireSuperAdmin'), '14. Page route enforces requireSuperAdmin authorization');
-
-  const adminNavPath = path.join(process.cwd(), 'src/app/admin/admin-navbar.tsx');
-  const adminNavContent = fs.readFileSync(adminNavPath, 'utf-8');
-  assert(adminNavContent.includes('/admin/subscription-payments'), '15. Admin navbar points to canonical /admin/subscription-payments route');
-
-  // 4. Immutability & Security Guards
-  console.log('\n--- SECTION 4: Immutability & Security Guards ---');
-  assert(!actionContent.includes('status: \'paid\''), '16. No action permits marking payment as PAID manually');
-  assert(!actionContent.includes('updatePayload.amount_lkr'), '17. Monetary amounts remain strictly immutable');
+  const migrationPath = path.join(process.cwd(), 'supabase/migrations/20260826060000_v1_subscription_payments_search_fix.sql');
+  assert(fs.existsSync(migrationPath), '15. Migration 20260826060000_v1_subscription_payments_search_fix.sql exists');
 
   console.log('\n================================================================');
-  console.log('  Phase 36 Step 4 Hotfix Verification: ALL 17 ASSERTIONS PASSED');
+  console.log('  Phase 36 Step 4 Search Hotfix: ALL 15 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

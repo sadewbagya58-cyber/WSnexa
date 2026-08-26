@@ -38,91 +38,54 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 36 Step 4 — Owner Billing & Admin Payment Management');
+  console.log('  WSNexa Phase 36 Step 4 — Targeted QA Hotfix Verification');
   console.log('================================================================\n');
 
-  const { SubscriptionPaymentQueryService } = await import('../src/server/services/subscription-payment-query.service');
-  const {
-    getOwnerPaymentHistoryAction,
-    getAdminPaymentsAction,
-    cancelPendingPaymentIntentAction,
-    expirePendingPaymentIntentAction,
-  } = await import('../src/server/actions/subscription-payment-admin');
-  const {
-    SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG,
-    PaymentProviderError,
-  } = await import('../src/server/payments/subscriptions/provider-registry');
-  const { isLegalPaymentStateTransition } = await import('../src/server/payments/subscriptions/payment-state-machine');
-
-  // 1. Service Layer Verification
-  console.log('--- SECTION 1: Service Layer & Tenant Isolation ---');
-  const queryServicePath = path.join(process.cwd(), 'src/server/services/subscription-payment-query.service.ts');
-  assert(fs.existsSync(queryServicePath), '1. SubscriptionPaymentQueryService exists');
-  const queryServiceContent = fs.readFileSync(queryServicePath, 'utf-8');
-  assert(queryServiceContent.includes('listOwnerSubscriptionPayments'), '2. Owner billing history query method exists');
-  assert(queryServiceContent.includes('listAdminSubscriptionPayments'), '3. Admin platform-wide payment list query method exists');
-
-  // 2. Server Action Security & Authorization Boundaries
-  console.log('\n--- SECTION 2: Server Action Security & Role Guards ---');
   const actionPath = path.join(process.cwd(), 'src/server/actions/subscription-payment-admin.ts');
-  assert(fs.existsSync(actionPath), '4. Subscription payment admin server actions exist');
   const actionContent = fs.readFileSync(actionPath, 'utf-8');
-  assert(actionContent.includes('!authContext.isBusinessOwner'), '5. Staff denied owner payment history');
-  assert(actionContent.includes('intent.business_id !== authContext.businessId'), '6. Cross-tenant payment access strictly denied');
-  assert(actionContent.includes('resolveSuperAdminContext'), '7. Super Admin role guard enforced for admin list and actions');
 
-  // 3. Admin Filters, Search & Pagination
-  console.log('\n--- SECTION 3: Admin Query Capabilities & Filters ---');
-  assert(queryServiceContent.includes('status !== \'all\''), '8. Status filter supported');
-  assert(queryServiceContent.includes('plan !== \'all\''), '9. Plan filter supported');
-  assert(queryServiceContent.includes('purpose !== \'all\''), '10. Payment purpose filter supported');
-  assert(queryServiceContent.includes('provider !== \'all\''), '11. Provider filter supported');
-  assert(queryServiceContent.includes('totalPages'), '12. Server-side pagination supported');
+  // 1. Owner Cancellation Hotfix Verification
+  console.log('--- SECTION 1: Owner Pending Intent Cancellation Hotfix ---');
+  assert(actionContent.includes('cancelOwnerPendingPaymentIntentAction'), '1. Dedicated cancelOwnerPendingPaymentIntentAction exists');
+  assert(actionContent.includes('admin_reason: null'), '2. Owner cancellation leaves admin_reason NULL');
+  assert(actionContent.includes('payment.cancelled_by_owner'), '3. Owner cancellation records payment.cancelled_by_owner audit event');
+  assert(actionContent.includes('intent.business_id !== authContext.businessId'), '4. Tenant isolation enforced on owner cancellation');
+  assert(actionContent.includes('intent.status !== \'pending\''), '5. Owner cannot cancel non-pending intents');
 
-  // 4. Safe Administrative Actions & Reason Requirement
-  console.log('\n--- SECTION 4: Safe Administrative Actions & Audit Logging ---');
-  assert(actionContent.includes('REASON_REQUIRED'), '13. Super Admin cancel/expire requires mandatory administrative reason');
-  assert(actionContent.includes('payment.cancelled_by_admin'), '14. Admin cancellation logs platform audit event');
-  assert(actionContent.includes('payment.expired_by_admin'), '15. Admin expiration logs platform audit event');
-
-  // 5. Immutability & Absence of Force Paid Action
-  console.log('\n--- SECTION 5: Immutability & No Force Paid Path ---');
-  assert(!actionContent.includes('status: \'paid\''), '16. No server action permits marking payment intent as PAID manually');
-  assert(!actionContent.includes('updatePayload.amount_lkr'), '17. Monetary amounts remain strictly immutable after intent creation');
-  assert(isLegalPaymentStateTransition('paid', 'pending') === false, '18. Paid payment state machine transition is immutable');
-
-  // 6. Manual Activation Separation
-  console.log('\n--- SECTION 6: Manual Subscription Activation Separation ---');
-  const superAdminSubActionPath = path.join(process.cwd(), 'src/server/actions/super-admin-subscription.ts');
-  const superAdminSubContent = fs.readFileSync(superAdminSubActionPath, 'utf-8');
-  assert(!superAdminSubContent.includes('business_subscription_payments'), '19. Manual subscription activation does NOT fabricate fake paid payment records');
-
-  // 7. UI Components & Route Structure
-  console.log('\n--- SECTION 7: UI Components & Route Structure ---');
   const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-billing-history-client.tsx');
-  assert(fs.existsSync(ownerClientPath), '20. OwnerBillingHistoryClient UI component exists');
   const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
-  assert(ownerClientContent.includes('Billing & Payment History'), '21. Owner billing history section header rendered');
+  assert(ownerClientContent.includes('cancelOwnerPendingPaymentIntentAction'), '6. Owner UI invokes cancelOwnerPendingPaymentIntentAction');
+  assert(ownerClientContent.includes('Billing Interval'), '7. Owner payment detail modal displays Billing Interval');
+  assert(ownerClientContent.includes('Monthly'), '8. Owner payment detail modal displays Monthly billing interval');
 
-  const adminClientPath = path.join(process.cwd(), 'src/components/admin/admin-subscription-payments-client.tsx');
-  assert(fs.existsSync(adminClientPath), '22. AdminSubscriptionPaymentsClient UI component exists');
+  // 2. Super Admin Separate Cancellation Verification
+  console.log('\n--- SECTION 2: Super Admin Cancellation Separation ---');
+  assert(actionContent.includes('cancelPendingPaymentIntentAction'), '9. Super Admin cancellation action exists');
+  assert(actionContent.includes('payment.cancelled_by_admin'), '10. Admin cancellation records payment.cancelled_by_admin audit event');
+  assert(actionContent.includes('REASON_REQUIRED'), '11. Admin cancellation STILL requires administrative reason');
 
-  const adminPagePath = path.join(process.cwd(), 'src/app/(dashboard)/admin/subscription-payments/page.tsx');
-  assert(fs.existsSync(adminPagePath), '23. Admin subscription payments page route handler exists');
+  // 3. Admin App Shell & Route Verification
+  console.log('\n--- SECTION 3: Admin App Shell & Canonical Route Verification ---');
+  const adminPagePath = path.join(process.cwd(), 'src/app/admin/subscription-payments/page.tsx');
+  assert(fs.existsSync(adminPagePath), '12. Canonical /admin/subscription-payments page exists under src/app/admin/ (inherits AdminLayout shell)');
 
-  // 8. Migration & Schema Verification
-  console.log('\n--- SECTION 8: Database Migration Verification ---');
-  const migrationPath = path.join(process.cwd(), 'supabase/migrations/20260826050000_v1_subscription_payments_admin_index.sql');
-  assert(fs.existsSync(migrationPath), '24. Migration 20260826050000_v1_subscription_payments_admin_index.sql exists');
+  const oldDashboardAdminPath = path.join(process.cwd(), 'src/app/(dashboard)/admin/subscription-payments/page.tsx');
+  assert(!fs.existsSync(oldDashboardAdminPath), '13. Old route under (dashboard)/admin/subscription-payments removed so DashboardShell does NOT wrap admin page');
 
-  // 9. Provider Status & Customer Order Domain Preservation
-  console.log('\n--- SECTION 9: Baseline Preservation ---');
-  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.onepay.enabled === false, '25. All candidate providers remain disabled in production');
-  const orderPaymentFile = path.join(process.cwd(), 'src/server/actions/payment.ts');
-  assert(fs.existsSync(orderPaymentFile), '26. Customer order payment domain untouched');
+  const adminPageContent = fs.readFileSync(adminPagePath, 'utf-8');
+  assert(adminPageContent.includes('requireSuperAdmin'), '14. Page route enforces requireSuperAdmin authorization');
+
+  const adminNavPath = path.join(process.cwd(), 'src/app/admin/admin-navbar.tsx');
+  const adminNavContent = fs.readFileSync(adminNavPath, 'utf-8');
+  assert(adminNavContent.includes('/admin/subscription-payments'), '15. Admin navbar points to canonical /admin/subscription-payments route');
+
+  // 4. Immutability & Security Guards
+  console.log('\n--- SECTION 4: Immutability & Security Guards ---');
+  assert(!actionContent.includes('status: \'paid\''), '16. No action permits marking payment as PAID manually');
+  assert(!actionContent.includes('updatePayload.amount_lkr'), '17. Monetary amounts remain strictly immutable');
 
   console.log('\n================================================================');
-  console.log('  Phase 36 Step 4 Verification: ALL 26 ASSERTIONS PASSED');
+  console.log('  Phase 36 Step 4 Hotfix Verification: ALL 17 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

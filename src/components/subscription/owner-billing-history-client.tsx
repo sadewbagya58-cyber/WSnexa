@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { cancelPendingPaymentIntentAction } from '@/server/actions/subscription-payment-admin';
+import { cancelOwnerPendingPaymentIntentAction } from '@/server/actions/subscription-payment-admin';
 
 export interface SubscriptionPaymentItem {
   id: string;
@@ -76,15 +76,16 @@ export function OwnerBillingHistoryClient({
     setIsCancelling(true);
     setActionError(null);
 
-    const res = await cancelPendingPaymentIntentAction({ paymentId });
+    const res = await cancelOwnerPendingPaymentIntentAction({ paymentId });
     setIsCancelling(false);
 
     if (res.success && res.data) {
+      const updatedItem = res.data as SubscriptionPaymentItem;
       setPayments((prev) =>
-        prev.map((p) => (p.id === paymentId ? (res.data as SubscriptionPaymentItem) : p))
+        prev.map((p) => (p.id === paymentId ? updatedItem : p))
       );
       if (selectedPayment?.id === paymentId) {
-        setSelectedPayment(res.data as SubscriptionPaymentItem);
+        setSelectedPayment(updatedItem);
       }
       router.refresh();
     } else {
@@ -242,6 +243,10 @@ export function OwnerBillingHistoryClient({
                   <div className="font-extrabold capitalize text-zinc-950 mt-0.5">{selectedPayment.plan_code}</div>
                 </div>
                 <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Billing Interval</span>
+                  <div className="font-extrabold text-zinc-950 mt-0.5">Monthly</div>
+                </div>
+                <div className="col-span-2">
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Purpose</span>
                   <div className="font-semibold capitalize text-zinc-800 mt-0.5">
                     {(selectedPayment.payment_purpose || 'new_subscription').replace('_', ' ')}

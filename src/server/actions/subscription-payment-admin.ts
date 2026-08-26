@@ -84,6 +84,7 @@ export async function getAdminPaymentsAction(input: GetAdminPaymentsInput = {}) 
  * Server action for a Business Owner to cancel their own PENDING payment intent.
  * Does NOT require or accept an administrative reason.
  * Preserves subscription lifecycle, status, and period dates completely unchanged.
+ * Correctly attributes actor_id in audit_logs to authenticated Business Owner.
  */
 export async function cancelOwnerPendingPaymentIntentAction(input: CancelOwnerPaymentIntentInput) {
   try {
@@ -97,7 +98,7 @@ export async function cancelOwnerPendingPaymentIntentAction(input: CancelOwnerPa
       return { success: false, error: 'UNAUTHORIZED_ROLE', message: 'Only Business Owners can cancel their payment intents.' };
     }
 
-    if (!authContext.businessId) {
+    if (!authContext.businessId || !authContext.userId) {
       return { success: false, error: 'MISSING_BUSINESS_CONTEXT', message: 'No active business context found.' };
     }
 
@@ -140,9 +141,10 @@ export async function cancelOwnerPendingPaymentIntentAction(input: CancelOwnerPa
       return { success: false, error: 'UPDATE_FAILED', message: `Failed to cancel payment intent: ${updateErr?.message}` };
     }
 
-    // Record canonical owner cancellation audit event
+    // Record canonical owner cancellation audit event with explicit actor_id
     await admin.from('audit_logs').insert({
       business_id: intent.business_id,
+      actor_id: authContext.userId,
       action: 'payment.cancelled_by_owner',
       target_type: 'subscription_payment',
       target_id: intent.id,
@@ -165,10 +167,11 @@ export async function cancelOwnerPendingPaymentIntentAction(input: CancelOwnerPa
 /**
  * Server action for Super Admin to cancel a PENDING subscription payment intent.
  * Mandatory administrative reason string is required.
+ * Correctly attributes actor_id in audit_logs to authenticated Super Admin user.
  */
 export async function cancelPendingPaymentIntentAction(input: CancelAdminPaymentIntentInput) {
   try {
-    await requireSuperAdmin();
+    const adminContext = await requireSuperAdmin();
 
     if (!input.paymentId) {
       return { success: false, error: 'INVALID_INPUT', message: 'Payment ID is required.' };
@@ -212,9 +215,10 @@ export async function cancelPendingPaymentIntentAction(input: CancelAdminPayment
       return { success: false, error: 'UPDATE_FAILED', message: `Failed to cancel intent: ${updateErr?.message}` };
     }
 
-    // Record admin cancellation audit entry
+    // Record admin cancellation audit entry with explicit actor_id
     await admin.from('audit_logs').insert({
       business_id: intent.business_id,
+      actor_id: adminContext.user.id,
       action: 'payment.cancelled_by_admin',
       target_type: 'subscription_payment',
       target_id: intent.id,
@@ -237,10 +241,11 @@ export async function cancelPendingPaymentIntentAction(input: CancelAdminPayment
 /**
  * Server action for Super Admin to mark a PENDING subscription payment intent EXPIRED.
  * Mandatory administrative reason string is required.
+ * Correctly attributes actor_id in audit_logs to authenticated Super Admin user.
  */
 export async function expirePendingPaymentIntentAction(input: ExpirePaymentIntentInput) {
   try {
-    await requireSuperAdmin();
+    const adminContext = await requireSuperAdmin();
 
     if (!input.paymentId) {
       return { success: false, error: 'INVALID_INPUT', message: 'Payment ID is required.' };
@@ -284,9 +289,10 @@ export async function expirePendingPaymentIntentAction(input: ExpirePaymentInten
       return { success: false, error: 'UPDATE_FAILED', message: `Failed to expire intent: ${updateErr?.message}` };
     }
 
-    // Record admin expiration audit entry
+    // Record admin expiration audit entry with explicit actor_id
     await admin.from('audit_logs').insert({
       business_id: intent.business_id,
+      actor_id: adminContext.user.id,
       action: 'payment.expired_by_admin',
       target_type: 'subscription_payment',
       target_id: intent.id,

@@ -48,34 +48,21 @@ $$\text{Extra Staff Blocks} = \left\lceil \frac{\max(0, \text{Staff} - 75)}{25} 
 
 | Requested Branches | Requested Staff | Extra Branches | Extra Staff Blocks | Calculation | Total Monthly Price (LKR) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **5** | **75** | 0 | 0 | Base 24,999 + 0 + 0 | **LKR 24,999** |
-| **6** | **75** | 1 | 0 | Base 24,999 + (1 × 3,000) + 0 | **LKR 27,999** |
-| **10** | **75** | 5 | 0 | Base 24,999 + (5 × 3,000) + 0 | **LKR 39,999** |
-| **5** | **76** | 0 | 1 | Base 24,999 + 0 + (1 × 2,000) | **LKR 26,999** |
-| **5** | **100** | 0 | 1 | Base 24,999 + 0 + (1 × 2,000) | **LKR 26,999** |
-| **5** | **101** | 0 | 2 | Base 24,999 + 0 + (2 × 2,000) | **LKR 28,999** |
-| **10** | **200** | 5 | 5 | Base 24,999 + (5 × 3,000) + (5 × 2,000) | **LKR 49,999** |
-| **10** | **201** | 5 | 6 | Base 24,999 + (5 × 3,000) + (6 × 2,000) | **LKR 51,999** |
+| 5 | 75 | 0 | 0 | Base Enterprise | LKR 24,999 |
+| 10 | 200 | 5 | 5 | 24,999 + (5 * 3,000) + (5 * 2,000) | LKR 49,999 |
+| 10 | 201 | 5 | 6 | 24,999 + (5 * 3,000) + (6 * 2,000) | LKR 51,999 |
 
 ---
 
-## 4. Server-Authoritative Pricing & Security
+## 4. Checkout Intent & Idempotency (`subscription-checkout.ts`)
 
-- **Server-Authoritative**: The client browser is **never** permitted to specify or override the payment amount. When checkout requests or payment intents are initiated (`createSubscriptionPaymentIntentAction`), the server recalculates the total from canonical plan configurations.
-- **Integer LKR Currency Math**: All monetary values are represented as integer LKR amounts to eliminate floating-point precision errors.
+- **Server-Authoritative Pricing**: Quotes are recalculated server-side; client payload estimates are never trusted.
+- **Downgrade Protection**: Checkout blocks downgrades if current active branches, staff, tables, or menu items exceed destination plan ceilings (`validateDowngradeEligibility`).
+- **Idempotency Keying**: Payment intent creation uses stable idempotency keys (`sub_intent_${businessId}_${planCode}_${attemptId}`) preventing duplicate intent rows on network retry.
 
 ---
 
-## 5. Provider-Neutral Gateway Architecture (Phase 36 Step 3)
-
-WSNexa utilizes a provider-neutral gateway architecture separating core subscription billing logic from external gateway adapters.
-
-### Provider Contract (`SubscriptionPaymentProvider`)
-All payment provider adapters must implement the canonical interface [`src/server/payments/subscriptions/subscription-payment-provider.ts`](file:///c:/Users/x/.antigravity/wsnexa/src/server/payments/subscriptions/subscription-payment-provider.ts):
-- `createCheckout(input: CreateCheckoutInput)`: Returns normalized `CreateCheckoutResult` (`provider`, `checkoutId`, `redirectUrl`).
-- `verifyReturn(input)`: Verifies browser callback parameters.
-- `verifyWebhook(payload, headers)`: Verifies webhook payload and cryptographic signature.
-- `getPaymentStatus?(providerTransactionId)`: Directly queries provider transaction status.
+## 5. Provider-Neutral Architecture & Verification Boundaries
 
 ### Provider Registry & Availability Model
 - Candidate providers: **OnePay**, **Dialog**, **PayHere**.
@@ -100,23 +87,53 @@ Strict legal payment transitions:
 
 ---
 
-## 6. Owner Billing & Payment History (Phase 36 Step 4)
+## 6. Owner Billing & Payment History
 
 - Route: `/dashboard/settings/subscription`
 - **Tenant Isolation**: Owners inspect payment records for their own business only. Non-owner staff are denied access.
 - **Visual Status Badges**: High-contrast badges for `PENDING`, `PROCESSING`, `PAID`, `FAILED`, `CANCELLED`, `EXPIRED`, and `REFUNDED`.
 - **Payment Detail Modal**: Displays intent reference, plan, purpose, billing interval, provider metadata, full timestamps, and Enterprise scale snapshot.
-- **Safe Actions**: Owners may cancel pending payment intents or view details. Owners cannot mark payments paid or edit monetary amounts.
+- **Safe Owner Actions**: Owners can cancel their own pending payment intents (`cancelOwnerPendingPaymentIntentAction`). Requires no administrative reason.
 
 ---
 
-## 7. Super Admin Subscription Payment Management (Phase 36 Step 4)
+## 7. Super Admin Subscription Payment Management
 
-- Route: `/admin/subscription-payments`
-- **Platform-Wide Table & Search**: Paginated list with filters (`Status`, `Provider`, `Purpose`, `Plan`) and search by ID, transaction ID, reference, or business name.
+- Route: `/admin/subscription-payments` (inherits Platform Admin shell `AdminLayout`)
+- **Platform-Wide Table & Search**: Paginated list with filters (`Status`, `Provider`, `Purpose`, `Plan`) and safe text search by 8-char short ref (via generated `id_text`), full UUID, transaction ID, or provider reference.
 - **Business Level Link**: Integrated into `/admin/businesses/[id]` for direct venue payment history inspection.
 - **Safe Administrative Actions**:
   - `Cancel Pending Intent` (`payment.cancelled_by_admin` audit entry)
   - `Expire Pending Intent` (`payment.expired_by_admin` audit entry)
   - Requires mandatory administrative reason string.
 - **Manual Activation Separation**: Super Admin manual subscription activation operates on subscription lifecycle and does NOT fabricate fake `paid` payment rows.
+
+---
+
+## 8. Gateway Integration Handoff Procedure
+
+When merchant approval and API credentials for a real provider (OnePay, Dialog, or PayHere) are received:
+
+1. **Implement Provider Adapter**:
+   - Implement `SubscriptionPaymentProvider` interface in `src/server/payments/subscriptions/providers/[provider].provider.ts`.
+   - Implement `initiatePayment()`, `verifyPaymentReturn()`, `verifyWebhook()`, `parseWebhookPayload()`, and `cancelPayment()`.
+2. **Configure Provider Registry**:
+   - Update `SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG` in `src/server/payments/subscriptions/provider-registry.ts`:
+     Set `enabled: true` and map environment variables for merchant keys/secrets.
+3. **Environment Credentials**:
+   - Add server-only environment variables (e.g. `ONEPAY_MERCHANT_ID`, `ONEPAY_SECRET_KEY`) to production environment. NEVER expose keys under `NEXT_PUBLIC_*`.
+4. **Handoff Contract**:
+   - Do NOT modify `SubscriptionPricingService`, `business_subscription_payments` schema, or `SubscriptionPaymentSettlementService`. Provider adapter will invoke `SubscriptionPaymentSettlementService.settleVerifiedPayment` upon cryptographically verified webhook delivery.
+
+---
+
+## 9. Audit Actor Attribution & Phase 36 Closure State
+
+- **Actor Attribution**: Payment audit events explicitly record authenticated user IDs:
+  - `payment.cancelled_by_owner` $\rightarrow$ `actor_id = authContext.userId`
+  - `payment.cancelled_by_admin` $\rightarrow$ `actor_id = adminContext.user.id`
+  - `payment.expired_by_admin` $\rightarrow$ `actor_id = adminContext.user.id`
+- **Current Disabled Provider Status**:
+  - `onepay`: `enabled = false`
+  - `dialog`: `enabled = false`
+  - `payhere`: `enabled = false`

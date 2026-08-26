@@ -11,15 +11,28 @@ export interface SubscriptionPlanLimits {
 export interface SubscriptionPlanDefinition {
   code: SubscriptionPlanCode;
   name: string;
-  priceLkrMonthly: number | null; // null for Enterprise
+  priceLkrMonthly: number | null; // null for Custom Enterprise
   limits: SubscriptionPlanLimits;
 }
+
+export const SUBSCRIPTION_PRICING_CONFIG = {
+  currency: 'LKR',
+  pricingEngineVersion: 'v1',
+  starterMonthlyLkr: 4499,
+  growthMonthlyLkr: 8999,
+  enterpriseBaseMonthlyLkr: 24999,
+  enterpriseIncludedBranches: 5,
+  enterpriseIncludedStaff: 75,
+  enterpriseExtraBranchMonthlyLkr: 3000,
+  enterpriseExtraStaffBlockSize: 25,
+  enterpriseExtraStaffBlockMonthlyLkr: 2000,
+} as const;
 
 export const SUBSCRIPTION_PLANS: Record<SubscriptionPlanCode, SubscriptionPlanDefinition> = {
   starter: {
     code: 'starter',
     name: 'Starter',
-    priceLkrMonthly: 4499,
+    priceLkrMonthly: SUBSCRIPTION_PRICING_CONFIG.starterMonthlyLkr,
     limits: {
       maxBranches: 1,
       maxActiveStaff: 10,
@@ -31,7 +44,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlanCode, SubscriptionPlanDe
   growth: {
     code: 'growth',
     name: 'Growth',
-    priceLkrMonthly: 8999,
+    priceLkrMonthly: SUBSCRIPTION_PRICING_CONFIG.growthMonthlyLkr,
     limits: {
       maxBranches: 3,
       maxActiveStaff: 40,
@@ -43,7 +56,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlanCode, SubscriptionPlanDe
   enterprise: {
     code: 'enterprise',
     name: 'Enterprise',
-    priceLkrMonthly: null, // Custom
+    priceLkrMonthly: null, // Custom enterprise pricing calculated dynamically
     limits: {
       maxBranches: null, // null = Unlimited / Custom
       maxActiveStaff: null,

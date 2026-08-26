@@ -38,7 +38,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 36 Step 2 — Subscription Checkout & Enterprise Configurator');
+  console.log('  WSNexa Phase 36 Step 2 — Subscription Checkout & Button UX Verification');
   console.log('================================================================\n');
 
   const { SubscriptionPricingService } = await import('../src/server/services/subscription-pricing.service');
@@ -122,33 +122,45 @@ async function runVerification() {
   assert(configuratorContent.includes('step={1}'), '16. EnterpriseConfigurator range input step is 1');
   assert(configuratorContent.includes('s - 1'), '17. Staff minus button decrements by 1');
 
-  // 4. Authorization & Security Checks
-  console.log('\n--- SECTION 4: Authorization & Platform Status Protection ---');
-  assert(checkoutContent.includes('!authContext.isBusinessOwner'), '18. Non-owner staff checkout strictly rejected');
-  assert(checkoutContent.includes('business.status === \'suspended\''), '19. Platform-suspended workspace checkout strictly blocked with PLATFORM_SUSPENDED');
-  assert(checkoutContent.includes('validateDowngradeEligibility'), '20. Downgrade over-limit eligibility checked before intent creation');
+  // 4. Plan Card Button Interaction UX
+  console.log('\n--- SECTION 4: Plan Card Button Interaction UX ---');
+  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-subscription-client.tsx');
+  assert(fs.existsSync(ownerClientPath), '18. OwnerSubscriptionClient component exists');
 
-  // 5. Component & Route Structure
-  console.log('\n--- SECTION 5: Component & Route Structure ---');
+  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
+  assert(ownerClientContent.includes('active:scale-[0.98]'), '19. Pressed feedback active:scale-[0.98] applied to plan card buttons');
+  assert(ownerClientContent.includes('Opening Checkout...'), '20. Immediate loading text feedback applied');
+  assert(ownerClientContent.includes('animate-spin'), '21. Inline loading spinner displayed during checkout preparation');
+  assert(ownerClientContent.includes('disabled={isDisabled}'), '22. Buttons disabled while navigation/loading in progress to prevent double clicks');
+  assert(ownerClientContent.includes('Active Plan'), '23. Current active plan state clearly styled as non-clickable Active Plan');
+
+  // 5. Authorization & Security Checks
+  console.log('\n--- SECTION 5: Authorization & Platform Status Protection ---');
+  assert(checkoutContent.includes('!authContext.isBusinessOwner'), '24. Non-owner staff checkout strictly rejected');
+  assert(checkoutContent.includes('business.status === \'suspended\''), '25. Platform-suspended workspace checkout strictly blocked with PLATFORM_SUSPENDED');
+  assert(checkoutContent.includes('validateDowngradeEligibility'), '26. Downgrade over-limit eligibility checked before intent creation');
+
+  // 6. Component & Route Structure
+  console.log('\n--- SECTION 6: Component & Route Structure ---');
   const reviewClientPath = path.join(process.cwd(), 'src/components/subscription/subscription-checkout-review-client.tsx');
-  assert(fs.existsSync(reviewClientPath), '21. SubscriptionCheckoutReviewClient component exists');
+  assert(fs.existsSync(reviewClientPath), '27. SubscriptionCheckoutReviewClient component exists');
 
   const reviewClientContent = fs.readFileSync(reviewClientPath, 'utf-8');
-  assert(reviewClientContent.includes('Online Payment Coming Soon'), '22. Honest Gateway Unavailable notice displayed post-intent creation');
-  assert(!reviewClientContent.includes('billing@wsnexa.internal'), '23. Zero fake email or fake contact details in checkout UI');
-  assert(reviewClientContent.includes('LKR {createdIntent.amountLkr.toLocaleString()}'), '24. Intent amount rendered from server response');
+  assert(reviewClientContent.includes('Online Payment Coming Soon'), '28. Honest Gateway Unavailable notice displayed post-intent creation');
+  assert(!reviewClientContent.includes('billing@wsnexa.internal'), '29. Zero fake email or fake contact details in checkout UI');
+  assert(reviewClientContent.includes('LKR {createdIntent.amountLkr.toLocaleString()}'), '30. Intent amount rendered from server response');
 
   const checkoutPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/settings/subscription/checkout/page.tsx');
-  assert(fs.existsSync(checkoutPagePath), '25. Next.js /dashboard/settings/subscription/checkout page route exists');
+  assert(fs.existsSync(checkoutPagePath), '31. Next.js /dashboard/settings/subscription/checkout page route exists');
 
-  // 6. Payment Intent & Idempotency Properties
-  console.log('\n--- SECTION 6: Payment Intent & Idempotency ---');
-  assert(checkoutContent.includes('status: \'pending\''), '26. Payment intent creates status pending');
-  assert(checkoutContent.includes('provider: null'), '27. Provider remains null until direct provider integration');
-  assert(checkoutContent.includes('idempotencyKey'), '28. Idempotency key generated to prevent duplicate intent rows on retry');
+  // 7. Payment Intent & Idempotency Properties
+  console.log('\n--- SECTION 7: Payment Intent & Idempotency ---');
+  assert(checkoutContent.includes('status: \'pending\''), '32. Payment intent creates status pending');
+  assert(checkoutContent.includes('provider: null'), '33. Provider remains null until direct provider integration');
+  assert(checkoutContent.includes('idempotencyKey'), '34. Idempotency key generated to prevent duplicate intent rows on retry');
 
   console.log('\n================================================================');
-  console.log('  Phase 36 Step 2 Staff Fix Verification: ALL 28 ASSERTIONS PASSED');
+  console.log('  Phase 36 Step 2 UX Verification: ALL 34 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

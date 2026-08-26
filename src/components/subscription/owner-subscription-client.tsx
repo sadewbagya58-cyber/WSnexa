@@ -43,6 +43,7 @@ export function OwnerSubscriptionClient({
   const router = useRouter();
   const { subscription, plan, effectiveStatus, effectiveLimits, daysRemaining } = subContext;
   const [showEnterpriseConfig, setShowEnterpriseConfig] = useState(false);
+  const [loadingPlanCode, setLoadingPlanCode] = useState<SubscriptionPlanCode | null>(null);
 
   const renderStatusBadge = () => {
     switch (effectiveStatus) {
@@ -70,9 +71,12 @@ export function OwnerSubscriptionClient({
   ];
 
   const handleSelectPlan = (code: SubscriptionPlanCode) => {
+    if (loadingPlanCode !== null) return;
+
     if (code === 'enterprise') {
       setShowEnterpriseConfig(true);
     } else {
+      setLoadingPlanCode(code);
       router.push(`/dashboard/settings/subscription/checkout?plan=${code}`);
     }
   };
@@ -168,6 +172,8 @@ export function OwnerSubscriptionClient({
           {(Object.keys(SUBSCRIPTION_PLANS) as SubscriptionPlanCode[]).map((code) => {
             const item = SUBSCRIPTION_PLANS[code];
             const isCurrent = subscription.plan_code === code;
+            const isLoadingThis = loadingPlanCode === code;
+            const isDisabled = loadingPlanCode !== null || isCurrent;
 
             return (
               <div
@@ -207,17 +213,29 @@ export function OwnerSubscriptionClient({
                   {isCurrent ? (
                     <button
                       disabled
-                      className="w-full py-2.5 rounded-xl bg-zinc-100 text-zinc-500 font-bold text-xs cursor-default"
+                      aria-disabled="true"
+                      className="w-full h-11 rounded-xl bg-zinc-100/90 text-zinc-500 font-extrabold text-xs border border-zinc-200 cursor-default select-none flex items-center justify-center gap-1.5"
                     >
-                      Active Plan
+                      ✓ Active Plan
                     </button>
                   ) : (
                     <button
                       type="button"
+                      disabled={isDisabled}
                       onClick={() => handleSelectPlan(code)}
-                      className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer"
+                      className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 active:scale-[0.98] text-white font-extrabold text-xs transition-all duration-150 shadow-xs hover:shadow-md cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2"
                     >
-                      {code === 'enterprise' ? 'Configure Enterprise ⚡' : `Select ${item.name} ⚡`}
+                      {isLoadingThis ? (
+                        <>
+                          <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span>Opening Checkout...</span>
+                        </>
+                      ) : (
+                        <span>{code === 'enterprise' ? 'Configure Enterprise ⚡' : `Select ${item.name} ⚡`}</span>
+                      )}
                     </button>
                   )}
                 </div>

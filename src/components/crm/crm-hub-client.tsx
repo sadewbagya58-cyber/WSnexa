@@ -160,11 +160,27 @@ export function CRMHubClient({
       {/* Header Banner */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Guest CRM & Retention Hub</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Customer Workspace</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Unified customer profiles, deterministic RFM segmentation, and consent-safe hospitality actions.
+            Unified customer profiles, customer feedback reviews, reputation analytics, and retention.
           </p>
         </div>
+      </div>
+
+      {/* Workspace Quick Links */}
+      <div className="flex flex-wrap gap-2 pb-2">
+        <Link href="/dashboard/customers" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white shadow-xs">
+          👥 Customer Directory
+        </Link>
+        <Link href="/dashboard/reviews" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+          ⭐ Customer Reviews
+        </Link>
+        <Link href="/dashboard/reputation" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+          📊 Reputation & Scores
+        </Link>
+        <Link href="/dashboard/loyalty" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
+          🎁 Loyalty Program
+        </Link>
       </div>
 
       {errorMessage && (

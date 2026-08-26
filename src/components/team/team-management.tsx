@@ -266,6 +266,23 @@ export function TeamManagement({
         </div>
       </div>
 
+      {/* Team Workspace Sub-Groups Navigation */}
+      <div className="flex flex-wrap items-center gap-2 pb-2">
+        <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 mr-1">Workspace Areas:</span>
+        <Link href="/dashboard/team" className="min-h-[44px] inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-zinc-950 text-white shadow-xs">
+          👥 Staff & Invitations
+        </Link>
+        <Link href="/dashboard/people" className="min-h-[44px] inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 transition-colors">
+          📁 People Directory
+        </Link>
+        <Link href="/dashboard/access/roles" className="min-h-[44px] inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 transition-colors">
+          🛡️ Roles & Permissions
+        </Link>
+        <Link href="/dashboard/organization/structure" className="min-h-[44px] inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 transition-colors">
+          🏛️ Organization & Positions
+        </Link>
+      </div>
+
       {/* Staff Directory Cards (Responsive Mobile & Desktop Grid) */}
       <div className="space-y-4 min-w-0">
         {members.length === 0 ? (

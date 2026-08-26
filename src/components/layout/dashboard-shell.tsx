@@ -111,7 +111,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           if (userRole === 'business_owner') return true;
           const requiredPerm = item.requiredPermission || getRequiredPermissionForRoute(item.href);
           if (!requiredPerm) return true;
-          return userPermissions.includes(requiredPerm);
+          const candidatePerms = Array.isArray(requiredPerm) ? requiredPerm : [requiredPerm];
+          return candidatePerms.some((p) => userPermissions.includes(p));
         }).map((item) => ({
           id: item.id,
           label: item.label,

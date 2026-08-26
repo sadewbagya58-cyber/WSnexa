@@ -9,39 +9,50 @@ import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 /**
  * Checks whether an AuthorizationContext grants effective permission capability for a nav item.
- * Explicit DENY overrides take highest precedence over all roles, grants, and owner status.
+ * Supports a single PermissionKey or an array of candidate PermissionKeys.
+ * Parent hub collapses only if user has NO accessible child permission.
  */
 export function hasNavCapability(
   context: AuthorizationContext,
-  requiredPerm?: PermissionKey
+  requiredPerm?: PermissionKey | PermissionKey[]
 ): boolean {
   if (!requiredPerm) return true;
 
-  // 1. Explicit DENY override precedence (Highest precedence across all users)
-  const hasDenyOverride = (context.permissionOverrides || []).some(
-    (o) => o.permissionKey === requiredPerm && o.effect === 'deny'
-  );
-  if (hasDenyOverride) return false;
+  const perms = Array.isArray(requiredPerm) ? requiredPerm : [requiredPerm];
 
-  // 2. Business Owner (Implicit full access if no explicit DENY)
-  if (context.isBusinessOwner) return true;
+  // Business Owner has full access unless explicitly denied across all candidate permissions
+  if (context.isBusinessOwner) {
+    const allDenied = perms.every((p) =>
+      (context.permissionOverrides || []).some((o) => o.permissionKey === p && o.effect === 'deny')
+    );
+    return !allDenied;
+  }
 
-  // 3. Role Permissions (built-in or custom role permissions)
-  if ((context.rolePermissions || []).includes(requiredPerm)) return true;
+  // Evaluate candidate permissions for built-in/custom roles, overrides, and scope grants
+  return perms.some((p) => {
+    // 1. Explicit DENY override precedence
+    const hasDenyOverride = (context.permissionOverrides || []).some(
+      (o) => o.permissionKey === p && o.effect === 'deny'
+    );
+    if (hasDenyOverride) return false;
 
-  // 4. Member Permission Overrides (ALLOW effect)
-  const hasAllowOverride = (context.permissionOverrides || []).some(
-    (o) => o.permissionKey === requiredPerm && o.effect === 'allow'
-  );
-  if (hasAllowOverride) return true;
+    // 2. Role Permissions (built-in or custom role permissions)
+    if ((context.rolePermissions || []).includes(p)) return true;
 
-  // 5. Permission Scope Grants (ALLOW effect)
-  const hasScopeGrant = (context.scopeGrants || []).some(
-    (g) => g.permissionKey === requiredPerm && g.effect === 'allow'
-  );
-  if (hasScopeGrant) return true;
+    // 3. Member Permission Overrides (ALLOW effect)
+    const hasAllowOverride = (context.permissionOverrides || []).some(
+      (o) => o.permissionKey === p && o.effect === 'allow'
+    );
+    if (hasAllowOverride) return true;
 
-  return false;
+    // 4. Permission Scope Grants (ALLOW effect)
+    const hasScopeGrant = (context.scopeGrants || []).some(
+      (g) => g.permissionKey === p && g.effect === 'allow'
+    );
+    if (hasScopeGrant) return true;
+
+    return false;
+  });
 }
 
 /**

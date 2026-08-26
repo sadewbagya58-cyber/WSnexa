@@ -244,6 +244,14 @@ export function OwnerSubscriptionClient({
           })}
         </div>
       </div>
+
+      {/* Manual Activation Notice */}
+      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-xs text-zinc-600 space-y-1">
+        <h4 className="font-bold text-zinc-950">Manual Activation Required</h4>
+        <p>
+          For enterprise customization, high-volume venues, or custom branch billing, contact WSNexa Support. All activations are handled via server-authoritative entitlement rules.
+        </p>
+      </div>
     </div>
   );
 }

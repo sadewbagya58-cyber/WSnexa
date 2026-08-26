@@ -15,6 +15,7 @@ export const ADMIN_NAV_ITEMS = [
   { label: 'Overview', href: '/admin', icon: '📊', exact: true },
   { label: 'Venues', href: '/admin/venues', icon: '🏛️' },
   { label: 'Businesses', href: '/admin/businesses', icon: '🏢' },
+  { label: 'SaaS Payments', href: '/admin/subscription-payments', icon: '💳' },
   { label: 'Branches', href: '/admin/branches', icon: '📍' },
   { label: 'Users', href: '/admin/users', icon: '👥' },
   { label: 'Super Admins', href: '/admin/super-admins', icon: '🛡️' },

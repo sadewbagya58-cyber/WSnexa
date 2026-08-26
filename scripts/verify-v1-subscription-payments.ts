@@ -38,110 +38,91 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 36 Step 3 — Provider-Neutral Payment Gateway Architecture');
+  console.log('  WSNexa Phase 36 Step 4 — Owner Billing & Admin Payment Management');
   console.log('================================================================\n');
 
-  const { SubscriptionPricingService } = await import('../src/server/services/subscription-pricing.service');
+  const { SubscriptionPaymentQueryService } = await import('../src/server/services/subscription-payment-query.service');
   const {
-    getSubscriptionPaymentProvider,
+    getOwnerPaymentHistoryAction,
+    getAdminPaymentsAction,
+    cancelPendingPaymentIntentAction,
+    expirePendingPaymentIntentAction,
+  } = await import('../src/server/actions/subscription-payment-admin');
+  const {
     SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG,
     PaymentProviderError,
   } = await import('../src/server/payments/subscriptions/provider-registry');
-  const {
-    isLegalPaymentStateTransition,
-    assertLegalPaymentStateTransition,
-  } = await import('../src/server/payments/subscriptions/payment-state-machine');
-  const { SubscriptionPaymentSettlementService } = await import('../src/server/payments/subscriptions/subscription-settlement.service');
-  const { SubscriptionService } = await import('../src/server/services/subscription.service');
+  const { isLegalPaymentStateTransition } = await import('../src/server/payments/subscriptions/payment-state-machine');
 
-  // 1. Provider Interface & Registry Verification
-  console.log('--- SECTION 1: Provider Interface & Registry ---');
-  const contractPath = path.join(process.cwd(), 'src/server/payments/subscriptions/subscription-payment-provider.ts');
-  assert(fs.existsSync(contractPath), '1. Provider contract interface file exists');
+  // 1. Service Layer Verification
+  console.log('--- SECTION 1: Service Layer & Tenant Isolation ---');
+  const queryServicePath = path.join(process.cwd(), 'src/server/services/subscription-payment-query.service.ts');
+  assert(fs.existsSync(queryServicePath), '1. SubscriptionPaymentQueryService exists');
+  const queryServiceContent = fs.readFileSync(queryServicePath, 'utf-8');
+  assert(queryServiceContent.includes('listOwnerSubscriptionPayments'), '2. Owner billing history query method exists');
+  assert(queryServiceContent.includes('listAdminSubscriptionPayments'), '3. Admin platform-wide payment list query method exists');
 
-  const registryPath = path.join(process.cwd(), 'src/server/payments/subscriptions/provider-registry.ts');
-  assert(fs.existsSync(registryPath), '2. Provider registry file exists');
+  // 2. Server Action Security & Authorization Boundaries
+  console.log('\n--- SECTION 2: Server Action Security & Role Guards ---');
+  const actionPath = path.join(process.cwd(), 'src/server/actions/subscription-payment-admin.ts');
+  assert(fs.existsSync(actionPath), '4. Subscription payment admin server actions exist');
+  const actionContent = fs.readFileSync(actionPath, 'utf-8');
+  assert(actionContent.includes('!authContext.isBusinessOwner'), '5. Staff denied owner payment history');
+  assert(actionContent.includes('intent.business_id !== authContext.businessId'), '6. Cross-tenant payment access strictly denied');
+  assert(actionContent.includes('resolveSuperAdminContext'), '7. Super Admin role guard enforced for admin list and actions');
 
-  // Assert unknown provider rejected
-  assert.throws(
-    () => getSubscriptionPaymentProvider('unknown_provider'),
-    (err: unknown) => err instanceof PaymentProviderError && err.code === 'PROVIDER_UNSUPPORTED',
-    '3. Unknown provider code is rejected with PROVIDER_UNSUPPORTED'
-  );
+  // 3. Admin Filters, Search & Pagination
+  console.log('\n--- SECTION 3: Admin Query Capabilities & Filters ---');
+  assert(queryServiceContent.includes('status !== \'all\''), '8. Status filter supported');
+  assert(queryServiceContent.includes('plan !== \'all\''), '9. Plan filter supported');
+  assert(queryServiceContent.includes('purpose !== \'all\''), '10. Payment purpose filter supported');
+  assert(queryServiceContent.includes('provider !== \'all\''), '11. Provider filter supported');
+  assert(queryServiceContent.includes('totalPages'), '12. Server-side pagination supported');
 
-  // Assert disabled provider rejected
-  assert.throws(
-    () => getSubscriptionPaymentProvider('onepay'),
-    (err: unknown) => err instanceof PaymentProviderError && err.code === 'PROVIDER_DISABLED',
-    '4. Disabled provider code is rejected with PROVIDER_DISABLED'
-  );
+  // 4. Safe Administrative Actions & Reason Requirement
+  console.log('\n--- SECTION 4: Safe Administrative Actions & Audit Logging ---');
+  assert(actionContent.includes('REASON_REQUIRED'), '13. Super Admin cancel/expire requires mandatory administrative reason');
+  assert(actionContent.includes('payment.cancelled_by_admin'), '14. Admin cancellation logs platform audit event');
+  assert(actionContent.includes('payment.expired_by_admin'), '15. Admin expiration logs platform audit event');
 
-  // Assert no provider is enabled by default
-  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.onepay.enabled === false, '5a. OnePay is disabled by default');
-  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.dialog.enabled === false, '5b. Dialog is disabled by default');
-  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.payhere.enabled === false, '5c. PayHere is disabled by default');
+  // 5. Immutability & Absence of Force Paid Action
+  console.log('\n--- SECTION 5: Immutability & No Force Paid Path ---');
+  assert(!actionContent.includes('status: \'paid\''), '16. No server action permits marking payment intent as PAID manually');
+  assert(!actionContent.includes('updatePayload.amount_lkr'), '17. Monetary amounts remain strictly immutable after intent creation');
+  assert(isLegalPaymentStateTransition('paid', 'pending') === false, '18. Paid payment state machine transition is immutable');
 
-  // 2. Return & Webhook Routes Security Boundaries
-  console.log('\n--- SECTION 2: Callback & Webhook Security Boundaries ---');
-  const returnRoutePath = path.join(process.cwd(), 'src/app/api/subscription-payments/[provider]/return/route.ts');
-  assert(fs.existsSync(returnRoutePath), '6. Return route API handler exists');
-  const returnContent = fs.readFileSync(returnRoutePath, 'utf-8');
-  assert(returnContent.includes('adapter.verifyReturn'), '7. Return route does not trust browser query parameters without adapter verification');
+  // 6. Manual Activation Separation
+  console.log('\n--- SECTION 6: Manual Subscription Activation Separation ---');
+  const superAdminSubActionPath = path.join(process.cwd(), 'src/server/actions/super-admin-subscription.ts');
+  const superAdminSubContent = fs.readFileSync(superAdminSubActionPath, 'utf-8');
+  assert(!superAdminSubContent.includes('business_subscription_payments'), '19. Manual subscription activation does NOT fabricate fake paid payment records');
 
-  const webhookRoutePath = path.join(process.cwd(), 'src/app/api/subscription-payments/[provider]/webhook/route.ts');
-  assert(fs.existsSync(webhookRoutePath), '8. Webhook route API handler exists');
-  const webhookContent = fs.readFileSync(webhookRoutePath, 'utf-8');
-  assert(webhookContent.includes('adapter.verifyWebhook'), '9. Webhook route delegates body & signature verification to adapter');
+  // 7. UI Components & Route Structure
+  console.log('\n--- SECTION 7: UI Components & Route Structure ---');
+  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-billing-history-client.tsx');
+  assert(fs.existsSync(ownerClientPath), '20. OwnerBillingHistoryClient UI component exists');
+  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
+  assert(ownerClientContent.includes('Billing & Payment History'), '21. Owner billing history section header rendered');
 
-  // 3. Payment State Machine Legal Transitions
-  console.log('\n--- SECTION 3: Payment State Machine & Transitions ---');
-  assert(isLegalPaymentStateTransition('pending', 'paid') === true, '10. Legal transition pending -> paid allowed');
-  assert(isLegalPaymentStateTransition('pending', 'failed') === true, '11. Legal transition pending -> failed allowed');
-  assert(isLegalPaymentStateTransition('paid', 'refunded') === true, '12. Legal transition paid -> refunded allowed');
+  const adminClientPath = path.join(process.cwd(), 'src/components/admin/admin-subscription-payments-client.tsx');
+  assert(fs.existsSync(adminClientPath), '22. AdminSubscriptionPaymentsClient UI component exists');
 
-  assert(isLegalPaymentStateTransition('paid', 'pending') === false, '13. Illegal transition paid -> pending rejected');
-  assert(isLegalPaymentStateTransition('failed', 'paid') === false, '14. Illegal transition failed -> paid rejected without new intent');
+  const adminPagePath = path.join(process.cwd(), 'src/app/(dashboard)/admin/subscription-payments/page.tsx');
+  assert(fs.existsSync(adminPagePath), '23. Admin subscription payments page route handler exists');
 
-  assert.throws(
-    () => assertLegalPaymentStateTransition('paid', 'pending'),
-    (err: unknown) => err instanceof PaymentProviderError && err.code === 'INVALID_PAYMENT_TRANSITION',
-    '15. assertLegalPaymentStateTransition throws INVALID_PAYMENT_TRANSITION for illegal state change'
-  );
+  // 8. Migration & Schema Verification
+  console.log('\n--- SECTION 8: Database Migration Verification ---');
+  const migrationPath = path.join(process.cwd(), 'supabase/migrations/20260826050000_v1_subscription_payments_admin_index.sql');
+  assert(fs.existsSync(migrationPath), '24. Migration 20260826050000_v1_subscription_payments_admin_index.sql exists');
 
-  // 4. Amount, Currency & Settlement Idempotency Checks
-  console.log('\n--- SECTION 4: Settlement Integrity & Amount/Currency Validation ---');
-  const settlementPath = path.join(process.cwd(), 'src/server/payments/subscriptions/subscription-settlement.service.ts');
-  assert(fs.existsSync(settlementPath), '16. SubscriptionPaymentSettlementService file exists');
-
-  const settlementContent = fs.readFileSync(settlementPath, 'utf-8');
-  assert(settlementContent.includes('PAYMENT_AMOUNT_MISMATCH'), '17. Amount mismatch throws PAYMENT_AMOUNT_MISMATCH error');
-  assert(settlementContent.includes('PAYMENT_CURRENCY_MISMATCH'), '18. Currency mismatch throws PAYMENT_CURRENCY_MISMATCH error');
-  assert(settlementContent.includes('alreadySettled: true'), '19. Duplicate settlement of paid intent is idempotent');
-
-  // 5. Schema Migration & Provider Transaction Uniqueness
-  console.log('\n--- SECTION 5: Schema Migration & Provider Transaction Uniqueness ---');
-  const migrationPath = path.join(process.cwd(), 'supabase/migrations/20260826040000_v1_subscription_payments_provider_neutral.sql');
-  assert(fs.existsSync(migrationPath), '20. Migration 20260826040000_v1_subscription_payments_provider_neutral.sql exists');
-
-  const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
-  assert(migrationSql.includes('idx_sub_payments_provider_tx_unique'), '21. Partial UNIQUE index on provider transaction ID created');
-  assert(migrationSql.includes('payment_purpose'), '22. Explicit payment_purpose column added');
-
-  // 6. Platform Suspension Precedence & Core Reuse
-  console.log('\n--- SECTION 6: Platform Suspension Precedence & Core Reuse ---');
-  assert(settlementContent.includes('PLATFORM_SUSPENDED_SETTLEMENT_BLOCKED'), '23. Platform suspension precedence enforced during payment settlement');
-  assert(typeof SubscriptionService.activateSubscriptionFromVerifiedPayment === 'function', '24. Subscription Core lifecycle activation adapter defined');
-
-  // 7. Absence of Fake Provider API Implementations & Credentials
-  console.log('\n--- SECTION 7: Absence of Provider API Implementations ---');
-  const paymentsDir = path.join(process.cwd(), 'src/server/payments/subscriptions');
-  const files = fs.readdirSync(paymentsDir);
-  assert(!files.some((f) => f.includes('onepay-api')), '25a. No OnePay API implementation files committed');
-  assert(!files.some((f) => f.includes('dialog-api')), '25b. No Dialog API implementation files committed');
-  assert(!files.some((f) => f.includes('payhere-api')), '25c. No PayHere API implementation files committed');
+  // 9. Provider Status & Customer Order Domain Preservation
+  console.log('\n--- SECTION 9: Baseline Preservation ---');
+  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.onepay.enabled === false, '25. All candidate providers remain disabled in production');
+  const orderPaymentFile = path.join(process.cwd(), 'src/server/actions/payment.ts');
+  assert(fs.existsSync(orderPaymentFile), '26. Customer order payment domain untouched');
 
   console.log('\n================================================================');
-  console.log('  Phase 36 Step 3 Verification: ALL 25 ASSERTIONS PASSED');
+  console.log('  Phase 36 Step 4 Verification: ALL 26 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

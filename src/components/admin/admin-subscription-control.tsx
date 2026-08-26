@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SubscriptionPlanCode, SUBSCRIPTION_PLANS } from '@/lib/config/subscription-plans';
@@ -326,7 +327,13 @@ export function AdminSubscriptionControl({
             Super Admin manual activation, trial/grace extensions, plan changes, and quota overrides.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/admin/subscription-payments?businessId=${businessId}`}
+            className="text-xs font-extrabold text-purple-900 bg-purple-100 hover:bg-purple-200 border border-purple-300 px-3 py-1.5 rounded-xl transition-all inline-flex items-center gap-1.5"
+          >
+            💳 View Payment Records
+          </Link>
           <span className="text-xs font-bold text-zinc-500 uppercase">Effective:</span>
           {renderStatusBadge(effectiveStatus)}
         </div>

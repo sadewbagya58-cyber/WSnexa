@@ -1,7 +1,7 @@
 # WSNexa V1 Subscription Payments — Architecture & Pricing Documentation
 
 ## Overview
-WSNexa V1 Subscription Payments establishes a dedicated, production-safe commercial SaaS payment domain, canonical server-side pricing engine, checkout review flow, and provider-neutral payment gateway architecture for WSNexa venue subscription billing (Business Owner $\rightarrow$ WSNexa merchant account).
+WSNexa V1 Subscription Payments establishes a dedicated, production-safe commercial SaaS payment domain, canonical server-side pricing engine, checkout review flow, provider-neutral payment gateway architecture, owner billing history, and Super Admin payment management for WSNexa venue subscription billing (Business Owner $\rightarrow$ WSNexa merchant account).
 
 ---
 
@@ -98,16 +98,25 @@ Strict legal payment transitions:
   5. Platform Suspension Precedence: Platform workspace suspension (`businesses.status === 'suspended'`) strictly blocks commercial payment settlement (`PLATFORM_SUSPENDED_SETTLEMENT_BLOCKED`).
   6. Subscription Core Activation: Invokes `SubscriptionService.activateSubscriptionFromVerifiedPayment` to update lifecycle status, audit logs, and owner notifications.
 
-### Callback & Webhook Routes
-- Return Route: `/api/subscription-payments/[provider]/return` (Browser redirect query params are NEVER trusted without server-side verification).
-- Webhook Route: `/api/subscription-payments/[provider]/webhook` (Raw body preservation, cryptographic signature verification, duplicate webhook delivery safety).
+---
+
+## 6. Owner Billing & Payment History (Phase 36 Step 4)
+
+- Route: `/dashboard/settings/subscription`
+- **Tenant Isolation**: Owners inspect payment records for their own business only. Non-owner staff are denied access.
+- **Visual Status Badges**: High-contrast badges for `PENDING`, `PROCESSING`, `PAID`, `FAILED`, `CANCELLED`, `EXPIRED`, and `REFUNDED`.
+- **Payment Detail Modal**: Displays intent reference, plan, purpose, billing interval, provider metadata, full timestamps, and Enterprise scale snapshot.
+- **Safe Actions**: Owners may cancel pending payment intents or view details. Owners cannot mark payments paid or edit monetary amounts.
 
 ---
 
-## 6. Future Provider Integration Workflow
+## 7. Super Admin Subscription Payment Management (Phase 36 Step 4)
 
-Connecting a new gateway (e.g. OnePay, Dialog, PayHere) requires only:
-1. Creating a provider adapter class implementing `SubscriptionPaymentProvider`.
-2. Registering the adapter via `registerSubscriptionPaymentProvider(adapter)`.
-3. Setting `SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG[providerCode] = { enabled: true, environment, hasCredentials: true }`.
-4. Adding server-side environment credentials (never exposed via `NEXT_PUBLIC_*` or database text).
+- Route: `/admin/subscription-payments`
+- **Platform-Wide Table & Search**: Paginated list with filters (`Status`, `Provider`, `Purpose`, `Plan`) and search by ID, transaction ID, reference, or business name.
+- **Business Level Link**: Integrated into `/admin/businesses/[id]` for direct venue payment history inspection.
+- **Safe Administrative Actions**:
+  - `Cancel Pending Intent` (`payment.cancelled_by_admin` audit entry)
+  - `Expire Pending Intent` (`payment.expired_by_admin` audit entry)
+  - Requires mandatory administrative reason string.
+- **Manual Activation Separation**: Super Admin manual subscription activation operates on subscription lifecycle and does NOT fabricate fake `paid` payment rows.

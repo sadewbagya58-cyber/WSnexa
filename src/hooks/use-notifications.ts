@@ -90,10 +90,24 @@ export function useNotifications(userId: string | null, businessId: string | nul
             }
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            if (err) {
+              console.warn('[Realtime] Notifications channel connection issue:', status, err);
+            }
+          }
+        });
     };
 
     setupSubscription();
+
+    // Revalidate notifications when tab regains focus (visibilitychange)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
 
     // 15-Second Polling Fallback to reconcile missed events or connection loss
     const pollInterval = setInterval(async () => {
@@ -108,12 +122,13 @@ export function useNotifications(userId: string | null, businessId: string | nul
     }, 15000);
 
     return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(pollInterval);
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [userId, businessId]);
+  }, [userId, businessId, loadNotifications]);
 
   // Optimistic Mark Single as Read
   const markAsRead = useCallback(

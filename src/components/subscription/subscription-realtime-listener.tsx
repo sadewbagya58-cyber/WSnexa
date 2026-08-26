@@ -90,7 +90,7 @@ export function SubscriptionRealtimeListener({
                 router.replace(`/account/pending-access?reason=${reason}`);
               }
             } else {
-              // ACTIVE / GRACE_PERIOD / TRIALING
+              // ACTIVE / GRACE_PERIOD / TRIALING (Reactivated!)
               if (currentPath.includes('/account/pending-access')) {
                 router.replace('/dashboard');
               } else {
@@ -98,12 +98,13 @@ export function SubscriptionRealtimeListener({
               }
             }
           } else {
-            // Dates or limits changed without status string change -> refresh view
+            // Live dates or limits changed -> trigger refresh signal
             router.refresh();
           }
         }
       )
-      // 2. Listen to platform business status changes (abuse/security suspension)
+
+      // 2. Listen to platform business status changes (abuse/security platform suspension)
       .on(
         'postgres_changes',
         {
@@ -126,9 +127,24 @@ export function SubscriptionRealtimeListener({
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (err) {
+            console.warn('[Realtime] Subscription channel connection issue:', status, err);
+          }
+        }
+      });
+
+    // 3. Resilience Fallback: revalidate when tab regains focus (visibilitychange)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        router.refresh();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [businessId, userRole, router]);

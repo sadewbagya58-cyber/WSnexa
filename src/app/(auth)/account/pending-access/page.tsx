@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { PendingAccessScreen } from '@/components/auth/pending-access-screen';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { resolveUnifiedAccessState } from '@/server/tenant/unified-access';
+import { SubscriptionRealtimeListener } from '@/components/subscription/subscription-realtime-listener';
 
 export const metadata: Metadata = {
   title: 'Pending Access | WSNexa',
@@ -30,9 +31,17 @@ export default async function PendingAccessPage({
 
   // Authoritatively resolve active tenant & subscription context from DB
   let confirmedReason: string | null = requestedReason;
+  let businessIdForRealtime: string | null = null;
+  let userRoleForRealtime: string = 'staff';
+  let subscriptionForRealtime = undefined;
+
   try {
     const tenantContext = await resolveActiveBusinessContext();
     if (tenantContext && tenantContext.business) {
+      businessIdForRealtime = tenantContext.business.id;
+      userRoleForRealtime = tenantContext.membership.role;
+      subscriptionForRealtime = tenantContext.subscription;
+
       const accessState = resolveUnifiedAccessState({
         businessStatus: tenantContext.business.status,
         effectiveSubscriptionStatus: tenantContext.subscription?.effectiveStatus || 'TRIALING',
@@ -61,6 +70,13 @@ export default async function PendingAccessPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
+      {businessIdForRealtime && (
+        <SubscriptionRealtimeListener
+          businessId={businessIdForRealtime}
+          userRole={userRoleForRealtime}
+          subscription={subscriptionForRealtime}
+        />
+      )}
       <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} reason={confirmedReason} />
     </div>
   );

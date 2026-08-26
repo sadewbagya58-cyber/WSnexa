@@ -44,17 +44,17 @@ export function OwnerSubscriptionClient({
   const renderStatusBadge = () => {
     switch (effectiveStatus) {
       case 'ACTIVE':
-        return <Badge className="bg-emerald-600 text-white font-black">ACTIVE</Badge>;
+        return <Badge variant="solid" className="bg-emerald-600 text-white font-extrabold px-2.5 py-0.5">ACTIVE</Badge>;
       case 'TRIALING':
-        return <Badge className="bg-blue-600 text-white font-black">14-DAY TRIAL</Badge>;
+        return <Badge variant="solid" className="bg-blue-600 text-white font-extrabold px-2.5 py-0.5">14-DAY TRIAL</Badge>;
       case 'GRACE_PERIOD':
-        return <Badge className="bg-amber-600 text-white font-black">GRACE PERIOD ({daysRemaining} DAYS LEFT)</Badge>;
+        return <Badge variant="solid" className="bg-amber-600 text-white font-extrabold px-2.5 py-0.5">GRACE PERIOD ({daysRemaining} DAYS LEFT)</Badge>;
       case 'SUSPENDED':
-        return <Badge className="bg-red-600 text-white font-black">SUSPENDED</Badge>;
+        return <Badge variant="solid" className="bg-rose-600 text-white font-extrabold px-2.5 py-0.5">SUSPENDED</Badge>;
       case 'CANCELLED':
-        return <Badge className="bg-zinc-700 text-white font-black">CANCELLED</Badge>;
+        return <Badge variant="solid" className="bg-zinc-900 text-white font-extrabold border border-zinc-700 px-2.5 py-0.5">CANCELLED</Badge>;
       default:
-        return <Badge className="bg-zinc-500 text-white font-black">{effectiveStatus}</Badge>;
+        return <Badge variant="solid" className="bg-zinc-700 text-white font-extrabold px-2.5 py-0.5">{effectiveStatus}</Badge>;
     }
   };
 
@@ -96,15 +96,10 @@ export function OwnerSubscriptionClient({
               Online subscription payments are coming soon. To upgrade or renew your plan to{' '}
               <span className="font-extrabold text-zinc-950">{selectedPlanForNotice}</span>, please contact WSNexa support or sales for bank transfer / manual activation.
             </p>
-            <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-left text-xs space-y-1 font-mono text-zinc-700">
-              <div className="font-extrabold uppercase text-[10px] text-zinc-500">Billing Contact</div>
-              <div>Email: billing@wsnexa.internal</div>
-              <div>Sales: +94 (11) 234-5678</div>
-            </div>
             <button
               type="button"
               onClick={() => setSelectedPlanForNotice(null)}
-              className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm"
+              className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
             >
               Close Notice
             </button>
@@ -187,7 +182,11 @@ export function OwnerSubscriptionClient({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-black text-zinc-950">{item.name}</h3>
-                    {isCurrent && <Badge className="bg-zinc-950 text-white font-extrabold text-[10px]">CURRENT</Badge>}
+                    {isCurrent && (
+                      <Badge variant="solid" className="bg-zinc-950 text-white font-extrabold text-[10px] border border-zinc-700 px-2.5 py-0.5">
+                        CURRENT
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-2xl font-black text-zinc-900">
                     {item.priceLkrMonthly !== null ? (
@@ -219,7 +218,7 @@ export function OwnerSubscriptionClient({
                     <button
                       type="button"
                       onClick={() => setSelectedPlanForNotice(item.name)}
-                      className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs transition-colors shadow-sm"
+                      className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer"
                     >
                       Select {item.name}
                     </button>

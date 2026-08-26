@@ -511,16 +511,29 @@ export class SubscriptionService {
     });
 
     try {
+      const canonicalAction = eventType.startsWith('subscription.')
+        ? eventType
+        : `subscription.${eventType.toLowerCase()}`;
+
       await admin.from('audit_logs').insert({
         business_id: businessId,
         actor_id: actorId,
-        action: `SUBSCRIPTION_${eventType.toUpperCase()}`,
-        entity_type: 'business_subscription',
-        entity_id: businessId,
-        details: { previousStatus, newStatus, previousPlan, newPlan, reason, ...metadata },
+        action: canonicalAction,
+        target_type: 'subscription',
+        target_id: businessId,
+        payload: {
+          previousStatus,
+          newStatus,
+          previousPlan,
+          newPlan,
+          reason,
+          eventType,
+          ...metadata,
+        },
+        created_at: new Date().toISOString(),
       });
-    } catch {
-      // Audit log creation fail-safe
+    } catch (err) {
+      console.error('[SubscriptionService] Failed to insert audit log entry:', err);
     }
   }
 

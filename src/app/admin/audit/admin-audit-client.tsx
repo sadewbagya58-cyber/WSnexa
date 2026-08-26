@@ -85,6 +85,7 @@ export function AdminAuditClient({
           className="rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 cursor-pointer"
         >
           <option value="all">All Target Types</option>
+          <option value="subscription">Subscription</option>
           <option value="venue_public_profile">Venue Public Profile</option>
           <option value="business">Business Tenant</option>
           <option value="branch">Branch</option>

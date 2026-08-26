@@ -301,17 +301,17 @@ export function AdminSubscriptionControl({
   const renderStatusBadge = (statusStr: string) => {
     switch (statusStr.toUpperCase()) {
       case 'ACTIVE':
-        return <Badge className="bg-emerald-600 text-white font-black text-[10px]">ACTIVE</Badge>;
+        return <Badge variant="solid" className="bg-emerald-600 text-white font-black text-[10px]">ACTIVE</Badge>;
       case 'TRIALING':
-        return <Badge className="bg-blue-600 text-white font-black text-[10px]">TRIALING</Badge>;
+        return <Badge variant="solid" className="bg-blue-600 text-white font-black text-[10px]">TRIALING</Badge>;
       case 'GRACE_PERIOD':
-        return <Badge className="bg-amber-600 text-white font-black text-[10px]">GRACE PERIOD</Badge>;
+        return <Badge variant="solid" className="bg-amber-600 text-white font-black text-[10px]">GRACE PERIOD</Badge>;
       case 'SUSPENDED':
-        return <Badge className="bg-red-600 text-white font-black text-[10px]">SUSPENDED</Badge>;
+        return <Badge variant="solid" className="bg-rose-600 text-white font-black text-[10px]">SUSPENDED</Badge>;
       case 'CANCELLED':
-        return <Badge className="bg-zinc-700 text-white font-black text-[10px]">CANCELLED</Badge>;
+        return <Badge variant="solid" className="bg-zinc-900 text-white font-black text-[10px] border border-zinc-700">CANCELLED</Badge>;
       default:
-        return <Badge className="bg-zinc-500 text-white font-black text-[10px]">{statusStr}</Badge>;
+        return <Badge variant="solid" className="bg-zinc-700 text-white font-black text-[10px]">{statusStr}</Badge>;
     }
   };
 

@@ -11,6 +11,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveAuthorizationContext } from '@/server/auth/authorization-context';
 import { resolveDashboardHomeModel } from '@/server/navigation/dashboard-home-model';
+import { OwnerSubscriptionLifecycleBanner } from '@/components/subscription/owner-subscription-lifecycle-banner';
 
 export default async function DashboardOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard');
@@ -183,6 +184,12 @@ export default async function DashboardOverviewPage() {
         breadcrumbs={[{ label: 'Dashboard Overview' }]}
         primaryAction={primaryAction}
         secondaryActions={secondaryActions}
+      />
+
+      {/* Business Owner Subscription Lifecycle Banner */}
+      <OwnerSubscriptionLifecycleBanner
+        subscription={context.subscription}
+        isBusinessOwner={model.isBusinessOwner}
       />
 
       {/* Fallback Mode for Highly Restricted Users */}

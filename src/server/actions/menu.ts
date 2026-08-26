@@ -28,6 +28,13 @@ export async function createMenuCategoryAction(
     return { success: false, message: 'Unauthorized or active business branch not found.' };
   }
 
+  try {
+    const { SubscriptionService } = await import('@/server/services/subscription.service');
+    await SubscriptionService.assertOperationalSubscription(authContext.businessId);
+  } catch (err: unknown) {
+    return { success: false, message: err instanceof Error ? err.message : 'Operational mutations are restricted.' };
+  }
+
   const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
   const canManage =
     (await can({ context: authContext, permission: 'menu.categories.manage', resource: branchResource })) ||

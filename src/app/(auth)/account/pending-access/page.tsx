@@ -3,6 +3,8 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { PendingAccessScreen } from '@/components/auth/pending-access-screen';
+import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
+import { resolveUnifiedAccessState } from '@/server/tenant/unified-access';
 
 export const metadata: Metadata = {
   title: 'Pending Access | WSNexa',
@@ -15,10 +17,9 @@ export default async function PendingAccessPage({
   searchParams?: Promise<{ reason?: string }>;
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
-  const reason = resolvedParams.reason || null;
+  const requestedReason = resolvedParams.reason || null;
 
   const supabase = await createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -27,24 +28,29 @@ export default async function PendingAccessPage({
     redirect('/login');
   }
 
-  // 1. Redirect active memberships to /dashboard ONLY when no explicit restriction reason is present.
-  // When reason=subscription_suspended or reason=platform_suspended is set, staff members have an
-  // active membership record in DB, but their workspace is restricted. Skipping this check prevents
-  // infinite redirect loops between /dashboard and /account/pending-access.
-  if (!reason) {
-    const { data: memberships } = await supabase
-      .from('business_memberships')
-      .select('role, membership_status')
-      .eq('user_id', user.id)
-      .eq('membership_status', 'active')
-      .limit(1);
+  // Authoritatively resolve active tenant & subscription context from DB
+  let confirmedReason: string | null = requestedReason;
+  try {
+    const tenantContext = await resolveActiveBusinessContext();
+    if (tenantContext && tenantContext.business) {
+      const accessState = resolveUnifiedAccessState({
+        businessStatus: tenantContext.business.status,
+        effectiveSubscriptionStatus: tenantContext.subscription?.effectiveStatus || 'TRIALING',
+      });
 
-    if (memberships && memberships.length > 0) {
-      redirect('/dashboard');
+      if (!accessState.isRestricted) {
+        // Access restriction is NO LONGER ACTIVE! (Super Admin reactivated business/subscription)
+        // Automatically redirect to operational workspace destination!
+        redirect('/dashboard');
+      } else {
+        // Restriction is STILL ACTIVE. Use authoritative server-confirmed reason.
+        confirmedReason = accessState.reason;
+      }
     }
+  } catch {
+    // If context resolution fails (e.g. no active membership), fall back to pending screen
   }
 
-  // 2. Fetch onboarding intent from user_profiles
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('onboarding_intent')
@@ -55,7 +61,7 @@ export default async function PendingAccessPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
-      <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} reason={reason} />
+      <PendingAccessScreen intent={intent} userEmail={user.email || 'User'} reason={confirmedReason} />
     </div>
   );
 }

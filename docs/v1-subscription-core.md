@@ -1,7 +1,7 @@
 # WSNexa V1 Subscription Core — Architecture & Operational Documentation
 
 ## Overview
-WSNexa V1 Subscription Core implements a commercial SaaS subscription engine for multi-tenant hotel, restaurant, and hospitality venues. It establishes plan definitions, resource quotas, lifecycle state calculations, access enforcement, and Super Admin management.
+WSNexa V1 Subscription Core implements a commercial SaaS subscription engine for multi-tenant hotel, restaurant, and hospitality venues. It establishes plan definitions, resource quotas, lifecycle state calculations, server-side operational enforcement, real-time UX propagation, and Super Admin management.
 
 ---
 
@@ -37,7 +37,21 @@ WSNexa V1 Subscription Core implements a commercial SaaS subscription engine for
 
 ---
 
-## 2. Subscription Lifecycle States
+## 2. 14-Day Core Product Trial Entitlements Model
+
+New businesses receive a 14-day initial trial upon onboarding completion. Rather than being artificially restricted as a Starter subscription during evaluation, trial accounts receive access to full/core WSNexa product capabilities (POS, Kitchen, Waiter, QR ordering, Reservations, Menu, CRM, Reports, Inventory, Organization, RBAC).
+
+- **Trial Limits Profile (`TRIAL_ENTITLEMENT_LIMITS`)**:
+  - 3 Branches
+  - 40 Active Staff Members
+  - 150 Dining Tables
+  - 1,000 Menu Items
+  - 10 Custom Roles
+- Stored `plan_code` remains `'starter'` (default post-trial plan).
+
+---
+
+## 3. Subscription Lifecycle States
 
 Subscriptions transition through five stored and effective lifecycle states:
 
@@ -49,61 +63,39 @@ Subscriptions transition through five stored and effective lifecycle states:
 
 ---
 
-## 3. Platform vs. Commercial Suspension Precedence
+## 4. Unified Access State & Server-Side Security Enforcement
 
-A fundamental invariant of WSNexa security is the strict separation of platform administrative status (`businesses.status`) and commercial subscription status (`business_subscriptions.status`).
+### Unified Access Resolver (`resolveUnifiedAccessState`)
+Single canonical access state interpreter with strict priority:
+1. **Platform Security Ban (`businesses.status === 'suspended'` or `'archived'`)**: Absolute priority (`reason = 'platform_suspended'`).
+2. **Commercial Suspension (`effectiveStatus === 'SUSPENDED'`)**: `reason = 'subscription_suspended'`.
+3. **Commercial Cancellation (`effectiveStatus === 'CANCELLED'`)**: `reason = 'subscription_cancelled'`.
+4. **Operational**: All features enabled.
 
-- **Platform Security Ban (`businesses.status === 'suspended'` or `'archived'`)**:
-  - Always takes **absolute priority** over commercial subscription status.
-  - A paid or active subscription row can **NEVER** bypass a platform security ban.
-  - All users (owners and staff) are redirected to `/account/pending-access?reason=platform_suspended`.
-- **Commercial Subscription Suspension (`business_subscriptions.status === 'suspended'`)**:
-  - Affects operational modules only.
-  - Business Owner retains access to `/dashboard/settings/subscription`.
+### Authoritative Operational Guard (`SubscriptionService.assertOperationalSubscription`)
+Client realtime and UI redirection are **UX enhancements only**, NOT security boundaries. Every operational mutation (menu, orders, POS, reservations, tables, staff invites, roles, inventory, CRM, organization) invokes `SubscriptionService.assertOperationalSubscription(businessId)` server-side. Restricted subscriptions fail atomically on the server before modifying tenant state.
 
----
-
-## 4. Resource Quota & Downgrade Enforcement
-
-Quotas are authoritatively enforced server-side across five creation paths:
-1. **Branches**: `BranchService.createBranch`
-2. **Staff**: `StaffInvitationService.createInvitation`
-3. **Tables**: `createDiningTableAction`
-4. **Menu Items**: `createMenuItemAction`
-5. **Custom Roles**: `RoleGovernanceService.createCustomRole`
-
-### Downgrade Rules
-When a business requests or undergoes a plan downgrade (e.g. Growth $\rightarrow$ Starter), `SubscriptionService.validateDowngradeEligibility` validates current usage against destination plan limits. If usage exceeds target limits, the downgrade is **BLOCKED** and **ALL conflict details are returned** (e.g. Branches: 3/1, Staff: 18/10). WSNexa never automatically deletes tenant data during downgrades.
+### Pending-Access Auto-Recovery
+`/account/pending-access` re-resolves current DB state on every server render/refresh. When Super Admin reactivates a suspended/cancelled business or subscription, visiting or refreshing `/account/pending-access` automatically redirects the user back to `/dashboard`.
 
 ---
 
-## 5. Super Admin Controls & Fallback Activation
+## 5. Supabase Realtime UX Propagation
 
-Super Admin management is accessible at `/admin/businesses/[id]`:
-- **Manual Activation**: Supports manual commercial activation specifying Plan, Period End (+30d, +90d, +1y), and Reason (`bank_transfer`, `pilot_account`, `complimentary`, `gateway_issue`, `other` + required notes).
-- **Trial Extension**: Extends `trial_ends_at` with mandatory reason.
-- **Grace Extension**: Extends `grace_ends_at` with mandatory reason.
-- **Plan Changes & Enterprise Overrides**: Immediate upgrade / compliant downgrade validation; finite custom overrides for Enterprise.
-- **Commercial Suspension & Reactivation**: Commercial suspend/reactivate actions with mandatory audit reasons.
-- **Cancellation**: Explicit cancellation preserving all underlying tenant database records.
+`public.business_subscriptions` and `public.businesses` are registered in the `supabase_realtime` Postgres publication. `SubscriptionRealtimeListener` subscribes to business-scoped updates. Status changes, date changes, and platform status changes immediately trigger client route updates / view refreshes without requiring manual browser reloads.
 
 ---
 
-## 6. Audit & History Logging
+## 6. Super Admin Controls & Audit Logging
 
-- **`business_subscription_events`**: Stores commercial subscription lifecycle events (`activated`, `trial_extended`, `grace_extended`, `plan_changed`, `manual_override`, `suspended`, `reactivated`, `cancelled`) with deterministic `dedupe_key` idempotency.
-- **`audit_logs`**: System audit trail capturing Super Admin actor, action, and metadata.
-- **In-App Notifications**: Emits owner notifications (`SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_GRACE_STARTED`, `SUBSCRIPTION_SUSPENDED`, `SUBSCRIPTION_REACTIVATED`).
-
----
-
-## 7. Operational vs. Billing Currency
-
-- **Operational Currency**: Configured per venue/branch (e.g. LKR, USD, EUR) for menu items, customer orders, and receipt printing.
-- **SaaS Billing Currency**: Fixed in **LKR** (LKR 4,499/mo Starter, LKR 8,999/mo Growth).
+Super Admin management at `/admin/businesses/[id]`:
+- **Activation Source & Reason**: Manual activations record `activation_source = 'manual_admin'`, while the selected reason (`bank_transfer`, `pilot_account`, `complimentary`, `gateway_issue`, `other`) is logged in event/audit metadata and notes.
+- **State-Aware Actions**: Action controls dynamically adapt based on effective status (e.g. `Suspend` and `Cancel` are hidden when already `CANCELLED`).
+- **Audit Integration**: Every subscription mutation writes to `business_subscription_events` AND platform `audit_logs`.
+- **In-App Notifications**: Owner notifications (`SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_GRACE_STARTED`, `SUBSCRIPTION_SUSPENDED`, `SUBSCRIPTION_REACTIVATED`, `SUBSCRIPTION_CANCELLED`) are persisted with valid `branch_id` references.
 
 ---
 
-## 8. Dialog Payment Gateway Boundary
+## 7. Dialog Payment Gateway Boundary
 
-Online subscription payment gateway integration is deferred to post-V1 infrastructure steps. Owner CTAs on `/dashboard/settings/subscription` display an honest manual activation notice: *"Online subscription payments coming soon. Contact WSNexa support or sales for manual activation."*. Zero fake payment transactions are generated.
+Online subscription payment gateway integration is deferred to post-V1 steps. Owner CTAs on `/dashboard/settings/subscription` display an honest manual activation notice: *"Online subscription payments coming soon. Contact WSNexa support or sales for manual activation."*. Zero fake payment transactions are generated. Pricing is displayed in **LKR** (Starter: LKR 4,499/mo, Growth: LKR 8,999/mo).

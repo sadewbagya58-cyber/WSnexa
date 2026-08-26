@@ -27,6 +27,7 @@ export function SubscriptionRealtimeListener({
 
     const channel = supabase
       .channel(channelName)
+      // 1. Listen to commercial subscription changes
       .on(
         'postgres_changes',
         {
@@ -72,10 +73,10 @@ export function SubscriptionRealtimeListener({
             }
           }
 
+          const currentPath = window.location.pathname;
+
           if (lastStateRef.current !== effective) {
             lastStateRef.current = effective;
-
-            const currentPath = window.location.pathname;
 
             if (effective === 'SUSPENDED' || effective === 'CANCELLED') {
               if (userRole === 'business_owner') {
@@ -96,6 +97,32 @@ export function SubscriptionRealtimeListener({
                 router.refresh();
               }
             }
+          } else {
+            // Dates or limits changed without status string change -> refresh view
+            router.refresh();
+          }
+        }
+      )
+      // 2. Listen to platform business status changes (abuse/security suspension)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'businesses',
+          filter: `id=eq.${businessId}`,
+        },
+        (payload) => {
+          const newRow = payload.new as { status?: string } | null;
+          if (!newRow) return;
+
+          const currentPath = window.location.pathname;
+          if (newRow.status === 'suspended' || newRow.status === 'archived') {
+            router.replace('/account/pending-access?reason=platform_suspended');
+          } else if (newRow.status === 'active' && currentPath.includes('/account/pending-access')) {
+            router.replace('/dashboard');
+          } else {
+            router.refresh();
           }
         }
       )

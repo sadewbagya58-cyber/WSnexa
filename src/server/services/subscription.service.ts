@@ -1,10 +1,19 @@
 import { createAdminClient } from '@/lib/supabase/server';
+import { resolveUnifiedAccessState } from '@/server/tenant/unified-access';
 import {
   SubscriptionPlanCode,
   SubscriptionPlanDefinition,
   SubscriptionPlanLimits,
   getPlanDefinition,
 } from '@/lib/config/subscription-plans';
+
+export const TRIAL_ENTITLEMENT_LIMITS: SubscriptionPlanLimits = {
+  maxBranches: 3,
+  maxActiveStaff: 40,
+  maxTables: 150,
+  maxMenuItems: 1000,
+  maxCustomRoles: 10,
+};
 
 export type StoredSubscriptionStatus = 'trialing' | 'active' | 'grace_period' | 'suspended' | 'cancelled';
 
@@ -262,16 +271,20 @@ export class SubscriptionService {
   }
 
   /**
-   * Resolves effective plan limits following precedence: Business DB Override -> Plan Default -> Unlimited (null).
+   * Resolves effective plan limits following precedence: Business DB Override -> Trial Base / Plan Default -> Unlimited (null).
    */
   static resolveEffectiveLimits(sub: BusinessSubscriptionRecord): SubscriptionPlanLimits {
-    const plan = getPlanDefinition(sub.plan_code);
+    const isTrial = (sub.status || 'trialing').toLowerCase() === 'trialing';
+    const planLimits = isTrial
+      ? TRIAL_ENTITLEMENT_LIMITS
+      : getPlanDefinition(sub.plan_code).limits;
+
     return {
-      maxBranches: sub.max_branches_override !== null ? sub.max_branches_override : plan.limits.maxBranches,
-      maxActiveStaff: sub.max_staff_override !== null ? sub.max_staff_override : plan.limits.maxActiveStaff,
-      maxTables: sub.max_tables_override !== null ? sub.max_tables_override : plan.limits.maxTables,
-      maxMenuItems: sub.max_menu_items_override !== null ? sub.max_menu_items_override : plan.limits.maxMenuItems,
-      maxCustomRoles: sub.max_custom_roles_override !== null ? sub.max_custom_roles_override : plan.limits.maxCustomRoles,
+      maxBranches: sub.max_branches_override !== null ? sub.max_branches_override : planLimits.maxBranches,
+      maxActiveStaff: sub.max_staff_override !== null ? sub.max_staff_override : planLimits.maxActiveStaff,
+      maxTables: sub.max_tables_override !== null ? sub.max_tables_override : planLimits.maxTables,
+      maxMenuItems: sub.max_menu_items_override !== null ? sub.max_menu_items_override : planLimits.maxMenuItems,
+      maxCustomRoles: sub.max_custom_roles_override !== null ? sub.max_custom_roles_override : planLimits.maxCustomRoles,
     };
   }
 
@@ -530,8 +543,16 @@ export class SubscriptionService {
 
     if (!owners || owners.length === 0) return;
 
+    const { data: branch } = await admin
+      .from('branches')
+      .select('id')
+      .eq('business_id', businessId)
+      .limit(1)
+      .maybeSingle();
+
     const rows = owners.map((o) => ({
       business_id: businessId,
+      branch_id: branch?.id || null,
       recipient_user_id: o.user_id,
       notification_type: notificationType,
       priority: 'high',
@@ -589,8 +610,8 @@ export class SubscriptionService {
       grace_ends_at: null,
       suspended_at: null,
       cancelled_at: null,
-      activation_source: reason,
-      notes: notes?.trim() || null,
+      activation_source: 'manual_admin',
+      notes: notes?.trim() ? `[Manual Activation Reason: ${reason}] ${notes.trim()}` : `[Manual Activation Reason: ${reason}]`,
       updated_at: now.toISOString(),
     };
 
@@ -628,15 +649,33 @@ export class SubscriptionService {
 
   /**
    * Authoritative server-side subscription operational assertion guard.
-   * Resolves effective subscription state and throws Error if SUSPENDED or CANCELLED.
+   * Resolves effective subscription & platform access state and throws Error if restricted.
    */
   static async assertOperationalSubscription(businessId: string): Promise<ResolvedSubscriptionContext> {
+    const admin = createAdminClient();
+    const { data: business } = await admin
+      .from('businesses')
+      .select('status')
+      .eq('id', businessId)
+      .maybeSingle();
+
     const subContext = await this.resolveSubscriptionContext(businessId);
-    if (subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED') {
-      throw new Error(
-        `Subscription is ${subContext.effectiveStatus.toLowerCase()}. Operational mutations are restricted. Contact business owner or WSNexa support.`
-      );
+    const accessState = resolveUnifiedAccessState({
+      businessStatus: business?.status || 'active',
+      effectiveSubscriptionStatus: subContext.effectiveStatus,
+    });
+
+    if (accessState.isRestricted) {
+      const msg =
+        accessState.reason === 'platform_suspended'
+          ? 'Platform workspace access is restricted.'
+          : `Subscription is ${subContext.effectiveStatus.toLowerCase()}. Operational mutations are restricted. Contact business owner or WSNexa support.`;
+
+      const err = new Error(msg);
+      (err as { code?: string }).code = 'SUBSCRIPTION_OPERATION_BLOCKED';
+      throw err;
     }
+
     return subContext;
   }
 

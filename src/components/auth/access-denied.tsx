@@ -25,8 +25,8 @@ export function AccessDenied({
             You don&apos;t have permission to access this area.
           </h2>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Your staff account does not have authorization to view or manage this section.
-            Please contact your Business Owner or Branch Manager if you believe this is an error.
+            Your account does not have authorization to view or manage this section.
+            Please contact your Business Administrator if you believe this is an error.
           </p>
         </div>
 

@@ -32,17 +32,19 @@ export default async function DashboardLayout({
 
   const { user, profile, business, activeBranch, branches, membership, subscription } = context;
 
-  // 1. Platform Administrative Suspension Precedence (abuse, security, legal)
-  if (business.status === 'suspended' || business.status === 'archived') {
-    redirect('/account/pending-access?reason=platform_suspended');
-  }
+  // Unified Platform + Commercial Access Precedence Evaluation
+  const { resolveUnifiedAccessState } = await import('@/server/tenant/unified-access');
+  const accessState = resolveUnifiedAccessState({
+    businessStatus: business.status,
+    effectiveSubscriptionStatus: subscription?.effectiveStatus || 'TRIALING',
+  });
 
-  // 2. Commercial Subscription Suspension / Cancellation Redirect for Non-Owner Staff
-  const isCommerciallySuspended = subscription?.effectiveStatus === 'SUSPENDED';
-  const isCommerciallyCancelled = subscription?.effectiveStatus === 'CANCELLED';
-  if ((isCommerciallySuspended || isCommerciallyCancelled) && membership.role !== 'business_owner') {
-    const reason = isCommerciallyCancelled ? 'subscription_cancelled' : 'subscription_suspended';
-    redirect(`/account/pending-access?reason=${reason}`);
+  if (accessState.isRestricted) {
+    if (accessState.reason === 'platform_suspended') {
+      redirect('/account/pending-access?reason=platform_suspended');
+    } else if (membership.role !== 'business_owner') {
+      redirect(`/account/pending-access?reason=${accessState.reason}`);
+    }
   }
 
   const userName = profile

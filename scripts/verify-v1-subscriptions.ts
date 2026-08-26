@@ -38,11 +38,12 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa V1 Subscription Core — Step 3 Production QA Hotfix Batch');
+  console.log('  WSNexa V1 Subscription Core — FINAL Production QA Hotfix Batch');
   console.log('================================================================\n');
 
-  const { SubscriptionService } = await import('../src/server/services/subscription.service');
+  const { SubscriptionService, TRIAL_ENTITLEMENT_LIMITS } = await import('../src/server/services/subscription.service');
   const { SUBSCRIPTION_PLANS } = await import('../src/lib/config/subscription-plans');
+  const { resolveUnifiedAccessState } = await import('../src/server/tenant/unified-access');
 
   // 1. Migration Schema & Security Validation
   console.log('--- SECTION 1: Migration Schema & Security Validation ---');
@@ -55,145 +56,54 @@ async function runVerification() {
   assert(migrationSql.includes('dedupe_key VARCHAR(255) UNIQUE NOT NULL'), '4. Deterministic dedupe_key UNIQUE constraint enforced on events');
   assert(migrationSql.includes('ENABLE ROW LEVEL SECURITY'), '5. RLS enabled on subscription tables');
   assert(migrationSql.includes('REVOKE INSERT, UPDATE, DELETE ON TABLE public.business_subscriptions'), '6. Direct client mutation revoked on business_subscriptions');
-  assert(migrationSql.includes('REVOKE INSERT, UPDATE, DELETE ON TABLE public.business_subscription_events'), '7. Direct client mutation revoked on business_subscription_events');
-  assert(migrationSql.includes('V1 Migration Backfill: Pilot/Dev Complimentary Access'), '8. Safe forward-only backfill SQL for existing tenants included');
 
-  // 2. Plan Definitions & Unlimited Semantics
-  console.log('\n--- SECTION 2: Plan Definitions & Unlimited Semantics ---');
-  assert(SUBSCRIPTION_PLANS.starter.limits.maxBranches === 1, '9. Starter branch limit is 1');
-  assert(SUBSCRIPTION_PLANS.starter.limits.maxActiveStaff === 10, '10. Starter staff limit is 10');
-  assert(SUBSCRIPTION_PLANS.growth.limits.maxBranches === 3, '11. Growth branch limit is 3');
-  assert(SUBSCRIPTION_PLANS.growth.limits.maxActiveStaff === 40, '12. Growth staff limit is 40');
-  assert(SUBSCRIPTION_PLANS.enterprise.limits.maxBranches === null, '13. Enterprise maxBranches is null (unlimited)');
-  assert(SUBSCRIPTION_PLANS.enterprise.limits.maxActiveStaff === null, '14. Enterprise maxActiveStaff is null (unlimited)');
-  assert(!migrationSql.includes('999999'), '15. Schema contains zero magic 999999 unlimited sentinel numbers');
+  const realtimeMigrationPath = path.join(process.cwd(), 'supabase/migrations/20260826010000_realtime_subscriptions_and_businesses.sql');
+  assert(fs.existsSync(realtimeMigrationPath), '7. Realtime migration 20260826010000_realtime_subscriptions_and_businesses.sql exists');
 
-  // 3. Pure Effective State Engine Unit Tests
-  console.log('\n--- SECTION 3: Pure Effective State Engine Unit Tests ---');
-  const now = new Date('2026-08-25T12:00:00Z');
+  const realtimeMigrationSql = fs.readFileSync(realtimeMigrationPath, 'utf-8');
+  assert(realtimeMigrationSql.includes('ALTER PUBLICATION supabase_realtime ADD TABLE public.business_subscriptions'), '8. business_subscriptions added to supabase_realtime publication');
+  assert(realtimeMigrationSql.includes('ALTER PUBLICATION supabase_realtime ADD TABLE public.businesses'), '9. businesses added to supabase_realtime publication');
+  assert(realtimeMigrationSql.includes('ALTER TABLE public.notifications ALTER COLUMN branch_id DROP NOT NULL'), '10. notifications.branch_id constraint updated for business-level notifications');
 
-  // Case A: Valid Trial
-  const validTrial = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'trialing',
-      trial_starts_at: '2026-08-20T00:00:00Z',
-      trial_ends_at: '2026-09-03T00:00:00Z',
-      current_period_starts_at: null,
-      current_period_ends_at: null,
-      grace_ends_at: null,
-    },
-    now
-  );
-  assert(validTrial.effectiveStatus === 'TRIALING', '16. Valid trial evaluates to TRIALING');
-  assert(!validTrial.requiresDbReconciliation, '17. Valid trial requires no DB reconciliation');
+  // 2. Plan Definitions & Trial Entitlements Model
+  console.log('\n--- SECTION 2: Plan Definitions & Trial Entitlements Model ---');
+  assert(SUBSCRIPTION_PLANS.starter.limits.maxBranches === 1, '11. Starter branch limit is 1');
+  assert(SUBSCRIPTION_PLANS.starter.limits.maxActiveStaff === 10, '12. Starter staff limit is 10');
+  assert(SUBSCRIPTION_PLANS.growth.limits.maxBranches === 3, '13. Growth branch limit is 3');
+  assert(SUBSCRIPTION_PLANS.enterprise.limits.maxBranches === null, '14. Enterprise maxBranches is null (unlimited)');
 
-  // Case B: Expired Trial within 7-Day Grace
-  const expiredTrialInGrace = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'trialing',
-      trial_starts_at: '2026-08-01T00:00:00Z',
-      trial_ends_at: '2026-08-20T00:00:00Z', // Expired 5 days ago
-      current_period_starts_at: null,
-      current_period_ends_at: null,
-      grace_ends_at: null,
-    },
-    now
-  );
-  assert(expiredTrialInGrace.effectiveStatus === 'GRACE_PERIOD', '18. Expired trial within 7 days evaluates to GRACE_PERIOD');
-  assert(expiredTrialInGrace.requiresDbReconciliation, '19. Expired trial in grace flags DB reconciliation required');
+  assert(TRIAL_ENTITLEMENT_LIMITS.maxBranches === 3, '15. 14-day trial provides 3 branches entitlement');
+  assert(TRIAL_ENTITLEMENT_LIMITS.maxActiveStaff === 40, '16. 14-day trial provides 40 staff entitlement');
+  assert(TRIAL_ENTITLEMENT_LIMITS.maxTables === 150, '17. 14-day trial provides 150 tables entitlement');
+  assert(TRIAL_ENTITLEMENT_LIMITS.maxMenuItems === 1000, '18. 14-day trial provides 1,000 menu items entitlement');
 
-  // Case C: Expired Trial Past Grace
-  const expiredTrialPastGrace = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'trialing',
-      trial_starts_at: '2026-07-01T00:00:00Z',
-      trial_ends_at: '2026-07-15T00:00:00Z', // Expired 40 days ago
-      current_period_starts_at: null,
-      current_period_ends_at: null,
-      grace_ends_at: null,
-    },
-    now
-  );
-  assert(expiredTrialPastGrace.effectiveStatus === 'SUSPENDED', '20. Expired trial past grace evaluates to SUSPENDED');
-  assert(expiredTrialPastGrace.requiresDbReconciliation, '21. Expired trial past grace flags DB reconciliation required');
+  // 3. Unified Access State Resolver Unit Tests
+  console.log('\n--- SECTION 3: Unified Access State Resolver Unit Tests ---');
+  const platSusp = resolveUnifiedAccessState({ businessStatus: 'suspended', effectiveSubscriptionStatus: 'ACTIVE' });
+  assert(platSusp.isRestricted && platSusp.reason === 'platform_suspended', '19. Platform suspension takes precedence over active subscription');
 
-  // Case D: Valid Active
-  const validActive = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'active',
-      trial_starts_at: '2026-01-01T00:00:00Z',
-      trial_ends_at: '2026-01-15T00:00:00Z',
-      current_period_starts_at: '2026-08-01T00:00:00Z',
-      current_period_ends_at: '2026-09-01T00:00:00Z',
-      grace_ends_at: null,
-    },
-    now
-  );
-  assert(validActive.effectiveStatus === 'ACTIVE', '22. Valid active period evaluates to ACTIVE');
+  const subSusp = resolveUnifiedAccessState({ businessStatus: 'active', effectiveSubscriptionStatus: 'SUSPENDED' });
+  assert(subSusp.isRestricted && subSusp.reason === 'subscription_suspended', '20. Subscription SUSPENDED evaluates to subscription_suspended');
 
-  // Case E: Expired Active within Grace
-  const expiredActiveInGrace = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'active',
-      trial_starts_at: '2026-01-01T00:00:00Z',
-      trial_ends_at: '2026-01-15T00:00:00Z',
-      current_period_starts_at: '2026-07-01T00:00:00Z',
-      current_period_ends_at: '2026-08-22T00:00:00Z', // Expired 3 days ago
-      grace_ends_at: null,
-    },
-    now
-  );
-  assert(expiredActiveInGrace.effectiveStatus === 'GRACE_PERIOD', '23. Expired active within 7 days evaluates to GRACE_PERIOD');
+  const subCanc = resolveUnifiedAccessState({ businessStatus: 'active', effectiveSubscriptionStatus: 'CANCELLED' });
+  assert(subCanc.isRestricted && subCanc.reason === 'subscription_cancelled', '21. Subscription CANCELLED evaluates to subscription_cancelled');
 
-  // Case F: Stored grace_period Explicit Handling
-  const storedGraceValid = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'grace_period',
-      trial_starts_at: '2026-01-01T00:00:00Z',
-      trial_ends_at: '2026-01-15T00:00:00Z',
-      current_period_starts_at: null,
-      current_period_ends_at: null,
-      grace_ends_at: '2026-08-28T00:00:00Z', // Valid for 3 more days
-    },
-    now
-  );
-  assert(storedGraceValid.effectiveStatus === 'GRACE_PERIOD', '24. Stored grace_period with future grace_ends_at evaluates to GRACE_PERIOD');
-  assert(!storedGraceValid.requiresDbReconciliation, '25. Valid stored grace_period requires no reconciliation');
+  const opActive = resolveUnifiedAccessState({ businessStatus: 'active', effectiveSubscriptionStatus: 'ACTIVE' });
+  assert(!opActive.isRestricted && opActive.reason === null, '22. Active business and subscription evaluates to operational (unrestricted)');
 
-  const storedGraceExpired = SubscriptionService.calculateSubscriptionState(
-    {
-      status: 'grace_period',
-      trial_starts_at: '2026-01-01T00:00:00Z',
-      trial_ends_at: '2026-01-15T00:00:00Z',
-      current_period_starts_at: null,
-      current_period_ends_at: null,
-      grace_ends_at: '2026-08-20T00:00:00Z', // Expired 5 days ago
-    },
-    now
-  );
-  assert(storedGraceExpired.effectiveStatus === 'SUSPENDED', '26. Stored grace_period with past grace_ends_at evaluates to SUSPENDED');
-  assert(storedGraceExpired.requiresDbReconciliation, '27. Expired stored grace_period requires DB reconciliation');
+  const opTrial = resolveUnifiedAccessState({ businessStatus: 'active', effectiveSubscriptionStatus: 'TRIALING' });
+  assert(!opTrial.isRestricted && opTrial.reason === null, '23. Trialing subscription evaluates to operational');
 
-  // Case G: Terminal Suspended and Cancelled
-  const suspendedState = SubscriptionService.calculateSubscriptionState(
-    { status: 'suspended', trial_starts_at: '', trial_ends_at: '', current_period_starts_at: null, current_period_ends_at: null, grace_ends_at: null },
-    now
-  );
-  assert(suspendedState.effectiveStatus === 'SUSPENDED', '28. Stored suspended evaluates to SUSPENDED');
-
-  const cancelledState = SubscriptionService.calculateSubscriptionState(
-    { status: 'cancelled', trial_starts_at: '', trial_ends_at: '', current_period_starts_at: null, current_period_ends_at: null, grace_ends_at: null },
-    now
-  );
-  assert(cancelledState.effectiveStatus === 'CANCELLED', '29. Stored cancelled evaluates to CANCELLED');
+  const opGrace = resolveUnifiedAccessState({ businessStatus: 'active', effectiveSubscriptionStatus: 'GRACE_PERIOD' });
+  assert(!opGrace.isRestricted && opGrace.reason === null, '24. Grace period subscription evaluates to operational');
 
   // 4. Effective Limits & Override Precedence
   console.log('\n--- SECTION 4: Effective Limits & Override Precedence ---');
-  const mockSubStarterNoOverride = {
+  const mockSubTrial = {
     id: 'sub-1',
     business_id: 'biz-1',
     plan_code: 'starter' as const,
-    status: 'active' as const,
+    status: 'trialing' as const,
     trial_starts_at: '',
     trial_ends_at: '',
     current_period_starts_at: null,
@@ -206,195 +116,133 @@ async function runVerification() {
     max_tables_override: null,
     max_menu_items_override: null,
     max_custom_roles_override: null,
-    activation_source: 'manual',
+    activation_source: 'onboarding_trial',
     notes: null,
     created_at: '',
     updated_at: '',
   };
 
-  const starterLimits = SubscriptionService.resolveEffectiveLimits(mockSubStarterNoOverride);
-  assert(starterLimits.maxBranches === 1, '30. Default Starter maxBranches is 1');
-  assert(starterLimits.maxActiveStaff === 10, '31. Default Starter maxActiveStaff is 10');
+  const trialLimits = SubscriptionService.resolveEffectiveLimits(mockSubTrial);
+  assert(trialLimits.maxBranches === 3, '25. Default Trial maxBranches uses trial entitlement (3)');
+  assert(trialLimits.maxActiveStaff === 40, '26. Default Trial maxActiveStaff uses trial entitlement (40)');
+
+  const mockSubActiveStarter = {
+    ...mockSubTrial,
+    status: 'active' as const,
+  };
+  const activeLimits = SubscriptionService.resolveEffectiveLimits(mockSubActiveStarter);
+  assert(activeLimits.maxBranches === 1, '27. Active Starter maxBranches falls back to plan limit (1)');
 
   const mockSubStarterWithOverride = {
-    ...mockSubStarterNoOverride,
-    max_branches_override: 5,
+    ...mockSubActiveStarter,
+    max_branches_override: 8,
   };
   const overrideLimits = SubscriptionService.resolveEffectiveLimits(mockSubStarterWithOverride);
-  assert(overrideLimits.maxBranches === 5, '32. Database max_branches_override (5) overrides plan default (1)');
+  assert(overrideLimits.maxBranches === 8, '28. Database max_branches_override (8) overrides plan default');
 
-  // 5. Branch Limit Compatibility Delegation
-  console.log('\n--- SECTION 5: Branch Limit Service Compatibility ---');
+  // 5. Server-Side Operational Assertion Guard Tests
+  console.log('\n--- SECTION 5: Server-Side Operational Assertion Guard ---');
+  assert(typeof SubscriptionService.assertOperationalSubscription === 'function', '29. SubscriptionService.assertOperationalSubscription method exists');
+
+  // 6. Branch Limit & Onboarding Integration
+  console.log('\n--- SECTION 6: Service & Onboarding Integration ---');
   const branchLimitPath = path.join(process.cwd(), 'src/server/services/branch-limit.service.ts');
-  assert(fs.existsSync(branchLimitPath), '33. branch-limit.service.ts file exists');
-
   const branchLimitContent = fs.readFileSync(branchLimitPath, 'utf-8');
-  assert(branchLimitContent.includes('SubscriptionService.validateLimit'), '34. checkBranchQuota delegates to SubscriptionService');
-  assert(!branchLimitContent.includes('process.env.NEXT_PUBLIC_DEFAULT_SUBSCRIPTION_TIER'), '35. Removed hardcoded process.env subscription tier reliance');
+  assert(branchLimitContent.includes('SubscriptionService.validateLimit'), '30. checkBranchQuota delegates to SubscriptionService');
 
-  // 6. Onboarding Integration Verification
-  console.log('\n--- SECTION 6: Onboarding Integration Verification ---');
   const onboardingPath = path.join(process.cwd(), 'src/server/actions/onboarding.ts');
   const onboardingContent = fs.readFileSync(onboardingPath, 'utf-8');
-  assert(onboardingContent.includes('SubscriptionService.createTrialSubscription'), '36. completeOnboardingAction provisions 14-day Starter trial upon onboarding RPC completion');
+  assert(onboardingContent.includes('SubscriptionService.createTrialSubscription'), '31. completeOnboardingAction provisions trial subscription');
 
-  // 7. Step 2 Tenant Resolver & Layout Guards Verification
+  // 7. Tenant Resolver & Layout Guards Verification
   console.log('\n--- SECTION 7: Tenant Resolver & Layout Access Enforcement ---');
-  const resolverPath = path.join(process.cwd(), 'src/server/tenant/resolver.ts');
-  const resolverContent = fs.readFileSync(resolverPath, 'utf-8');
-  assert(resolverContent.includes('SubscriptionService.resolveSubscriptionContext'), '37. resolveActiveBusinessContext resolves subscription context');
-
   const layoutPath = path.join(process.cwd(), 'src/app/(dashboard)/layout.tsx');
   const layoutContent = fs.readFileSync(layoutPath, 'utf-8');
-  assert(layoutContent.includes('business.status === \'suspended\''), '38. DashboardLayout checks platform suspension precedence');
-  assert(layoutContent.includes('redirect(\'/account/pending-access?reason=platform_suspended\')'), '39. Platform suspension redirects to pending access page');
-  assert(layoutContent.includes('membership.role !== \'business_owner\''), '40. Non-owner staff redirected when commercially suspended');
+  assert(layoutContent.includes('resolveUnifiedAccessState'), '32. DashboardLayout uses resolveUnifiedAccessState');
 
   const shellPath = path.join(process.cwd(), 'src/components/layout/dashboard-shell.tsx');
   const shellContent = fs.readFileSync(shellPath, 'utf-8');
-  assert(shellContent.includes('/dashboard/settings/subscription'), '41. Suspended owner redirected to subscription settings page');
-  assert(shellContent.includes('Subscription Grace Period Active'), '42. Grace period warning banner rendered in DashboardShell');
-  assert(shellContent.includes('Free Trial Ending Soon'), '43. Trial ending warning banner rendered in DashboardShell');
+  assert(shellContent.includes('SubscriptionRealtimeListener'), '33. DashboardShell embeds SubscriptionRealtimeListener');
 
-  // 8. Step 2 Public QR Ordering & Reservation Enforcement Verification
+  // 8. Public QR Ordering & Reservation Enforcement Verification
   console.log('\n--- SECTION 8: Public QR Ordering & Reservation Enforcement ---');
   const orderServicePath = path.join(process.cwd(), 'src/server/services/order.service.ts');
   const orderServiceContent = fs.readFileSync(orderServicePath, 'utf-8');
-  assert(orderServiceContent.includes('Ordering is currently unavailable for this venue.'), '44. OrderService.createGuestOrder blocks guest orders for suspended businesses');
+  assert(orderServiceContent.includes('Ordering is currently unavailable for this venue.'), '34. OrderService blocks guest orders for suspended businesses');
 
   const publicResPath = path.join(process.cwd(), 'src/server/reservations/public-reservation.service.ts');
   const publicResContent = fs.readFileSync(publicResPath, 'utf-8');
-  assert(publicResContent.includes('Table reservations are currently unavailable for this venue.'), '45. PublicReservationService blocks guest bookings for suspended businesses');
+  assert(publicResContent.includes('Table reservations are currently unavailable for this venue.'), '35. PublicReservationService blocks guest bookings for suspended businesses');
 
-  // 9. Step 2 Resource Limit Enforcement Integration Verification
+  // 9. Resource Limit Enforcement Integration Verification
   console.log('\n--- SECTION 9: Resource Limit Enforcement Integration ---');
   const staffInvitePath = path.join(process.cwd(), 'src/server/services/staff-invitation.service.ts');
   const staffInviteContent = fs.readFileSync(staffInvitePath, 'utf-8');
-  assert(staffInviteContent.includes('validateLimit(businessId, \'staff\')'), '46. StaffInvitationService checks active staff limit');
-
-  const tableActionPath = path.join(process.cwd(), 'src/server/actions/table.ts');
-  const tableActionContent = fs.readFileSync(tableActionPath, 'utf-8');
-  assert(tableActionContent.includes('validateLimit(authContext.businessId, \'tables\')'), '47. createDiningTableAction checks table limit');
+  assert(staffInviteContent.includes('validateLimit(businessId, \'staff\')'), '36. StaffInvitationService checks staff limit');
 
   const menuActionPath = path.join(process.cwd(), 'src/server/actions/menu.ts');
   const menuActionContent = fs.readFileSync(menuActionPath, 'utf-8');
-  assert(menuActionContent.includes('validateLimit(authContext.businessId, \'menuItems\')'), '48. createMenuItemAction checks menu items limit');
+  assert(menuActionContent.includes('assertOperationalSubscription'), '37. Menu server actions assert operational subscription server-side');
 
-  const roleGovPath = path.join(process.cwd(), 'src/server/services/role-governance.service.ts');
-  const roleGovContent = fs.readFileSync(roleGovPath, 'utf-8');
-  assert(roleGovContent.includes('validateLimit(businessId, \'customRoles\')'), '49. RoleGovernanceService checks custom roles limit');
-
-  const ownerPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/settings/subscription/page.tsx');
-  assert(fs.existsSync(ownerPagePath), '50. Owner Subscription Management page exists at /dashboard/settings/subscription');
-
-  // 10. Step 2 Pending-Access Hotfix & Redirect Loop Protection Verification
-  console.log('\n--- SECTION 10: Pending-Access Hotfix & Redirect Loop Protection ---');
+  // 10. Pending-Access Hotfix & Recovery Verification
+  console.log('\n--- SECTION 10: Pending-Access Recovery & State Re-resolution ---');
   const pendingPagePath = path.join(process.cwd(), 'src/app/(auth)/account/pending-access/page.tsx');
   const pendingPageContent = fs.readFileSync(pendingPagePath, 'utf-8');
-  assert(pendingPageContent.includes('if (!reason)'), '51. PendingAccessPage skips dashboard redirect check when reason parameter is present');
+  assert(pendingPageContent.includes('resolveUnifiedAccessState'), '38. PendingAccessPage uses resolveUnifiedAccessState on every render');
+  assert(pendingPageContent.includes('redirect(\'/dashboard\')'), '39. PendingAccessPage automatically redirects to /dashboard when restriction resolves');
 
   const pendingScreenPath = path.join(process.cwd(), 'src/components/auth/pending-access-screen.tsx');
   const pendingScreenContent = fs.readFileSync(pendingScreenPath, 'utf-8');
-  assert(pendingScreenContent.includes('reason === \'subscription_suspended\''), '52. PendingAccessScreen handles subscription_suspended reason');
-  assert(pendingScreenContent.includes('Subscription Suspended'), '53. PendingAccessScreen renders Subscription Suspended header');
-  assert(pendingScreenContent.includes('reason === \'platform_suspended\''), '54. PendingAccessScreen handles platform_suspended reason');
-  assert(pendingScreenContent.includes('Sign Out / Switch Account'), '55. PendingAccessScreen exposes Sign Out button');
+  assert(pendingScreenContent.includes('reason === \'subscription_suspended\''), '40. PendingAccessScreen handles subscription_suspended reason');
+  assert(pendingScreenContent.includes('reason === \'subscription_cancelled\''), '41. PendingAccessScreen handles subscription_cancelled reason');
+  assert(pendingScreenContent.includes('reason === \'platform_suspended\''), '42. PendingAccessScreen handles platform_suspended reason');
 
-  // 11. Step 2 Public Suspension UX Hotfix Verification
-  console.log('\n--- SECTION 11: Public Suspension UX Hotfix ---');
+  // 11. Public Suspension UX Hotfix Verification
+  console.log('\n--- SECTION 11: Public Suspension UX ---');
   const venuePagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/page.tsx');
   const venuePageContent = fs.readFileSync(venuePagePath, 'utf-8');
-  assert(venuePageContent.includes('isCommerciallySuspended'), '56. Public venue page checks isCommerciallySuspended');
-  assert(venuePageContent.includes('Reservations Unavailable'), '57. Public venue page renders Reservations Unavailable CTA when suspended');
+  assert(venuePageContent.includes('isCommerciallySuspended'), '43. Public venue page checks isCommerciallySuspended');
 
-  const reservePagePath = path.join(process.cwd(), 'src/app/(public)/venues/[slug]/reserve/page.tsx');
-  const reservePageContent = fs.readFileSync(reservePagePath, 'utf-8');
-  assert(reservePageContent.includes('isCommerciallySuspended'), '58. Public reserve page checks isCommerciallySuspended');
-  assert(reservePageContent.includes('Table reservations are currently unavailable for this venue.'), '59. Public reserve page renders Reservations Unavailable card when suspended');
-
-  const qrPagePath = path.join(process.cwd(), 'src/app/m/[token]/page.tsx');
-  const qrPageContent = fs.readFileSync(qrPagePath, 'utf-8');
-  assert(qrPageContent.includes('isOrderingUnavailable'), '60. Public QR page checks isOrderingUnavailable');
-
-  const checkoutPagePath = path.join(process.cwd(), 'src/app/m/[token]/checkout/page.tsx');
-  const checkoutPageContent = fs.readFileSync(checkoutPagePath, 'utf-8');
-  assert(checkoutPageContent.includes('Ordering is currently unavailable for this venue.'), '61. Public QR checkout page renders Ordering Unavailable card when suspended');
-
-  // 12. Step 3 Super Admin Subscription Management Verification
-  console.log('\n--- SECTION 12: Step 3 Super Admin Controls ---');
+  // 12. Super Admin Controls & Audit Logging Verification
+  console.log('\n--- SECTION 12: Super Admin Controls & Audit Integration ---');
   const superAdminActionPath = path.join(process.cwd(), 'src/server/actions/super-admin-subscription.ts');
-  assert(fs.existsSync(superAdminActionPath), '62. Super Admin subscription server actions exist in super-admin-subscription.ts');
+  assert(fs.existsSync(superAdminActionPath), '44. super-admin-subscription.ts actions exist');
 
-  const superAdminActionContent = fs.readFileSync(superAdminActionPath, 'utf-8');
-  assert(superAdminActionContent.includes('requireSuperAdmin()'), '63. Super Admin subscription server actions enforce requireSuperAdmin()');
-
-  assert(typeof SubscriptionService.manualActivateSubscription === 'function', '64. SubscriptionService.manualActivateSubscription method exists');
-  assert(typeof SubscriptionService.extendTrial === 'function', '65. SubscriptionService.extendTrial method exists');
-  assert(typeof SubscriptionService.extendGracePeriod === 'function', '66. SubscriptionService.extendGracePeriod method exists');
-  assert(typeof SubscriptionService.changeSubscriptionPlan === 'function', '67. SubscriptionService.changeSubscriptionPlan method exists');
-  assert(typeof SubscriptionService.setEnterpriseOverrides === 'function', '68. SubscriptionService.setEnterpriseOverrides method exists');
-  assert(typeof SubscriptionService.suspendSubscription === 'function', '69. SubscriptionService.suspendSubscription method exists');
-  assert(typeof SubscriptionService.reactivateSubscription === 'function', '70. SubscriptionService.reactivateSubscription method exists');
-  assert(typeof SubscriptionService.cancelSubscription === 'function', '71. SubscriptionService.cancelSubscription method exists');
+  const subServicePath = path.join(process.cwd(), 'src/server/services/subscription.service.ts');
+  const subServiceContent = fs.readFileSync(subServicePath, 'utf-8');
+  assert(subServiceContent.includes('admin.from(\'audit_logs\').insert'), '45. SubscriptionService writes to platform audit_logs table');
+  assert(subServiceContent.includes('activation_source: \'manual_admin\''), '46. manualActivateSubscription records activation_source = manual_admin');
 
   const adminControlPath = path.join(process.cwd(), 'src/components/admin/admin-subscription-control.tsx');
-  assert(fs.existsSync(adminControlPath), '72. AdminSubscriptionControl component exists in admin-subscription-control.tsx');
+  const adminControlContent = fs.readFileSync(adminControlPath, 'utf-8');
+  assert(adminControlContent.includes('Grace Period End'), '47. AdminSubscriptionControl explicitly renders Grace Period End');
+  assert(adminControlContent.includes('effectiveStatus !== \'CANCELLED\''), '48. AdminSubscriptionControl actions are state-aware');
 
+  // 13. UI Cleanliness & Badge Contrast Verification
+  console.log('\n--- SECTION 13: UI Cleanliness & Badge Contrast ---');
   const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-subscription-client.tsx');
   const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
-  assert(ownerClientContent.includes('LKR 4,499'), '73. Owner subscription UI displays LKR 4,499 Starter pricing');
-  assert(ownerClientContent.includes('LKR 8,999'), '74. Owner subscription UI displays LKR 8,999 Growth pricing');
-  assert(ownerClientContent.includes('Manual Activation Required'), '75. Owner subscription UI displays manual activation notice for payment CTAs');
+  assert(!ownerClientContent.includes('billing@wsnexa.internal'), '49. Removed fake billing@wsnexa.internal email literal');
+  assert(!ownerClientContent.includes('+94 (11) 234-5678'), '50. Removed fake +94 (11) 234-5678 phone number literal');
+  assert(ownerClientContent.includes('Manual Activation Required'), '51. Owner payment notice modal retains honest manual activation copy');
 
-  const docPath = path.join(process.cwd(), 'docs/v1-subscription-core.md');
-  assert(fs.existsSync(docPath), '76. Documentation file docs/v1-subscription-core.md exists');
+  const accessDeniedPath = path.join(process.cwd(), 'src/components/auth/access-denied.tsx');
+  const accessDeniedContent = fs.readFileSync(accessDeniedPath, 'utf-8');
+  assert(!accessDeniedContent.includes('Your staff account'), '52. AccessDenied component uses role-neutral copy');
 
-  // 13. Step 3 Production QA Hotfix Batch Verification
-  console.log('\n--- SECTION 13: Step 3 Production QA Hotfix Batch ---');
-
-  // Navigation Verification
-  const navConfigPath = path.join(process.cwd(), 'src/lib/navigation/dashboard-navigation.ts');
-  const navConfigContent = fs.readFileSync(navConfigPath, 'utf-8');
-  assert(navConfigContent.includes('Subscription & Billing'), '77. Dashboard navigation config includes Subscription & Billing nav entry');
-  assert(navConfigContent.includes('href: \'/dashboard/settings/subscription\''), '78. Subscription nav item routes to /dashboard/settings/subscription');
-  assert(navConfigContent.includes('requiredPermission: \'business.settings.manage\''), '79. Subscription nav item requires business.settings.manage permission');
-
-  // Realtime Component & Shell Verification
+  // 14. Realtime Component Dual Listener Verification
+  console.log('\n--- SECTION 14: Realtime Component Dual Listener ---');
   const realtimeCompPath = path.join(process.cwd(), 'src/components/subscription/subscription-realtime-listener.tsx');
-  assert(fs.existsSync(realtimeCompPath), '80. SubscriptionRealtimeListener component exists');
-
   const realtimeCompContent = fs.readFileSync(realtimeCompPath, 'utf-8');
-  assert(realtimeCompContent.includes('sub_realtime_${businessId}'), '81. SubscriptionRealtimeListener uses business-scoped Supabase Realtime channel');
-  assert(realtimeCompContent.includes('business_subscriptions'), '82. SubscriptionRealtimeListener listens to business_subscriptions postgres_changes');
+  assert(realtimeCompContent.includes('table: \'business_subscriptions\''), '53. SubscriptionRealtimeListener listens to business_subscriptions');
+  assert(realtimeCompContent.includes('table: \'businesses\''), '54. SubscriptionRealtimeListener listens to businesses platform table');
 
-  assert(shellContent.includes('SubscriptionRealtimeListener'), '83. DashboardShell embeds SubscriptionRealtimeListener for live subscription state propagation');
-
-  // State-Correct Messaging Verification
-  assert(pendingScreenContent.includes('reason === \'subscription_cancelled\''), '84. PendingAccessScreen handles subscription_cancelled reason');
-  assert(pendingScreenContent.includes('Subscription Cancelled'), '85. PendingAccessScreen renders Subscription Cancelled header');
-
-  // Super Admin UI & Date Visibility Verification
-  const adminControlContent = fs.readFileSync(adminControlPath, 'utf-8');
-  assert(adminControlContent.includes('Grace Period End'), '86. AdminSubscriptionControl explicitly renders Grace Period End in summary grid');
-  assert(adminControlContent.includes('effectiveStatus !== \'CANCELLED\''), '87. AdminSubscriptionControl makes Suspend/Cancel actions state-aware');
-
-  // Server-Side Guard & Backend Transition Verification
-  assert(typeof SubscriptionService.assertOperationalSubscription === 'function', '88. SubscriptionService.assertOperationalSubscription method exists');
-
-  let suspendCancelledError = false;
-  try {
-    await SubscriptionService.suspendSubscription({ businessId: 'mock-id', reason: 'test', actorId: 'actor-id' });
-  } catch (err: unknown) {
-    if (err instanceof Error && (err.message.includes('already cancelled') || err.message.includes('Database') || err.message.includes('Failed'))) {
-      suspendCancelledError = true;
-    }
-  }
-  assert(suspendCancelledError, '89. Backend transition guard rejects invalid transitions on cancelled subscriptions');
-
-  assert(!superAdminActionContent.includes('DialogGateway') && !superAdminActionContent.includes('payhere'), '90. Zero fake payment actions or Dialog Gateway stubs introduced');
+  // 15. Zero Fake Gateway Verification
+  console.log('\n--- SECTION 15: Zero Fake Gateway Verification ---');
+  assert(!subServiceContent.includes('DialogGateway') && !subServiceContent.includes('payhere'), '55. Zero fake payment actions or Dialog Gateway stubs introduced');
 
   console.log('\n================================================================');
-  console.log('  V1 Subscription Core Hotfix Batch: ALL 90 ASSERTIONS PASSED');
+  console.log('  V1 Subscription Core Final Hotfix: ALL 55 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

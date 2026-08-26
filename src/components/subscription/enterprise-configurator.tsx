@@ -71,7 +71,17 @@ export function EnterpriseConfigurator({
                 Includes 5 branches (Extra: LKR {SUBSCRIPTION_PRICING_CONFIG.enterpriseExtraBranchMonthlyLkr.toLocaleString()}/mo per branch)
               </p>
             </div>
-            <span className="text-lg font-black text-zinc-950 font-mono">{branches}</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={branches}
+                onChange={(e) => setBranches(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-16 h-9 px-2 text-right text-base font-black font-mono text-zinc-950 bg-white border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-950"
+              />
+              <span className="text-xs font-bold text-zinc-500">branches</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -79,7 +89,7 @@ export function EnterpriseConfigurator({
               type="button"
               onClick={() => setBranches((b) => Math.max(1, b - 1))}
               disabled={branches <= 1}
-              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 disabled:opacity-40 transition-all cursor-pointer flex items-center justify-center shadow-2xs"
+              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 disabled:opacity-40 transition-all cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
             >
               -
             </button>
@@ -88,6 +98,7 @@ export function EnterpriseConfigurator({
               type="range"
               min={1}
               max={50}
+              step={1}
               value={branches}
               onChange={(e) => setBranches(Math.max(1, parseInt(e.target.value, 10) || 1))}
               className="flex-1 accent-zinc-950 cursor-pointer"
@@ -96,7 +107,7 @@ export function EnterpriseConfigurator({
             <button
               type="button"
               onClick={() => setBranches((b) => b + 1)}
-              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 transition-all cursor-pointer flex items-center justify-center shadow-2xs"
+              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 transition-all cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
             >
               +
             </button>
@@ -112,15 +123,25 @@ export function EnterpriseConfigurator({
                 Includes 75 staff (Extra: LKR {SUBSCRIPTION_PRICING_CONFIG.enterpriseExtraStaffBlockMonthlyLkr.toLocaleString()}/mo per 25-staff block)
               </p>
             </div>
-            <span className="text-lg font-black text-zinc-950 font-mono">{staff}</span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={staff}
+                onChange={(e) => setStaff(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-20 h-9 px-2 text-right text-base font-black font-mono text-zinc-950 bg-white border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-950"
+              />
+              <span className="text-xs font-bold text-zinc-500">staff</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setStaff((s) => Math.max(1, s - 5))}
+              onClick={() => setStaff((s) => Math.max(1, s - 1))}
               disabled={staff <= 1}
-              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 disabled:opacity-40 transition-all cursor-pointer flex items-center justify-center shadow-2xs"
+              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 disabled:opacity-40 transition-all cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
             >
               -
             </button>
@@ -129,7 +150,7 @@ export function EnterpriseConfigurator({
               type="range"
               min={1}
               max={500}
-              step={5}
+              step={1}
               value={staff}
               onChange={(e) => setStaff(Math.max(1, parseInt(e.target.value, 10) || 1))}
               className="flex-1 accent-zinc-950 cursor-pointer"
@@ -137,8 +158,8 @@ export function EnterpriseConfigurator({
 
             <button
               type="button"
-              onClick={() => setStaff((s) => s + 5)}
-              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 transition-all cursor-pointer flex items-center justify-center shadow-2xs"
+              onClick={() => setStaff((s) => s + 1)}
+              className="w-10 h-10 rounded-xl bg-white border border-zinc-200 text-zinc-900 font-extrabold text-base hover:bg-zinc-100 transition-all cursor-pointer flex items-center justify-center shadow-2xs shrink-0"
             >
               +
             </button>

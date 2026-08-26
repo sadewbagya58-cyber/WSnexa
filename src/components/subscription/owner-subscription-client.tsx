@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { SUBSCRIPTION_PLANS, SubscriptionPlanCode } from '@/lib/config/subscription-plans';
+import { EnterpriseConfigurator } from '@/components/subscription/enterprise-configurator';
 
 interface OwnerSubscriptionClientProps {
   businessName: string;
@@ -38,8 +40,9 @@ export function OwnerSubscriptionClient({
   subContext,
   usage,
 }: OwnerSubscriptionClientProps) {
+  const router = useRouter();
   const { subscription, plan, effectiveStatus, effectiveLimits, daysRemaining } = subContext;
-  const [selectedPlanForNotice, setSelectedPlanForNotice] = useState<string | null>(null);
+  const [showEnterpriseConfig, setShowEnterpriseConfig] = useState(false);
 
   const renderStatusBadge = () => {
     switch (effectiveStatus) {
@@ -66,6 +69,14 @@ export function OwnerSubscriptionClient({
     { label: 'Custom Roles', usage: usage.customRoles, limit: effectiveLimits.maxCustomRoles },
   ];
 
+  const handleSelectPlan = (code: SubscriptionPlanCode) => {
+    if (code === 'enterprise') {
+      setShowEnterpriseConfig(true);
+    } else {
+      router.push(`/dashboard/settings/subscription/checkout?plan=${code}`);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Header */}
@@ -82,28 +93,14 @@ export function OwnerSubscriptionClient({
         </div>
       </div>
 
-      {/* Payment Notice Modal */}
-      {selectedPlanForNotice && (
+      {/* Enterprise Configurator Modal */}
+      {showEnterpriseConfig && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl text-center">
-            <div className="w-14 h-14 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-2xl mx-auto shadow-xs">
-              💳
-            </div>
-            <h3 className="text-lg font-black text-zinc-950 uppercase tracking-wider">
-              Manual Activation Required
-            </h3>
-            <p className="text-xs text-zinc-600 leading-relaxed font-medium">
-              Online subscription payments are coming soon. To upgrade or renew your plan to{' '}
-              <span className="font-extrabold text-zinc-950">{selectedPlanForNotice}</span>, please contact WSNexa support or sales for bank transfer / manual activation.
-            </p>
-            <button
-              type="button"
-              onClick={() => setSelectedPlanForNotice(null)}
-              className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
-            >
-              Close Notice
-            </button>
-          </div>
+          <EnterpriseConfigurator
+            initialBranches={usage.branches || 5}
+            initialStaff={usage.staff || 75}
+            onCancel={() => setShowEnterpriseConfig(false)}
+          />
         </div>
       )}
 
@@ -117,7 +114,7 @@ export function OwnerSubscriptionClient({
               {plan.priceLkrMonthly !== null ? (
                 <span className="text-sm font-bold text-zinc-600">LKR {plan.priceLkrMonthly.toLocaleString()} / mo</span>
               ) : (
-                <span className="text-sm font-bold text-zinc-600">Custom Pricing</span>
+                <span className="text-sm font-bold text-zinc-600">Custom Enterprise Pricing</span>
               )}
             </div>
           </div>
@@ -194,12 +191,12 @@ export function OwnerSubscriptionClient({
                         LKR {item.priceLkrMonthly.toLocaleString()} <span className="text-xs font-normal text-zinc-500">/ mo</span>
                       </>
                     ) : (
-                      'Contact Sales'
+                      'From LKR 24,999 / mo'
                     )}
                   </div>
                   <ul className="text-xs font-medium text-zinc-700 space-y-2 border-t border-zinc-100 pt-4">
-                    <li>• {item.limits.maxBranches === null ? 'Unlimited' : item.limits.maxBranches} Branch(es)</li>
-                    <li>• {item.limits.maxActiveStaff === null ? 'Unlimited' : item.limits.maxActiveStaff} Active Staff</li>
+                    <li>• {item.limits.maxBranches === null ? '5 Included (Customable)' : `${item.limits.maxBranches} Branch(es)`}</li>
+                    <li>• {item.limits.maxActiveStaff === null ? '75 Included (Customable)' : `${item.limits.maxActiveStaff} Active Staff`}</li>
                     <li>• {item.limits.maxTables === null ? 'Unlimited' : item.limits.maxTables} Dining Tables</li>
                     <li>• {item.limits.maxMenuItems === null ? 'Unlimited' : item.limits.maxMenuItems} Menu Items</li>
                     <li>• {item.limits.maxCustomRoles === null ? 'Unlimited' : item.limits.maxCustomRoles} Custom Roles</li>
@@ -217,10 +214,10 @@ export function OwnerSubscriptionClient({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setSelectedPlanForNotice(item.name)}
+                      onClick={() => handleSelectPlan(code)}
                       className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs transition-colors shadow-sm cursor-pointer"
                     >
-                      Select {item.name}
+                      {code === 'enterprise' ? 'Configure Enterprise ⚡' : `Select ${item.name} ⚡`}
                     </button>
                   )}
                 </div>

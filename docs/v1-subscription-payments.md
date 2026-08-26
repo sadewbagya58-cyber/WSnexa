@@ -33,7 +33,7 @@ All WSNexa SaaS subscription prices are calculated in **LKR** (Lankan Rupee). Su
 
 ---
 
-## 3. Enterprise Pricing Formula & Ceiling Block Logic
+## 3. Enterprise Pricing Formula & Configurator
 
 Enterprise scale pricing is dynamically calculated on top of the base plan:
 
@@ -60,21 +60,35 @@ $$\text{Extra Staff Blocks} = \left\lceil \frac{\max(0, \text{Staff} - 75)}{25} 
 
 ## 4. Server-Authoritative Pricing & Security
 
-- **Server-Authoritative**: The client browser is **never** permitted to specify or override the payment amount. When checkout requests are initiated, the server recalculates the total from canonical plan configurations.
+- **Server-Authoritative**: The client browser is **never** permitted to specify or override the payment amount. When checkout requests or payment intents are initiated (`createSubscriptionPaymentIntentAction`), the server recalculates the total from canonical plan configurations.
 - **Integer LKR Currency Math**: All monetary values are represented as integer LKR amounts to eliminate floating-point precision errors.
 
 ---
 
-## 5. Pricing Snapshot JSONB
+## 5. Owner Plan Selection & Checkout Review Flow
 
-Every payment record preserves an immutable `pricing_snapshot` JSONB object capturing the exact pricing calculation result at payment creation time (`pricingEngineVersion: "v1"`).
+1. **Plan Selection (`/dashboard/settings/subscription`)**:
+   - Owner selects Starter, Growth, or Enterprise.
+   - For Enterprise, the inline `EnterpriseConfigurator` allows dynamic configuration of branches and staff seats with live estimate updates.
+2. **Checkout Review (`/dashboard/settings/subscription/checkout`)**:
+   - Server action `previewSubscriptionCheckoutAction` calculates the canonical quote, evaluates downgrade eligibility, and returns quote itemization.
+   - If downgrade is ineligible (resource usage exceeds destination plan limits), checkout is **BLOCKED** and explicit conflict details are displayed.
+3. **Payment Intent Creation (`createSubscriptionPaymentIntentAction`)**:
+   - On clicking `Continue to Payment`, a `pending` record is created in `public.business_subscription_payments`.
+   - `status`: `'pending'`
+   - `provider`: `null`
+   - `amount_lkr`: Calculated server-side
+   - `idempotency_key`: `sub_intent_${businessId}_${planCode}_${checkoutAttemptId}`
+4. **Gateway Unavailable State**:
+   - Displays honest pending notice: *"Online payment coming soon. Your subscription selection has been prepared. Dialog Gateway connection is not yet available."*
+   - Zero fake payment success, zero fake provider transaction IDs, zero subscription auto-activation.
 
 ---
 
 ## 6. Payment Status Lifecycle
 
 SaaS subscription payment records transition through seven canonical statuses:
-1. `pending`: Checkout session initialized.
+1. `pending`: Checkout session / intent initialized.
 2. `processing`: Payment submission undergoing gateway processing.
 3. `paid`: Payment verified and completed.
 4. `failed`: Payment attempt rejected or failed.
@@ -87,16 +101,18 @@ SaaS subscription payment records transition through seven canonical statuses:
 ## 7. Idempotency & Retries
 
 - `idempotency_key`: `VARCHAR(255) UNIQUE NOT NULL` on `public.business_subscription_payments`.
-- Prevents duplicate payment creation on network retries or concurrent checkout requests.
+- Prevents duplicate payment intent creation on double clicks, browser retries, or concurrent checkout submissions.
 
 ---
 
-## 8. Manual Activation Separation
+## 8. Platform Suspension Protection & Authorization
 
-Super Admin manual subscription activations (`manualActivateSubscription`) do **NOT** create payment gateway records. Manual activations are logged in `business_subscription_events` and platform `audit_logs` only. `business_subscription_payments` is reserved for commercial gateway payment attempts.
+- **Business Owner Only**: Only authenticated Business Owners can initiate checkout previews or create payment intents. Non-owner staff are rejected with `UNAUTHORIZED_ROLE`.
+- **Commercial Suspended/Cancelled Owners**: Can access checkout to prepare plan renewals or reactivations.
+- **Platform Suspended Businesses**: `businesses.status === 'suspended'` strictly blocks payment intent creation (`PLATFORM_SUSPENDED`).
 
 ---
 
 ## 9. Dialog Gateway Integration Boundary
 
-Phase 36 Step 1 establishes database schemas, types, and server-side pricing calculation. Direct Dialog payment gateway SDKs, merchant IDs, hash generation, webhooks, and checkout URLs are deferred to subsequent Phase 36 steps.
+Phase 36 Step 2 completes owner plan selection, Enterprise configurator, server-side quote recalculation, checkout review, and `pending` payment intent creation. Direct Dialog payment gateway SDKs, merchant credentials, webhooks, and checkout URLs are deferred to subsequent Phase 36 steps.

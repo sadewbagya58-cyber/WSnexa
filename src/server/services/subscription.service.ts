@@ -661,6 +661,99 @@ export class SubscriptionService {
   }
 
   /**
+   * Verified gateway payment settlement lifecycle adapter.
+   * Activates or renews commercial subscription upon verified payment.
+   * Preserves platform suspension precedence.
+   */
+  static async activateSubscriptionFromVerifiedPayment({
+    businessId,
+    planCode,
+    pricingSnapshot,
+    paymentPurpose,
+    actorId = 'system_reconciliation',
+  }: {
+    businessId: string;
+    planCode: SubscriptionPlanCode;
+    pricingSnapshot?: Record<string, unknown>;
+    paymentPurpose?: string;
+    actorId?: string;
+  }): Promise<BusinessSubscriptionRecord> {
+    const admin = createAdminClient();
+    const { data: business } = await admin
+      .from('businesses')
+      .select('status')
+      .eq('id', businessId)
+      .maybeSingle();
+
+    if (business && (business.status === 'suspended' || business.status === 'archived')) {
+      throw new Error('Platform workspace access is suspended. Commercial payment cannot activate a platform-suspended business.');
+    }
+
+    const subContext = await this.resolveSubscriptionContext(businessId);
+    const oldSub = subContext.subscription;
+    const now = new Date();
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    let maxBranchesOverride: number | null = oldSub.max_branches_override;
+    let maxStaffOverride: number | null = oldSub.max_staff_override;
+
+    if (planCode === 'enterprise' && pricingSnapshot && typeof pricingSnapshot === 'object') {
+      const breakdown = (pricingSnapshot as { breakdown?: { requestedBranches?: number; requestedStaff?: number } }).breakdown;
+      if (breakdown) {
+        maxBranchesOverride = breakdown.requestedBranches ?? 5;
+        maxStaffOverride = breakdown.requestedStaff ?? 75;
+      }
+    }
+
+    const updatePayload = {
+      business_id: businessId,
+      plan_code: planCode,
+      status: 'active' as const,
+      current_period_starts_at: now.toISOString(),
+      current_period_ends_at: periodEnd.toISOString(),
+      grace_ends_at: null,
+      suspended_at: null,
+      cancelled_at: null,
+      max_branches_override: maxBranchesOverride,
+      max_staff_override: maxStaffOverride,
+      activation_source: 'verified_gateway_payment',
+      notes: `[Verified Gateway Payment] Purpose: ${paymentPurpose || 'paid_subscription'}`,
+      updated_at: now.toISOString(),
+    };
+
+    const { data: updated, error } = await admin
+      .from('business_subscriptions')
+      .upsert(updatePayload, { onConflict: 'business_id' })
+      .select('*')
+      .single();
+
+    if (error || !updated) {
+      throw new Error(`Failed to activate subscription from verified payment: ${error?.message}`);
+    }
+
+    await this.recordSubscriptionEventAndAudit({
+      businessId,
+      actorId,
+      eventType: 'activated',
+      previousStatus: oldSub.status,
+      newStatus: 'active',
+      previousPlan: oldSub.plan_code,
+      newPlan: planCode,
+      reason: `Verified gateway payment settlement (${paymentPurpose || 'paid_subscription'})`,
+      metadata: { periodEnd: periodEnd.toISOString(), pricingSnapshot },
+    });
+
+    await this.notifyBusinessOwner(
+      businessId,
+      'SUBSCRIPTION_ACTIVATED',
+      'Subscription Payment Verified',
+      `Your WSNexa ${getPlanDefinition(planCode).name} subscription payment was verified and active until ${periodEnd.toLocaleDateString()}.`
+    );
+
+    return updated as BusinessSubscriptionRecord;
+  }
+
+  /**
    * Authoritative server-side subscription operational assertion guard.
    * Resolves effective subscription & platform access state and throws Error if restricted.
    */

@@ -1,7 +1,7 @@
 # WSNexa V1 Subscription Payments — Architecture & Pricing Documentation
 
 ## Overview
-WSNexa V1 Subscription Payments establishes a dedicated, production-safe commercial SaaS payment domain and canonical server-side pricing engine for WSNexa venue subscription billing (Business Owner $\rightarrow$ WSNexa merchant account).
+WSNexa V1 Subscription Payments establishes a dedicated, production-safe commercial SaaS payment domain, canonical server-side pricing engine, checkout review flow, and provider-neutral payment gateway architecture for WSNexa venue subscription billing (Business Owner $\rightarrow$ WSNexa merchant account).
 
 ---
 
@@ -55,6 +55,7 @@ $$\text{Extra Staff Blocks} = \left\lceil \frac{\max(0, \text{Staff} - 75)}{25} 
 | **5** | **100** | 0 | 1 | Base 24,999 + 0 + (1 × 2,000) | **LKR 26,999** |
 | **5** | **101** | 0 | 2 | Base 24,999 + 0 + (2 × 2,000) | **LKR 28,999** |
 | **10** | **200** | 5 | 5 | Base 24,999 + (5 × 3,000) + (5 × 2,000) | **LKR 49,999** |
+| **10** | **201** | 5 | 6 | Base 24,999 + (5 × 3,000) + (6 × 2,000) | **LKR 51,999** |
 
 ---
 
@@ -65,54 +66,48 @@ $$\text{Extra Staff Blocks} = \left\lceil \frac{\max(0, \text{Staff} - 75)}{25} 
 
 ---
 
-## 5. Owner Plan Selection & Checkout Review Flow
+## 5. Provider-Neutral Gateway Architecture (Phase 36 Step 3)
 
-1. **Plan Selection (`/dashboard/settings/subscription`)**:
-   - Owner selects Starter, Growth, or Enterprise.
-   - For Enterprise, the inline `EnterpriseConfigurator` allows dynamic configuration of branches and staff seats with live estimate updates.
-2. **Checkout Review (`/dashboard/settings/subscription/checkout`)**:
-   - Server action `previewSubscriptionCheckoutAction` calculates the canonical quote, evaluates downgrade eligibility, and returns quote itemization.
-   - If downgrade is ineligible (resource usage exceeds destination plan limits), checkout is **BLOCKED** and explicit conflict details are displayed.
-3. **Payment Intent Creation (`createSubscriptionPaymentIntentAction`)**:
-   - On clicking `Continue to Payment`, a `pending` record is created in `public.business_subscription_payments`.
-   - `status`: `'pending'`
-   - `provider`: `null`
-   - `amount_lkr`: Calculated server-side
-   - `idempotency_key`: `sub_intent_${businessId}_${planCode}_${checkoutAttemptId}`
-4. **Gateway Unavailable State**:
-   - Displays honest pending notice: *"Online payment coming soon. Your subscription selection has been prepared. Dialog Gateway connection is not yet available."*
-   - Zero fake payment success, zero fake provider transaction IDs, zero subscription auto-activation.
+WSNexa utilizes a provider-neutral gateway architecture separating core subscription billing logic from external gateway adapters.
 
----
+### Provider Contract (`SubscriptionPaymentProvider`)
+All payment provider adapters must implement the canonical interface [`src/server/payments/subscriptions/subscription-payment-provider.ts`](file:///c:/Users/x/.antigravity/wsnexa/src/server/payments/subscriptions/subscription-payment-provider.ts):
+- `createCheckout(input: CreateCheckoutInput)`: Returns normalized `CreateCheckoutResult` (`provider`, `checkoutId`, `redirectUrl`).
+- `verifyReturn(input)`: Verifies browser callback parameters.
+- `verifyWebhook(payload, headers)`: Verifies webhook payload and cryptographic signature.
+- `getPaymentStatus?(providerTransactionId)`: Directly queries provider transaction status.
 
-## 6. Payment Status Lifecycle
+### Provider Registry & Availability Model
+- Candidate providers: **OnePay**, **Dialog**, **PayHere**.
+- Centralized configuration (`SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG`) controls provider enablement.
+- **Current Production Status**: All providers default to `enabled: false`. Unknown, disabled, or unconfigured providers are rejected cleanly by `getSubscriptionPaymentProvider(code)`.
 
-SaaS subscription payment records transition through seven canonical statuses:
-1. `pending`: Checkout session / intent initialized.
-2. `processing`: Payment submission undergoing gateway processing.
-3. `paid`: Payment verified and completed.
-4. `failed`: Payment attempt rejected or failed.
-5. `cancelled`: Payment checkout session cancelled by user.
-6. `expired`: Payment checkout session expired before completion.
-7. `refunded`: Payment refunded post-completion.
+### Payment State Machine (`payment-state-machine.ts`)
+Strict legal payment transitions:
+- `pending` $\rightarrow$ `processing`, `paid`, `failed`, `cancelled`, `expired`
+- `processing` $\rightarrow$ `paid`, `failed`, `cancelled`
+- `paid` $\rightarrow$ `refunded`
+- Illegal transitions (e.g. `paid` $\rightarrow$ `pending`, `failed` $\rightarrow$ `paid`) throw `PaymentProviderError('INVALID_PAYMENT_TRANSITION')`.
 
----
+### Verified Payment Settlement Boundary (`SubscriptionPaymentSettlementService`)
+- Server-side settlement boundary executing upon verified return/webhook:
+  1. Locates payment intent record.
+  2. Idempotency Check: If already `paid`, returns existing settlement result without duplicate execution.
+  3. Exact Amount & Currency Match: Verified `amountLkr` MUST equal `paymentIntent.amount_lkr`, `currency` MUST equal `'LKR'`. Mismatches reject settlement.
+  4. Provider Transaction Uniqueness: Ensures no single provider transaction ID can settle multiple payment intents (`idx_sub_payments_provider_tx_unique`).
+  5. Platform Suspension Precedence: Platform workspace suspension (`businesses.status === 'suspended'`) strictly blocks commercial payment settlement (`PLATFORM_SUSPENDED_SETTLEMENT_BLOCKED`).
+  6. Subscription Core Activation: Invokes `SubscriptionService.activateSubscriptionFromVerifiedPayment` to update lifecycle status, audit logs, and owner notifications.
 
-## 7. Idempotency & Retries
-
-- `idempotency_key`: `VARCHAR(255) UNIQUE NOT NULL` on `public.business_subscription_payments`.
-- Prevents duplicate payment intent creation on double clicks, browser retries, or concurrent checkout submissions.
+### Callback & Webhook Routes
+- Return Route: `/api/subscription-payments/[provider]/return` (Browser redirect query params are NEVER trusted without server-side verification).
+- Webhook Route: `/api/subscription-payments/[provider]/webhook` (Raw body preservation, cryptographic signature verification, duplicate webhook delivery safety).
 
 ---
 
-## 8. Platform Suspension Protection & Authorization
+## 6. Future Provider Integration Workflow
 
-- **Business Owner Only**: Only authenticated Business Owners can initiate checkout previews or create payment intents. Non-owner staff are rejected with `UNAUTHORIZED_ROLE`.
-- **Commercial Suspended/Cancelled Owners**: Can access checkout to prepare plan renewals or reactivations.
-- **Platform Suspended Businesses**: `businesses.status === 'suspended'` strictly blocks payment intent creation (`PLATFORM_SUSPENDED`).
-
----
-
-## 9. Dialog Gateway Integration Boundary
-
-Phase 36 Step 2 completes owner plan selection, Enterprise configurator, server-side quote recalculation, checkout review, and `pending` payment intent creation. Direct Dialog payment gateway SDKs, merchant credentials, webhooks, and checkout URLs are deferred to subsequent Phase 36 steps.
+Connecting a new gateway (e.g. OnePay, Dialog, PayHere) requires only:
+1. Creating a provider adapter class implementing `SubscriptionPaymentProvider`.
+2. Registering the adapter via `registerSubscriptionPaymentProvider(adapter)`.
+3. Setting `SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG[providerCode] = { enabled: true, environment, hasCredentials: true }`.
+4. Adding server-side environment credentials (never exposed via `NEXT_PUBLIC_*` or database text).

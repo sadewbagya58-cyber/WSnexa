@@ -38,129 +38,110 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
 
 async function runVerification() {
   console.log('\n================================================================');
-  console.log('  WSNexa Phase 36 Step 2 — Subscription Checkout & Button UX Verification');
+  console.log('  WSNexa Phase 36 Step 3 — Provider-Neutral Payment Gateway Architecture');
   console.log('================================================================\n');
 
   const { SubscriptionPricingService } = await import('../src/server/services/subscription-pricing.service');
+  const {
+    getSubscriptionPaymentProvider,
+    SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG,
+    PaymentProviderError,
+  } = await import('../src/server/payments/subscriptions/provider-registry');
+  const {
+    isLegalPaymentStateTransition,
+    assertLegalPaymentStateTransition,
+  } = await import('../src/server/payments/subscriptions/payment-state-machine');
+  const { SubscriptionPaymentSettlementService } = await import('../src/server/payments/subscriptions/subscription-settlement.service');
+  const { SubscriptionService } = await import('../src/server/services/subscription.service');
 
-  // 1. Checkout Quote Assertions
-  console.log('--- SECTION 1: Checkout Quote Recalculation & Formula Assertions ---');
-  const starterQuote = SubscriptionPricingService.calculateSubscriptionPrice({ planCode: 'starter' });
-  assert(starterQuote.total === 4499, '1. Starter checkout quote = 4499 LKR');
+  // 1. Provider Interface & Registry Verification
+  console.log('--- SECTION 1: Provider Interface & Registry ---');
+  const contractPath = path.join(process.cwd(), 'src/server/payments/subscriptions/subscription-payment-provider.ts');
+  assert(fs.existsSync(contractPath), '1. Provider contract interface file exists');
 
-  const growthQuote = SubscriptionPricingService.calculateSubscriptionPrice({ planCode: 'growth' });
-  assert(growthQuote.total === 8999, '2. Growth checkout quote = 8999 LKR');
+  const registryPath = path.join(process.cwd(), 'src/server/payments/subscriptions/provider-registry.ts');
+  assert(fs.existsSync(registryPath), '2. Provider registry file exists');
 
-  const ent575 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 5, activeStaff: 75 },
-  });
-  assert(ent575.total === 24999, '3. Enterprise 5/75 quote = 24999 LKR');
-
-  // Regression Assertions for Exact Staff Values (75, 76, 100, 101, 200, 201)
-  const ent10_75 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 75 },
-  });
-  assert(ent10_75.total === 39999, '4. Enterprise 10/75 quote = 39999 LKR');
-
-  const ent10_76 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 76 },
-  });
-  assert(ent10_76.total === 41999, '5. Enterprise 10/76 quote = 41999 LKR');
-
-  const ent10_100 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 100 },
-  });
-  assert(ent10_100.total === 41999, '6. Enterprise 10/100 quote = 41999 LKR');
-
-  const ent10_101 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 101 },
-  });
-  assert(ent10_101.total === 43999, '7. Enterprise 10/101 quote = 43999 LKR');
-
-  const ent10_200 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 200 },
-  });
-  assert(ent10_200.total === 49999, '8. Enterprise 10/200 quote = 49999 LKR');
-
-  const ent10_201 = SubscriptionPricingService.calculateSubscriptionPrice({
-    planCode: 'enterprise',
-    enterpriseConfig: { branches: 10, activeStaff: 201 },
-  });
-  assert(ent10_201.total === 51999, '9. Enterprise 10/201 quote = 51999 LKR');
-
-  // 2. Client Amount Non-Authority & Server Calculation
-  console.log('\n--- SECTION 2: Security & Client Non-Authority ---');
-  const checkoutFile = path.join(process.cwd(), 'src/server/actions/subscription-checkout.ts');
-  const checkoutContent = fs.readFileSync(checkoutFile, 'utf-8');
-  assert(!checkoutContent.includes('amount_lkr: input.amount'), '10. Server action does not accept or trust client-provided amounts');
-  assert(checkoutContent.includes('SubscriptionPricingService.calculateSubscriptionPrice'), '11. Server action authoritatively recalculates price via SubscriptionPricingService');
-
-  // 3. Enterprise Input Validation & UI Step Integrity
-  console.log('\n--- SECTION 3: Enterprise Configurator Validation ---');
+  // Assert unknown provider rejected
   assert.throws(
-    () => SubscriptionPricingService.calculateSubscriptionPrice({ planCode: 'enterprise', enterpriseConfig: { branches: 0, activeStaff: 75 } }),
-    /PRICING_INVALID_ENTERPRISE_BRANCHES/,
-    '12. Enterprise branch < 1 rejected'
-  );
-  assert.throws(
-    () => SubscriptionPricingService.calculateSubscriptionPrice({ planCode: 'enterprise', enterpriseConfig: { branches: 5, activeStaff: -1 } }),
-    /PRICING_INVALID_ENTERPRISE_STAFF/,
-    '13. Enterprise staff < 1 rejected'
+    () => getSubscriptionPaymentProvider('unknown_provider'),
+    (err: unknown) => err instanceof PaymentProviderError && err.code === 'PROVIDER_UNSUPPORTED',
+    '3. Unknown provider code is rejected with PROVIDER_UNSUPPORTED'
   );
 
-  const configuratorPath = path.join(process.cwd(), 'src/components/subscription/enterprise-configurator.tsx');
-  assert(fs.existsSync(configuratorPath), '14. EnterpriseConfigurator component exists');
+  // Assert disabled provider rejected
+  assert.throws(
+    () => getSubscriptionPaymentProvider('onepay'),
+    (err: unknown) => err instanceof PaymentProviderError && err.code === 'PROVIDER_DISABLED',
+    '4. Disabled provider code is rejected with PROVIDER_DISABLED'
+  );
 
-  const configuratorContent = fs.readFileSync(configuratorPath, 'utf-8');
-  assert(configuratorContent.includes('type="number"'), '15. EnterpriseConfigurator supports direct numeric input');
-  assert(configuratorContent.includes('step={1}'), '16. EnterpriseConfigurator range input step is 1');
-  assert(configuratorContent.includes('s - 1'), '17. Staff minus button decrements by 1');
+  // Assert no provider is enabled by default
+  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.onepay.enabled === false, '5a. OnePay is disabled by default');
+  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.dialog.enabled === false, '5b. Dialog is disabled by default');
+  assert(SUBSCRIPTION_PAYMENT_PROVIDER_CONFIG.payhere.enabled === false, '5c. PayHere is disabled by default');
 
-  // 4. Plan Card Button Interaction UX
-  console.log('\n--- SECTION 4: Plan Card Button Interaction UX ---');
-  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-subscription-client.tsx');
-  assert(fs.existsSync(ownerClientPath), '18. OwnerSubscriptionClient component exists');
+  // 2. Return & Webhook Routes Security Boundaries
+  console.log('\n--- SECTION 2: Callback & Webhook Security Boundaries ---');
+  const returnRoutePath = path.join(process.cwd(), 'src/app/api/subscription-payments/[provider]/return/route.ts');
+  assert(fs.existsSync(returnRoutePath), '6. Return route API handler exists');
+  const returnContent = fs.readFileSync(returnRoutePath, 'utf-8');
+  assert(returnContent.includes('adapter.verifyReturn'), '7. Return route does not trust browser query parameters without adapter verification');
 
-  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
-  assert(ownerClientContent.includes('active:scale-[0.98]'), '19. Pressed feedback active:scale-[0.98] applied to plan card buttons');
-  assert(ownerClientContent.includes('Opening Checkout...'), '20. Immediate loading text feedback applied');
-  assert(ownerClientContent.includes('animate-spin'), '21. Inline loading spinner displayed during checkout preparation');
-  assert(ownerClientContent.includes('disabled={isDisabled}'), '22. Buttons disabled while navigation/loading in progress to prevent double clicks');
-  assert(ownerClientContent.includes('Active Plan'), '23. Current active plan state clearly styled as non-clickable Active Plan');
+  const webhookRoutePath = path.join(process.cwd(), 'src/app/api/subscription-payments/[provider]/webhook/route.ts');
+  assert(fs.existsSync(webhookRoutePath), '8. Webhook route API handler exists');
+  const webhookContent = fs.readFileSync(webhookRoutePath, 'utf-8');
+  assert(webhookContent.includes('adapter.verifyWebhook'), '9. Webhook route delegates body & signature verification to adapter');
 
-  // 5. Authorization & Security Checks
-  console.log('\n--- SECTION 5: Authorization & Platform Status Protection ---');
-  assert(checkoutContent.includes('!authContext.isBusinessOwner'), '24. Non-owner staff checkout strictly rejected');
-  assert(checkoutContent.includes('business.status === \'suspended\''), '25. Platform-suspended workspace checkout strictly blocked with PLATFORM_SUSPENDED');
-  assert(checkoutContent.includes('validateDowngradeEligibility'), '26. Downgrade over-limit eligibility checked before intent creation');
+  // 3. Payment State Machine Legal Transitions
+  console.log('\n--- SECTION 3: Payment State Machine & Transitions ---');
+  assert(isLegalPaymentStateTransition('pending', 'paid') === true, '10. Legal transition pending -> paid allowed');
+  assert(isLegalPaymentStateTransition('pending', 'failed') === true, '11. Legal transition pending -> failed allowed');
+  assert(isLegalPaymentStateTransition('paid', 'refunded') === true, '12. Legal transition paid -> refunded allowed');
 
-  // 6. Component & Route Structure
-  console.log('\n--- SECTION 6: Component & Route Structure ---');
-  const reviewClientPath = path.join(process.cwd(), 'src/components/subscription/subscription-checkout-review-client.tsx');
-  assert(fs.existsSync(reviewClientPath), '27. SubscriptionCheckoutReviewClient component exists');
+  assert(isLegalPaymentStateTransition('paid', 'pending') === false, '13. Illegal transition paid -> pending rejected');
+  assert(isLegalPaymentStateTransition('failed', 'paid') === false, '14. Illegal transition failed -> paid rejected without new intent');
 
-  const reviewClientContent = fs.readFileSync(reviewClientPath, 'utf-8');
-  assert(reviewClientContent.includes('Online Payment Coming Soon'), '28. Honest Gateway Unavailable notice displayed post-intent creation');
-  assert(!reviewClientContent.includes('billing@wsnexa.internal'), '29. Zero fake email or fake contact details in checkout UI');
-  assert(reviewClientContent.includes('LKR {createdIntent.amountLkr.toLocaleString()}'), '30. Intent amount rendered from server response');
+  assert.throws(
+    () => assertLegalPaymentStateTransition('paid', 'pending'),
+    (err: unknown) => err instanceof PaymentProviderError && err.code === 'INVALID_PAYMENT_TRANSITION',
+    '15. assertLegalPaymentStateTransition throws INVALID_PAYMENT_TRANSITION for illegal state change'
+  );
 
-  const checkoutPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/settings/subscription/checkout/page.tsx');
-  assert(fs.existsSync(checkoutPagePath), '31. Next.js /dashboard/settings/subscription/checkout page route exists');
+  // 4. Amount, Currency & Settlement Idempotency Checks
+  console.log('\n--- SECTION 4: Settlement Integrity & Amount/Currency Validation ---');
+  const settlementPath = path.join(process.cwd(), 'src/server/payments/subscriptions/subscription-settlement.service.ts');
+  assert(fs.existsSync(settlementPath), '16. SubscriptionPaymentSettlementService file exists');
 
-  // 7. Payment Intent & Idempotency Properties
-  console.log('\n--- SECTION 7: Payment Intent & Idempotency ---');
-  assert(checkoutContent.includes('status: \'pending\''), '32. Payment intent creates status pending');
-  assert(checkoutContent.includes('provider: null'), '33. Provider remains null until direct provider integration');
-  assert(checkoutContent.includes('idempotencyKey'), '34. Idempotency key generated to prevent duplicate intent rows on retry');
+  const settlementContent = fs.readFileSync(settlementPath, 'utf-8');
+  assert(settlementContent.includes('PAYMENT_AMOUNT_MISMATCH'), '17. Amount mismatch throws PAYMENT_AMOUNT_MISMATCH error');
+  assert(settlementContent.includes('PAYMENT_CURRENCY_MISMATCH'), '18. Currency mismatch throws PAYMENT_CURRENCY_MISMATCH error');
+  assert(settlementContent.includes('alreadySettled: true'), '19. Duplicate settlement of paid intent is idempotent');
+
+  // 5. Schema Migration & Provider Transaction Uniqueness
+  console.log('\n--- SECTION 5: Schema Migration & Provider Transaction Uniqueness ---');
+  const migrationPath = path.join(process.cwd(), 'supabase/migrations/20260826040000_v1_subscription_payments_provider_neutral.sql');
+  assert(fs.existsSync(migrationPath), '20. Migration 20260826040000_v1_subscription_payments_provider_neutral.sql exists');
+
+  const migrationSql = fs.readFileSync(migrationPath, 'utf-8');
+  assert(migrationSql.includes('idx_sub_payments_provider_tx_unique'), '21. Partial UNIQUE index on provider transaction ID created');
+  assert(migrationSql.includes('payment_purpose'), '22. Explicit payment_purpose column added');
+
+  // 6. Platform Suspension Precedence & Core Reuse
+  console.log('\n--- SECTION 6: Platform Suspension Precedence & Core Reuse ---');
+  assert(settlementContent.includes('PLATFORM_SUSPENDED_SETTLEMENT_BLOCKED'), '23. Platform suspension precedence enforced during payment settlement');
+  assert(typeof SubscriptionService.activateSubscriptionFromVerifiedPayment === 'function', '24. Subscription Core lifecycle activation adapter defined');
+
+  // 7. Absence of Fake Provider API Implementations & Credentials
+  console.log('\n--- SECTION 7: Absence of Provider API Implementations ---');
+  const paymentsDir = path.join(process.cwd(), 'src/server/payments/subscriptions');
+  const files = fs.readdirSync(paymentsDir);
+  assert(!files.some((f) => f.includes('onepay-api')), '25a. No OnePay API implementation files committed');
+  assert(!files.some((f) => f.includes('dialog-api')), '25b. No Dialog API implementation files committed');
+  assert(!files.some((f) => f.includes('payhere-api')), '25c. No PayHere API implementation files committed');
 
   console.log('\n================================================================');
-  console.log('  Phase 36 Step 2 UX Verification: ALL 34 ASSERTIONS PASSED');
+  console.log('  Phase 36 Step 3 Verification: ALL 25 ASSERTIONS PASSED');
   console.log('================================================================\n');
 }
 

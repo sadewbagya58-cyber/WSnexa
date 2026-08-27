@@ -57,6 +57,17 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
     }
   };
 
+  const formatScopeName = (scope: string) => {
+    switch (scope) {
+      case 'ORGANIZATION': return 'Organization Wide';
+      case 'PROPERTY': return 'Property / Branch';
+      case 'DEPARTMENT': return 'Department';
+      case 'AREA_TEAM': return 'Service Area / Team';
+      case 'SELF': return 'Self Only';
+      default: return scope;
+    }
+  };
+
   const availableRoleOptions = [
     ...builtInTemplates.map((t) => ({ id: t.roleKey, name: t.displayName, isBuiltIn: true })),
     ...roles.filter((r) => !r.isArchived).map((r) => ({ id: r.id, name: r.name, isBuiltIn: false })),
@@ -67,8 +78,8 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
       {/* List Header Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-zinc-50 p-3.5 rounded-xl border border-zinc-200">
         <div>
-          <h3 className="text-sm font-bold text-zinc-900">Custom Tenant Roles</h3>
-          <p className="text-xs text-zinc-500">Create, edit, and manage custom permission bundles for your team.</p>
+          <h3 className="text-sm font-bold text-zinc-900">Custom Roles</h3>
+          <p className="text-xs text-zinc-500">Create, edit, and manage tailored staff roles and capabilities for your team.</p>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -96,16 +107,16 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
       {filteredRoles.length === 0 ? (
         <div className="p-12 text-center bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
           <IconShield className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
-          <h4 className="text-sm font-bold text-zinc-700">No Custom Roles Found</h4>
+          <h4 className="text-sm font-bold text-zinc-700">No Custom Roles Yet</h4>
           <p className="text-xs text-zinc-500 mt-1 mb-4">
-            You have not created any custom roles yet. Built-in roles are active by default.
+            Built-in roles (Manager, Cashier, Kitchen, Waiter) are active by default. You can create custom roles anytime.
           </p>
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
             className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl inline-flex items-center gap-1.5"
           >
-            <IconPlus className="w-4 h-4" /> Create First Custom Role
+            <IconPlus className="w-4 h-4" /> Create Custom Role
           </button>
         </div>
       ) : (
@@ -129,7 +140,7 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {r.isArchived ? 'Archived' : 'Active Custom Role'}
+                      {r.isArchived ? 'Archived' : 'Active Role'}
                     </span>
 
                     <span className="text-[10px] font-mono text-zinc-500">
@@ -144,22 +155,22 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
 
                   <div className="space-y-2 text-xs border-t border-zinc-100 pt-3 mb-4">
                     <div className="flex items-center justify-between text-zinc-600">
-                      <span>Permissions:</span>
-                      <span className="font-mono font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
-                        {r.permissions.length} keys
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-zinc-600">
-                      <span>Default Scope:</span>
+                      <span>Access Scope:</span>
                       <span className="font-semibold text-zinc-900 flex items-center gap-1">
                         <ScopeIcon className="w-3.5 h-3.5 text-emerald-600" />
-                        {r.defaultScope}
+                        {formatScopeName(r.defaultScope)}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-zinc-600">
-                      <span>Assigned Members:</span>
+                      <span>Permissions:</span>
+                      <span className="font-mono font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded text-[11px]">
+                        {r.permissions.length} capabilities
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-zinc-600">
+                      <span>Assigned Staff:</span>
                       <span className="font-mono font-bold text-emerald-700">
                         {r.assignedMembersCount || 0}
                       </span>
@@ -172,7 +183,7 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
                     type="button"
                     onClick={() => router.push(`/dashboard/access/roles/${r.id}`)}
                     className="p-1.5 text-xs text-zinc-600 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
-                    title="View Role Details"
+                    title="View Role Details & Diagnostics"
                   >
                     <IconEye className="w-4 h-4" />
                   </button>
@@ -218,10 +229,11 @@ export const CustomRolesList: React.FC<CustomRolesListProps> = ({
           mode="create"
           catalog={catalog}
           onClose={() => setShowCreateModal(false)}
-          onSuccess={(id) => {
+          onSuccess={(newRoleId) => {
             setShowCreateModal(false);
-            if (id) router.push(`/dashboard/access/roles/${id}`);
-            else router.refresh();
+            if (newRoleId) {
+              router.refresh();
+            }
           }}
         />
       )}

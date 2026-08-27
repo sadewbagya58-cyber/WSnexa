@@ -5,7 +5,6 @@ import { BuiltInRoleTemplate } from '@/types/authorization.types';
 import {
   IconShieldCheck,
   IconEye,
-  IconPlus,
   IconBuildingSkyscraper,
   IconBuildingStore,
   IconUsers,
@@ -79,12 +78,23 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
     }
   };
 
+  const formatScopeName = (scope: string) => {
+    switch (scope) {
+      case 'ORGANIZATION': return 'Organization Wide';
+      case 'PROPERTY': return 'Property / Branch';
+      case 'DEPARTMENT': return 'Department';
+      case 'AREA_TEAM': return 'Service Area / Team';
+      case 'SELF': return 'Self Only';
+      default: return scope;
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
-        <IconAlertTriangle className="w-4 h-4 text-amber-700 mt-0.5 shrink-0" />
+      <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-3.5 text-xs text-emerald-950 flex items-start gap-2.5">
+        <IconShieldCheck className="w-4 h-4 text-emerald-700 mt-0.5 shrink-0" />
         <div>
-          <span className="font-semibold">Canonical Built-in Role Templates:</span> Built-in system roles are protected standards. They cannot be edited, renamed, archived, or deleted. You can inspect their permissions or clone them as custom roles to adapt to your business needs.
+          <span className="font-semibold">Ready-Made Built-in Roles:</span> Standard protected roles for common restaurant and hospitality staff jobs. You can view their details or clone them as custom roles to adapt to your venue.
         </div>
       </div>
 
@@ -104,11 +114,11 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono bg-zinc-100 text-zinc-800 px-2 py-0.5 rounded-md">
                     <IconShieldCheck className="w-3 h-3 text-emerald-600" />
-                    System Protected
+                    Built-in Standard
                   </span>
                   {isOwnerRole && (
                     <span className="text-[10px] font-bold font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md">
-                      Owner Core
+                      Owner Authority
                     </span>
                   )}
                 </div>
@@ -121,24 +131,17 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
                 {/* Permissions & Scope Specs */}
                 <div className="space-y-2 text-xs border-t border-zinc-100 pt-3 mb-4">
                   <div className="flex items-center justify-between text-zinc-600">
-                    <span>Permissions:</span>
-                    <span className="font-mono font-bold text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded">
-                      {permCount} keys
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-zinc-600">
-                    <span>Default Scope:</span>
+                    <span>Access Scope:</span>
                     <span className="font-semibold text-zinc-900 flex items-center gap-1">
                       <ScopeIcon className="w-3.5 h-3.5 text-emerald-600" />
-                      {tmpl.defaultScope}
+                      {formatScopeName(tmpl.defaultScope)}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-zinc-600">
-                    <span>Max Scope Ceiling:</span>
-                    <span className="font-semibold text-zinc-700 font-mono text-[11px]">
-                      {tmpl.maxScope}
+                    <span>Permissions Included:</span>
+                    <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded text-[11px]">
+                      {permCount} capabilities
                     </span>
                   </div>
                 </div>
@@ -151,7 +154,7 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
                   onClick={() => setSelectedTemplate(tmpl)}
                   className="flex-1 py-1.5 px-3 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 >
-                  <IconEye className="w-3.5 h-3.5" /> Inspect
+                  <IconEye className="w-3.5 h-3.5" /> View Details
                 </button>
 
                 <button
@@ -159,7 +162,7 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
                   onClick={() => handleOpenClone(tmpl)}
                   className="flex-1 py-1.5 px-3 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 >
-                  <IconPlus className="w-3.5 h-3.5" /> Clone Role
+                  <IconCopy className="w-3.5 h-3.5" /> Clone Role
                 </button>
               </div>
             </div>
@@ -175,8 +178,8 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
               <div className="flex items-center gap-2">
                 <IconShieldCheck className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-900">{selectedTemplate.displayName} Template</h3>
-                  <p className="text-xs text-zinc-500 font-mono">Key: {selectedTemplate.roleKey}</p>
+                  <h3 className="text-sm font-bold text-zinc-900">{selectedTemplate.displayName} Role Details</h3>
+                  <p className="text-xs text-zinc-500 font-mono">System Key: {selectedTemplate.roleKey}</p>
                 </div>
               </div>
               <button
@@ -188,21 +191,41 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto space-y-4">
-              <p className="text-xs text-zinc-600 leading-relaxed bg-zinc-50 p-3 rounded-xl border border-zinc-200">
-                {selectedTemplate.description}
-              </p>
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Description</span>
+                <p className="text-sm text-zinc-700 mt-1">{selectedTemplate.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs">
+                <div>
+                  <span className="text-zinc-500 block">Default Access Scope:</span>
+                  <span className="font-bold text-zinc-900">{formatScopeName(selectedTemplate.defaultScope)}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 block">Max Scope Ceiling:</span>
+                  <span className="font-bold text-zinc-900">{formatScopeName(selectedTemplate.maxScope)}</span>
+                </div>
+              </div>
 
               <div>
-                <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider mb-2">
-                  Bundled Permission Keys ({(selectedTemplate.permissions || []).length})
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1">
-                  {(selectedTemplate.permissions || []).map((p: string) => (
-                    <div key={p} className="p-2 text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800">
-                      {p}
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    Included Capabilities ({(selectedTemplate.permissions || []).length})
+                  </span>
+                </div>
+
+                <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 max-h-60 overflow-y-auto space-y-1.5 font-mono text-xs text-zinc-800">
+                  {selectedTemplate.permissions && selectedTemplate.permissions.length > 0 ? (
+                    selectedTemplate.permissions.map((p) => (
+                      <div key={p} className="flex items-center gap-2 py-0.5">
+                        <span className="text-emerald-600">✓</span>
+                        <span>{p}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-zinc-400 italic">Owner authority covers all business permissions.</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -218,11 +241,11 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
               <button
                 type="button"
                 onClick={() => {
-                  const t = selectedTemplate;
+                  const tmpl = selectedTemplate;
                   setSelectedTemplate(null);
-                  handleOpenClone(t);
+                  handleOpenClone(tmpl);
                 }}
-                className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center gap-1.5"
+                className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center gap-1.5 shadow-2xs"
               >
                 <IconCopy className="w-3.5 h-3.5" /> Clone as Custom Role
               </button>
@@ -234,52 +257,73 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
       {/* Clone Role Modal */}
       {cloningTemplate && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <form onSubmit={handleCloneSubmit} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-zinc-200 space-y-4">
-            <div className="flex items-center gap-2">
-              <IconCopy className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-base font-bold text-zinc-900">Clone Role: {cloningTemplate.displayName}</h3>
-            </div>
-
-            {errorMsg && (
-              <div className="p-3 text-xs bg-red-50 text-red-700 rounded-xl border border-red-200 font-medium">
-                {errorMsg}
+          <form
+            onSubmit={handleCloneSubmit}
+            className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-zinc-200 overflow-hidden"
+          >
+            <div className="p-4 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <IconCopy className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900">Clone Role Template</h3>
+                  <p className="text-xs text-zinc-500">
+                    Cloning from built-in template: <strong className="text-zinc-800">{cloningTemplate.displayName}</strong>
+                  </p>
+                </div>
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">New Custom Role Name</label>
-              <input
-                type="text"
-                required
-                value={cloneName}
-                onChange={(e) => setCloneName(e.target.value)}
-                placeholder="e.g. Senior Shift Leader"
-                className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-              />
+              <button
+                type="button"
+                onClick={() => setCloningTemplate(null)}
+                className="text-zinc-400 hover:text-zinc-600 text-lg leading-none p-1"
+              >
+                ✕
+              </button>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">Description</label>
-              <textarea
-                rows={2}
-                value={cloneDescription}
-                onChange={(e) => setCloneDescription(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-              />
-            </div>
+            <div className="p-6 space-y-4">
+              {errorMsg && (
+                <div className="p-3 text-xs bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2 font-medium">
+                  <IconAlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-            <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-600 space-y-1">
-              <div className="flex justify-between">
-                <span>Inherited Permissions:</span>
-                <span className="font-mono font-bold text-zinc-900">{(cloningTemplate.permissions || []).length}</span>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 mb-1">
+                  New Custom Role Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cloneName}
+                  onChange={(e) => setCloneName(e.target.value)}
+                  placeholder="e.g. Senior Cashier"
+                  className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
               </div>
-              <div className="flex justify-between">
-                <span>Default Scope:</span>
-                <span className="font-semibold text-zinc-900">{cloningTemplate.defaultScope}</span>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={cloneDescription}
+                  onChange={(e) => setCloneDescription(e.target.value)}
+                  placeholder="Operational purpose of this cloned role..."
+                  className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-600 space-y-1">
+                <div className="font-semibold text-zinc-900">What gets copied?</div>
+                <div>• All {(cloningTemplate.permissions || []).length} permissions from {cloningTemplate.displayName}</div>
+                <div>• Default access scope: {formatScopeName(cloningTemplate.defaultScope)}</div>
+                <div>• You can freely customize all permissions after cloning.</div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="p-4 border-t border-zinc-200 bg-zinc-50 flex justify-end gap-2">
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -291,9 +335,10 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
               <button
                 type="submit"
                 disabled={isSubmitting || !cloneName.trim()}
-                className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
               >
-                {isSubmitting ? 'Cloning...' : 'Create Cloned Role'}
+                <IconCopy className="w-3.5 h-3.5" />
+                {isSubmitting ? 'Cloning Role...' : 'Create Cloned Role'}
               </button>
             </div>
           </form>

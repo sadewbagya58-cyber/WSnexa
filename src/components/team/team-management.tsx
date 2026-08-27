@@ -253,11 +253,6 @@ export function TeamManagement({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <Link href="/dashboard/team/roles">
-            <Button variant="outline" className="flex items-center gap-2 text-xs min-h-[44px]">
-              🛡️ Roles & Permissions Matrix
-            </Button>
-          </Link>
           <Link href="/dashboard/team/invites">
             <Button variant="primary" className="flex items-center gap-2 text-xs min-h-[44px]">
               🔑 Staff Invitations

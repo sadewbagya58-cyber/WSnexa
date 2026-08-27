@@ -37,7 +37,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
               .from('orders')
               .select(`
                 *,
-                table:dining_tables(id, name, code, table_number),
+                table:dining_tables(id, name, code, table_number, service_area:service_areas(id, name)),
                 items:order_items(
                   id,
                   menu_item_id,
@@ -65,7 +65,10 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
             setOrders((prev) => {
               const exists = prev.some((o) => o.id === fullOrder.id);
               if (exists) return prev;
-              return [fullOrder, ...prev];
+              const next = [fullOrder, ...prev];
+              return next.sort(
+                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id.localeCompare(a.id)
+              );
             });
 
             // Trigger kitchen sound notification for new order
@@ -97,7 +100,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
                   .from('orders')
                   .select(`
                     *,
-                    table:dining_tables(id, name, code, table_number),
+                    table:dining_tables(id, name, code, table_number, service_area:service_areas(id, name)),
                     items:order_items(
                       id,
                       menu_item_id,
@@ -118,7 +121,12 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
                   .maybeSingle()
                   .then(({ data }) => {
                     if (data) {
-                      setOrders((curr) => [data as unknown as OrderRecord, ...curr]);
+                      setOrders((curr) => {
+                        const next = [data as unknown as OrderRecord, ...curr];
+                        return next.sort(
+                          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id.localeCompare(a.id)
+                        );
+                      });
                       kitchenSoundEngine.playNewOrderChime(data.id);
                     }
                   });
@@ -158,7 +166,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
           .from('orders')
           .select(`
             *,
-            table:dining_tables(id, name, code, table_number),
+            table:dining_tables(id, name, code, table_number, service_area:service_areas(id, name)),
             items:order_items(
               id,
               menu_item_id,
@@ -177,7 +185,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
           `)
           .eq('branch_id', branchId)
           .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false });
 
         if (data) {
           setOrders(data as unknown as OrderRecord[]);

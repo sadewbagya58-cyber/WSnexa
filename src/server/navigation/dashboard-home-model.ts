@@ -226,7 +226,6 @@ export async function resolveDashboardHomeModel(
     showOrdersTodayCard ||
     showReservationsTodayCard ||
     showTableStatusCard ||
-    showLowStockCard ||
     showOperationsShortcuts ||
     canViewReports;
 

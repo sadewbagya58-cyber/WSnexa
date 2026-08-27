@@ -16,6 +16,14 @@ export const DashboardTodayMetrics: React.FC<DashboardTodayMetricsProps> = ({ da
 
   // 1. Orders Today Card (permission-gated)
   if (model.showOrdersTodayCard && data.ordersTodayCount !== null) {
+    const ordersCount = data.ordersTodayCount;
+    const secondaryText =
+      ordersCount === 0
+        ? 'No orders yet today'
+        : ordersCount === 1
+        ? '1 order placed today'
+        : `${ordersCount} orders placed today`;
+
     cards.push(
       <Card key="orders-today" className="p-5 hover:border-zinc-300 transition-all shadow-xs flex flex-col justify-between">
         <div>
@@ -24,19 +32,15 @@ export const DashboardTodayMetrics: React.FC<DashboardTodayMetricsProps> = ({ da
             <Badge variant="neutral">Today</Badge>
           </div>
           <div className="mt-3">
-            {data.ordersTodayCount > 0 ? (
-              <p className="text-3xl font-extrabold text-zinc-950 tracking-tight">{data.ordersTodayCount}</p>
+            {ordersCount > 0 ? (
+              <p className="text-3xl font-extrabold text-zinc-950 tracking-tight">{ordersCount}</p>
             ) : (
               <p className="text-sm font-semibold text-zinc-400 mt-1">No orders yet today</p>
             )}
           </div>
         </div>
         <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-          <span className="text-zinc-500 font-medium">
-            {data.activeOrdersCount !== null && data.activeOrdersCount > 0
-              ? `${data.activeOrdersCount} in progress`
-              : 'All up to date'}
-          </span>
+          <span className="text-zinc-500 font-medium">{secondaryText}</span>
           <Link href="/dashboard/orders" className="font-bold text-zinc-900 hover:text-zinc-600">
             View →
           </Link>
@@ -150,29 +154,6 @@ export const DashboardTodayMetrics: React.FC<DashboardTodayMetricsProps> = ({ da
           </span>
           <Link href="/dashboard/dining" className="font-bold text-zinc-900 hover:text-zinc-600">
             Dining →
-          </Link>
-        </div>
-      </Card>
-    );
-  }
-
-  // 6. Low Stock Items Card (conditional when inventory permission present and low stock exists)
-  if (model.showLowStockCard && data.lowStockCount !== null && data.lowStockCount > 0) {
-    cards.push(
-      <Card key="low-stock" className="p-5 border-amber-200 bg-amber-50/40 hover:border-amber-300 transition-all shadow-xs flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Low Stock</span>
-            <Badge variant="warning">Attention</Badge>
-          </div>
-          <div className="mt-3">
-            <p className="text-3xl font-extrabold text-amber-900 tracking-tight">{data.lowStockCount}</p>
-          </div>
-        </div>
-        <div className="mt-4 pt-3 border-t border-amber-200/60 flex items-center justify-between text-xs">
-          <span className="text-amber-800 font-medium">Below threshold</span>
-          <Link href="/dashboard/inventory" className="font-bold text-amber-900 hover:underline">
-            Restock →
           </Link>
         </div>
       </Card>

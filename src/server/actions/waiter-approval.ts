@@ -50,6 +50,13 @@ export async function approveGuestOrderAction(orderId: string, _waiterUserId?: s
 
     // Always use authoritative session user id
     const res = await WaiterService.approveGuestOrder(orderId, authContext.userId);
+    if (res.success) {
+      const { revalidatePath } = await import('next/cache');
+      revalidatePath('/dashboard/waiter');
+      revalidatePath('/dashboard/kitchen');
+      revalidatePath('/dashboard/cashier');
+      revalidatePath('/dashboard/orders');
+    }
     return res;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to approve order.';
@@ -78,6 +85,13 @@ export async function rejectGuestOrderAction(orderId: string, _waiterUserId?: st
 
     // Always use authoritative session user id
     const res = await WaiterService.rejectGuestOrder(orderId, authContext.userId, reason);
+    if (res.success) {
+      const { revalidatePath } = await import('next/cache');
+      revalidatePath('/dashboard/waiter');
+      revalidatePath('/dashboard/kitchen');
+      revalidatePath('/dashboard/cashier');
+      revalidatePath('/dashboard/orders');
+    }
     return res;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to reject order.';

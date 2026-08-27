@@ -34,6 +34,10 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
             balance_due_cents: data.balance_due_cents,
             customer_user_id: data.customer_user_id,
             updated_at: data.updated_at,
+            approval_status: data.approval_status as OrderRecord['approval_status'] || prev.approval_status,
+            approved_at: data.approved_at !== undefined ? data.approved_at : prev.approved_at,
+            rejected_at: data.rejected_at !== undefined ? data.rejected_at : prev.rejected_at,
+            rejection_reason: data.rejection_reason !== undefined ? data.rejection_reason : prev.rejection_reason,
           };
           updateActiveOrderStatusInStorage(nextOrder.branch_id, nextOrder.id, nextOrder.status);
           return nextOrder;
@@ -77,6 +81,13 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
             refetchOrderState();
           }
         )
+        .on(
+          'broadcast',
+          { event: 'order_status_updated' },
+          () => {
+            refetchOrderState();
+          }
+        )
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             setConnectionStatus('connected');
@@ -91,10 +102,10 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
 
     setupSubscription();
 
-    // 5-second polling fallback
+    // 2.5-second polling fallback for responsive reconciliation
     pollTimerRef.current = setInterval(() => {
       refetchOrderState();
-    }, 5000);
+    }, 2500);
 
     const handleFocus = () => {
       refetchOrderState();

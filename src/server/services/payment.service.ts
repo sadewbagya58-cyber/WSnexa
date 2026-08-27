@@ -160,7 +160,7 @@ export class PaymentService {
       p_order_id: orderId,
       p_amount_cents: amountCents,
       p_payment_method: paymentMethod,
-      p_received_by: authContext.userId,
+      p_actor_id: authContext.userId,
       p_external_reference: externalReference || null,
       p_notes: notes || null,
       p_idempotency_key: idempotencyKey,

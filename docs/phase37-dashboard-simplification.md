@@ -248,3 +248,43 @@ In the Phase 37 Step 3 Restricted Custom Role Hotfix:
 ## 16. Risks & Known Limitations
 - **Intra-Day Revenue Currency**: The Revenue Today card queries the branch sales summary and formats according to the business's default currency. Multi-currency reporting remains available in the full Reports workspace.
 - **Point-in-Time Low Stock**: Low stock calculations compare current inventory balances against `min_stock_level`. If minimum stock levels are not configured, items will not trigger low stock warnings.
+
+---
+
+## 17. Consolidated Production QA Closure Hotfix
+
+Following production manual QA, 7 focused operational and realtime gaps were resolved:
+
+### Issue 1 — Cashier Payment Settlement RPC Parameter Alignment
+- **Problem**: `admin.rpc('record_order_payment')` failed with `Could not find function public.record_order_payment(...) in schema cache`.
+- **Root Cause**: `PaymentService.recordPayment` passed `p_received_by: authContext.userId` while canonical PostgreSQL function declared `p_actor_id UUID DEFAULT NULL`.
+- **Resolution**: Updated `PaymentService.recordPayment` to pass `p_actor_id: authContext.userId`. No new database migration required as `20260807000000_create_payment_schema.sql` already defines `p_actor_id`.
+
+### Issue 2 — Waiter Approval Queue Realtime Synchronization
+- **Problem**: Waiter Request Center approval count/list did not update when customer submitted a QR order requiring approval.
+- **Root Cause**: `PendingOrderApprovalsSection` lacked a Supabase Realtime channel subscription on `table: 'orders'`.
+- **Resolution**: Added Realtime channel subscription `waiter_order_approvals_${branchId}` on `table: 'orders'` with filter `branch_id=eq.${branchId}` to automatically refetch pending approvals. Added cache revalidations on approval and rejection.
+
+### Issue 3 — Customer Order Tracker Waiter Approval Propagation
+- **Problem**: Customer tracker screen did not reflect waiter approval/rejection until page reload.
+- **Root Cause**: `useRealtimeOrder` fetched updated tracking state via `getPublicOrderTrackingStateAction` but omitted `approval_status`, `approved_at`, `rejected_at`, and `rejection_reason` when merging into React state.
+- **Resolution**: Added mapping for all approval status fields in `useRealtimeOrder`, added broadcast event listener on `order_status_updated`, and tightened fallback polling interval to 2500ms.
+
+### Issue 4 — Dashboard Orders Today Secondary Copy
+- **Problem**: Orders Today displayed `${data.activeOrdersCount} in progress` in secondary text, creating confusion when active queue differed from today's orders.
+- **Resolution**: Replaced with isolated daily order count descriptors:
+  - `0` → `No orders yet today`
+  - `1` → `1 order placed today`
+  - `N` → `N orders placed today`
+
+### Issue 5 — Low Stock Warning De-duplication
+- **Problem**: Low stock count appeared both in "Needs Attention" and as Card 6 in "Today's Performance".
+- **Resolution**: Removed Card 6 from `DashboardTodayMetrics`. Low stock alerts are exclusively presented under "Needs Attention" when `lowStockCount > 0`.
+
+### Issue 6 — Kitchen Queue Ordering (Newest First)
+- **Problem**: Kitchen queue orders were sorted oldest-first.
+- **Resolution**: Changed query order in `OrderService.getBranchActiveOrders()` and `useRealtimeKitchen()` to `.order('created_at', { ascending: false })`. Enforced deterministic descending sort with ID tie-breaker in `KitchenOrderQueue`.
+
+### Issue 7 — Kitchen Order Card At-a-Glance Context
+- **Problem**: Kitchen cards showed bare table names without service area context, and line items had distracting price subtotals with small quantity indicators.
+- **Resolution**: Selected `service_area:service_areas(id, name)` in dining table queries. Formatted location string as `${tableName} · ${serviceAreaName}` (e.g. `T4 · Main Hall`). Enhanced item display with prominent `2x` quantity badges and indented `+ Modifiers` list while removing line item pricing clutter.

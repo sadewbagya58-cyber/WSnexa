@@ -8,6 +8,7 @@ import { WaiterRequestRecord } from '@/server/services/waiter.service';
 import type { OrderRecord } from '@/server/services/order.service';
 import { updateWaiterRequestStatusAction } from '@/server/actions/waiter';
 import { WaiterRequestStatus } from '@/lib/validation/waiter';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useRealtimeWaiterRequests } from '@/hooks/use-realtime-waiter-requests';
 
 interface WaiterRequestCenterProps {
@@ -243,21 +244,59 @@ function PendingOrderApprovalsSection({
 
   React.useEffect(() => {
     let isMounted = true;
+    let channel: RealtimeChannel | null = null;
+
     const loadData = async () => {
       if (isMounted) {
         await fetchApprovals();
       }
     };
     loadData();
+
+    // Subscribe to realtime changes on orders table for this branch
+    const initRealtime = async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        channel = supabase
+          .channel(`waiter_order_approvals_${branchId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'orders',
+              filter: `branch_id=eq.${branchId}`,
+            },
+            () => {
+              if (isMounted) {
+                fetchApprovals();
+              }
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime approval subscription error:', err);
+      }
+    };
+
+    initRealtime();
+
     const interval = setInterval(() => {
       if (isMounted) fetchApprovals();
     }, 5000);
 
     return () => {
       isMounted = false;
+      if (channel) {
+        import('@/lib/supabase/client').then(({ createClient }) => {
+          const supabase = createClient();
+          supabase.removeChannel(channel as unknown as ReturnType<typeof supabase.channel>);
+        });
+      }
       clearInterval(interval);
     };
-  }, [fetchApprovals]);
+  }, [branchId, fetchApprovals]);
 
   const handleApprove = async (orderId: string) => {
     setProcessingId(orderId);

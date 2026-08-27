@@ -69,6 +69,10 @@ export interface OrderRecord {
     name: string;
     code: string;
     table_number: number | null;
+    service_area?: {
+      id: string;
+      name: string;
+    } | null;
   } | null;
   items?: OrderItemRecord[];
 }
@@ -551,7 +555,7 @@ export class OrderService {
       .from('orders')
       .select(`
         *,
-        table:dining_tables(id, name, code, table_number),
+        table:dining_tables(id, name, code, table_number, service_area:service_areas(id, name)),
         items:order_items(
           id,
           menu_item_id,
@@ -572,7 +576,7 @@ export class OrderService {
       .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
       .neq('approval_status', 'pending_waiter_approval')
       .neq('approval_status', 'rejected')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     return (data as unknown as OrderRecord[]) || [];
   }

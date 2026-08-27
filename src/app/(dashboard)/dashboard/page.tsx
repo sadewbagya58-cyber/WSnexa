@@ -2,12 +2,12 @@ import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
-import { Card } from '@/components/ui/card';
 
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveAuthorizationContext } from '@/server/auth/authorization-context';
 import { resolveDashboardHomeModel } from '@/server/navigation/dashboard-home-model';
+import { resolveDashboardNavigation } from '@/server/navigation/navigation-engine';
 import { fetchDashboardTodayData } from '@/server/navigation/dashboard-today-data';
 import { OwnerSubscriptionLifecycleBanner } from '@/components/subscription/owner-subscription-lifecycle-banner';
 import { DashboardTodayMetrics } from '@/components/dashboard/dashboard-today-metrics';
@@ -15,11 +15,19 @@ import { DashboardNeedsAttention } from '@/components/dashboard/dashboard-needs-
 import { DashboardOperationsShortcuts } from '@/components/dashboard/dashboard-operations-shortcuts';
 import { DashboardQuickActions } from '@/components/dashboard/dashboard-quick-actions';
 import { DashboardSetupProgress } from '@/components/dashboard/dashboard-setup-progress';
+import { DashboardFallbackWorkspace } from '@/components/dashboard/dashboard-fallback-workspace';
 
 export default async function DashboardOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
+    return (
+      <AccessDenied
+        workspaceRoute={resolveDefaultWorkspaceRoute(
+          context?.membership?.role,
+          context?.membership?.customRoleId
+        )}
+      />
+    );
   }
   if (!context || !context.activeBranch) {
     redirect('/login');
@@ -36,6 +44,7 @@ export default async function DashboardOverviewPage() {
   }
 
   const model = await resolveDashboardHomeModel(authContext);
+  const navSections = resolveDashboardNavigation(authContext);
 
   // 2. Fetch Today Operational Metrics & Attention Signals in Single Server Pass
   const todayData = await fetchDashboardTodayData(
@@ -124,23 +133,13 @@ export default async function DashboardOverviewPage() {
         isBusinessOwner={model.isBusinessOwner}
       />
 
-      {/* 3. Fallback Mode for Highly Restricted / Non-Operational Users */}
+      {/* 3. Fallback Mode for Restricted / Non-Operational Roles */}
       {model.isFallbackMode ? (
-        <Card className="p-8 text-center space-y-4 max-w-xl mx-auto border-dashed border-zinc-300">
-          <div className="text-4xl">🛡️</div>
-          <h2 className="text-lg font-bold text-zinc-950">Active Branch Workspace</h2>
-          <p className="text-xs text-zinc-600 leading-relaxed">
-            Welcome to <span className="font-semibold text-zinc-900">{business.name}</span> ({activeBranch.name}). You are logged in with effective role capability access. Select an authorized module from the sidebar navigation to begin.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/dashboard/help"
-              className="inline-flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors touch-manipulation"
-            >
-              📖 Open Help Center
-            </Link>
-          </div>
-        </Card>
+        <DashboardFallbackWorkspace
+          businessName={business.name}
+          activeBranchName={activeBranch.name}
+          accessibleSections={navSections}
+        />
       ) : (
         <>
           {/* 4. Needs Attention Section (Conditional — disappears when nothing needs action) */}

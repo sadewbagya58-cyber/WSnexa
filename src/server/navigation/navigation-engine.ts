@@ -36,6 +36,12 @@ export function hasNavCapability(
     );
     if (hasDenyOverride) return false;
 
+    // 1.1 Explicit DENY scope grant precedence
+    const hasDenyScopeGrant = (context.scopeGrants || []).some(
+      (g) => g.permissionKey === p && g.effect === 'deny'
+    );
+    if (hasDenyScopeGrant) return false;
+
     // 2. Role Permissions (built-in or custom role permissions)
     if ((context.rolePermissions || []).includes(p)) return true;
 
@@ -99,7 +105,51 @@ export function resolveDashboardNavigation(
       const hasScope = hasNavScopeContext(context, item.context);
       if (!hasScope) continue;
 
-      // 3. Feature Flag & Badge Handling
+      // 3. Dynamic target href resolution for restricted roles
+      let href = item.href;
+      if (item.id === 'settings') {
+        if (hasNavCapability(context, ['business.settings.manage', 'owner.transfer']) || context.isBusinessOwner) {
+          href = '/dashboard/settings/subscription';
+        } else if (hasNavCapability(context, 'business.view')) {
+          href = '/dashboard/business';
+        } else if (hasNavCapability(context, ['branches.view', 'branches.manage', 'branches.operational.manage'])) {
+          href = '/dashboard/branches';
+        } else if (hasNavCapability(context, ['venue_profile.view', 'venue_profile.manage'])) {
+          href = '/dashboard/venue-profile';
+        } else if (hasNavCapability(context, ['order_security.view', 'order_security.manage'])) {
+          href = '/dashboard/settings/order-security';
+        }
+      } else if (item.id === 'dining') {
+        if (hasNavCapability(context, ['tables.view', 'tables.manage']) || context.isBusinessOwner) {
+          href = '/dashboard/dining';
+        } else if (hasNavCapability(context, ['areas.view', 'areas.manage'])) {
+          href = '/dashboard/areas';
+        } else if (hasNavCapability(context, ['qr.view', 'qr.generate', 'qr.manage', 'qr.security.reset'])) {
+          href = '/dashboard/tables/qr';
+        }
+      } else if (item.id === 'operations') {
+        if (hasNavCapability(context, ['inventory.view', 'inventory.items.manage', 'inventory.counts.manage']) || context.isBusinessOwner) {
+          href = '/dashboard/inventory';
+        } else if (hasNavCapability(context, ['recipes.view', 'recipes.manage', 'recipes.costs.view'])) {
+          href = '/dashboard/inventory/recipes';
+        } else if (hasNavCapability(context, ['purchasing.view', 'purchasing.create', 'purchasing.approve', 'purchasing.receive'])) {
+          href = '/dashboard/inventory/purchasing';
+        } else if (hasNavCapability(context, ['suppliers.view', 'suppliers.manage'])) {
+          href = '/dashboard/inventory/suppliers';
+        }
+      } else if (item.id === 'team') {
+        if (hasNavCapability(context, ['staff.view', 'staff.manage', 'staff.invite']) || context.isBusinessOwner) {
+          href = '/dashboard/team';
+        } else if (hasNavCapability(context, ['roles.view', 'roles.manage', 'permissions.override.manage'])) {
+          href = '/dashboard/team/roles';
+        } else if (hasNavCapability(context, ['organization.view', 'organization.manage', 'positions.manage'])) {
+          href = '/dashboard/organization';
+        } else if (hasNavCapability(context, ['people.view', 'people.manage'])) {
+          href = '/dashboard/people';
+        }
+      }
+
+      // 4. Feature Flag & Badge Handling
       let badge = item.badge;
       if (item.id === 'loyalty' && !IS_LOYALTY_ENABLED) {
         badge = 'Soon';
@@ -108,7 +158,7 @@ export function resolveDashboardNavigation(
       visibleItems.push({
         id: item.id,
         label: item.label,
-        href: item.href,
+        href,
         badge,
         custom: item.custom,
       });

@@ -37,6 +37,7 @@ export interface DashboardNavSectionDTO {
 /**
  * Single Canonical Navigation Configuration Source of Truth for WSNexa Dashboard.
  * Streamlined to 10 Primary Navigation Items in Phase 37 Step 2.
+ * Enriched with comprehensive candidate permission arrays in Phase 37 Step 3 Hotfix.
  */
 export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfig[] = [
   {
@@ -48,63 +49,182 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
         id: 'orders',
         label: 'Orders',
         href: '/dashboard/orders',
-        requiredPermission: ['orders.view', 'cashier.access', 'kitchen.access', 'waiter.requests.view', 'waiter.orders.create'],
+        requiredPermission: [
+          'orders.view',
+          'orders.create',
+          'orders.update_status',
+          'orders.cancel',
+          'orders.history.view',
+          'cashier.access',
+          'payments.view',
+          'payments.record',
+          'payments.void',
+          'payments.refund',
+          'receipts.print',
+          'kitchen.access',
+          'kitchen.orders.view',
+          'kitchen.update',
+          'waiter.access',
+          'waiter.requests.view',
+          'waiter.requests.manage',
+          'waiter.orders.create',
+        ],
         context: 'PROPERTY',
       },
       {
         id: 'menu',
         label: 'Menu',
         href: '/dashboard/menu',
-        requiredPermission: ['menu.view', 'menu.categories.manage', 'menu.modifiers.manage'],
+        requiredPermission: [
+          'menu.view',
+          'menu.manage',
+          'menu.items.create',
+          'menu.items.edit',
+          'menu.price.update',
+          'menu.availability.update',
+          'menu.items.delete',
+          'menu.categories.manage',
+          'menu.modifiers.manage',
+        ],
         context: 'PROPERTY',
       },
       {
         id: 'dining',
         label: 'Dining & QR',
         href: '/dashboard/dining',
-        requiredPermission: ['tables.manage', 'tables.view', 'areas.manage', 'qr.manage'],
+        requiredPermission: [
+          'tables.view',
+          'tables.manage',
+          'tables.status.update',
+          'tables.create',
+          'tables.edit',
+          'tables.delete',
+          'areas.view',
+          'areas.manage',
+          'qr.view',
+          'qr.manage',
+          'qr.generate',
+          'qr.security.reset',
+        ],
         context: 'PROPERTY',
       },
       {
         id: 'reservations',
         label: 'Reservations',
         href: '/dashboard/reservations',
-        requiredPermission: ['reservations.view', 'reservations.manage'],
+        requiredPermission: [
+          'reservations.view',
+          'reservations.create',
+          'reservations.manage',
+          'reservations.cancel',
+          'reservations.assign_tables',
+          'reservations.waitlist_manage',
+        ],
         context: 'PROPERTY',
       },
       {
         id: 'customers',
         label: 'Customers',
         href: '/dashboard/customers',
-        requiredPermission: ['customers.view', 'customers.manage', 'reviews.respond', 'reputation.view', 'loyalty.view'],
+        requiredPermission: [
+          'customers.view',
+          'customers.manage',
+          'customers.contact_view',
+          'reviews.view',
+          'reviews.respond',
+          'reviews.moderate',
+          'reputation.view',
+          'reputation.export',
+          'loyalty.view',
+          'loyalty.manage',
+          'loyalty.rewards.manage',
+          'loyalty.customers.view',
+          'loyalty.points.adjust',
+        ],
         context: 'ORGANIZATION',
       },
       {
         id: 'operations',
         label: 'Operations',
         href: '/dashboard/inventory',
-        requiredPermission: ['inventory.view', 'inventory.counts.manage', 'inventory.waste.record', 'inventory.transfers.manage', 'inventory.locations.manage'],
+        requiredPermission: [
+          'inventory.view',
+          'inventory.items.manage',
+          'inventory.costs.view',
+          'inventory.adjust',
+          'inventory.counts.manage',
+          'inventory.counts.approve',
+          'inventory.waste.record',
+          'inventory.transfers.manage',
+          'inventory.transfers.receive',
+          'inventory.locations.manage',
+          'inventory.reports.view',
+          'recipes.view',
+          'recipes.manage',
+          'recipes.costs.view',
+          'purchasing.view',
+          'purchasing.create',
+          'purchasing.approve',
+          'purchasing.receive',
+          'suppliers.view',
+          'suppliers.manage',
+          'inventory.cogs.view',
+          'inventory.menu_profitability.view',
+          'inventory.settings.manage',
+          'inventory.production.manage',
+        ],
         context: 'PROPERTY',
       },
       {
         id: 'team',
         label: 'Team',
         href: '/dashboard/team',
-        requiredPermission: ['staff.view', 'staff.invite', 'people.view', 'roles.view', 'roles.manage', 'organization.view', 'positions.manage'],
+        requiredPermission: [
+          'staff.view',
+          'staff.manage',
+          'staff.invite',
+          'staff.edit',
+          'staff.suspend',
+          'staff.role.assign',
+          'staff.branch.assign',
+          'staff.area.assign',
+          'roles.view',
+          'roles.manage',
+          'permissions.override.manage',
+          'organization.view',
+          'organization.manage',
+          'people.view',
+          'people.manage',
+          'positions.manage',
+        ],
         context: 'ORGANIZATION',
       },
       {
         id: 'reports',
         label: 'Reports',
         href: '/dashboard/reports',
-        requiredPermission: ['reports.view', 'reports.financial.view', 'reports.export'],
+        requiredPermission: [
+          'reports.view',
+          'reports.financial.view',
+          'reports.export',
+        ],
         context: 'MIXED',
       },
       {
         id: 'settings',
         label: 'Settings',
         href: '/dashboard/settings/subscription',
-        requiredPermission: ['business.settings.manage', 'venue_profile.manage', 'branches.manage', 'order_security.manage'],
+        requiredPermission: [
+          'business.view',
+          'business.settings.manage',
+          'venue_profile.view',
+          'venue_profile.manage',
+          'branches.view',
+          'branches.manage',
+          'branches.operational.manage',
+          'order_security.view',
+          'order_security.manage',
+        ],
         context: 'ORGANIZATION',
       },
     ],
@@ -172,6 +292,7 @@ export const DETAIL_ROUTE_PARENT_MAP: Record<string, string> = {
   '/dashboard/access/members': '/dashboard/team',
 
   // Settings Subroutes
+  '/dashboard/settings': '/dashboard/settings/subscription',
   '/dashboard/business': '/dashboard/settings/subscription',
   '/dashboard/venue-profile': '/dashboard/settings/subscription',
   '/dashboard/branches': '/dashboard/settings/subscription',
@@ -206,10 +327,29 @@ export function getParentNavPath(pathname: string): string {
 /**
  * Determines whether a navigation item is active given the current pathname.
  */
-export function isNavItemActive(item: { href: string; exact?: boolean }, pathname: string): boolean {
+export function isNavItemActive(item: { id?: string; href: string; exact?: boolean }, pathname: string): boolean {
   if (item.exact) {
     return pathname === item.href;
   }
+  if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+    return true;
+  }
   const activePath = getParentNavPath(pathname);
-  return activePath === item.href || activePath.startsWith(`${item.href}/`);
+  if (activePath === item.href || activePath.startsWith(`${item.href}/`)) {
+    return true;
+  }
+  // Check mapped parent equivalences
+  if (item.id === 'settings' && DETAIL_ROUTE_PARENT_MAP[pathname] === '/dashboard/settings/subscription') {
+    return true;
+  }
+  if (item.id === 'dining' && DETAIL_ROUTE_PARENT_MAP[pathname] === '/dashboard/dining') {
+    return true;
+  }
+  if (item.id === 'operations' && DETAIL_ROUTE_PARENT_MAP[pathname] === '/dashboard/inventory') {
+    return true;
+  }
+  if (item.id === 'team' && DETAIL_ROUTE_PARENT_MAP[pathname] === '/dashboard/team') {
+    return true;
+  }
+  return false;
 }

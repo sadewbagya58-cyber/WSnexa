@@ -14,12 +14,14 @@ interface AreaManagementProps {
   initialAreas: FormattedServiceArea[];
   activeBranchName: string;
   initialOrderingMode?: 'qr_only' | 'waiter_only' | 'qr_and_waiter';
+  canManage?: boolean;
 }
 
 export function AreaManagement({
   initialAreas,
   activeBranchName,
   initialOrderingMode = 'qr_and_waiter',
+  canManage = true,
 }: AreaManagementProps) {
   const [areas, setAreas] = useState<FormattedServiceArea[]>(initialAreas);
   const [orderingMode, setOrderingMode] = useState(initialOrderingMode);
@@ -161,12 +163,18 @@ export function AreaManagement({
               Manage physical sections (Restaurant, Pool Area, Garden, Rooftop) and assign tables & waiters.
             </p>
           </div>
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center px-4 py-2.5 rounded-xl text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 transition-colors shadow-xs touch-manipulation"
-          >
-            + Create Area
-          </button>
+          {canManage ? (
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="w-full sm:w-auto inline-flex min-h-[44px] items-center justify-center px-4 py-2.5 rounded-xl text-sm font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 transition-colors shadow-xs touch-manipulation"
+            >
+              + Create Area
+            </button>
+          ) : (
+            <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+              Read-Only Mode
+            </span>
+          )}
         </div>
 
         {/* Feedback Banners */}
@@ -183,15 +191,23 @@ export function AreaManagement({
 
         {/* Ordering Mode Selector */}
         <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-xs space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-zinc-950">Ordering Mode Configuration</h2>
-            <p className="text-xs text-zinc-500">Choose how customers and waiters place orders for this branch.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-zinc-950">Ordering Mode Configuration</h2>
+              <p className="text-xs text-zinc-500">Choose how customers and waiters place orders for this branch.</p>
+            </div>
+            {!canManage && (
+              <span className="text-xs font-medium text-zinc-400">View Only</span>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
-              onClick={() => handleOrderingModeChange('qr_only')}
-              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
+              disabled={!canManage}
+              onClick={() => canManage && handleOrderingModeChange('qr_only')}
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] ${
+                canManage ? 'touch-manipulation' : 'cursor-default opacity-80'
+              } ${
                 orderingMode === 'qr_only'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -205,8 +221,11 @@ export function AreaManagement({
 
             <button
               type="button"
-              onClick={() => handleOrderingModeChange('waiter_only')}
-              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
+              disabled={!canManage}
+              onClick={() => canManage && handleOrderingModeChange('waiter_only')}
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] ${
+                canManage ? 'touch-manipulation' : 'cursor-default opacity-80'
+              } ${
                 orderingMode === 'waiter_only'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -220,8 +239,11 @@ export function AreaManagement({
 
             <button
               type="button"
-              onClick={() => handleOrderingModeChange('qr_and_waiter')}
-              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] touch-manipulation ${
+              disabled={!canManage}
+              onClick={() => canManage && handleOrderingModeChange('qr_and_waiter')}
+              className={`p-4 rounded-xl border text-left transition-all min-h-[60px] ${
+                canManage ? 'touch-manipulation' : 'cursor-default opacity-80'
+              } ${
                 orderingMode === 'qr_and_waiter'
                   ? 'border-zinc-950 bg-zinc-900 text-white shadow-xs'
                   : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900'
@@ -241,14 +263,18 @@ export function AreaManagement({
             <div className="text-4xl mb-3">📍</div>
             <h3 className="text-lg font-bold text-zinc-950">No Service Areas Created</h3>
             <p className="text-sm text-zinc-500 max-w-md mx-auto mt-1 mb-6">
-              Create your first service area (e.g. Main Restaurant, Pool Area, Rooftop) to organize tables and route waiter requests.
+              {canManage
+                ? 'Create your first service area (e.g. Main Restaurant, Pool Area, Rooftop) to organize tables and route waiter requests.'
+                : 'No service areas have been created for this branch yet.'}
             </p>
-            <button
-              onClick={() => setIsCreateOpen(true)}
-              className="inline-flex min-h-[44px] items-center justify-center px-4 py-2 text-sm font-extrabold bg-zinc-950 text-white rounded-xl hover:bg-zinc-800 touch-manipulation"
-            >
-              + Create First Area
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setIsCreateOpen(true)}
+                className="inline-flex min-h-[44px] items-center justify-center px-4 py-2 text-sm font-extrabold bg-zinc-950 text-white rounded-xl hover:bg-zinc-800 touch-manipulation"
+              >
+                + Create First Area
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -293,28 +319,30 @@ export function AreaManagement({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-5 pt-3 border-t border-zinc-100">
-                  <button
-                    onClick={() => {
-                      setEditingArea(area);
-                      setEditName(area.name);
-                      setEditDesc(area.description || '');
-                      setEditActive(area.isActive);
-                    }}
-                    className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center touch-manipulation transition-colors"
-                  >
-                    Edit Area
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDeletingArea(area);
-                      setBlockedTableCount(null);
-                    }}
-                    className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-center touch-manipulation transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="flex items-center gap-2 mt-5 pt-3 border-t border-zinc-100">
+                    <button
+                      onClick={() => {
+                        setEditingArea(area);
+                        setEditName(area.name);
+                        setEditDesc(area.description || '');
+                        setEditActive(area.isActive);
+                      }}
+                      className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center touch-manipulation transition-colors"
+                    >
+                      Edit Area
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeletingArea(area);
+                        setBlockedTableCount(null);
+                      }}
+                      className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-center touch-manipulation transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

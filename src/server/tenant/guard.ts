@@ -7,7 +7,7 @@ import { PermissionKey } from '@/lib/validation/permission';
 export interface RouteGuardResult {
   allowed: boolean;
   context: ActiveTenantContext;
-  requiredPermission: PermissionKey | null;
+  requiredPermission: PermissionKey | PermissionKey[] | null;
 }
 
 /**
@@ -54,10 +54,29 @@ export async function requireRoutePermission(pathname: string): Promise<RouteGua
   try {
     const authContext = await resolveAuthorizationContext();
     if (authContext) {
-      const branchResource = authContext.activeBranchId
-        ? { type: 'branch' as const, id: authContext.activeBranchId }
-        : undefined;
-      allowed = await can({ context: authContext, permission: requiredPermission, resource: branchResource });
+      if (authContext.isBusinessOwner) {
+        allowed = true;
+      } else {
+        const branchResource = authContext.activeBranchId
+          ? {
+              resourceType: 'branch' as const,
+              resourceId: authContext.activeBranchId,
+              businessId: authContext.businessId,
+              branchId: authContext.activeBranchId,
+              departmentId: null,
+              organizationUnitId: null,
+              serviceAreaId: null,
+              ownerUserId: null,
+            }
+          : undefined;
+        const perms = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+        for (const perm of perms) {
+          if (await can({ context: authContext, permission: perm, resource: branchResource })) {
+            allowed = true;
+            break;
+          }
+        }
+      }
     }
   } catch {
     allowed = false;

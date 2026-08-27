@@ -29,6 +29,7 @@ Prior to Phase 37 Step 3, the `/dashboard` landing view functioned more like an 
 - **Action Fatigue**: Quick actions presented 10 items duplicating almost every sidebar menu item instead of focusing on high-frequency daily tasks.
 - **Permanent Onboarding Banner**: Setup progress occupied major real estate on established venues with hundreds of orders.
 - **Lack of Real-Time Operational Signals**: No direct visibility on today's placed orders, active kitchen/POS queue depth, today's revenue, or pending reservations.
+- **Restricted Custom Role Dead-Ends**: Previously, users assigned restricted custom roles without `orders.view` hit a 403 Access Denied block on `/dashboard` because the route guard had hardcoded `orders.view`.
 
 ---
 
@@ -52,6 +53,7 @@ Prior to Phase 37 Step 3, the `/dashboard` landing view functioned more like an 
 | **Needs Attention** | Missing | **ADD (Conditional)** | Surfacing pending bookings, low stock, and waiter calls only when active |
 | **Quick Actions** | 10 Buttons | **SIMPLIFY (Max 4)** | Top 4 high-frequency tasks (+ Add Item, View Orders, Manage Dining, Invite Staff) |
 | **Setup Progress** | Permanent Checklist | **CONDITIONAL** | Automatically disappears once menu and tables are configured |
+| **Restricted Role Landing**| Access Denied | **ADD (Generic Fallback)** | Renders dynamic "Your Workspace" cards derived from canonical nav resolver |
 
 ---
 
@@ -82,6 +84,14 @@ The simplified dashboard follows a strict, mobile-first visual hierarchy:
 └────────────────────────────────────────────────────────┘
 ```
 
+For restricted / non-operational roles, sections 3–7 are replaced by:
+```
+┌────────────────────────────────────────────────────────┐
+│ Your Workspace(s)                                      │
+│ [⚙️ Settings & Business Details] [Open Business →]    │
+└────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 5. Today Metrics Specification
@@ -93,7 +103,7 @@ The simplified dashboard follows a strict, mobile-first visual hierarchy:
 | **Revenue Today** | `get_branch_sales_summary` RPC (`paid_revenue_cents`) | `reports.financial.view` \|\| Owner | Formatted Currency (`$0.00`) |
 | **Reservations Today** | `reservations` (`reservation_date = today_local`, `status NOT IN ('CANCELLED', 'DECLINED')`) | `reservations.view` \|\| Owner \|\| Manager | "No reservations today" |
 | **Floor Tables** | `dining_tables` (`status = 'available' / 'occupied' / 'reserved'`) | `tables.view` \|\| `tables.manage` \|\| Owner \|\| Manager | "No tables configured" |
-| **Low Stock** | `inventory_items` JOIN `inventory_balances` (`stock <= min_stock_level`) | `inventory.view` \|\| `inventory.manage` \|\| Owner \|\| Manager | Card hidden if 0 |
+| **Low Stock** | `inventory_items` JOIN `inventory_balances` (`stock <= min_stock_level`) | `inventory.view` \|\| `inventory.items.manage` \|\| Owner \|\| Manager | Card hidden if 0 |
 
 ---
 
@@ -110,7 +120,7 @@ The simplified dashboard follows a strict, mobile-first visual hierarchy:
 
 ## 7. Quick Actions Specification
 Capped at **maximum 4 high-frequency items** derived from effective permissions:
-1. `+ Add Menu Item` (`/dashboard/menu/items`) — Requires `menu.manage` or Owner
+1. `+ Add Menu Item` (`/dashboard/menu/items`) — Requires `menu.items.create`, `menu.manage` or Owner
 2. `📋 View Orders` (`/dashboard/orders`) — Requires `orders.view`, `cashier.access`, Owner, or Manager
 3. `🍽️ Manage Dining` (`/dashboard/dining`) — Requires `tables.manage`, Owner, or Manager
 4. `👥 Invite Staff` (`/dashboard/team/invites`) — Requires `staff.invite`, `staff.manage`, or Owner
@@ -142,23 +152,34 @@ Each chip evaluates role capability permissions independently and remains hidden
 
 ---
 
-## 11. Role-Aware Dashboard Behavior
+## 11. Role-Aware Dashboard & Navigation Behavior
 
-| Role | Today Numbers | Needs Attention | Terminals Bar | Quick Actions | Setup Checklist | Fallback Mode |
+| Role | Today Numbers | Needs Attention | Terminals Bar | Quick Actions | Setup Checklist | Landing UX |
 |---|---|---|---|---|---|---|
-| **Business Owner** | Orders, Queue, Revenue, Bookings, Tables | All alerts | POS, Kitchen, Waiter | 4 items | Yes (if incomplete) | No |
-| **Branch Manager** | Orders, Queue, Bookings, Tables (No Revenue unless financial permitted) | Operational alerts | Permitted terminals | 4 items | Yes (if incomplete) | No |
-| **Cashier** | Lands on `/dashboard/cashier` (if visited `/dashboard`, sees Active Queue & Cashier POS) | None | Cashier only | None | No | No |
-| **Kitchen Staff** | Lands on `/dashboard/kitchen` (if visited `/dashboard`, sees Kitchen Queue) | None | Kitchen only | None | No | No |
-| **Waiter** | Lands on `/dashboard/waiter` (if visited `/dashboard`, sees Waiter Queue) | None | Waiter only | None | No | No |
-| **Custom Restricted** | None | None | None | None | No | **Yes** (Help Center Card) |
+| **Business Owner** | Orders, Queue, Revenue, Bookings, Tables | All alerts | POS, Kitchen, Waiter | 4 items | Yes (if incomplete) | Full Dashboard Overview |
+| **Branch Manager** | Orders, Queue, Bookings, Tables (No Revenue unless financial permitted) | Operational alerts | Permitted terminals | 4 items | Yes (if incomplete) | Full Dashboard Overview |
+| **Cashier** | Lands on `/dashboard/cashier` | N/A | N/A | N/A | N/A | Cashier POS Terminal |
+| **Kitchen Staff** | Lands on `/dashboard/kitchen` | N/A | N/A | N/A | N/A | Kitchen Display Queue |
+| **Waiter** | Lands on `/dashboard/waiter` | N/A | N/A | N/A | N/A | Waiter Service Terminal |
+| **Custom (business.view)** | None | None | None | None | No | "Your Workspace" → `/dashboard/business` |
+| **Custom (areas.view)** | None | None | None | None | No | "Your Workspace" → `/dashboard/areas` |
+| **Custom (menu.view)** | None | None | None | None | No | "Your Workspace" → `/dashboard/menu` |
+| **Custom (zero perms)** | None | None | None | None | No | "No Workspace Access" empty state |
 
 ---
 
-## 12. Custom-Role Isolation
-In accordance with Step 2 RBAC fixes:
-- A custom-role member assigned `cashier` as a compatibility base key NEVER inherits Cashier POS, Revenue, or Kitchen shortcuts unless their custom role explicitly contains `cashier.access` or `kitchen.access`.
-- Custom-role users with only `business.view` land on `/dashboard` and receive the clean **Active Branch Workspace** fallback card with a link to the Help Center.
+## 12. Restricted Custom-Role Architecture & Route Security Hotfix
+In the Phase 37 Step 3 Restricted Custom Role Hotfix:
+1. **Route Guard Generalization**:
+   - `ROUTE_PERMISSION_MAP` and `RoutePermissionConfig` now accept `PermissionKey | PermissionKey[]`.
+   - `requireRoutePermission(pathname)` evaluates candidate arrays in a loop using the server-resolved authoritative `ResourceScope`.
+   - `/dashboard` root route has no restrictive route guard (returns `null`), allowing all authenticated business members to load their workspace.
+2. **Dynamic Navigation Href Resolution**:
+   - `resolveDashboardNavigation(authContext)` dynamically resolves the target URL for restricted users (e.g. `Settings` resolves to `/dashboard/business` if the user has `business.view`, and `Dining & QR` resolves to `/dashboard/areas` if the user has `areas.view`).
+3. **Parent Hub Collapse Invariant**:
+   - Parent navigation hubs remain visible if the user possesses ANY permitted child capability.
+4. **Read-Only Mode Enforcement**:
+   - Subroutes like `/dashboard/areas` verify route permissions via `requireRoutePermission('/dashboard/areas')` and enforce `canManage: false` when the user only has view permissions, cleanly disabling mutation CTAs.
 
 ---
 
@@ -172,7 +193,8 @@ In accordance with Step 2 RBAC fixes:
 ## 14. Security & RBAC Invariants
 - **No Service Role in Frontend**: Queries are executed strictly server-side in Server Components.
 - **Strict Server Gating**: Metric queries only execute if the user's evaluated `model` flag is `true` (preventing unauthorized DB queries).
-- **Server Guard Intact**: `requireRoutePermission('/dashboard')` remains the entry security gate.
+- **Server Guard Intact**: `requireRoutePermission` protects every operational and administrative subroute.
+- **Direct ResourceScope**: Authorization queries pass authoritative `ResourceScope` objects without redundant database roundtrips.
 
 ---
 
@@ -200,16 +222,23 @@ In accordance with Step 2 RBAC fixes:
 
 ### D. Custom Restricted Role (business.view only)
 - [ ] Log in as custom role with only `business.view` (base role `cashier`).
+- [ ] Confirm `/dashboard` loads successfully without 403 "You don't have permission to access this area."
 - [ ] Confirm header badge displays the actual custom role name, NOT "Cashier".
-- [ ] Confirm Cashier POS shortcut and Orders Today card are NOT visible.
-- [ ] Confirm user sees the clean "Active Branch Workspace" fallback card.
+- [ ] Confirm sidebar shows "Settings" linking to `/dashboard/business`.
+- [ ] Confirm "Your Workspace" card displays Business Details with direct "Open Business Details →" button.
 
-### E. Operational Terminals Direct Experience
+### E. Custom Restricted Role (areas.view only)
+- [ ] Log in as custom role with only `areas.view`.
+- [ ] Confirm `/dashboard` loads successfully and shows "Dining & QR" workspace.
+- [ ] Click "Open Dining & QR →" or navigate to `/dashboard/areas`.
+- [ ] Confirm Service Areas page renders in read-only mode (no "+ Create Area", no Edit/Delete buttons, ordering mode read-only).
+
+### F. Operational Terminals Direct Experience
 - [ ] Log in as built-in Cashier → confirm direct redirect to `/dashboard/cashier`.
 - [ ] Log in as built-in Kitchen Staff → confirm direct redirect to `/dashboard/kitchen`.
 - [ ] Log in as built-in Waiter → confirm direct redirect to `/dashboard/waiter`.
 
-### F. Mobile Layout
+### G. Mobile Layout
 - [ ] View `/dashboard` in mobile viewport (375px - 428px).
 - [ ] Confirm cards stack 1-column with zero horizontal scrolling.
 - [ ] Confirm all action chips and buttons are easily tappable (min 44px height).

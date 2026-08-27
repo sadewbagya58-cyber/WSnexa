@@ -290,9 +290,13 @@ async function runVerification() {
   console.log('\n--- 1. Access Hub Route Security ---');
 
   const routePerm = getRequiredPermissionForRoute('/dashboard/access');
-  assert(routePerm === 'roles.view', '/dashboard/access requires roles.view route permission');
+  const primaryPerm = Array.isArray(routePerm) ? routePerm[0] : routePerm!;
+  assert(
+    Array.isArray(routePerm) ? routePerm.includes('roles.view') : routePerm === 'roles.view',
+    '/dashboard/access requires roles.view route permission'
+  );
 
-  const ownerCanRoute = await can({ context: ownerAuth, permission: routePerm! });
+  const ownerCanRoute = await can({ context: ownerAuth, permission: primaryPerm });
   assert(ownerCanRoute === true, 'Business Owner can access /dashboard/access route');
 
   await PermissionService.setScopedMemberOverride(ownerAuth, {
@@ -310,12 +314,12 @@ async function runVerification() {
 
   const managerCanRoute = await can({
     context: managerAuthUpdated,
-    permission: routePerm!,
+    permission: primaryPerm,
     resource: { type: 'branch', id: branchA1!.id, branchId: branchA1!.id },
   });
   assert(managerCanRoute === true, 'Authorized role manager with roles.view can access /dashboard/access route');
 
-  const waiterCanRoute = await can({ context: waiterAuth, permission: routePerm! });
+  const waiterCanRoute = await can({ context: waiterAuth, permission: primaryPerm });
   assert(waiterCanRoute === false, 'Ordinary waiter without roles.view is DENIED access to /dashboard/access route');
 
   // ====================================================================

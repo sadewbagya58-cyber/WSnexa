@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { FormattedInvitation } from '@/server/services/staff-invitation.service';
 import {
@@ -8,6 +8,7 @@ import {
   revokeInvitationAction,
   regenerateInvitationAction,
 } from '@/server/actions/staff-invitation';
+import { listCustomRolesAction } from '@/server/actions/permission';
 import { StaffRole, ExpiryOption } from '@/lib/validation/staff-invitation';
 
 export interface BranchOption {
@@ -23,9 +24,16 @@ export interface AreaOption {
   code: string;
 }
 
+export interface CustomRoleOption {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 interface StaffInvitesManagementProps {
   branches: BranchOption[];
   branchAreas?: AreaOption[];
+  customRoles?: CustomRoleOption[];
   initialInvitations: FormattedInvitation[];
   userRole: string;
   activeBranchId?: string;
@@ -34,11 +42,13 @@ interface StaffInvitesManagementProps {
 export function StaffInvitesManagement({
   branches,
   branchAreas = [],
+  customRoles: initialCustomRoles = [],
   initialInvitations,
   userRole,
   activeBranchId,
 }: StaffInvitesManagementProps) {
   const [invitations, setInvitations] = useState<FormattedInvitation[]>(initialInvitations);
+  const [customRoles, setCustomRoles] = useState<CustomRoleOption[]>(initialCustomRoles);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [createdCodeModal, setCreatedCodeModal] = useState<{
     rawCode: string;
@@ -49,7 +59,7 @@ export function StaffInvitesManagement({
 
   // Form states
   const [branchId, setBranchId] = useState<string>(activeBranchId || branches[0]?.id || '');
-  const [assignedRole, setAssignedRole] = useState<StaffRole>('cashier');
+  const [selectedRoleKey, setSelectedRoleKey] = useState<string>('builtin:cashier');
   const [invitedEmail, setInvitedEmail] = useState<string>('');
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>('48h');
   const [selectedAreaIds, setSelectedAreaIds] = useState<string[]>([]);
@@ -61,6 +71,28 @@ export function StaffInvitesManagement({
 
   const isOwner = userRole === 'business_owner';
 
+  // Refresh active custom roles when modal opens to ensure any freshly created custom role appears immediately
+  useEffect(() => {
+    if (isModalOpen) {
+      let isMounted = true;
+      listCustomRolesAction({ includeArchived: false }).then((res) => {
+        if (isMounted && res.success && res.data) {
+          const activeOnly = res.data
+            .filter((r) => r.isActive && !r.isArchived)
+            .map((r) => ({
+              id: r.id,
+              name: r.name,
+              description: r.description || undefined,
+            }));
+          setCustomRoles(activeOnly);
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isModalOpen]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!branchId) {
@@ -68,7 +100,19 @@ export function StaffInvitesManagement({
       return;
     }
 
-    if (assignedRole === 'waiter' && selectedAreaIds.length === 0) {
+    let assignedRole: StaffRole = 'cashier';
+    let customRoleId: string | undefined = undefined;
+
+    if (selectedRoleKey.startsWith('builtin:')) {
+      assignedRole = selectedRoleKey.replace('builtin:', '') as StaffRole;
+    } else if (selectedRoleKey.startsWith('custom:')) {
+      customRoleId = selectedRoleKey.replace('custom:', '');
+      assignedRole = 'cashier'; // Base staff role for custom role assignment
+    } else {
+      assignedRole = selectedRoleKey as StaffRole;
+    }
+
+    if (assignedRole === 'waiter' && !customRoleId && selectedAreaIds.length === 0) {
       setErrorMsg('At least one Service Area is required when inviting a Waiter.');
       return;
     }
@@ -79,6 +123,7 @@ export function StaffInvitesManagement({
     const res = await createInvitationAction({
       branchId,
       assignedRole,
+      customRoleId,
       invitedEmail,
       expiryOption,
       serviceAreaIds: selectedAreaIds,
@@ -88,17 +133,21 @@ export function StaffInvitesManagement({
 
     if (res.success && res.data) {
       const selectedBranch = branches.find((b) => b.id === branchId);
+      const selectedCustomRole = customRoles.find((cr) => cr.id === customRoleId);
+      const displayRoleLabel = selectedCustomRole ? selectedCustomRole.name : formatRoleLabel(assignedRole);
+
       setInvitations([res.data.invitation, ...invitations]);
       setIsModalOpen(false);
       setCreatedCodeModal({
         rawCode: res.data.rawCode,
         tokenPrefix: res.data.tokenPrefix,
-        role: assignedRole,
+        role: displayRoleLabel,
         branchName: selectedBranch?.name || 'Selected Branch',
       });
       // Reset form
       setInvitedEmail('');
       setSelectedAreaIds([]);
+      setSelectedRoleKey('builtin:cashier');
     } else {
       setErrorMsg(res.message || 'Failed to generate invitation.');
     }
@@ -141,44 +190,32 @@ export function StaffInvitesManagement({
             : inv
         )
       );
-
       setCreatedCodeModal({
         rawCode: res.data.rawCode,
         tokenPrefix: res.data.tokenPrefix,
-        role: invitation.assignedRole,
+        role: formatRoleLabel(invitation.assignedRole, invitation.customRoleName),
         branchName: invitation.branchName,
       });
     } else {
-      alert(res.message || 'Failed to regenerate invitation code.');
+      alert(res.message || 'Failed to regenerate invitation token.');
     }
   };
 
-  const handleCopyCode = () => {
-    if (!createdCodeModal) return;
-    navigator.clipboard.writeText(createdCodeModal.rawCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const handleCopyInstructions = () => {
-    if (!createdCodeModal) return;
-    const text = `Join our team on WSNexa!
-
-Workspace Role: ${formatRoleLabel(createdCodeModal.role)}
-Branch: ${createdCodeModal.branchName}
-
-Your Single-Use Invitation Code: ${createdCodeModal.rawCode}
-
-Instructions:
-1. Log in or create an account at WSNexa.
-2. Select "${formatRoleLabel(createdCodeModal.role)}" on account setup.
-3. Enter your Invitation Code on the Authorization screen.`;
+  const copyToClipboard = (text: string, isFullInstruction = false) => {
     navigator.clipboard.writeText(text);
-    setCopiedInstructions(true);
-    setTimeout(() => setCopiedInstructions(false), 2000);
+    if (isFullInstruction) {
+      setCopiedInstructions(true);
+      setTimeout(() => setCopiedInstructions(false), 2000);
+    } else {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
   };
 
-  const formatRoleLabel = (role: string) => {
+  const formatRoleLabel = (role: string, customRoleName?: string | null) => {
+    if (customRoleName) {
+      return customRoleName;
+    }
     switch (role) {
       case 'branch_manager':
         return 'Branch Manager';
@@ -188,12 +225,14 @@ Instructions:
         return 'Kitchen Staff';
       case 'waiter':
         return 'Waiter';
+      case 'business_owner':
+        return 'Business Owner';
       default:
-        return role;
+        return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: FormattedInvitation['status']) => {
     switch (status) {
       case 'pending':
         return 'bg-amber-500/10 text-amber-600 border-amber-500/30';
@@ -208,6 +247,8 @@ Instructions:
     }
   };
 
+  const isWaiterSelected = selectedRoleKey === 'builtin:waiter';
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -215,7 +256,7 @@ Instructions:
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Staff & Manager Invitations</h1>
           <p className="text-xs text-zinc-500">
-            Generate secure, single-use invitation codes bound to specific branches and roles.
+            Generate secure, single-use invitation codes bound to specific branches and built-in or custom roles.
           </p>
         </div>
 
@@ -227,14 +268,14 @@ Instructions:
       </div>
 
       {/* Invitation Table / List */}
-      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
         {invitations.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 text-xs space-y-2">
             <div className="text-3xl mb-2">🔑</div>
             <div>No staff invitations generated yet.</div>
             {isOwner && (
               <div className="text-[11px] text-zinc-400">
-                Click <strong>Generate New Invitation</strong> to invite Branch Managers, Cashiers, Kitchen Staff, or Waiters.
+                Click <strong>Generate New Invitation</strong> to invite Branch Managers, Cashiers, Kitchen Staff, Waiters, or custom role staff.
               </div>
             )}
           </div>
@@ -259,7 +300,14 @@ Instructions:
                   {invitations.map((inv) => (
                     <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
                       <td className="py-3 px-4 font-bold text-zinc-900">
-                        {formatRoleLabel(inv.assignedRole)}
+                        <div className="flex items-center gap-1.5">
+                          <span>{formatRoleLabel(inv.assignedRole, inv.customRoleName)}</span>
+                          {inv.customRoleName && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                              Custom
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-zinc-600 font-medium">{inv.branchName}</td>
                       <td className="py-3 px-4">
@@ -298,14 +346,16 @@ Instructions:
                         {isOwner && inv.status === 'pending' && (
                           <>
                             <button
+                              type="button"
                               onClick={() => handleRegenerate(inv)}
-                              className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+                              className="text-xs font-semibold text-amber-600 hover:text-amber-700 transition-colors cursor-pointer"
                             >
                               Regenerate
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleRevoke(inv.id)}
-                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors"
+                              className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
                             >
                               Revoke
                             </button>
@@ -326,7 +376,14 @@ Instructions:
               {invitations.map((inv) => (
                 <div key={inv.id} className="p-4 space-y-2 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-900 text-sm">{formatRoleLabel(inv.assignedRole)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-zinc-900 text-sm">{formatRoleLabel(inv.assignedRole, inv.customRoleName)}</span>
+                      {inv.customRoleName && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                          Custom
+                        </span>
+                      )}
+                    </div>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusBadge(inv.status)}`}>
                       {inv.status}
                     </span>
@@ -358,14 +415,16 @@ Instructions:
                       {isOwner && inv.status === 'pending' && (
                         <>
                           <button
+                            type="button"
                             onClick={() => handleRegenerate(inv)}
-                            className="font-bold text-amber-600 hover:underline"
+                            className="font-bold text-amber-600 hover:underline cursor-pointer"
                           >
                             Regenerate
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleRevoke(inv.id)}
-                            className="font-bold text-rose-600 hover:underline"
+                            className="font-bold text-rose-600 hover:underline cursor-pointer"
                           >
                             Revoke
                           </button>
@@ -382,13 +441,14 @@ Instructions:
 
       {/* CREATE INVITATION MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-lg font-bold text-zinc-950">Generate Staff Invitation</h3>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold"
+                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -423,21 +483,32 @@ Instructions:
               <div>
                 <label className="block text-zinc-700 font-bold mb-1">Assigned Role *</label>
                 <select
-                  value={assignedRole}
+                  value={selectedRoleKey}
                   onChange={(e) => {
-                    const role = e.target.value as StaffRole;
-                    setAssignedRole(role);
-                    if (role !== 'waiter') {
+                    const val = e.target.value;
+                    setSelectedRoleKey(val);
+                    if (val !== 'builtin:waiter') {
                       setErrorMsg(null);
                     }
                   }}
-                  className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                  className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none cursor-pointer"
                   required
                 >
-                  <option value="branch_manager">Branch Manager</option>
-                  <option value="cashier">Cashier</option>
-                  <option value="kitchen_staff">Kitchen Staff</option>
-                  <option value="waiter">Waiter</option>
+                  <optgroup label="Built-in Roles">
+                    <option value="builtin:branch_manager">Branch Manager</option>
+                    <option value="builtin:cashier">Cashier</option>
+                    <option value="builtin:kitchen_staff">Kitchen Staff</option>
+                    <option value="builtin:waiter">Waiter</option>
+                  </optgroup>
+                  {customRoles.length > 0 && (
+                    <optgroup label="Custom Roles">
+                      {customRoles.map((cr) => (
+                        <option key={cr.id} value={`custom:${cr.id}`}>
+                          {cr.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
@@ -445,10 +516,10 @@ Instructions:
               <div className="space-y-2 border-t border-b border-zinc-100 py-3">
                 <div className="flex items-center justify-between">
                   <label className="text-zinc-900 font-bold text-xs">
-                    Service Area Assignments {assignedRole === 'waiter' && <span className="text-rose-600">*</span>}
+                    Service Area Assignments {isWaiterSelected && <span className="text-rose-600">*</span>}
                   </label>
                   <span className="text-[10px] text-zinc-500 font-normal">
-                    {assignedRole === 'waiter' ? 'Required for Waiters' : 'Optional'}
+                    {isWaiterSelected ? 'Required for Waiters' : 'Optional'}
                   </span>
                 </div>
 
@@ -514,23 +585,28 @@ Instructions:
                       key={exp}
                       type="button"
                       onClick={() => setExpiryOption(exp)}
-                      className={`py-2 rounded-xl border text-xs font-bold transition-all ${
+                      className={`py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                         expiryOption === exp
                           ? 'bg-zinc-950 text-white border-zinc-950'
                           : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
                       }`}
                     >
-                      {exp === '24h' ? '24 Hours' : exp === '48h' ? '48 Hours' : '7 Days'}
+                      {exp}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setIsModalOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" size="sm" disabled={isSubmitting}>
+                <Button type="submit" variant="primary" disabled={isSubmitting}>
                   {isSubmitting ? 'Generating...' : 'Generate Code'}
                 </Button>
               </div>
@@ -539,55 +615,71 @@ Instructions:
         </div>
       )}
 
-      {/* ONE-TIME RAW CODE DISPLAY MODAL */}
+      {/* CREATED CODE SUCCESS MODAL */}
       {createdCodeModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-amber-500/40 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 text-center">
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center text-2xl font-bold mx-auto">
-              🔑
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎉</span>
+                <h3 className="text-lg font-bold text-zinc-950">Invitation Code Ready</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreatedCodeModal(null)}
+                className="text-zinc-400 hover:text-zinc-600 text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="space-y-1">
-              <h3 className="text-lg font-black text-white uppercase tracking-wider">Invitation Code Generated</h3>
-              <p className="text-xs text-zinc-400">
-                Bound for <strong className="text-white">{formatRoleLabel(createdCodeModal.role)}</strong> at{' '}
-                <strong className="text-white">{createdCodeModal.branchName}</strong>
-              </p>
-            </div>
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
+              <div className="text-[11px] text-emerald-800 font-medium">
+                Single-use invitation code generated for <strong>{createdCodeModal.role}</strong> at{' '}
+                <strong>{createdCodeModal.branchName}</strong>:
+              </div>
 
-            {/* Prominent One-Time Code Box */}
-            <div className="p-4 bg-zinc-900 border border-amber-500/30 rounded-xl space-y-2">
-              <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Single-Use Code</span>
-              <div className="text-xl font-black font-mono text-white tracking-widest selection:bg-amber-500 selection:text-black">
-                {createdCodeModal.rawCode}
+              <div className="flex items-center justify-between bg-white border border-emerald-300 rounded-xl p-3">
+                <span className="text-lg font-mono font-bold tracking-widest text-emerald-950 select-all">
+                  {createdCodeModal.rawCode}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(createdCodeModal.rawCode)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                >
+                  {copiedCode ? 'Copied!' : 'Copy Code'}
+                </button>
               </div>
             </div>
 
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300 leading-relaxed text-left">
-              ⚠️ <strong>IMPORTANT:</strong> This invitation code is displayed <strong>ONLY ONCE</strong> and is not stored in plaintext. Copy it now and send it to your staff member.
+            <div className="text-xs text-zinc-600 space-y-2">
+              <div className="font-bold text-zinc-900">How to share:</div>
+              <ol className="list-decimal list-inside space-y-1 text-zinc-500 pl-1">
+                <li>Send this single-use code to the team member.</li>
+                <li>Direct them to register or login at WSNexa.</li>
+                <li>They enter this code in their invitation onboarding prompt.</li>
+              </ol>
             </div>
 
-            <div className="flex flex-col gap-2 pt-2">
-              <Button
-                variant="primary"
-                onClick={handleCopyCode}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold"
-              >
-                {copiedCode ? '✓ Code Copied!' : '📋 Copy Invitation Code'}
-              </Button>
+            <div className="pt-2 flex flex-col gap-2">
               <Button
                 variant="outline"
-                onClick={handleCopyInstructions}
-                className="w-full text-zinc-300 border-zinc-700 hover:bg-zinc-900"
+                className="w-full text-xs font-semibold"
+                onClick={() => {
+                  const shareText = `You've been invited to join WSNexa as a ${createdCodeModal.role} at ${createdCodeModal.branchName}!\n\nYour single-use Invitation Code is:\n${createdCodeModal.rawCode}\n\nClaim your invite at: ${window.location.origin}/register`;
+                  copyToClipboard(shareText, true);
+                }}
               >
-                {copiedInstructions ? '✓ Instructions Copied!' : '💬 Copy Full Invite Text'}
+                {copiedInstructions ? '✅ Instructions Copied!' : '📋 Copy Full Invitation Instructions'}
               </Button>
-              <button
+              <Button
+                variant="primary"
+                className="w-full"
                 onClick={() => setCreatedCodeModal(null)}
-                className="text-xs text-zinc-500 hover:text-zinc-400 font-medium py-1 transition-colors"
               >
-                Close & Done
-              </button>
+                Done
+              </Button>
             </div>
           </div>
         </div>

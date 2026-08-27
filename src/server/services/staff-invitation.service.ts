@@ -13,6 +13,8 @@ export interface FormattedInvitation {
   branchName: string;
   invitationType: 'manager' | 'staff';
   assignedRole: StaffRole;
+  customRoleId?: string | null;
+  customRoleName?: string | null;
   invitedEmail: string | null;
   tokenPrefix: string;
   status: 'pending' | 'claimed' | 'expired' | 'revoked';
@@ -88,10 +90,11 @@ export class StaffInvitationService {
     }
 
     // 2b. If custom role specified, verify it belongs to this business and is active
+    let customRoleName: string | null = null;
     if (input.customRoleId) {
       const { data: customRole } = await admin
         .from('custom_roles')
-        .select('id, is_active')
+        .select('id, name, is_active')
         .eq('id', input.customRoleId)
         .eq('business_id', businessId)
         .maybeSingle();
@@ -103,6 +106,8 @@ export class StaffInvitationService {
       if (!customRole.is_active) {
         return { success: false, message: 'Cannot invite with an archived or inactive custom role.' };
       }
+
+      customRoleName = customRole.name;
     }
 
     // 3. Service Area Validation
@@ -232,6 +237,7 @@ export class StaffInvitationService {
       payload: {
         branch_id: input.branchId,
         assigned_role: input.assignedRole,
+        custom_role_id: input.customRoleId || null,
         invited_email: invitedEmail,
         token_prefix: tokenPrefix,
         expires_at: expiresAt,
@@ -246,6 +252,8 @@ export class StaffInvitationService {
       branchName: branch.name,
       invitationType: inviteRow.invitation_type,
       assignedRole: inviteRow.assigned_role,
+      customRoleId: inviteRow.custom_role_id || null,
+      customRoleName,
       invitedEmail: inviteRow.invited_email,
       tokenPrefix: inviteRow.token_prefix,
       status: inviteRow.status,
@@ -730,7 +738,7 @@ export class StaffInvitationService {
 
     let query = admin
       .from('staff_invitations')
-      .select('*, branches(name)')
+      .select('*, branches(name), custom_roles(id, name)')
       .eq('business_id', businessId);
 
     if (branchId) {
@@ -801,6 +809,7 @@ export class StaffInvitationService {
 
     return rows.map((r) => {
       const b = r.branches as { name?: string } | null;
+      const cr = r.custom_roles as { id?: string; name?: string } | null;
       const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
       return {
         id: r.id as string,
@@ -809,6 +818,8 @@ export class StaffInvitationService {
         branchName: b?.name || 'Assigned Branch',
         invitationType: r.invitation_type as 'manager' | 'staff',
         assignedRole: r.assigned_role as StaffRole,
+        customRoleId: (r.custom_role_id as string) || cr?.id || null,
+        customRoleName: cr?.name || null,
         invitedEmail: (r.invited_email as string) || null,
         tokenPrefix: r.token_prefix as string,
         status: r.status as 'pending' | 'claimed' | 'expired' | 'revoked',

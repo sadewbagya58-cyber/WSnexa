@@ -130,13 +130,34 @@ Phase 37 Step 2 successfully implements the approved simplified Information Arch
 - [ ] Assign custom role with ONLY `inventory.counts.manage`.
 - [ ] Verify sidebar displays **Operations** hub while collapsing Customers, Dining, and Settings hubs.
 
-### H. Mobile Viewport
-- [ ] Open application on mobile screen size ($\le 640\text{px}$).
-- [ ] Open mobile drawer and verify touch targets are $\ge 44\text{px}$ high.
-- [ ] Confirm drawer closes upon selecting a route.
+### I. Staff Invitations with Custom Roles
+- [ ] Open **Team** $\rightarrow$ **Staff Invitations** (`/dashboard/team/invites`).
+- [ ] Click **Generate New Invitation**.
+- [ ] Open the **Assigned Role** dropdown; verify both **Built-in Roles** (Branch Manager, Cashier, Kitchen Staff, Waiter) and active **Custom Roles** (e.g. Restaurant Supervisor QA, Senior Cashier) appear clearly grouped.
+- [ ] Select a Custom Role and generate invitation code.
+- [ ] Verify the invitation list displays the Custom Role name with a distinctive "Custom" tag.
+- [ ] Claim the invitation code with a new staff account and verify the user membership receives the `custom_role_id` and resolves all custom role permissions.
+
+---
+
+## 5. Staff Invitations Custom Roles Integration
+
+1. **Active Custom Role Discovery**:
+   - Server-side query via `RoleGovernanceService.listCustomRoles(businessId, { includeArchived: false })` filters active, non-archived roles for the tenant business.
+   - Client modal auto-refreshes custom roles upon opening via `listCustomRolesAction({ includeArchived: false })` to instantly reflect freshly created custom roles.
+2. **Optgroup Visual Distinction**:
+   - Built-in system templates grouped under `Built-in Roles`.
+   - Tenant custom RBAC roles grouped under `Custom Roles`.
+3. **Server-Authoritative Validation**:
+   - Creation verifies `custom_roles` belongs to `business_id` and `is_active === true`.
+   - Claim-time revalidation ensures archived custom roles cannot be claimed.
+4. **Data Model Integrity**:
+   - `custom_role_id` foreign key is saved in `public.staff_invitations` and applied to `public.business_memberships`.
+   - Single authoritative policy engine evaluates dynamic permissions through RBAC v2.
 
 ---
 
 ## 9. Phase 37 Step 2 Status
 
 **READY FOR MANUAL QA**
+

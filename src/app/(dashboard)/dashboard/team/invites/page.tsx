@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 };
 
 import { ServiceAreaService } from '@/server/services/service-area.service';
+import { RoleGovernanceService } from '@/server/services/role-governance.service';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 
@@ -24,7 +25,18 @@ export default async function StaffInvitesPage() {
 
   const { business, membership, branches, activeBranch } = context;
 
-  const invitations = await StaffInvitationService.listInvitations(business.id, activeBranch?.id);
+  const [invitations, rawCustomRoles] = await Promise.all([
+    StaffInvitationService.listInvitations(business.id, activeBranch?.id),
+    RoleGovernanceService.listCustomRoles(business.id, { includeArchived: false }),
+  ]);
+
+  const customRoles = rawCustomRoles
+    .filter((r) => r.isActive && !r.isArchived)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description || undefined,
+    }));
 
   const formattedBranches = branches.map((b: { id: string; name: string; isDefault: boolean }) => ({
     id: b.id,
@@ -48,6 +60,7 @@ export default async function StaffInvitesPage() {
     <StaffInvitesManagement
       branches={formattedBranches}
       branchAreas={branchAreas}
+      customRoles={customRoles}
       initialInvitations={invitations}
       userRole={membership.role}
       activeBranchId={activeBranch?.id}

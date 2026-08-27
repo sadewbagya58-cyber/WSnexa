@@ -180,8 +180,25 @@ async function runAssertions() {
   assert(roleEditorContent.includes('handleNextStep'), 'Explicit handleNextStep advances wizard without calling create action');
   assert(roleEditorContent.includes('handlePrevStep'), 'Explicit handlePrevStep goes back without calling save action');
 
-  // --- 8. Super Admin & Public Route Isolation ---
-  console.log('\n--- 8. Super Admin Isolation ---');
+  // --- 8. Staff Invitations Custom Roles Integration ---
+  console.log('\n--- 8. Staff Invitations Custom Roles Integration ---');
+  const invitesPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/team/invites/page.tsx');
+  const invitesPageContent = fs.readFileSync(invitesPagePath, 'utf8');
+  assert(invitesPageContent.includes('RoleGovernanceService.listCustomRoles'), 'Invites page queries active custom roles');
+  assert(invitesPageContent.includes('customRoles={customRoles}'), 'Invites page passes customRoles prop to StaffInvitesManagement');
+
+  const invitesCompPath = path.join(process.cwd(), 'src/components/team/staff-invites-management.tsx');
+  const invitesCompContent = fs.readFileSync(invitesCompPath, 'utf8');
+  assert(invitesCompContent.includes('<optgroup label="Custom Roles">'), 'Staff invites dropdown includes optgroup for Custom Roles');
+  assert(invitesCompContent.includes('<optgroup label="Built-in Roles">'), 'Staff invites dropdown includes optgroup for Built-in Roles');
+  const inviteServicePath = path.join(process.cwd(), 'src/server/services/staff-invitation.service.ts');
+  const inviteServiceContent = fs.readFileSync(inviteServicePath, 'utf8');
+  assert(inviteServiceContent.includes('customRoleId: (r.custom_role_id as string) || cr?.id || null'), 'Staff invitation service maps customRoleId');
+  assert(inviteServiceContent.includes("Cannot invite with an archived or inactive custom role"), 'StaffInvitationService verifies custom role is active');
+  assert(inviteServiceContent.includes("The custom role associated with this invitation has been archived"), 'StaffInvitationService revalidates custom role on claim');
+
+  // --- 9. Super Admin & Public Route Isolation ---
+  console.log('\n--- 9. Super Admin Isolation ---');
   const hasAdminRoutes = allItems.some((i) => i.href.startsWith('/admin'));
   assert(!hasAdminRoutes, 'No Super Admin /admin routes present in business workspace navigation');
 

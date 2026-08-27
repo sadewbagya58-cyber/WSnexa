@@ -83,13 +83,15 @@ export default async function StockCountsPage() {
           <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1">
             Start a stock count audit sheet to compare physical counts on shelves against expected system stock.
           </p>
-          <div className="mt-4">
-            <Link href="/dashboard/inventory/counts/new">
-              <Button size="sm" className="font-bold text-xs">
-                Start Physical Count
-              </Button>
-            </Link>
-          </div>
+          {canManageCounts && (
+            <div className="mt-4">
+              <Link href="/dashboard/inventory/counts/new">
+                <Button size="sm" className="font-bold text-xs">
+                  Start Physical Count
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">

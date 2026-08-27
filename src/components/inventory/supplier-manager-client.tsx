@@ -11,9 +11,14 @@ import Link from 'next/link';
 interface SupplierManagerClientProps {
   initialSuppliers: SupplierRecord[];
   currency: string;
+  canManage?: boolean;
 }
 
-export function SupplierManagerClient({ initialSuppliers, currency }: SupplierManagerClientProps) {
+export function SupplierManagerClient({
+  initialSuppliers,
+  currency,
+  canManage = true,
+}: SupplierManagerClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isAdding, setIsAdding] = useState(false);
@@ -67,13 +72,15 @@ export function SupplierManagerClient({ initialSuppliers, currency }: SupplierMa
             Active Vendors ({initialSuppliers.length})
           </span>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setIsAdding(!isAdding)}
-          className="text-xs font-bold bg-zinc-950 text-white"
-        >
-          {isAdding ? '✕ Cancel' : '+ Add Supplier'}
-        </Button>
+        {canManage && (
+          <Button
+            size="sm"
+            onClick={() => setIsAdding(!isAdding)}
+            className="text-xs font-bold bg-zinc-950 text-white min-h-[40px]"
+          >
+            {isAdding ? '✕ Cancel' : '+ Add Supplier'}
+          </Button>
+        )}
       </div>
 
       {/* Add Supplier Form Drawer / Card */}
@@ -184,7 +191,7 @@ export function SupplierManagerClient({ initialSuppliers, currency }: SupplierMa
               disabled={isPending}
               className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-32"
             >
-              {isPending ? 'Saving…' : 'Save Supplier ✓'}
+              {isPending ? 'Saving…' : 'Save Supplier'}
             </Button>
           </div>
         </form>

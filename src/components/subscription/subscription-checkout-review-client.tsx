@@ -235,7 +235,7 @@ export function SubscriptionCheckoutReviewClient({
         <div className="pt-2 border-t border-zinc-100 flex justify-between items-center">
           <div>
             <span className="text-xs font-black uppercase text-zinc-500">Final Monthly Amount</span>
-            <p className="text-[11px] font-medium text-zinc-400">Canonical server-calculated quote</p>
+            <p className="text-[11px] font-medium text-zinc-400">Verified calculated price</p>
           </div>
           <div className="text-2xl font-black font-mono text-zinc-950">
             LKR {quote.total.toLocaleString()} <span className="text-xs font-normal text-zinc-500">/ mo</span>

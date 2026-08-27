@@ -48,6 +48,7 @@ interface GoodsReceivingClientProps {
   availableItems: ItemOption[];
   openPurchaseOrders: PurchaseOrderOption[];
   currency: string;
+  canManage?: boolean;
 }
 
 export function GoodsReceivingClient({
@@ -57,6 +58,7 @@ export function GoodsReceivingClient({
   availableItems,
   openPurchaseOrders,
   currency,
+  canManage = true,
 }: GoodsReceivingClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -447,13 +449,17 @@ export function GoodsReceivingClient({
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button
-          type="submit"
-          disabled={isPending}
-          className="w-full sm:w-auto text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-w-40 min-h-[38px] rounded-xl shadow-xs"
-        >
-          {isPending ? 'Receiving Stock…' : 'Receive Delivery ✓'}
-        </Button>
+        {canManage ? (
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="w-full sm:w-auto text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-w-40 min-h-[38px] rounded-xl shadow-xs"
+          >
+            {isPending ? 'Receiving Stock…' : 'Receive Delivery'}
+          </Button>
+        ) : (
+          <p className="text-xs text-zinc-500 italic">View-only access. Receiving stock requires purchasing receive permission.</p>
+        )}
       </div>
     </form>
   );

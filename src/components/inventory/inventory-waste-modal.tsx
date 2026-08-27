@@ -184,7 +184,7 @@ export function InventoryWasteModal({
               disabled={isSubmitting}
               className="text-xs font-bold bg-rose-600 text-white hover:bg-rose-700"
             >
-              {isSubmitting ? 'Recording...' : 'Record Waste'}
+              {isSubmitting ? 'Recording…' : 'Record Waste'}
             </Button>
           </div>
         </form>

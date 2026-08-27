@@ -36,6 +36,7 @@ interface SupplierReturnsClientProps {
   returnableGrnItems: ReturnableGrnItem[];
   supplierReturns: SupplierReturnRecord[];
   currency: string;
+  canManage?: boolean;
 }
 
 const RETURN_REASONS = [
@@ -55,6 +56,7 @@ export function SupplierReturnsClient({
   returnableGrnItems,
   supplierReturns,
   currency,
+  canManage = true,
 }: SupplierReturnsClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -404,13 +406,17 @@ export function SupplierReturnsClient({
           </div>
 
           <div className="flex justify-end pt-2">
-            <Button
-              type="submit"
-              disabled={isPending || exceedsGrn || !selectedItemId}
-              className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white min-w-40 shadow-xs"
-            >
-              {isPending ? 'Processing Return…' : '↩️ Confirm Supplier Return'}
-            </Button>
+            {canManage ? (
+              <Button
+                type="submit"
+                disabled={isPending || exceedsGrn || !selectedItemId}
+                className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white min-w-40 shadow-xs"
+              >
+                {isPending ? 'Processing Return…' : 'Record Supplier Return'}
+              </Button>
+            ) : (
+              <p className="text-xs text-zinc-500 italic">View-only access. Supplier returns require purchasing receive permissions.</p>
+            )}
           </div>
         </div>
       </form>

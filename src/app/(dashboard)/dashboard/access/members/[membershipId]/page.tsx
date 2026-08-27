@@ -32,7 +32,7 @@ export default async function MemberAccessInspectorPage({ params }: MemberAccess
       <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl max-w-lg mx-auto my-12 shadow-2xs">
         <h2 className="text-base font-bold text-zinc-900 mb-2">Access Restricted</h2>
         <p className="text-xs text-zinc-500">
-          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800">roles.view</code> permission required to view member access profiles.
+          You do not have permission to view member access profiles.
         </p>
       </div>
     );

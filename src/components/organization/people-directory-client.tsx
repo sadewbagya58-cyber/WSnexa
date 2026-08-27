@@ -252,7 +252,7 @@ export function PeopleDirectoryClient({
             <span className="text-3xl">👥</span>
             <div className="text-sm font-semibold text-zinc-900">No staff members found</div>
             <div className="text-xs text-zinc-500">
-              Try adjusting your search criteria or selecting a different property scope.
+              Try adjusting your search criteria or selecting a different location.
             </div>
           </div>
         ) : (

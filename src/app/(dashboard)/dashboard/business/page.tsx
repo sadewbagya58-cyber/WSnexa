@@ -20,7 +20,7 @@ export default async function BusinessProfilePage() {
     <div className="space-y-6">
       <PageHeader
         title={tenantContext ? tenantContext.business.name : 'Business Profile'}
-        description="Core multi-tenant business identity, currency, and regional settings."
+        description="Core business profile, default currency, and regional settings."
         breadcrumbs={[{ label: 'Business Profile' }]}
         backHref="/dashboard"
       />

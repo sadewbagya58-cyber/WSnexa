@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { GoodsReceivingClient } from '@/components/inventory/goods-receiving-client';
 import { SupplierReturnsClient } from '@/components/inventory/supplier-returns-client';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Receive Goods & Supplier Returns | WSNexa Inventory',
@@ -26,6 +27,28 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
 
   if (!context || !context.user || !context.business || !context.activeBranch) {
     redirect('/login');
+  }
+
+  let canReceive = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasReceive =
+      (await can({ context: authContext, permission: 'purchasing.receive', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.receiving.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    canReceive = hasReceive || authContext.isBusinessOwner;
+  } catch {
+    canReceive = false;
   }
 
   const { tab } = await searchParams;
@@ -187,6 +210,7 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
           returnableGrnItems={returnableGrnItems}
           supplierReturns={supplierReturns}
           currency={currency}
+          canManage={canReceive}
         />
       ) : (
         <GoodsReceivingClient
@@ -196,6 +220,7 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
           availableItems={availableItems}
           openPurchaseOrders={openPurchaseOrders}
           currency={currency}
+          canManage={canReceive}
         />
       )}
     </div>

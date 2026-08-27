@@ -45,7 +45,7 @@ export default async function CustomersPage() {
         </div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-white">Access Denied</h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          You do not have permission (<code className="text-red-500">customers.view</code>) to access the Guest CRM hub.
+          You do not have permission to access the Guest CRM hub.
         </p>
       </div>
     );

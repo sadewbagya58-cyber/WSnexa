@@ -464,7 +464,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
               <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-blue-950 uppercase tracking-wider">
-                    📍 Venue GPS Location Coordinates
+                    Venue GPS Location Coordinates
                   </h4>
                   <Button
                     type="button"
@@ -474,11 +474,11 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                     disabled={geoLocating}
                     className="text-[11px] font-bold bg-white text-blue-900 border-blue-300 hover:bg-blue-100"
                   >
-                    {geoLocating ? 'Locating...' : '📍 Use Current Location'}
+                    {geoLocating ? 'Locating…' : 'Use Current Location'}
                   </Button>
                 </div>
                 <p className="text-[11px] text-blue-800 leading-relaxed">
-                  Used by the Order Security Engine to verify customers are physically inside the venue before allowing checkout.
+                  Used by the order security engine to verify customers are physically inside the venue before allowing checkout.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -561,7 +561,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                 Cancel
               </Button>
               <Button type="submit" className="flex-1" disabled={loading}>
-                {loading ? 'Saving...' : editingBranch ? 'Update Branch' : 'Create Branch'}
+                {loading ? 'Saving…' : editingBranch ? 'Save Changes' : 'Create Branch'}
               </Button>
             </div>
           </form>

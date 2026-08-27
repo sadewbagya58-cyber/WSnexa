@@ -7,6 +7,8 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { StorageLocationManager } from '@/components/inventory/storage-location-manager';
 
+import { can, resolveAuthorizationContext } from '@/server/auth';
+
 export const metadata: Metadata = {
   title: 'Storage Locations | WSNexa Inventory',
   description: 'Manage branch storage locations, walk-in coolers, dry stores, and bar caches',
@@ -20,6 +22,27 @@ export default async function StorageLocationsPage() {
 
   if (!context || !context.user || !context.activeBranch) {
     redirect('/login');
+  }
+
+  let canManageLocations = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasLocationsManage =
+      (await can({ context: authContext, permission: 'inventory.locations.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    canManageLocations = hasLocationsManage || authContext.isBusinessOwner;
+  } catch {
+    canManageLocations = false;
   }
 
   const locations = await InventoryService.getBranchLocations(
@@ -44,6 +67,7 @@ export default async function StorageLocationsPage() {
         locations={locations}
         branchId={context.activeBranch.id}
         branchName={context.activeBranch.name}
+        canManage={canManageLocations}
       />
     </div>
   );

@@ -88,7 +88,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           WSNexa Business Setup
         </h1>
         <p className="mt-1 text-xs text-zinc-500">
-          Complete the onboarding wizard to configure your multi-tenant operating system.
+          Complete the setup wizard to configure your hospitality workspace.
         </p>
       </div>
 

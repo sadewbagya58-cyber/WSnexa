@@ -199,11 +199,11 @@ export const BuiltInRolesView: React.FC<BuiltInRolesViewProps> = ({ templates })
 
               <div className="grid grid-cols-2 gap-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs">
                 <div>
-                  <span className="text-zinc-500 block">Default Access Scope:</span>
+                  <span className="text-zinc-500 block">Default Access Level:</span>
                   <span className="font-bold text-zinc-900">{formatScopeName(selectedTemplate.defaultScope)}</span>
                 </div>
                 <div>
-                  <span className="text-zinc-500 block">Max Scope Ceiling:</span>
+                  <span className="text-zinc-500 block">Maximum Access Limit:</span>
                   <span className="font-bold text-zinc-900">{formatScopeName(selectedTemplate.maxScope)}</span>
                 </div>
               </div>

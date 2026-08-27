@@ -1194,7 +1194,7 @@ export function ReservationManagementClient({
                 disabled={isPending}
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
-                Create Reservation
+                {isPending ? 'Saving…' : 'Create Reservation'}
               </button>
             </div>
           </form>
@@ -1235,7 +1235,7 @@ export function ReservationManagementClient({
                 disabled={isPending}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
-                Decline Booking
+                {isPending ? 'Declining…' : 'Decline Booking'}
               </button>
             </div>
           </form>
@@ -1545,7 +1545,7 @@ export function ReservationManagementClient({
                 disabled={isPending}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
-                Seat Walk-In
+                {isPending ? 'Seating…' : 'Seat Walk-In'}
               </button>
             </div>
           </form>
@@ -1605,7 +1605,7 @@ export function ReservationManagementClient({
                 disabled={isPending}
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-40 min-h-[40px]"
               >
-                Add Guest
+                {isPending ? 'Adding…' : 'Add to Waitlist'}
               </button>
             </div>
           </form>

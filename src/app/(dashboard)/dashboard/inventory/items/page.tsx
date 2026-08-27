@@ -26,6 +26,10 @@ export default async function InventoryItemsPage() {
 
   let hasCostPermission = false;
   let canManageItems = false;
+  let canAdjust = false;
+  let canWaste = false;
+  let canManageLocations = false;
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -39,12 +43,30 @@ export default async function InventoryItemsPage() {
       ownerUserId: null,
     };
     hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view', resource: branchResource });
-    const hasItemsCreate = await can({ context: authContext, permission: 'inventory.items.create', resource: branchResource });
-    const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
-    canManageItems = hasItemsCreate || hasManage || authContext.isBusinessOwner;
+    const hasItemsCreate =
+      (await can({ context: authContext, permission: 'inventory.items.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.items.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    const hasAdjustPerm =
+      (await can({ context: authContext, permission: 'inventory.adjust', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    const hasWastePerm =
+      (await can({ context: authContext, permission: 'inventory.waste.record', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    const hasLocationsManage =
+      (await can({ context: authContext, permission: 'inventory.locations.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+
+    canManageItems = hasItemsCreate || authContext.isBusinessOwner;
+    canAdjust = hasAdjustPerm || authContext.isBusinessOwner;
+    canWaste = hasWastePerm || authContext.isBusinessOwner;
+    canManageLocations = hasLocationsManage || authContext.isBusinessOwner;
   } catch {
     hasCostPermission = false;
     canManageItems = false;
+    canAdjust = false;
+    canWaste = false;
+    canManageLocations = false;
   }
 
   const [items, categories, locations] = await Promise.all([
@@ -75,12 +97,14 @@ export default async function InventoryItemsPage() {
           ) : undefined
         }
         secondaryActions={
-          <Link
-            href="/dashboard/inventory/locations"
-            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-          >
-            📦 Manage Locations
-          </Link>
+          canManageLocations ? (
+            <Link
+              href="/dashboard/inventory/locations"
+              className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+            >
+              📦 Manage Locations
+            </Link>
+          ) : undefined
         }
       />
 
@@ -89,6 +113,9 @@ export default async function InventoryItemsPage() {
         categories={categories}
         locations={locations}
         hasCostPermission={hasCostPermission}
+        canManageItems={canManageItems}
+        canAdjust={canAdjust}
+        canWaste={canWaste}
       />
     </div>
   );

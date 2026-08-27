@@ -7,6 +7,8 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { SupplierManagerClient } from '@/components/inventory/supplier-manager-client';
 
+import { can, resolveAuthorizationContext } from '@/server/auth';
+
 export const metadata: Metadata = {
   title: 'Suppliers & Vendors | WSNexa Inventory',
   description: 'Manage supplier directories, contact details, payment terms, and vendor price histories',
@@ -20,6 +22,29 @@ export default async function SuppliersPage() {
 
   if (!context || !context.user || !context.business) {
     redirect('/login');
+  }
+
+  let canManageSuppliers = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = context.activeBranch
+      ? {
+          resourceType: 'branch' as const,
+          resourceId: context.activeBranch.id,
+          businessId: context.business.id,
+          branchId: context.activeBranch.id,
+          departmentId: null,
+          organizationUnitId: null,
+          serviceAreaId: null,
+          ownerUserId: null,
+        }
+      : undefined;
+    const hasSuppliersManage =
+      (await can({ context: authContext, permission: 'suppliers.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    canManageSuppliers = hasSuppliersManage || authContext.isBusinessOwner;
+  } catch {
+    canManageSuppliers = false;
   }
 
   const suppliers = await PurchasingService.getSuppliers();
@@ -38,7 +63,11 @@ export default async function SuppliersPage() {
         helpSlug="supplier-management"
       />
 
-      <SupplierManagerClient initialSuppliers={suppliers} currency={currency} />
+      <SupplierManagerClient
+        initialSuppliers={suppliers}
+        currency={currency}
+        canManage={canManageSuppliers}
+      />
     </div>
   );
 }

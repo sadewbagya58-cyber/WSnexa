@@ -231,7 +231,7 @@ export function InventoryAdjustmentModal({
               disabled={isSubmitting}
               className="text-xs font-bold bg-zinc-950 text-white"
             >
-              {isSubmitting ? 'Recording...' : 'Commit Adjustment'}
+              {isSubmitting ? 'Saving…' : 'Save Adjustment'}
             </Button>
           </div>
         </form>

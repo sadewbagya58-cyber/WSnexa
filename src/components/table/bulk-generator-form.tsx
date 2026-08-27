@@ -178,12 +178,20 @@ export const BulkGeneratorForm: React.FC<BulkGeneratorFormProps> = ({ areas }) =
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard/tables')}
+          disabled={loading}
+          className="min-h-[44px] px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl"
+        >
+          Cancel
+        </button>
         <LoadingButton
           type="submit"
           loading={loading}
-          loadingText={`Generating ${formData.count} Tables...`}
+          loadingText="Generating Tables…"
         >
-          ⚡ Bulk Generate {formData.count} Tables
+          Generate {formData.count} Tables
         </LoadingButton>
       </div>
     </form>

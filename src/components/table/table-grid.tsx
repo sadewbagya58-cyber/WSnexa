@@ -424,14 +424,14 @@ export const TableGrid: React.FC<TableGridProps> = ({
             <div className="flex flex-col gap-2 print:hidden">
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={handleCopyPin}>
-                  {copied ? '✅ Copied!' : '📋 Copy PIN'}
+                  {copied ? 'Copied!' : 'Copy PIN'}
                 </Button>
                 <Button variant="outline" className="flex-1" onClick={handlePrintSticker}>
-                  🖨️ Print PIN Sticker
+                  Print PIN Sticker
                 </Button>
               </div>
               <Button className="w-full" onClick={() => setPinModal(null)}>
-                Done / Close
+                Close
               </Button>
             </div>
           </div>
@@ -473,7 +473,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
                 disabled={customPinModal.inputPin.length !== tablePinLength || pinLoading}
                 onClick={handleSaveCustomPin}
               >
-                Save PIN
+                {pinLoading ? 'Saving…' : 'Save PIN'}
               </Button>
             </div>
           </div>

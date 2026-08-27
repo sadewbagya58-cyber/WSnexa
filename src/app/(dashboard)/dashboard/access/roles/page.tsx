@@ -11,7 +11,7 @@ import { IconShieldCheck, IconSliders } from '@/components/access/access-icons';
 
 export const metadata = {
   title: 'Roles & Templates | Access Control | WSNexa',
-  description: 'Manage built-in templates and custom tenant roles.',
+  description: 'Manage built-in templates and custom business roles.',
 };
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -24,7 +24,7 @@ export default async function RolesManagementPage() {
       <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl max-w-lg mx-auto my-12 shadow-2xs">
         <h2 className="text-base font-bold text-zinc-900 mb-2">Access Restricted</h2>
         <p className="text-xs text-zinc-500">
-          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800">roles.view</code> permission required to access Role Management.
+          You do not have permission to access Role Management.
         </p>
       </div>
     );
@@ -65,7 +65,7 @@ export default async function RolesManagementPage() {
       <div className="space-y-3 pt-6 border-t border-zinc-200">
         <div className="flex items-center gap-2 border-b border-zinc-200 pb-2">
           <IconSliders className="w-4 h-4 text-purple-600" />
-          <h2 className="text-sm font-bold text-zinc-900">Custom Tenant Roles</h2>
+          <h2 className="text-sm font-bold text-zinc-900">Custom Roles</h2>
         </div>
         <CustomRolesList
           roles={customRoles}

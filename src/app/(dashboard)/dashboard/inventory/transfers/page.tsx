@@ -8,6 +8,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { sendStockTransferAction, receiveStockTransferAction } from '@/server/actions/inventory';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Stock Transfers | WSNexa Inventory',
@@ -22,6 +23,27 @@ export default async function StockTransfersPage() {
 
   if (!context || !context.user || !context.activeBranch) {
     redirect('/login');
+  }
+
+  let canManageTransfers = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasPerm =
+      (await can({ context: authContext, permission: 'inventory.transfers.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    canManageTransfers = hasPerm || authContext.isBusinessOwner;
+  } catch {
+    canManageTransfers = false;
   }
 
   const activeBranchId = context.activeBranch.id;
@@ -46,10 +68,14 @@ export default async function StockTransfersPage() {
           { label: 'Stock Transfers' },
         ]}
         helpSlug="managing-stock-transfers"
-        primaryAction={{
-          label: '+ New Transfer',
-          href: '/dashboard/inventory/transfers/new',
-        }}
+        primaryAction={
+          canManageTransfers
+            ? {
+                label: '+ New Transfer',
+                href: '/dashboard/inventory/transfers/new',
+              }
+            : undefined
+        }
       />
 
       {/* Transfer Lifecycle Flow Guide */}
@@ -124,7 +150,7 @@ export default async function StockTransfersPage() {
                     type="submit"
                     className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[38px] shadow-xs"
                   >
-                    ✓ Receive Stock into {t.destinationLocationName}
+                    Receive Stock into {t.destinationLocationName}
                   </Button>
                 </form>
               </div>
@@ -141,13 +167,15 @@ export default async function StockTransfersPage() {
           <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1">
             Transfer stock between storage areas (e.g. Main Store → Main Kitchen) or across authorized branches.
           </p>
-          <div className="mt-4">
-            <Link href="/dashboard/inventory/transfers/new">
-              <Button size="sm" className="font-bold text-xs">
-                Create Stock Transfer
-              </Button>
-            </Link>
-          </div>
+          {canManageTransfers && (
+            <div className="mt-4">
+              <Link href="/dashboard/inventory/transfers/new">
+                <Button size="sm" className="font-bold text-xs">
+                  Create Stock Transfer
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -239,7 +267,7 @@ export default async function StockTransfersPage() {
                         }}
                       >
                         <Button size="sm" type="submit" className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[38px] rounded-xl shadow-xs">
-                          Receive Stock into {t.destinationLocationName} ✓
+                          Receive Stock into {t.destinationLocationName}
                         </Button>
                       </form>
                     ) : t.status === 'in_transit' && isSource ? (
@@ -303,7 +331,7 @@ export default async function StockTransfersPage() {
                                   : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
                               }`}
                             >
-                              {t.status === 'in_transit' ? 'In Transit 🚚' : t.status === 'received' ? 'Received ✓' : t.status}
+                              {t.status === 'in_transit' ? 'In Transit' : t.status === 'received' ? 'Received' : t.status}
                             </span>
                             {t.status === 'in_transit' && !isDestination && (
                               <span className="text-[10px] text-zinc-400">
@@ -344,7 +372,7 @@ export default async function StockTransfersPage() {
                               className="inline-block"
                             >
                               <Button size="sm" type="submit" className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-7">
-                                Receive Stock ✓
+                                Receive Stock
                               </Button>
                             </form>
                           ) : t.status === 'in_transit' && isSource ? (

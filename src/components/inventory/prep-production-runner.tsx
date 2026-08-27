@@ -21,9 +21,14 @@ interface StorageLocationOption {
 interface PrepProductionRunnerProps {
   prepRecipes: PrepRecipeOption[];
   locations: StorageLocationOption[];
+  canProduce?: boolean;
 }
 
-export function PrepProductionRunner({ prepRecipes, locations }: PrepProductionRunnerProps) {
+export function PrepProductionRunner({
+  prepRecipes,
+  locations,
+  canProduce = true,
+}: PrepProductionRunnerProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -224,13 +229,17 @@ export function PrepProductionRunner({ prepRecipes, locations }: PrepProductionR
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button
-          type="submit"
-          disabled={isPending}
-          className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-36"
-        >
-          {isPending ? 'Producing Batch…' : 'Dispatch Production ✓'}
-        </Button>
+        {canProduce ? (
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-36"
+          >
+            {isPending ? 'Producing Batch…' : 'Dispatch Batch'}
+          </Button>
+        ) : (
+          <p className="text-xs text-zinc-500 italic">View-only access. Production dispatch requires production management permission.</p>
+        )}
       </div>
     </form>
   );

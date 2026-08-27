@@ -76,7 +76,7 @@ export function PurchaseOrderActions({
               disabled={isPending}
               className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white h-7 px-2.5 rounded-lg transition-colors cursor-pointer"
             >
-              {isPending ? '...' : 'Approve ✓'}
+              {isPending ? 'Approving…' : 'Approve'}
             </Button>
           )}
 
@@ -85,7 +85,7 @@ export function PurchaseOrderActions({
               href="/dashboard/inventory/receiving"
               className="inline-flex items-center px-2.5 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-xs"
             >
-              Receive 📥
+              Receive
             </Link>
           )}
 
@@ -125,7 +125,7 @@ export function PurchaseOrderActions({
               disabled={isPending}
               className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white transition shadow-xs cursor-pointer"
             >
-              {isPending ? 'Approving...' : 'Approve Purchase Order ✓'}
+              {isPending ? 'Approving…' : 'Approve Purchase Order'}
             </Button>
           )}
 
@@ -134,7 +134,7 @@ export function PurchaseOrderActions({
               href="/dashboard/inventory/receiving"
               className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-xs"
             >
-              Receive Deliveries (GRN) 📥
+              Receive Deliveries (GRN)
             </Link>
           )}
 

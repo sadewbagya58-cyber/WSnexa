@@ -362,7 +362,7 @@ export function InventoryItemForm({
           disabled={isSubmitting}
           className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6"
         >
-          {isSubmitting ? 'Saving...' : 'Save Ingredient'}
+          {isSubmitting ? 'Saving…' : 'Add Ingredient'}
         </Button>
       </div>
     </form>

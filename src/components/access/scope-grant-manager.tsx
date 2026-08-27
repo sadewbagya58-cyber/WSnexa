@@ -208,7 +208,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                   {/* WHAT */}
                   <div className="bg-zinc-50 p-2.5 rounded-lg border border-zinc-200 mb-3">
                     <span className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                      Permission Key (WHAT)
+                      Permission / Capability
                     </span>
                     <span className="text-xs font-mono font-semibold text-zinc-900 break-all">
                       {g.permissionKey}
@@ -325,7 +325,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
 
             {/* Permission Key */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission Key (WHAT)</label>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
               <select
                 value={permissionKey}
                 onChange={(e) => setPermissionKey(e.target.value)}
@@ -348,30 +348,29 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                   onChange={(e) => setEffect(e.target.value as 'ALLOW' | 'DENY')}
                   className="w-full px-3 py-2 text-xs font-bold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
-                  <option value="ALLOW">ALLOW</option>
-                  <option value="DENY">DENY</option>
+                  <option value="ALLOW">ALLOW (Grant permission)</option>
+                  <option value="DENY">DENY (Restrict permission)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">Scope Level</label>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Location Level</label>
                 <select
                   value={scopeType}
                   onChange={(e) => setScopeType(e.target.value as ScopeType)}
                   className="w-full px-3 py-2 text-xs font-semibold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 >
-                  <option value="ORGANIZATION">ORGANIZATION</option>
-                  <option value="PROPERTY">PROPERTY</option>
-                  <option value="DEPARTMENT">DEPARTMENT</option>
-                  <option value="AREA_TEAM">AREA / TEAM</option>
+                  <option value="PROPERTY">Specific Branch</option>
+                  <option value="ORGANIZATION">Entire Business</option>
+                  <option value="DEPARTMENT">Department</option>
                 </select>
               </div>
             </div>
 
-            {/* Target Property / Department */}
+            {/* Scope Target Selectors */}
             {scopeType === 'PROPERTY' && branches.length > 0 && (
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Property / Branch</label>
+                <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Branch</label>
                 <select
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
@@ -413,7 +412,7 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
                 disabled={isSubmitting}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5"
               >
-                {isSubmitting ? 'Saving...' : editingGrant ? 'Update Grant' : 'Create Grant'}
+                {isSubmitting ? 'Saving…' : editingGrant ? 'Save Changes' : 'Create Grant'}
               </button>
             </div>
           </form>

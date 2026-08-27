@@ -39,8 +39,8 @@ export const AccessHubOverview: React.FC<AccessHubOverviewProps> = ({
             <IconShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">RBAC & Scope V2 Access Control Hub</h1>
-            <p className="text-xs text-zinc-300">Central management layer for tenant roles, scope grants, member permission overrides, and access diagnostics.</p>
+            <h1 className="text-xl font-bold tracking-tight">Roles & Permissions Hub</h1>
+            <p className="text-xs text-zinc-300">Central management for staff roles, location assignments, individual permissions, and policy diagnostics.</p>
           </div>
         </div>
 
@@ -48,15 +48,15 @@ export const AccessHubOverview: React.FC<AccessHubOverviewProps> = ({
         <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono text-zinc-300 border-t border-zinc-700/60">
           <div className="flex items-center gap-1.5 bg-black/20 p-2 rounded-lg">
             <IconShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-            <span>Precedence: DENY &gt; ALLOW &gt; Role</span>
+            <span>Precedence: Deny &gt; Override &gt; Role</span>
           </div>
           <div className="flex items-center gap-1.5 bg-black/20 p-2 rounded-lg">
             <IconShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Model: WHAT (Role) / WHERE (Scope)</span>
+            <span>Assignments: Role + Location Access</span>
           </div>
           <div className="flex items-center gap-1.5 bg-black/20 p-2 rounded-lg">
             <IconZap className="w-3.5 h-3.5 text-blue-400" />
-            <span>RLS Defense: Enforced Server-Side</span>
+            <span>Security: Enforced Server-Side</span>
           </div>
         </div>
       </div>
@@ -72,11 +72,11 @@ export const AccessHubOverview: React.FC<AccessHubOverviewProps> = ({
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs">
           <span className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Active Custom Roles</span>
           <span className="text-2xl font-bold font-mono text-emerald-700">{activeCustomRolesCount}</span>
-          <span className="block text-[11px] text-zinc-500 mt-1">Tenant Defined</span>
+          <span className="block text-[11px] text-zinc-500 mt-1">Custom Defined</span>
         </div>
 
         <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-2xs">
-          <span className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Scope Grants</span>
+          <span className="block text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Location Access Grants</span>
           <span className="text-2xl font-bold font-mono text-blue-700">{scopeGrants.length}</span>
           <span className="block text-[11px] text-zinc-500 mt-1">Target Rules</span>
         </div>

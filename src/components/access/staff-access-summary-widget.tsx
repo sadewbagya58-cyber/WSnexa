@@ -20,7 +20,7 @@ export const StaffAccessSummaryWidget: React.FC<StaffAccessSummaryWidgetProps> =
         <div className="flex items-center gap-2">
           <IconShieldCheck className="w-4 h-4 text-emerald-600" />
           <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider">
-            RBAC V2 Access Summary
+            Role & Permissions Summary
           </h3>
         </div>
 
@@ -39,7 +39,7 @@ export const StaffAccessSummaryWidget: React.FC<StaffAccessSummaryWidgetProps> =
         </div>
 
         <div className="p-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
-          <span className="block text-[10px] font-semibold text-zinc-400 uppercase">Default Scope</span>
+          <span className="block text-[10px] font-semibold text-zinc-400 uppercase">Access Level</span>
           <span className="font-mono font-semibold text-zinc-900">{preview.preset?.defaultScope || preview.defaultScope || 'PROPERTY'}</span>
         </div>
 

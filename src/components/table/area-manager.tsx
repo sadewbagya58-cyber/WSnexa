@@ -118,8 +118,8 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas, canManag
               onChange={(e) => setDescription(e.target.value)}
               className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
             />
-            <LoadingButton type="submit" loading={loading || isPending} loadingText="Creating Area...">
-              + Create Area
+            <LoadingButton type="submit" loading={loading || isPending} loadingText="Saving…">
+              Create Area
             </LoadingButton>
           </form>
         </Card>
@@ -152,7 +152,7 @@ export const AreaManager: React.FC<AreaManagerProps> = ({ initialAreas, canManag
 
         {areas.length === 0 && (
           <Card className="p-8 text-center text-xs text-zinc-500">
-            No service areas created yet. Create your first area above.
+            No service areas created yet.{canManage ? ' Create your first area above.' : ''}
           </Card>
         )}
       </div>

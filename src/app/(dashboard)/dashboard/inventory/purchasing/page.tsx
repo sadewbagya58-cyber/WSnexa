@@ -26,6 +26,7 @@ export default async function PurchasingPage() {
   }
 
   let canManagePO = false;
+  let canReceive = false;
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -38,11 +39,20 @@ export default async function PurchasingPage() {
       serviceAreaId: null,
       ownerUserId: null,
     };
-    const hasPOManage = await can({ context: authContext, permission: 'inventory.purchasing.manage', resource: branchResource });
+    const hasPOManage =
+      (await can({ context: authContext, permission: 'purchasing.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'purchasing.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.purchasing.manage', resource: branchResource }));
+    const hasReceive =
+      (await can({ context: authContext, permission: 'purchasing.receive', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.receiving.manage', resource: branchResource }));
     const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
+
     canManagePO = hasPOManage || hasManage || authContext.isBusinessOwner;
+    canReceive = hasReceive || hasManage || authContext.isBusinessOwner;
   } catch {
     canManagePO = false;
+    canReceive = false;
   }
 
   const purchaseOrders = await PurchasingService.getPurchaseOrders();
@@ -70,12 +80,14 @@ export default async function PurchasingPage() {
           ) : undefined
         }
         secondaryActions={
-          <Link
-            href="/dashboard/inventory/receiving"
-            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-          >
-            📥 Receive Deliveries
-          </Link>
+          canReceive ? (
+            <Link
+              href="/dashboard/inventory/receiving"
+              className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+            >
+              📥 Receive Deliveries
+            </Link>
+          ) : undefined
         }
       />
 
@@ -86,14 +98,16 @@ export default async function PurchasingPage() {
           <p className="text-xs text-zinc-500 max-w-md mx-auto">
             Create a purchase order to request goods from suppliers, track delivery dates, and streamline stock receiving.
           </p>
-          <div className="pt-2">
-            <Link
-              href="/dashboard/inventory/purchasing/new"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-950 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-xs"
-            >
-              + Create First Purchase Order
-            </Link>
-          </div>
+          {canManagePO && (
+            <div className="pt-2">
+              <Link
+                href="/dashboard/inventory/purchasing/new"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-950 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-xs"
+              >
+                + Create First Purchase Order
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

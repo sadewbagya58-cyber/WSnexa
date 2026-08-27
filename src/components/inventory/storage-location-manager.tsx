@@ -9,12 +9,14 @@ interface StorageLocationManagerProps {
   locations: FormattedStorageLocation[];
   branchId: string;
   branchName: string;
+  canManage?: boolean;
 }
 
 export function StorageLocationManager({
   locations,
   branchId,
   branchName,
+  canManage = true,
 }: StorageLocationManagerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [name, setName] = useState('');
@@ -63,7 +65,7 @@ export function StorageLocationManager({
           <p className="text-xs text-zinc-500">Configured storage areas for {branchName}</p>
         </div>
 
-        {!showAddForm && (
+        {canManage && !showAddForm && (
           <Button
             size="sm"
             onClick={() => setShowAddForm(true)}
@@ -161,7 +163,7 @@ export function StorageLocationManager({
               size="sm"
               className="text-xs font-bold bg-zinc-950 text-white"
             >
-              {isSubmitting ? 'Saving...' : 'Save Location'}
+              {isSubmitting ? 'Saving…' : 'Save Location'}
             </Button>
           </div>
         </form>

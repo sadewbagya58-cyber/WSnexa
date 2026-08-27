@@ -83,9 +83,9 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
           </div>
         )}
 
-        {/* Permission Key (WHAT) */}
+        {/* Permission / Capability */}
         <div>
-          <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission Key (WHAT)</label>
+          <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
           <select
             value={permissionKey}
             onChange={(e) => setPermissionKey(e.target.value)}
@@ -106,25 +106,23 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
             <select
               value={isAllowed ? 'ALLOW' : 'DENY'}
               onChange={(e) => setIsAllowed(e.target.value === 'ALLOW')}
-              className={`w-full px-3 py-2 text-xs font-bold border rounded-xl focus:outline-none ${
-                isAllowed ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-red-300 bg-red-50 text-red-900'
-              }`}
+              className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none"
             >
-              <option value="DENY">Explicit DENY</option>
-              <option value="ALLOW">Explicit ALLOW</option>
+              <option value="ALLOW">ALLOW (Grant permission)</option>
+              <option value="DENY">DENY (Explicit restriction)</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Scope Level</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Location Level</label>
             <select
               value={scopeType}
               onChange={(e) => setScopeType(e.target.value as ScopeType)}
-              className="w-full px-3 py-2 text-xs font-semibold border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none"
             >
-              <option value="ORGANIZATION">ORGANIZATION</option>
-              <option value="PROPERTY">PROPERTY</option>
-              <option value="DEPARTMENT">DEPARTMENT</option>
+              <option value="PROPERTY">Specific Branch</option>
+              <option value="ORGANIZATION">Entire Business</option>
+              <option value="DEPARTMENT">Specific Department</option>
             </select>
           </div>
         </div>
@@ -132,7 +130,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
         {/* Scope Target Selector */}
         {scopeType === 'PROPERTY' && branches.length > 0 && (
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Branch / Property</label>
+            <label className="block text-xs font-semibold text-zinc-700 mb-1">Target Branch</label>
             <select
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
@@ -176,7 +174,7 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
               isAllowed ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
-            {isSubmitting ? 'Saving...' : 'Set Member Override'}
+            {isSubmitting ? 'Saving…' : 'Save Override'}
           </button>
         </div>
       </form>

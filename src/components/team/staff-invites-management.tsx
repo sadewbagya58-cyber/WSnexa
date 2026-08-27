@@ -607,7 +607,7 @@ export function StaffInvitesManagement({
                   Cancel
                 </Button>
                 <Button type="submit" variant="primary" disabled={isSubmitting}>
-                  {isSubmitting ? 'Generating...' : 'Generate Code'}
+                  {isSubmitting ? 'Sending…' : 'Send Invite'}
                 </Button>
               </div>
             </form>

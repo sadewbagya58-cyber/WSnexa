@@ -10,7 +10,7 @@ import { AccessHubOverview } from '@/components/access/access-hub-overview';
 
 export const metadata = {
   title: 'Access Control Hub | WSNexa',
-  description: 'RBAC & Scope V2 authorization management and diagnostics hub.',
+  description: 'Roles, permissions, and location access management hub.',
 };
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -23,7 +23,7 @@ export default async function AccessHubPage() {
       <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl max-w-lg mx-auto my-12 shadow-2xs">
         <h2 className="text-base font-bold text-zinc-900 mb-2">Access Control Restricted</h2>
         <p className="text-xs text-zinc-500">
-          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800">roles.view</code> permission required to access the Access Control Hub.
+          You do not have permission to access the Access Control Hub.
         </p>
       </div>
     );
@@ -45,7 +45,7 @@ export default async function AccessHubPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Access Control Hub"
-        description="RBAC & Scope V2 authorization management, custom role bundles, scope grants, and policy diagnostics."
+        description="Manage staff roles, custom permission bundles, and location access."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Access Control Hub' },

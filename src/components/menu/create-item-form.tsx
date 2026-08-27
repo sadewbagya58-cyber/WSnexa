@@ -264,8 +264,16 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
-        <Button type="submit" disabled={loading || uploading}>
-          {loading ? 'Creating Item...' : 'Save & Add Item'}
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard/menu/items')}
+          disabled={loading}
+          className="min-h-[44px] px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl"
+        >
+          Cancel
+        </button>
+        <Button type="submit" disabled={loading || uploading} className="min-h-[44px] px-5 py-2 font-bold text-xs">
+          {loading ? 'Saving…' : 'Add Menu Item'}
         </Button>
       </div>
     </form>

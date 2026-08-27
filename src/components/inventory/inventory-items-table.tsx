@@ -12,6 +12,9 @@ interface InventoryItemsTableProps {
   categories: FormattedInventoryCategory[];
   locations: FormattedStorageLocation[];
   hasCostPermission?: boolean;
+  canManageItems?: boolean;
+  canAdjust?: boolean;
+  canWaste?: boolean;
 }
 
 export function InventoryItemsTable({
@@ -19,6 +22,9 @@ export function InventoryItemsTable({
   categories,
   locations,
   hasCostPermission = false,
+  canManageItems = true,
+  canAdjust = true,
+  canWaste = true,
 }: InventoryItemsTableProps) {
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -106,11 +112,13 @@ export function InventoryItemsTable({
           </select>
         </div>
 
-        <Link href="/dashboard/inventory/items/new">
-          <Button size="sm" className="w-full sm:w-auto font-bold text-xs min-h-[40px]">
-            + Add Ingredient
-          </Button>
-        </Link>
+        {canManageItems && (
+          <Link href="/dashboard/inventory/items/new">
+            <Button size="sm" className="w-full sm:w-auto font-bold text-xs min-h-[40px]">
+              + Add Ingredient
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Items Table / Cards */}
@@ -123,13 +131,15 @@ export function InventoryItemsTable({
               ? 'No ingredients match the selected filters. Try clearing search filters.'
               : 'Add your first ingredient or raw material to begin tracking stock levels.'}
           </p>
-          <div className="mt-4">
-            <Link href="/dashboard/inventory/items/new">
-              <Button size="sm" className="font-bold text-xs">
-                Add Inventory Item
-              </Button>
-            </Link>
-          </div>
+          {canManageItems && (
+            <div className="mt-4">
+              <Link href="/dashboard/inventory/items/new">
+                <Button size="sm" className="font-bold text-xs">
+                  Add Inventory Item
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -240,21 +250,25 @@ export function InventoryItemsTable({
                     >
                       View Details →
                     </Link>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setAdjustItem(item)}
-                      className="text-xs font-bold px-3 py-2 min-h-[38px] rounded-xl flex-1"
-                    >
-                      Adjust
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => setWasteItem(item)}
-                      className="text-xs font-bold text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl border border-rose-200 cursor-pointer min-h-[38px] flex-1 text-center transition-colors"
-                    >
-                      Waste
-                    </button>
+                    {canAdjust && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAdjustItem(item)}
+                        className="text-xs font-bold px-3 py-2 min-h-[38px] rounded-xl flex-1"
+                      >
+                        Adjust
+                      </Button>
+                    )}
+                    {canWaste && (
+                      <button
+                        type="button"
+                        onClick={() => setWasteItem(item)}
+                        className="text-xs font-bold text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-xl border border-rose-200 cursor-pointer min-h-[38px] flex-1 text-center transition-colors"
+                      >
+                        Waste
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -366,21 +380,33 @@ export function InventoryItemsTable({
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setAdjustItem(item)}
-                              className="h-7 text-xs font-bold px-2.5"
-                            >
-                              Adjust
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={() => setWasteItem(item)}
-                              className="h-7 text-xs font-semibold text-rose-600 hover:bg-rose-50 px-2.5 rounded-md border border-rose-200 cursor-pointer"
-                            >
-                              Waste
-                            </button>
+                            {canAdjust && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAdjustItem(item)}
+                                className="h-7 text-xs font-bold px-2.5"
+                              >
+                                Adjust
+                              </Button>
+                            )}
+                            {canWaste && (
+                              <button
+                                type="button"
+                                onClick={() => setWasteItem(item)}
+                                className="h-7 text-xs font-semibold text-rose-600 hover:bg-rose-50 px-2.5 rounded-md border border-rose-200 cursor-pointer"
+                              >
+                                Waste
+                              </button>
+                            )}
+                            {!canAdjust && !canWaste && (
+                              <Link
+                                href={`/dashboard/inventory/items/${item.id}`}
+                                className="text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:underline"
+                              >
+                                View →
+                              </Link>
+                            )}
                           </div>
                         </td>
                       </tr>

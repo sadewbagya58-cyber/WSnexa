@@ -30,7 +30,7 @@ export default async function ReputationDashboardPage() {
       <div className="p-8 text-center space-y-4">
         <div className="text-rose-500 font-bold text-lg">⚠️ Access Denied</div>
         <p className="text-xs text-zinc-500">
-          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded">reputation.view</code> permission required to access business reputation insights.
+          You do not have permission to access business reputation insights.
         </p>
       </div>
     );

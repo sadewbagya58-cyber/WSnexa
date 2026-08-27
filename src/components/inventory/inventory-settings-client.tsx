@@ -264,7 +264,7 @@ export function InventorySettingsClient({
           disabled={isPending}
           className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-36"
         >
-          {isPending ? 'Saving Settings…' : 'Save Settings ✓'}
+          {isPending ? 'Saving…' : 'Save Settings'}
         </Button>
       </div>
     </form>

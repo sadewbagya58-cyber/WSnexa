@@ -184,7 +184,7 @@ export const RoleArchiveModal: React.FC<RoleArchiveModalProps> = ({
             disabled={isSubmitting || loadingUsage}
             className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5"
           >
-            {isSubmitting ? 'Archiving...' : 'Confirm Archival'}
+            {isSubmitting ? 'Archiving…' : 'Archive Role'}
           </button>
         </div>
       </form>

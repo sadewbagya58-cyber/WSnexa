@@ -29,11 +29,43 @@ export default async function InventoryHubPage() {
   }
 
   let hasCostPermission = false;
+  let canManageItems = false;
+  let canManageCounts = false;
+  let canManagePurchasing = false;
+
   try {
     const authContext = await resolveAuthorizationContext();
-    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view', resource: branchResource });
+    const hasItemsManage =
+      (await can({ context: authContext, permission: 'inventory.items.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.items.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    const hasCountsManage =
+      (await can({ context: authContext, permission: 'inventory.counts.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    const hasPOManage =
+      (await can({ context: authContext, permission: 'inventory.purchasing.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'purchasing.create', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'purchasing.manage', resource: branchResource }));
+
+    canManageItems = hasItemsManage || authContext.isBusinessOwner;
+    canManageCounts = hasCountsManage || authContext.isBusinessOwner;
+    canManagePurchasing = hasPOManage || authContext.isBusinessOwner;
   } catch {
     hasCostPermission = false;
+    canManageItems = false;
+    canManageCounts = false;
+    canManagePurchasing = false;
   }
 
   const [overview, expiringSummary, reorderOverview] = await Promise.all([
@@ -66,20 +98,24 @@ export default async function InventoryHubPage() {
         ]}
         helpSlug="inventory-quick-start"
         primaryAction={
-          <Link
-            href="/dashboard/inventory/items/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
-          >
-            + Add Ingredient
-          </Link>
+          canManageItems ? (
+            <Link
+              href="/dashboard/inventory/items/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs"
+            >
+              + Add Ingredient
+            </Link>
+          ) : undefined
         }
         secondaryActions={
-          <Link
-            href="/dashboard/inventory/counts/new"
-            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-          >
-            📋 Physical Count
-          </Link>
+          canManageCounts ? (
+            <Link
+              href="/dashboard/inventory/counts/new"
+              className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+            >
+              📋 Physical Count
+            </Link>
+          ) : undefined
         }
       />
 
@@ -103,6 +139,7 @@ export default async function InventoryHubPage() {
       <InventoryReorderSuggestions
         overview={reorderOverview}
         hasCostPermission={hasCostPermission}
+        canManagePO={canManagePurchasing}
       />
 
       {/* Quick Navigation Shortcuts */}

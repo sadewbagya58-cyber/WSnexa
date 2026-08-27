@@ -6,6 +6,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { createAdminClient } from '@/lib/supabase/server';
 import { PrepProductionRunner } from '@/components/inventory/prep-production-runner';
+import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Prep Production Batches | WSNexa Inventory',
@@ -20,6 +21,27 @@ export default async function PrepProductionPage() {
 
   if (!context || !context.user || !context.business || !context.activeBranch) {
     redirect('/login');
+  }
+
+  let canProduce = false;
+  try {
+    const authContext = await resolveAuthorizationContext();
+    const branchResource = {
+      resourceType: 'branch' as const,
+      resourceId: context.activeBranch.id,
+      businessId: context.business.id,
+      branchId: context.activeBranch.id,
+      departmentId: null,
+      organizationUnitId: null,
+      serviceAreaId: null,
+      ownerUserId: null,
+    };
+    const hasProduce =
+      (await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+    canProduce = hasProduce || authContext.isBusinessOwner;
+  } catch {
+    canProduce = false;
   }
 
   const admin = createAdminClient();
@@ -113,7 +135,11 @@ export default async function PrepProductionPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
-          <PrepProductionRunner prepRecipes={prepRecipes} locations={locations} />
+          <PrepProductionRunner
+            prepRecipes={prepRecipes}
+            locations={locations}
+            canProduce={canProduce}
+          />
         </div>
 
         <div className="lg:col-span-5 space-y-4">

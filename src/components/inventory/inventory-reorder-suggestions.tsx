@@ -7,11 +7,13 @@ import { ReorderSuggestionsOverview } from '@/server/services/inventory.service'
 interface InventoryReorderSuggestionsProps {
   overview: ReorderSuggestionsOverview;
   hasCostPermission?: boolean;
+  canManagePO?: boolean;
 }
 
 export function InventoryReorderSuggestions({
   overview,
   hasCostPermission = false,
+  canManagePO = true,
 }: InventoryReorderSuggestionsProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -358,15 +360,25 @@ export function InventoryReorderSuggestions({
                   )}
                 </div>
 
-                {/* Right action: Create PO button */}
+                {/* Right action: Create PO button or View Details */}
                 <div className="flex items-center gap-2 w-full lg:w-auto justify-end">
-                  <Link
-                    href={poHref}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl transition-all shadow-xs min-h-[38px]"
-                  >
-                    <span>Create PO</span>
-                    <span>→</span>
-                  </Link>
+                  {canManagePO ? (
+                    <Link
+                      href={poHref}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl transition-all shadow-xs min-h-[38px]"
+                    >
+                      <span>Create PO</span>
+                      <span>→</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/dashboard/inventory/items/${item.itemId}`}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-semibold rounded-xl transition-all min-h-[38px]"
+                    >
+                      <span>View Details</span>
+                      <span>→</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             );

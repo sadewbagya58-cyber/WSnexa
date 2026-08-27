@@ -117,7 +117,7 @@ export const AccessDiagnosticsClient: React.FC<AccessDiagnosticsClientProps> = (
 
             {/* Target Permission */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission Key (WHAT)</label>
+              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
               <select
                 value={selectedPermission}
                 onChange={(e) => setSelectedPermission(e.target.value)}

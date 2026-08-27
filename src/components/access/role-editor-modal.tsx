@@ -348,17 +348,17 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                 {showAdvancedScopes && (
                   <div className="p-4 bg-white border-t border-zinc-200 space-y-4 animate-in fade-in duration-150">
                     <ScopePresetSelector
-                      label="Default Authority Scope"
+                      label="Default Access Level"
                       value={defaultScope}
                       onChange={setDefaultScope}
-                      helpText="Initial scope evaluated when a member is assigned this role."
+                      helpText="Initial location access level when a staff member is assigned this role."
                     />
 
                     <ScopePresetSelector
-                      label="Maximum Scope Ceiling"
+                      label="Maximum Access Limit"
                       value={maxScope}
                       onChange={setMaxScope}
-                      helpText="Upper limit boundary that scope grants or overrides cannot exceed for this role."
+                      helpText="Upper access limit that temporary grants or custom overrides cannot exceed."
                     />
                   </div>
                 )}
@@ -412,7 +412,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                 className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
                 <IconSparkles className="w-3.5 h-3.5" />
-                {isSubmitting ? 'Saving Role...' : mode === 'create' ? 'Create Custom Role' : 'Save Role Changes'}
+                {isSubmitting ? 'Saving…' : mode === 'create' ? 'Create Role' : 'Save Changes'}
               </button>
             )}
           </div>

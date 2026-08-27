@@ -245,7 +245,7 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
                       <span className="font-mono text-[10px] bg-indigo-200 px-1.5 py-0.5 rounded">Host Branch</span>
                     </div>
                     <p className="text-indigo-800 text-[11px]">
-                      Expands property scope reach to host branch without altering base role capabilities.
+                      Expands access to host branch without altering base role permissions.
                     </p>
                   </div>
                 ))}

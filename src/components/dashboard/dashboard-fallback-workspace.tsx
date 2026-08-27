@@ -80,10 +80,10 @@ export function DashboardFallbackWorkspace({
         <div className="space-y-1.5">
           <h2 className="text-base sm:text-lg font-bold text-zinc-950">No Workspace Access</h2>
           <p className="text-xs text-zinc-600 leading-relaxed max-w-md mx-auto">
-            Your account at <span className="font-semibold text-zinc-900">{businessName}</span> ({activeBranchName}) does not currently have permissions assigned for any operational workspaces or management tools.
+            Your account at <span className="font-semibold text-zinc-900">{businessName}</span> ({activeBranchName}) does not have active role permissions assigned yet.
           </p>
           <p className="text-xs text-zinc-500 max-w-md mx-auto">
-            Please contact your business owner or manager to request role permissions.
+            Please contact your business owner or manager to assign permissions to your account.
           </p>
         </div>
         <div className="pt-3">

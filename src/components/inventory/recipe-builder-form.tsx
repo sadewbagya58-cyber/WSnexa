@@ -490,7 +490,7 @@ export function RecipeBuilderForm({
           disabled={isPending}
           className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-32"
         >
-          {isPending ? 'Saving Recipe…' : 'Save Recipe ✓'}
+          {isPending ? 'Saving…' : 'Save Recipe'}
         </Button>
       </div>
     </form>

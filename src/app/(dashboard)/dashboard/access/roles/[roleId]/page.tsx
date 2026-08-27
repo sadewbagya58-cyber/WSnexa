@@ -31,7 +31,7 @@ export default async function RoleDetailPage({ params }: RoleDetailPageProps) {
       <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl max-w-lg mx-auto my-12 shadow-2xs">
         <h2 className="text-base font-bold text-zinc-900 mb-2">Access Restricted</h2>
         <p className="text-xs text-zinc-500">
-          You do not have the <code className="font-mono bg-zinc-100 px-1 py-0.5 rounded text-zinc-800">roles.view</code> permission required to view role details.
+          You do not have permission to view role details.
         </p>
       </div>
     );
@@ -116,15 +116,15 @@ export default async function RoleDetailPage({ params }: RoleDetailPageProps) {
         {/* Scope Specs */}
         <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-3">
           <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider border-b border-zinc-100 pb-2">
-            Role Scope Boundaries
+            Location Access Boundaries
           </h3>
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-              <span className="block text-[10px] text-zinc-400 font-medium uppercase">Default Scope</span>
+              <span className="block text-[10px] text-zinc-400 font-medium uppercase">Default Access Level</span>
               <span className="font-mono font-bold text-zinc-900">{role.defaultScope}</span>
             </div>
             <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-              <span className="block text-[10px] text-zinc-400 font-medium uppercase">Max Scope Ceiling</span>
+              <span className="block text-[10px] text-zinc-400 font-medium uppercase">Maximum Access Limit</span>
               <span className="font-mono font-bold text-zinc-700">{role.maxScope}</span>
             </div>
           </div>

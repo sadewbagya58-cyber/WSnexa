@@ -25,6 +25,7 @@ export default async function RecipesPage() {
   }
 
   let canManageRecipes = false;
+  let canProduce = false;
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -37,11 +38,16 @@ export default async function RecipesPage() {
       serviceAreaId: null,
       ownerUserId: null,
     };
-    const hasRecipeManage = await can({ context: authContext, permission: 'inventory.recipes.manage', resource: branchResource });
+    const hasRecipeManage =
+      (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.recipes.manage', resource: branchResource }));
     const hasManage = await can({ context: authContext, permission: 'inventory.manage', resource: branchResource });
+    const hasProduce = await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource });
     canManageRecipes = hasRecipeManage || hasManage || authContext.isBusinessOwner;
+    canProduce = hasProduce || authContext.isBusinessOwner;
   } catch {
     canManageRecipes = false;
+    canProduce = false;
   }
 
   const recipes = await RecipeService.getRecipes();
@@ -69,12 +75,14 @@ export default async function RecipesPage() {
           ) : undefined
         }
         secondaryActions={
-          <Link
-            href="/dashboard/inventory/production"
-            className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-          >
-            🍲 Batch Production
-          </Link>
+          canProduce ? (
+            <Link
+              href="/dashboard/inventory/production"
+              className="flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+            >
+              🍲 Batch Production
+            </Link>
+          ) : undefined
         }
       />
 
@@ -102,14 +110,16 @@ export default async function RecipesPage() {
           <p className="text-xs text-zinc-500 max-w-md mx-auto">
             Link your menu items to inventory ingredients to begin tracking ingredient consumption, portion costs, and food margins automatically.
           </p>
-          <div className="pt-2">
-            <Link
-              href="/dashboard/inventory/recipes/new"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-950 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-xs"
-            >
-              + Create First Recipe
-            </Link>
-          </div>
+          {canManageRecipes && (
+            <div className="pt-2">
+              <Link
+                href="/dashboard/inventory/recipes/new"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-950 text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-all shadow-xs"
+              >
+                + Create First Recipe
+              </Link>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

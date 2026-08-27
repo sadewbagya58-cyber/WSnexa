@@ -511,7 +511,7 @@ export const ItemList: React.FC<ItemListProps> = ({
                   />
                   {!canEditPrice && (
                     <p className="text-[10px] text-amber-700 mt-1 font-semibold">
-                      🔒 You need &apos;menu.price.update&apos; permission to modify prices.
+                      🔒 Price editing requires menu price management permissions.
                     </p>
                   )}
                 </div>
@@ -588,7 +588,7 @@ export const ItemList: React.FC<ItemListProps> = ({
                   disabled={isSavingEdit || !editName.trim()}
                   className="min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50"
                 >
-                  {isSavingEdit ? 'Saving...' : 'Save Item Changes'}
+                  {isSavingEdit ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </form>

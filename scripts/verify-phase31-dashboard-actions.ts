@@ -207,35 +207,14 @@ async function runVerification() {
   const dashboardPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'page.tsx');
   const dashboardPageCode = fs.readFileSync(dashboardPagePath, 'utf8');
   assert(dashboardPageCode.includes('resolveDashboardHomeModel'), 'Main dashboard page consumes resolveDashboardHomeModel');
-  assert(dashboardPageCode.includes('model.showMenuStatsCard'), 'Main dashboard conditionally fetches menu stats data');
-  assert(dashboardPageCode.includes('model.showDiningStatsCard'), 'Main dashboard conditionally fetches dining stats data');
-  assert(dashboardPageCode.includes('model.showAuditLogs'), 'Main dashboard conditionally fetches audit logs data');
-
-  // Differentiate View vs Manage CTA Labels
-  assert(
-    dashboardPageCode.includes("model.canManageMenu || model.isBusinessOwner ? 'Manage Categories →' : 'View Categories →'"),
-    'Categories card CTA differentiates Manage Categories from View Categories'
-  );
-  assert(
-    dashboardPageCode.includes("model.canManageMenu || model.isBusinessOwner ? 'Manage Items →' : 'View Items →'"),
-    'Menu Items card CTA differentiates Manage Items from View Items'
-  );
-  assert(
-    dashboardPageCode.includes("model.canManageTables || model.isBusinessOwner ? 'Manage Service Areas →' : 'View Service Areas →'"),
-    'Service Areas card CTA differentiates Manage Service Areas from View Service Areas'
-  );
-  assert(
-    dashboardPageCode.includes("model.canManageTables || model.isBusinessOwner ? 'Manage Tables →' : 'View Tables →'"),
-    'Dining Tables card CTA differentiates Manage Tables from View Tables'
-  );
-  assert(
-    dashboardPageCode.includes("model.canManageInventory || model.isBusinessOwner ? 'Manage Stock Catalog →' : 'View Stock Catalog →'"),
-    'Stock Items card CTA differentiates Manage Stock Catalog from View Stock Catalog'
-  );
-  assert(
-    dashboardPageCode.includes("model.canManageAccess || model.isBusinessOwner ? 'Manage Roles & Scope Grants →' : 'View Access Control Hub →'"),
-    'Access Control card CTA differentiates Manage Roles from View Access Control Hub'
-  );
+  assert(dashboardPageCode.includes('fetchDashboardTodayData'), 'Main dashboard fetches today operational data');
+  assert(dashboardPageCode.includes('DashboardTodayMetrics'), 'Main dashboard renders DashboardTodayMetrics component');
+  assert(dashboardPageCode.includes('DashboardNeedsAttention'), 'Main dashboard renders DashboardNeedsAttention component');
+  assert(dashboardPageCode.includes('DashboardOperationsShortcuts'), 'Main dashboard renders compact DashboardOperationsShortcuts');
+  assert(dashboardPageCode.includes('DashboardQuickActions'), 'Main dashboard renders simplified DashboardQuickActions');
+  assert(dashboardPageCode.includes('DashboardSetupProgress'), 'Main dashboard renders conditional DashboardSetupProgress');
+  assert(dashboardPageCode.includes('model.canCreateOrders'), 'Main dashboard evaluates canCreateOrders for primary Cashier CTA');
+  assert(dashboardPageCode.includes('model.canManageMenu || model.isBusinessOwner'), 'Main dashboard evaluates canManageMenu for Add Menu Item CTA');
 
   const stockItemsPagePath = path.join(process.cwd(), 'src', 'app', '(dashboard)', 'dashboard', 'inventory', 'items', 'page.tsx');
   const stockItemsCode = fs.readFileSync(stockItemsPagePath, 'utf8');

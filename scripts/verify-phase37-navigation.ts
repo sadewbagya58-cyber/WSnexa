@@ -168,8 +168,20 @@ async function runAssertions() {
   assert(waiterPreset.includes('waiter.access'), 'Waiter preset includes waiter.access');
   assert(waiterPreset.includes('waiter.orders.create'), 'Waiter preset includes waiter.orders.create');
 
-  // --- 7. Super Admin & Public Route Isolation ---
-  console.log('\n--- 7. Super Admin Isolation ---');
+  // --- 7. Role Editor Wizard Auto-Submit Prevention Assertions ---
+  console.log('\n--- 7. Role Editor Wizard Auto-Submit Prevention ---');
+  const roleEditorPath = path.join(process.cwd(), 'src/components/access/role-editor-modal.tsx');
+  assert(fs.existsSync(roleEditorPath), 'role-editor-modal.tsx exists');
+  const roleEditorContent = fs.readFileSync(roleEditorPath, 'utf8');
+
+  assert(!roleEditorContent.includes('<form onSubmit='), 'RoleEditorModal does not use outer <form onSubmit> wrapper');
+  assert(roleEditorContent.includes("if (mode === 'create' && step !== 3)"), 'handleFinalSubmit strictly guards against premature submission before Step 3');
+  assert(roleEditorContent.includes('key="final-submit-save-btn"'), 'Final submit button has distinct key attribute to prevent DOM element recycling');
+  assert(roleEditorContent.includes('handleNextStep'), 'Explicit handleNextStep advances wizard without calling create action');
+  assert(roleEditorContent.includes('handlePrevStep'), 'Explicit handlePrevStep goes back without calling save action');
+
+  // --- 8. Super Admin & Public Route Isolation ---
+  console.log('\n--- 8. Super Admin Isolation ---');
   const hasAdminRoutes = allItems.some((i) => i.href.startsWith('/admin'));
   assert(!hasAdminRoutes, 'No Super Admin /admin routes present in business workspace navigation');
 

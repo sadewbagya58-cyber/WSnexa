@@ -48,56 +48,95 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleNextStep = () => {
+    if (step === 1) {
+      if (!name.trim()) {
+        setErrorMsg('Role name is required.');
+        return;
+      }
+      setErrorMsg(null);
+      setStep(2);
+    } else if (step === 2) {
+      setErrorMsg(null);
+      setStep(3);
+    }
+  };
+
+  const handlePrevStep = () => {
+    setErrorMsg(null);
+    if (step === 3) {
+      setStep(2);
+    } else if (step === 2) {
+      setStep(1);
+    }
+  };
+
+  const handleFinalSubmit = async () => {
+    // Critical Guard: In create mode, submission is strictly forbidden unless the user is on Step 3
+    if (mode === 'create' && step !== 3) {
+      return;
+    }
+
     if (!name.trim()) {
       setErrorMsg('Role name is required.');
       setStep(1);
       return;
     }
 
+    if (isSubmitting) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    if (mode === 'create') {
-      const res = await createCustomRoleAction({
-        name: name.trim(),
-        description: description.trim(),
-        permissions: selectedPermissions as unknown as Parameters<typeof createCustomRoleAction>[0]['permissions'],
-        defaultScope,
-        maxScope,
-      });
+    try {
+      if (mode === 'create') {
+        const res = await createCustomRoleAction({
+          name: name.trim(),
+          description: description.trim(),
+          permissions: selectedPermissions as unknown as Parameters<typeof createCustomRoleAction>[0]['permissions'],
+          defaultScope,
+          maxScope,
+        });
 
-      setIsSubmitting(false);
-      if (!res.success) {
-        setErrorMsg(res.message || 'Failed to create custom role.');
-        return;
-      }
-      onSuccess(res.data?.id);
-    } else {
-      if (!role?.id) return;
-      const res = await updateCustomRoleAction({
-        roleId: role.id,
-        name: name.trim(),
-        description: description.trim(),
-        permissions: selectedPermissions as unknown as Parameters<typeof updateCustomRoleAction>[0]['permissions'],
-        defaultScope,
-        maxScope,
-      });
+        setIsSubmitting(false);
+        if (!res.success) {
+          setErrorMsg(res.message || 'Failed to create custom role.');
+          return;
+        }
+        onSuccess(res.data?.id);
+      } else {
+        if (!role?.id) {
+          setIsSubmitting(false);
+          return;
+        }
+        const res = await updateCustomRoleAction({
+          roleId: role.id,
+          name: name.trim(),
+          description: description.trim(),
+          permissions: selectedPermissions as unknown as Parameters<typeof updateCustomRoleAction>[0]['permissions'],
+          defaultScope,
+          maxScope,
+        });
 
-      setIsSubmitting(false);
-      if (!res.success) {
-        setErrorMsg(res.message || 'Failed to update custom role.');
-        return;
+        setIsSubmitting(false);
+        if (!res.success) {
+          setErrorMsg(res.message || 'Failed to update custom role.');
+          return;
+        }
+        onSuccess(role.id);
       }
-      onSuccess(role.id);
+    } catch (err: unknown) {
+      setIsSubmitting(false);
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred while saving.';
+      setErrorMsg(msg);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <form
-        onSubmit={handleSubmit}
+      <div
         className="bg-white rounded-2xl max-w-4xl w-full my-auto shadow-xl border border-zinc-200 flex flex-col max-h-[90vh] overflow-hidden"
       >
         {/* Modal Header */}
@@ -120,8 +159,9 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
 
           <button
             type="button"
+            key="close-modal-x"
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 text-xl font-medium leading-none p-1"
+            className="text-zinc-400 hover:text-zinc-600 text-xl font-medium leading-none p-1 cursor-pointer"
           >
             ✕
           </button>
@@ -163,6 +203,14 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (mode === 'create' && step === 1 && name.trim()) {
+                          handleNextStep();
+                        }
+                      }
+                    }}
                     placeholder="e.g. Senior Cashier"
                     className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
                   />
@@ -176,6 +224,14 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (mode === 'create' && step === 1 && name.trim()) {
+                          handleNextStep();
+                        }
+                      }
+                    }}
                     placeholder="e.g. Front-of-house lead cashier with refund authority"
                     className="w-full px-3 py-2 text-xs border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
                   />
@@ -202,7 +258,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
                       key={preset.key}
                       type="button"
                       onClick={() => handleTemplateSelect(preset.key)}
-                      className={`p-4 rounded-xl border text-left transition-all ${
+                      className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                         isSelected
                           ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600 shadow-xs'
                           : 'border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50/50'
@@ -221,8 +277,9 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
 
                 <button
                   type="button"
+                  key="custom-scratch-template"
                   onClick={() => handleTemplateSelect('custom')}
-                  className={`p-4 rounded-xl border text-left transition-all ${
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
                     selectedTemplate === 'custom'
                       ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600 shadow-xs'
                       : 'border-zinc-200 hover:border-zinc-300 bg-white hover:bg-zinc-50/50'
@@ -268,8 +325,9 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
               <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50">
                 <button
                   type="button"
+                  key="toggle-advanced-scopes"
                   onClick={() => setShowAdvancedScopes((prev) => !prev)}
-                  className="w-full p-3.5 flex items-center justify-between text-left hover:bg-zinc-100/70 transition-colors"
+                  className="w-full p-3.5 flex items-center justify-between text-left hover:bg-zinc-100/70 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">⚙️</span>
@@ -315,8 +373,9 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
             {mode === 'create' && step > 1 && (
               <button
                 type="button"
-                onClick={() => setStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3) : 1))}
-                className="px-3 py-1.5 text-xs font-bold text-zinc-600 hover:text-zinc-900 bg-white border border-zinc-200 rounded-xl"
+                key="back-step-btn"
+                onClick={handlePrevStep}
+                className="px-3 py-1.5 text-xs font-bold text-zinc-600 hover:text-zinc-900 bg-white border border-zinc-200 rounded-xl cursor-pointer"
               >
                 ← Back
               </button>
@@ -326,9 +385,10 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
           <div className="flex gap-2">
             <button
               type="button"
+              key="cancel-modal-btn"
               disabled={isSubmitting}
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl"
+              className="px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
@@ -336,23 +396,19 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
             {mode === 'create' && step < 3 ? (
               <button
                 type="button"
+                key={`next-step-${step}-btn`}
                 disabled={step === 1 && !name.trim()}
-                onClick={() => {
-                  if (step === 1 && !name.trim()) {
-                    setErrorMsg('Role name is required.');
-                    return;
-                  }
-                  setErrorMsg(null);
-                  setStep((prev) => ((prev + 1) as 1 | 2 | 3));
-                }}
-                className="px-5 py-2 text-xs font-semibold text-white bg-zinc-950 hover:bg-zinc-800 rounded-xl disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
+                onClick={handleNextStep}
+                className="px-5 py-2 text-xs font-semibold text-white bg-zinc-950 hover:bg-zinc-800 rounded-xl disabled:opacity-50 flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
                 Next Step →
               </button>
             ) : (
               <button
-                type="submit"
+                type="button"
+                key="final-submit-save-btn"
                 disabled={isSubmitting || !name.trim()}
+                onClick={handleFinalSubmit}
                 className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
                 <IconSparkles className="w-3.5 h-3.5" />
@@ -361,7 +417,7 @@ export const RoleEditorModal: React.FC<RoleEditorModalProps> = ({
             )}
           </div>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

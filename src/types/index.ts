@@ -60,6 +60,8 @@ export interface ActiveTenantContext {
     id: string;
     role: string;
     status: string;
+    customRoleId?: string | null;
+    customRoleName?: string | null;
   };
   subscription?: TenantSubscriptionInfo;
 }

@@ -201,6 +201,23 @@ export const resolveActiveBusinessContext = cache(
       console.warn('[resolveActiveBusinessContext] Failed to resolve subscription context:', subErr);
     }
 
+    // Fetch custom role name if member has a custom role
+    let customRoleName: string | null = null;
+    const memberCustomRoleId: string | null = (activeMembership as unknown as { custom_role_id?: string | null }).custom_role_id || null;
+    if (memberCustomRoleId) {
+      try {
+        const { data: customRoleRow } = await supabase
+          .from('custom_roles')
+          .select('name')
+          .eq('id', memberCustomRoleId)
+          .eq('business_id', business.id)
+          .maybeSingle();
+        customRoleName = customRoleRow?.name || null;
+      } catch {
+        // Non-fatal: if lookup fails, fall back to null (shell will use base role label)
+      }
+    }
+
     const duration = stopTimer(startTime);
     logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);
 
@@ -232,6 +249,8 @@ export const resolveActiveBusinessContext = cache(
         id: activeMembership.id,
         role: activeMembership.role,
         status: activeMembership.membership_status,
+        customRoleId: memberCustomRoleId,
+        customRoleName,
       },
       subscription: subscriptionInfo,
     };

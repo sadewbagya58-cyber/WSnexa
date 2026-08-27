@@ -72,6 +72,8 @@ export default async function DashboardLayout({
       userEmail={user.email || ''}
       userName={userName || user.email || ''}
       userRole={membership.role}
+      userCustomRoleId={membership.customRoleId}
+      userCustomRoleName={membership.customRoleName}
       navSections={navSections}
       subscription={subscription}
     >

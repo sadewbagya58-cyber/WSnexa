@@ -438,7 +438,7 @@ export class StaffInvitationService {
     let membershipId: string;
 
     if (existingMem) {
-      // Update existing membership
+      // Update existing membership — reset role and custom_role_id fully
       const { data: updatedMem, error: updateMemErr } = await admin
         .from('business_memberships')
         .update({
@@ -455,6 +455,24 @@ export class StaffInvitationService {
         return { success: false, message: 'Failed to update business membership.' };
       }
       membershipId = updatedMem.id;
+
+      // SECURITY: Clear all old member-level permission overrides and scope grants
+      // when a staff member is reassigned a new role through a fresh invitation.
+      // Old overrides belonged to the previous role tenure and must not persist
+      // into the new role assignment. This prevents accidental privilege escalation
+      // (e.g. old explicit ALLOW cashier.access override surviving a custom-role claim).
+      await admin
+        .from('member_permission_overrides')
+        .delete()
+        .eq('business_membership_id', membershipId);
+
+      // Also clear any membership-level (not role-key/custom-role-level) scope grants
+      await admin
+        .from('permission_scope_grants')
+        .delete()
+        .eq('business_membership_id', membershipId)
+        .is('role_key', null)
+        .is('custom_role_id', null);
     } else {
       // Insert new membership
       const { data: newMem, error: insertMemErr } = await admin
@@ -542,11 +560,16 @@ export class StaffInvitationService {
       }
     }
 
-    // Update user_profiles workspace preference
+    // Update user_profiles workspace preference.
+    // For custom-role invitations the base role ('cashier') must NOT become the onboarding_intent
+    // because that would route the user to /dashboard/cashier on next login via resolveAccountRoute.
+    // Use 'staff' as a neutral intent for custom-role members; their landing is resolved
+    // dynamically by effective permissions in AccountService.resolveAccountRoute.
+    const intentValue = invite.custom_role_id ? 'staff' : invite.assigned_role;
     await admin
       .from('user_profiles')
       .update({
-        onboarding_intent: invite.assigned_role,
+        onboarding_intent: intentValue,
         preferred_workspace: 'dashboard',
       })
       .eq('id', userId);
@@ -561,28 +584,35 @@ export class StaffInvitationService {
       payload: {
         branch_id: invite.branch_id,
         assigned_role: invite.assigned_role,
+        custom_role_id: invite.custom_role_id || null,
         claimed_by_email: userEmail,
+        previous_overrides_cleared: existingMem ? true : false,
       },
     });
 
-    // Resolve target route
+    // Resolve target route.
+    // For custom-role invitations, route to /dashboard and let permission-based
+    // landing logic in resolveDashboardHomeModel determine the correct workspace CTA.
+    // Do NOT route directly to /dashboard/cashier solely because base role is 'cashier'.
     let targetRoute = '/dashboard';
-    switch (invite.assigned_role) {
-      case 'business_owner':
-      case 'branch_manager':
-        targetRoute = '/dashboard';
-        break;
-      case 'cashier':
-        targetRoute = '/dashboard/cashier';
-        break;
-      case 'kitchen_staff':
-        targetRoute = '/dashboard/kitchen';
-        break;
-      case 'waiter':
-        targetRoute = '/dashboard/waiter';
-        break;
-      default:
-        targetRoute = '/dashboard';
+    if (!invite.custom_role_id) {
+      switch (invite.assigned_role) {
+        case 'business_owner':
+        case 'branch_manager':
+          targetRoute = '/dashboard';
+          break;
+        case 'cashier':
+          targetRoute = '/dashboard/cashier';
+          break;
+        case 'kitchen_staff':
+          targetRoute = '/dashboard/kitchen';
+          break;
+        case 'waiter':
+          targetRoute = '/dashboard/waiter';
+          break;
+        default:
+          targetRoute = '/dashboard';
+      }
     }
 
     return {

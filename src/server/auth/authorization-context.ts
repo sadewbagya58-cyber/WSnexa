@@ -215,22 +215,31 @@ async function _resolveAuthorizationContext(
       .eq('business_membership_id', activeMembership.id),
 
     // 3.7 Applicable permission scope grants
+    // When the member has a custom_role_id, we intentionally do NOT include
+    // role_key.eq.${activeMembership.role} in the .or() filter.
+    // This prevents built-in role (e.g. 'cashier') scope grants from being
+    // applied to a custom-role member whose base compatibility role happens
+    // to match a built-in role key. Only membership-level and custom-role-level
+    // scope grants should apply.
     admin
       .from('permission_scope_grants')
       .select('id, permission_key, effect, scope_type, branch_id, department_id, organization_unit_id, service_area_id, grant_source, source_id')
       .or(
-        `business_membership_id.eq.${activeMembership.id},` +
-          `role_key.eq.${activeMembership.role}` +
-          (activeMembership.custom_role_id ? `,custom_role_id.eq.${activeMembership.custom_role_id}` : '')
+        activeMembership.custom_role_id
+          ? `business_membership_id.eq.${activeMembership.id},custom_role_id.eq.${activeMembership.custom_role_id}`
+          : `business_membership_id.eq.${activeMembership.id},role_key.eq.${activeMembership.role}`
       ),
 
     // 3.8 Role scope presets
+    // Same isolation rule: when a custom_role_id is present, only load the
+    // custom-role-specific preset (if any), not the built-in role preset.
     admin
       .from('role_scope_presets')
       .select('role_key, custom_role_id, default_scope, max_scope')
       .or(
-        `role_key.eq.${activeMembership.role}` +
-          (activeMembership.custom_role_id ? `,custom_role_id.eq.${activeMembership.custom_role_id}` : '')
+        activeMembership.custom_role_id
+          ? `custom_role_id.eq.${activeMembership.custom_role_id}`
+          : `role_key.eq.${activeMembership.role}`
       ),
 
     // 3.9 Organization departments

@@ -12,8 +12,14 @@ export interface RouteGuardResult {
 
 /**
  * Resolves the primary workspace route for a staff member role.
+ * When a customRoleId is present the member is not a built-in role staff member —
+ * always route to /dashboard so permission-based landing logic applies.
  */
-export function resolveDefaultWorkspaceRoute(role?: string): string {
+export function resolveDefaultWorkspaceRoute(role?: string, customRoleId?: string | null): string {
+  // Custom-role members must never be routed to a built-in operational workspace
+  // solely because the underlying compatibility role key happens to match cashier/waiter/etc.
+  if (customRoleId) return '/dashboard';
+
   switch (role) {
     case 'cashier':
       return '/dashboard/cashier';

@@ -16,7 +16,7 @@ import { OwnerSubscriptionLifecycleBanner } from '@/components/subscription/owne
 export default async function DashboardOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
   if (!context || !context.activeBranch) {
     redirect('/login');

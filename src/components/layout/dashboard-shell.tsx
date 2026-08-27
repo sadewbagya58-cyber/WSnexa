@@ -23,6 +23,8 @@ interface DashboardShellProps {
   userId?: string;
   businessId?: string;
   userRole: string;
+  userCustomRoleId?: string | null;
+  userCustomRoleName?: string | null;
   userPermissions?: string[];
   navSections?: DashboardNavSectionDTO[];
   userName?: string;
@@ -33,7 +35,9 @@ interface DashboardShellProps {
   subscription?: TenantSubscriptionInfo;
 }
 
-function formatRoleLabel(role: string): string {
+function formatRoleLabel(role: string, customRoleName?: string | null): string {
+  // If member has a custom role, display the custom role name, not the internal base role key
+  if (customRoleName) return customRoleName;
   switch (role) {
     case 'business_owner':   return 'Business Owner';
     case 'branch_manager':   return 'Branch Manager';
@@ -51,6 +55,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   userId,
   businessId,
   userRole,
+  userCustomRoleId: _userCustomRoleId,
+  userCustomRoleName,
   userPermissions = [],
   navSections,
   userName,
@@ -266,7 +272,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             >
               <span className="font-bold text-zinc-950 max-w-[140px] truncate">{userName || userEmail}</span>
               <Badge variant="neutral" className="text-[10px] uppercase">
-                {formatRoleLabel(userRole)}
+                {formatRoleLabel(userRole, userCustomRoleName)}
               </Badge>
               <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -278,7 +284,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <div className="border-b border-zinc-100 px-3 py-2">
                   <p className="text-xs font-bold text-zinc-950">{userName || 'User Profile'}</p>
                   <p className="text-[11px] text-zinc-500 truncate">{userEmail}</p>
-                  <p className="mt-1 text-[10px] text-zinc-400 font-medium">Role: {formatRoleLabel(userRole)}</p>
+                  <p className="mt-1 text-[10px] text-zinc-400 font-medium">Role: {formatRoleLabel(userRole, userCustomRoleName)}</p>
                 </div>
                 <div className="py-1">
                   <form action="/api/auth/logout" method="POST">
@@ -374,7 +380,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <div className="rounded-xl bg-zinc-50 p-3 space-y-1 border border-zinc-200/60">
                   <div className="font-extrabold text-xs text-zinc-950 truncate">{userName || userEmail}</div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-bold text-zinc-700">{formatRoleLabel(userRole)}</span>
+                    <span className="font-bold text-zinc-700">{formatRoleLabel(userRole, userCustomRoleName)}</span>
                     <span className="text-zinc-500 truncate max-w-[120px]">📍 {activeBranch?.name || 'Branch'}</span>
                   </div>
                 </div>

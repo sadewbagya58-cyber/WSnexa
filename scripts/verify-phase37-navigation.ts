@@ -197,8 +197,104 @@ async function runAssertions() {
   assert(inviteServiceContent.includes("Cannot invite with an archived or inactive custom role"), 'StaffInvitationService verifies custom role is active');
   assert(inviteServiceContent.includes("The custom role associated with this invitation has been archived"), 'StaffInvitationService revalidates custom role on claim');
 
-  // --- 9. Super Admin & Public Route Isolation ---
-  console.log('\n--- 9. Super Admin Isolation ---');
+  // --- 9. Custom Role Claim — Old Permission Leakage Hotfix ---
+  console.log('\n--- 9. Custom Role Claim — Old Permission Leakage Hotfix ---');
+
+  // A. claimInvitation: onboarding_intent must not be built-in role for custom-role invites
+  assert(
+    inviteServiceContent.includes("invite.custom_role_id ? 'staff' : invite.assigned_role"),
+    "claimInvitation: uses 'staff' as onboarding_intent for custom-role invitations, not the base built-in role"
+  );
+
+  // B. claimInvitation: target route must not route to cashier/kitchen/waiter for custom-role invites
+  assert(
+    inviteServiceContent.includes('if (!invite.custom_role_id)'),
+    'claimInvitation: target route switch is guarded by !invite.custom_role_id check'
+  );
+
+  // C. claimInvitation: old member_permission_overrides are cleared on role reassignment
+  assert(
+    inviteServiceContent.includes("'member_permission_overrides'") &&
+      inviteServiceContent.includes('.delete()') &&
+      inviteServiceContent.includes('SECURITY: Clear all old member-level permission overrides'),
+    'claimInvitation: clears old member_permission_overrides when existing member is reassigned a new role'
+  );
+
+  // D. claimInvitation: membership-level permission_scope_grants are cleared on role reassignment
+  assert(
+    inviteServiceContent.includes("'permission_scope_grants'") &&
+      inviteServiceContent.includes('.is(\'role_key\', null)') &&
+      inviteServiceContent.includes(".is('custom_role_id', null)"),
+    'claimInvitation: clears old membership-level permission_scope_grants when existing member is reassigned'
+  );
+
+  // E. authorization-context: scope grants query is isolated for custom-role members
+  const authContextPath = path.join(process.cwd(), 'src/server/auth/authorization-context.ts');
+  const authContextContent = fs.readFileSync(authContextPath, 'utf8');
+  assert(
+    authContextContent.includes('activeMembership.custom_role_id') &&
+      authContextContent.includes('? `business_membership_id.eq.${activeMembership.id},custom_role_id.eq.${activeMembership.custom_role_id}`') &&
+      authContextContent.includes(': `business_membership_id.eq.${activeMembership.id},role_key.eq.${activeMembership.role}`'),
+    'authorization-context: scope grants query uses custom_role_id isolation when member has custom role'
+  );
+
+  // F. authorization-context: role scope presets query is isolated for custom-role members
+  assert(
+    authContextContent.includes('? `custom_role_id.eq.${activeMembership.custom_role_id}`') &&
+      authContextContent.includes(': `role_key.eq.${activeMembership.role}`'),
+    'authorization-context: role scope presets query uses custom_role_id isolation when member has custom role'
+  );
+
+  // G. resolveDefaultWorkspaceRoute: custom_role_id parameter causes /dashboard return
+  assert(
+    resolveDefaultWorkspaceRoute('cashier', 'some-uuid') === '/dashboard',
+    "resolveDefaultWorkspaceRoute: returns '/dashboard' when customRoleId is provided, even if role='cashier'"
+  );
+  assert(
+    resolveDefaultWorkspaceRoute('cashier', null) === '/dashboard/cashier',
+    "resolveDefaultWorkspaceRoute: still returns '/dashboard/cashier' for built-in cashier without customRoleId"
+  );
+  assert(
+    resolveDefaultWorkspaceRoute('cashier', undefined) === '/dashboard/cashier',
+    "resolveDefaultWorkspaceRoute: still returns '/dashboard/cashier' for built-in cashier with undefined customRoleId"
+  );
+
+  // H. DashboardShell: accepts userCustomRoleId and userCustomRoleName props
+  const shellPath = path.join(process.cwd(), 'src/components/layout/dashboard-shell.tsx');
+  const shellContent = fs.readFileSync(shellPath, 'utf8');
+  assert(
+    shellContent.includes('userCustomRoleId?: string | null') &&
+      shellContent.includes('userCustomRoleName?: string | null'),
+    'DashboardShell interface has userCustomRoleId and userCustomRoleName optional props'
+  );
+  assert(
+    shellContent.includes('formatRoleLabel(userRole, userCustomRoleName)'),
+    'DashboardShell calls formatRoleLabel with userCustomRoleName for role header badge'
+  );
+  assert(
+    shellContent.includes("if (customRoleName) return customRoleName"),
+    'formatRoleLabel returns customRoleName immediately if present, skipping built-in role label'
+  );
+
+  // I. ActiveTenantContext type: membership includes customRoleId and customRoleName
+  const typesPath = path.join(process.cwd(), 'src/types/index.ts');
+  const typesContent = fs.readFileSync(typesPath, 'utf8');
+  assert(
+    typesContent.includes('customRoleId?: string | null') &&
+      typesContent.includes('customRoleName?: string | null'),
+    'ActiveTenantContext.membership includes optional customRoleId and customRoleName fields'
+  );
+
+  // J. Tenant resolver: includes custom role name lookup and maps to membership context
+  const resolverPath = path.join(process.cwd(), 'src/server/tenant/resolver.ts');
+  const resolverContent = fs.readFileSync(resolverPath, 'utf8');
+  assert(
+    resolverContent.includes('customRoleName') && resolverContent.includes("'custom_roles'"),
+    'Tenant resolver fetches custom role name and maps it into membership context'
+  );
+
+  // --- 10. Super Admin & Public Route Isolation ---
+  console.log('\n--- 10. Super Admin Isolation ---');
   const hasAdminRoutes = allItems.some((i) => i.href.startsWith('/admin'));
   assert(!hasAdminRoutes, 'No Super Admin /admin routes present in business workspace navigation');
 

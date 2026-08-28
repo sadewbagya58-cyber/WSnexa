@@ -183,9 +183,13 @@ export async function resolveDashboardHomeModel(
   const showReviewsCard = canViewReviews || canRespondReviews || isBusinessOwner;
   const showExecutiveSummary = isBusinessOwner || isBranchManager || canViewReports;
 
-  // 5. Attention Section — rendered when there's data worth surfacing
+  // 5. Attention Section — rendered when there's data worth surfacing to this role
   const showAttentionSection =
-    showReservationsTodayCard || showLowStockCard || showOrdersTodayCard || isBusinessOwner;
+    (showReservationsTodayCard && canViewReservations) ||
+    (showLowStockCard && (canViewInventory || canManageInventory)) ||
+    (showOrdersTodayCard && (canViewOrders || canCreateOrders)) ||
+    isBusinessOwner ||
+    isBranchManager;
 
   // 6. Setup Checklist
   const showSetupChecklist = isBusinessOwner || (canManageMenu && canManageTables);

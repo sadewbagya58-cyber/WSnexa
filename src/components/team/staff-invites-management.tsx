@@ -28,11 +28,20 @@ export interface CustomRoleOption {
   id: string;
   name: string;
   description?: string;
+  defaultScope?: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF';
+  maxScope?: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF';
+}
+
+export interface DepartmentOption {
+  id: string;
+  name: string;
+  branchId?: string | null;
 }
 
 interface StaffInvitesManagementProps {
   branches: BranchOption[];
   branchAreas?: AreaOption[];
+  departments?: DepartmentOption[];
   customRoles?: CustomRoleOption[];
   initialInvitations: FormattedInvitation[];
   userRole: string;
@@ -42,6 +51,7 @@ interface StaffInvitesManagementProps {
 export function StaffInvitesManagement({
   branches,
   branchAreas = [],
+  departments = [],
   customRoles: initialCustomRoles = [],
   initialInvitations,
   userRole,
@@ -59,6 +69,8 @@ export function StaffInvitesManagement({
 
   // Form states
   const [branchId, setBranchId] = useState<string>(activeBranchId || branches[0]?.id || '');
+  const [departmentId, setDepartmentId] = useState<string>('');
+  const [scopeChoice, setScopeChoice] = useState<'ORGANIZATION' | 'PROPERTY'>('ORGANIZATION');
   const [selectedRoleKey, setSelectedRoleKey] = useState<string>('builtin:cashier');
   const [invitedEmail, setInvitedEmail] = useState<string>('');
   const [expiryOption, setExpiryOption] = useState<ExpiryOption>('48h');
@@ -84,6 +96,8 @@ export function StaffInvitesManagement({
               id: r.id,
               name: r.name,
               description: r.description || undefined,
+              defaultScope: r.defaultScope,
+              maxScope: r.maxScope,
             }));
           setCustomRoles(activeOnly);
         }
@@ -94,23 +108,50 @@ export function StaffInvitesManagement({
     }
   }, [isModalOpen]);
 
+  const selectedCustomRole = customRoles.find((cr) => `custom:${cr.id}` === selectedRoleKey);
+  const isCustomRole = Boolean(selectedCustomRole);
+  const isWaiterSelected = selectedRoleKey === 'builtin:waiter';
+  const isOrgScopeRole = selectedCustomRole?.defaultScope === 'ORGANIZATION';
+  const isDeptScopeRole = selectedCustomRole?.defaultScope === 'DEPARTMENT';
+  const isAreaScopeRole = selectedCustomRole?.defaultScope === 'AREA_TEAM';
+  const canChooseOrgScope = selectedCustomRole?.maxScope === 'ORGANIZATION' && !isOrgScopeRole;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!branchId) {
-      setErrorMsg('Please select a branch.');
-      return;
-    }
 
     let assignedRole: StaffRole = 'cashier';
     let customRoleId: string | undefined = undefined;
+    let scopeType: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF' | undefined = undefined;
 
     if (selectedRoleKey.startsWith('builtin:')) {
       assignedRole = selectedRoleKey.replace('builtin:', '') as StaffRole;
+      scopeType = 'PROPERTY';
     } else if (selectedRoleKey.startsWith('custom:')) {
       customRoleId = selectedRoleKey.replace('custom:', '');
       assignedRole = 'cashier'; // Base staff role for custom role assignment
+      const cr = customRoles.find((r) => r.id === customRoleId);
+      if (cr?.defaultScope === 'ORGANIZATION' || (cr?.maxScope === 'ORGANIZATION' && scopeChoice === 'ORGANIZATION')) {
+        scopeType = 'ORGANIZATION';
+      } else if (cr?.defaultScope === 'DEPARTMENT') {
+        scopeType = 'DEPARTMENT';
+      } else if (cr?.defaultScope === 'AREA_TEAM') {
+        scopeType = 'AREA_TEAM';
+      } else {
+        scopeType = 'PROPERTY';
+      }
     } else {
       assignedRole = selectedRoleKey as StaffRole;
+      scopeType = 'PROPERTY';
+    }
+
+    if (scopeType === 'DEPARTMENT' && !departmentId) {
+      setErrorMsg('Please select a target department for this department-scoped role.');
+      return;
+    }
+
+    if (scopeType !== 'ORGANIZATION' && !branchId) {
+      setErrorMsg('Please select a branch.');
+      return;
     }
 
     if (assignedRole === 'waiter' && !customRoleId && selectedAreaIds.length === 0) {
@@ -122,7 +163,9 @@ export function StaffInvitesManagement({
     setErrorMsg(null);
 
     const res = await createInvitationAction({
-      branchId,
+      branchId: scopeType === 'ORGANIZATION' ? (branchId || undefined) : branchId,
+      scopeType,
+      departmentId: scopeType === 'DEPARTMENT' ? departmentId : undefined,
       assignedRole,
       customRoleId,
       invitedEmail,
@@ -134,7 +177,6 @@ export function StaffInvitesManagement({
 
     if (res.success && res.data) {
       const selectedBranch = branches.find((b) => b.id === branchId);
-      const selectedCustomRole = customRoles.find((cr) => cr.id === customRoleId);
       const displayRoleLabel = selectedCustomRole ? selectedCustomRole.name : formatRoleLabel(assignedRole);
 
       setInvitations([res.data.invitation, ...invitations]);
@@ -143,11 +185,12 @@ export function StaffInvitesManagement({
         rawCode: res.data.rawCode,
         tokenPrefix: res.data.tokenPrefix,
         role: displayRoleLabel,
-        branchName: selectedBranch?.name || 'Selected Branch',
+        branchName: scopeType === 'ORGANIZATION' ? 'Organization Wide' : (selectedBranch?.name || 'Selected Branch'),
       });
       // Reset form
       setInvitedEmail('');
       setSelectedAreaIds([]);
+      setDepartmentId('');
       setSelectedRoleKey('builtin:cashier');
     } else {
       setErrorMsg(res.message || 'Failed to generate invitation.');
@@ -216,7 +259,7 @@ export function StaffInvitesManagement({
   const copyCodeToClipboard = (id: string, code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setTimeout(() => setCopiedId(null), 2500);
   };
 
   const formatRoleLabel = (role: string, customRoleName?: string | null) => {
@@ -246,43 +289,51 @@ export function StaffInvitesManagement({
       case 'claimed':
         return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30';
       case 'expired':
-        return 'bg-zinc-100 text-zinc-500 border-zinc-200';
+        return 'bg-zinc-500/10 text-zinc-600 border-zinc-500/30';
       case 'revoked':
         return 'bg-rose-500/10 text-rose-600 border-rose-500/30';
       default:
-        return 'bg-zinc-100 text-zinc-600 border-zinc-200';
+        return 'bg-zinc-100 text-zinc-600';
     }
   };
 
-  const isWaiterSelected = selectedRoleKey === 'builtin:waiter';
-
   return (
     <div className="space-y-6">
-      {/* Top Header */}
+      {/* Header with Title & Action */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Staff & Manager Invitations</h1>
-          <p className="text-xs text-zinc-500">
-            Generate secure, single-use invitation codes bound to specific branches and built-in or custom roles.
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-950">Staff Invitations</h1>
+          </div>
+          <p className="text-xs text-zinc-500 mt-1">
+            Generate and manage access codes for operational staff and managers. Codes can be copied repeatedly while active.
           </p>
         </div>
 
         {isOwner && (
-          <Button variant="primary" onClick={() => setIsModalOpen(true)} className="flex items-center gap-2">
-            <span>➕</span> Invite Staff
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => {
+              setIsModalOpen(true);
+              setErrorMsg(null);
+            }}
+            className="flex items-center gap-2 text-xs min-h-[44px]"
+          >
+            + Invite Staff
           </Button>
         )}
       </div>
 
-      {/* Invitation Table / List */}
-      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
+      {/* Invitations Table Card */}
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-2xs overflow-hidden">
         {invitations.length === 0 ? (
           <div className="p-12 text-center text-zinc-500 text-xs space-y-2">
             <div className="text-3xl mb-2">🔑</div>
             <div>No staff invitations generated yet.</div>
             {isOwner && (
               <div className="text-[11px] text-zinc-400">
-                Click <strong>Invite Staff</strong> to invite Branch Managers, Cashiers, Kitchen Staff, Waiters, or custom role staff.
+                Click <strong>Invite Staff</strong> to create new access codes.
               </div>
             )}
           </div>
@@ -294,8 +345,7 @@ export function StaffInvitesManagement({
                 <thead>
                   <tr className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Branch</th>
-                    <th className="py-3 px-4">Service Areas</th>
+                    <th className="py-3 px-4">Access / Scope</th>
                     <th className="py-3 px-4">Code / Copy</th>
                     <th className="py-3 px-4">Bound Email</th>
                     <th className="py-3 px-4">Status</th>
@@ -316,21 +366,32 @@ export function StaffInvitesManagement({
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-zinc-600 font-medium">{inv.branchName}</td>
                       <td className="py-3 px-4">
-                        {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {inv.serviceAreaNames.map((areaName, i) => (
-                              <span
-                                key={i}
-                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
-                              >
-                                {areaName}
-                              </span>
-                            ))}
-                          </div>
+                        {inv.scopeType === 'ORGANIZATION' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-purple-50 text-purple-800 border border-purple-200">
+                            🏢 Organization Wide
+                          </span>
                         ) : (
-                          <span className="text-[11px] text-zinc-400 italic">Branch Wide</span>
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-zinc-800">📍 {inv.branchName}</div>
+                            {inv.departmentName && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                👥 {inv.departmentName}
+                              </span>
+                            )}
+                            {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {inv.serviceAreaNames.map((areaName, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                                  >
+                                    {areaName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -419,7 +480,14 @@ export function StaffInvitesManagement({
                     </span>
                   </div>
                   <div className="flex justify-between text-zinc-600">
-                    <span>Branch: <strong>{inv.branchName}</strong></span>
+                    <span>
+                      Scope:{' '}
+                      {inv.scopeType === 'ORGANIZATION' ? (
+                        <strong className="text-purple-900">🏢 Organization Wide</strong>
+                      ) : (
+                        <strong>📍 {inv.assignmentLabel || inv.branchName}</strong>
+                      )}
+                    </span>
                   </div>
 
                   {/* Mobile Invitation Code & Persistent Copy Button */}
@@ -450,18 +518,6 @@ export function StaffInvitesManagement({
                     </div>
                   )}
 
-                  {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {inv.serviceAreaNames.map((areaName, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
-                        >
-                          {areaName}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                   {inv.invitedEmail && (
                     <div className="text-zinc-500 font-mono text-[11px]">
                       Email: {inv.invitedEmail}
@@ -519,35 +575,16 @@ export function StaffInvitesManagement({
             )}
 
             <form onSubmit={handleCreate} className="space-y-4 text-xs">
+              {/* 1. Target Role Selection */}
               <div>
-                <label className="block text-zinc-700 font-bold mb-1">Target Branch *</label>
-                <select
-                  value={branchId}
-                  onChange={(e) => {
-                    setBranchId(e.target.value);
-                    setSelectedAreaIds([]);
-                  }}
-                  className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
-                  required
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.isDefault ? '(Default)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-zinc-700 font-bold mb-1">Assigned Role *</label>
+                <label className="block text-zinc-700 font-bold mb-1">Target Role *</label>
                 <select
                   value={selectedRoleKey}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSelectedRoleKey(val);
-                    if (val !== 'builtin:waiter') {
-                      setErrorMsg(null);
-                    }
+                    setErrorMsg(null);
+                    setSelectedAreaIds([]);
                   }}
                   className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none cursor-pointer"
                   required
@@ -562,7 +599,7 @@ export function StaffInvitesManagement({
                     <optgroup label="Custom Roles">
                       {customRoles.map((cr) => (
                         <option key={cr.id} value={`custom:${cr.id}`}>
-                          {cr.name}
+                          {cr.name} ({cr.defaultScope || 'PROPERTY'})
                         </option>
                       ))}
                     </optgroup>
@@ -570,62 +607,190 @@ export function StaffInvitesManagement({
                 </select>
               </div>
 
-              {/* Service Areas Checklist */}
-              <div className="space-y-2 border-t border-b border-zinc-100 py-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-zinc-900 font-bold text-xs">
-                    Service Area Assignments {isWaiterSelected && <span className="text-rose-600">*</span>}
-                  </label>
-                  <span className="text-[10px] text-zinc-500 font-normal">
-                    {isWaiterSelected ? 'Required for Waiters' : 'Optional'}
+              {/* 2. Role-Driven Assignment Scope */}
+              {isOrgScopeRole ? (
+                <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">Assignment Scope</span>
+                  <span className="font-extrabold text-xs text-purple-950 flex items-center gap-1.5">
+                    🏢 Organization Wide
                   </span>
+                  <p className="text-[11px] text-purple-700 leading-relaxed">
+                    This custom role operates across all branches in the organization. No branch restriction is required.
+                  </p>
                 </div>
-
-                {branchAreas.length === 0 ? (
-                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl leading-relaxed">
-                    ⚠️ No active service areas found for this branch. Create areas in{' '}
-                    <strong className="underline">/dashboard/areas</strong> first.
+              ) : canChooseOrgScope ? (
+                <div className="space-y-3 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
+                  <label className="block text-zinc-900 font-bold">Assignment Level *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScopeChoice('ORGANIZATION')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                        scopeChoice === 'ORGANIZATION'
+                          ? 'bg-purple-900 text-white border-purple-900 shadow-xs'
+                          : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                      }`}
+                    >
+                      🏢 Organization Wide
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScopeChoice('PROPERTY')}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                        scopeChoice === 'PROPERTY'
+                          ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
+                          : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                      }`}
+                    >
+                      📍 Specific Branch
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                    {branchAreas.map((area) => {
-                      const isChecked = selectedAreaIds.includes(area.id);
-                      return (
-                        <label
-                          key={area.id}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer min-h-[44px] ${
-                            isChecked
-                              ? 'bg-blue-50/60 border-blue-300 text-blue-900'
-                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <span className="font-semibold text-xs">{area.name}</span>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedAreaIds([...selectedAreaIds, area.id]);
-                              } else {
-                                setSelectedAreaIds(selectedAreaIds.filter((id) => id !== area.id));
-                              }
-                            }}
-                            className="w-4 h-4 rounded border-zinc-300 text-zinc-950 focus:ring-0"
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
+                  {scopeChoice === 'PROPERTY' && (
+                    <div className="pt-2">
+                      <label className="block text-zinc-700 font-bold mb-1">Target Branch *</label>
+                      <select
+                        value={branchId}
+                        onChange={(e) => {
+                          setBranchId(e.target.value);
+                          setSelectedAreaIds([]);
+                        }}
+                        className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                        required
+                      >
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} {b.isDefault ? '(Default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              ) : isDeptScopeRole ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-zinc-700 font-bold mb-1">Target Branch *</label>
+                    <select
+                      value={branchId}
+                      onChange={(e) => {
+                        setBranchId(e.target.value);
+                        setSelectedAreaIds([]);
+                      }}
+                      className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                      required
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} {b.isDefault ? '(Default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-700 font-bold mb-1">Target Department *</label>
+                    {departments.length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl">
+                        ⚠️ No departments configured. Create departments in Organization setup.
+                      </div>
+                    ) : (
+                      <select
+                        value={departmentId}
+                        onChange={(e) => setDepartmentId(e.target.value)}
+                        className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none cursor-pointer"
+                        required
+                      >
+                        <option value="">Select Department...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-zinc-700 font-bold mb-1">Target Branch *</label>
+                  <select
+                    value={branchId}
+                    onChange={(e) => {
+                      setBranchId(e.target.value);
+                      setSelectedAreaIds([]);
+                    }}
+                    className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
+                    required
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} {b.isDefault ? '(Default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Service Areas Checklist (For Waiter or area-scoped roles) */}
+              {(!isOrgScopeRole && (isWaiterSelected || isAreaScopeRole || !isCustomRole)) && (
+                <div className="space-y-2 border-t border-b border-zinc-100 py-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-900 font-bold text-xs">
+                      Service Area Assignments {isWaiterSelected && <span className="text-rose-600">*</span>}
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-normal">
+                      {isWaiterSelected ? 'Required for Waiters' : 'Optional'}
+                    </span>
+                  </div>
+
+                  {branchAreas.length === 0 ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl leading-relaxed">
+                      ⚠️ No active service areas found for this branch. Create areas in{' '}
+                      <strong className="underline">/dashboard/dining</strong> first.
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {branchAreas.map((area) => {
+                        const isChecked = selectedAreaIds.includes(area.id);
+                        return (
+                          <label
+                            key={area.id}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer min-h-[44px] ${
+                              isChecked
+                                ? 'bg-blue-50/60 border-blue-300 text-blue-900'
+                                : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+                            }`}
+                          >
+                            <span className="font-semibold text-xs">{area.name}</span>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedAreaIds([...selectedAreaIds, area.id]);
+                                } else {
+                                  setSelectedAreaIds(selectedAreaIds.filter((id) => id !== area.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-zinc-300 text-zinc-950 focus:ring-0"
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3. Optional Bound Email */}
               <div>
                 <label className="block text-zinc-700 font-bold mb-1">
                   Email <span className="text-zinc-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="email"
-                  placeholder="e.g. cashier@example.com"
+                  placeholder="e.g. staff@example.com"
                   value={invitedEmail}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInvitedEmail(e.target.value)}
                   className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
@@ -635,6 +800,7 @@ export function StaffInvitesManagement({
                 </p>
               </div>
 
+              {/* 4. Expiry Option */}
               <div>
                 <label className="block text-zinc-700 font-bold mb-1">Invite expires in *</label>
                 <div className="grid grid-cols-3 gap-2">

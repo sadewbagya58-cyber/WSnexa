@@ -14,15 +14,17 @@ export type ExpiryOption = z.infer<typeof expiryOptionEnum>;
 
 export const createInvitationSchema = z
   .object({
-    branchId: z.string().uuid('Invalid branch selected'),
+    branchId: z.string().uuid('Invalid branch selected').optional().nullable(),
+    scopeType: z.enum(['ORGANIZATION', 'PROPERTY', 'DEPARTMENT', 'AREA_TEAM', 'SELF']).optional(),
+    departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
     assignedRole: staffRoleEnum,
-    customRoleId: z.string().uuid('Invalid custom role ID').optional(),
+    customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
     invitedEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
     expiryOption: expiryOptionEnum.default('48h'),
     serviceAreaIds: z.array(z.string().uuid('Invalid area ID')).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.assignedRole === 'waiter') {
+    if (data.assignedRole === 'waiter' && !data.customRoleId) {
       if (!data.serviceAreaIds || data.serviceAreaIds.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

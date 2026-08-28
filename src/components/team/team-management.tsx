@@ -219,7 +219,10 @@ export function TeamManagement({
     }
   };
 
-  const formatRoleLabel = (role: string) => {
+  const formatRoleLabel = (role: string, customRoleName?: string | null) => {
+    if (customRoleName) {
+      return customRoleName;
+    }
     switch (role) {
       case 'business_owner':
         return 'Business Owner';
@@ -232,7 +235,7 @@ export function TeamManagement({
       case 'waiter':
         return 'Waiter';
       default:
-        return role;
+        return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     }
   };
 
@@ -331,7 +334,14 @@ export function TeamManagement({
                     <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-zinc-100">
                       <div>
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Role</span>
-                        <span className="font-extrabold text-zinc-900">{formatRoleLabel(m.role)}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-zinc-900">{formatRoleLabel(m.role, m.customRoleName)}</span>
+                          {m.customRoleName && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                              Custom
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Branch</span>
@@ -512,9 +522,9 @@ export function TeamManagement({
                   Permission Overrides: {overridesMember.userName}
                 </h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Base Role: <strong className="text-zinc-800 font-bold">{formatRoleLabel(overridesMember.role)}</strong>
+                  Role: <strong className="text-zinc-800 font-bold">{formatRoleLabel(overridesMember.role, overridesMember.customRoleName)}</strong>
                   {overridesMember.customRoleName && (
-                    <span className="text-zinc-600 font-medium"> ({overridesMember.customRoleName})</span>
+                    <span className="text-zinc-400 font-normal"> (Base: {formatRoleLabel(overridesMember.role)})</span>
                   )}
                 </p>
               </div>

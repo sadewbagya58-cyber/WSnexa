@@ -134,7 +134,7 @@ export async function fetchDashboardTodayData(
         .is('deleted_at', null)
     : Promise.resolve({ data: [] });
 
-  const lowStockPromise: Promise<{ lowStockCount: number | null }> = (model.showLowStockCard || model.showAttentionSection)
+  const lowStockPromise: Promise<{ lowStockCount: number | null }> = (model.showLowStockCard || ((model.canViewInventory || model.canManageInventory || model.isBusinessOwner || model.isBranchManager) && model.showAttentionSection))
     ? (async () => {
         try {
           const { data } = await admin
@@ -162,7 +162,7 @@ export async function fetchDashboardTodayData(
       })()
     : Promise.resolve({ lowStockCount: null });
 
-  const pendingWaiterRequestsPromise = (model.canManageWaiter || model.isBusinessOwner)
+  const pendingWaiterRequestsPromise = (model.canManageWaiter || model.canViewKitchen || model.isBusinessOwner || model.isBranchManager)
     ? admin
         .from('waiter_requests')
         .select('id', { count: 'exact', head: true })
@@ -174,7 +174,7 @@ export async function fetchDashboardTodayData(
     ? admin
         .from('menu_categories')
         .select('id', { count: 'exact', head: true })
-        .eq('branch_id', activeBranch.id)
+        .eq('business_id', businessId)
         .is('deleted_at', null)
     : Promise.resolve({ count: 0 });
 
@@ -182,7 +182,7 @@ export async function fetchDashboardTodayData(
     ? admin
         .from('menu_items')
         .select('id', { count: 'exact', head: true })
-        .eq('branch_id', activeBranch.id)
+        .eq('business_id', businessId)
         .is('deleted_at', null)
     : Promise.resolve({ count: 0 });
 
@@ -234,7 +234,11 @@ export async function fetchDashboardTodayData(
 
   const attentionItems: DashboardAttentionItem[] = [];
 
-  if (pendingReservationsCount && pendingReservationsCount > 0) {
+  if (
+    (model.canViewReservations || model.isBusinessOwner || model.isBranchManager) &&
+    pendingReservationsCount &&
+    pendingReservationsCount > 0
+  ) {
     attentionItems.push({
       id: 'pending-reservations',
       type: 'reservation',
@@ -246,7 +250,11 @@ export async function fetchDashboardTodayData(
     });
   }
 
-  if (lowStockCount && lowStockCount > 0) {
+  if (
+    (model.canViewInventory || model.canManageInventory || model.isBusinessOwner || model.isBranchManager) &&
+    lowStockCount &&
+    lowStockCount > 0
+  ) {
     attentionItems.push({
       id: 'low-stock',
       type: 'inventory',
@@ -258,7 +266,11 @@ export async function fetchDashboardTodayData(
     });
   }
 
-  if (pendingWaiterCount && pendingWaiterCount > 0) {
+  if (
+    (model.canManageWaiter || model.canViewKitchen || model.isBusinessOwner || model.isBranchManager) &&
+    pendingWaiterCount &&
+    pendingWaiterCount > 0
+  ) {
     attentionItems.push({
       id: 'waiter-requests',
       type: 'waiter',

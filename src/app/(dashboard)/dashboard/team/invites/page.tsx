@@ -15,6 +15,8 @@ import { RoleGovernanceService } from '@/server/services/role-governance.service
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 
+import { OrganizationService } from '@/server/services/organization.service';
+
 export default async function StaffInvitesPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/team/invites');
   if (!allowed) {
@@ -26,9 +28,10 @@ export default async function StaffInvitesPage() {
 
   const { business, membership, branches, activeBranch } = context;
 
-  const [invitations, rawCustomRoles] = await Promise.all([
+  const [invitations, rawCustomRoles, rawDepartments] = await Promise.all([
     StaffInvitationService.listInvitations(business.id, activeBranch?.id),
     RoleGovernanceService.listCustomRoles(business.id, { includeArchived: false }),
+    OrganizationService.getDepartments(business.id),
   ]);
 
   const customRoles = rawCustomRoles
@@ -37,7 +40,15 @@ export default async function StaffInvitesPage() {
       id: r.id,
       name: r.name,
       description: r.description || undefined,
+      defaultScope: r.defaultScope,
+      maxScope: r.maxScope,
     }));
+
+  const departments = (rawDepartments || []).map((d) => ({
+    id: d.id,
+    name: d.name,
+    branchId: d.branch_id,
+  }));
 
   const formattedBranches = branches.map((b: { id: string; name: string; isDefault: boolean }) => ({
     id: b.id,
@@ -63,6 +74,7 @@ export default async function StaffInvitesPage() {
       <StaffInvitesManagement
         branches={formattedBranches}
         branchAreas={branchAreas}
+        departments={departments}
         customRoles={customRoles}
         initialInvitations={invitations}
         userRole={membership.role}

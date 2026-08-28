@@ -1,4 +1,4 @@
-﻿# Phase 37 — Final UX Acceptance & System Closure
+# Phase 37 — Final UX Acceptance & System Closure
 
 ## 1. Executive Summary & Design Principle
 
@@ -70,21 +70,44 @@ Phase 37 consolidates the entire tenant operational platform across:
 
 ---
 
-## 5. Verification & Test Suite Summary
+## 5. Final Three Manual QA Blockers Resolution
 
-- `scripts/verify-phase37-final.ts`: **33 / 33 PASSED**
+### Blocker 1: Dashboard Attention Card & CTA Capability-Gating
+- **Problem**: Custom roles without inventory permissions (e.g. `Senior Cashier` with `orders.view`, `pos.create`) saw `Check Inventory →` in Dashboard $\rightarrow$ Needs Attention, leading to Access Denied.
+- **Resolution**:
+  - `src/server/navigation/dashboard-today-data.ts`: Low-stock promise and attention items (`low-stock`, `pending-reservations`, `waiter-requests`) are now strictly capability-gated.
+  - `src/server/navigation/dashboard-home-model.ts`: `showAttentionSection` is accurately gated on user permissions, eliminating dead-end CTAs.
+
+### Blocker 2: Staff Directory Authoritative Custom Role Display
+- **Problem**: Staff members assigned custom roles (e.g. `Senior Cashier`) displayed the underlying compatibility role (`Cashier`) on staff directory cards.
+- **Resolution**:
+  - `src/components/team/team-management.tsx`: `formatRoleLabel` updated to prioritize `customRoleName` with an explicit `Custom` badge, displaying `Senior Cashier` rather than `Cashier`.
+
+### Blocker 3: Enterprise Staff Invitation Scope & Ceiling Model
+- **Problem**: Staff invitations were strictly branch-bound, preventing enterprise/hotel-group invitations (Organization-wide, Department-scoped, Area-scoped).
+- **Resolution**:
+  - `src/lib/validation/staff-invitation.ts` & `src/server/services/staff-invitation.service.ts`: Extended with `scopeType` (`ORGANIZATION`, `PROPERTY`, `DEPARTMENT`, `AREA_TEAM`), `departmentId`, and inviter reach enforcement via `validateAdministrativeReach` and role ceiling enforcement via `validateMaxScope`.
+  - On claim, if department-scoped, atomic `staff_assignments` record is created/updated.
+  - UI in `StaffInvitesManagement` dynamically adapts based on custom role presets and surfaces `🏢 Organization Wide` and `👥 Department` badges.
+
+---
+
+## 6. Verification & Test Suite Summary
+
+- `scripts/verify-phase37-final.ts`: **40 / 40 PASSED**
 - `scripts/verify-phase37-step4-ux.ts`: **53 / 53 PASSED**
 - `scripts/verify-phase37-step3-closure.ts`: **17 / 17 PASSED**
 - `scripts/verify-phase37-dashboard.ts`: **82 / 82 PASSED**
 - `scripts/verify-phase37-navigation.ts`: **63 / 63 PASSED**
 - `scripts/verify-phase31-role-aware-navigation.ts`: **42 / 42 PASSED**
 - `scripts/verify-phase31-navigation-ia.ts`: **60 / 60 PASSED**
+- `npm run build`: **179/179 routes compiled successfully with 0 errors**
 
 ---
 
-## 6. Migration Policy & Readiness
+## 7. Migration Policy & Readiness
 
 - **Migration File**: `supabase/migrations/20260828000000_phase37_staff_invitation_encrypted_code.sql`
 - **SQL Action**: `ALTER TABLE public.staff_invitations ADD COLUMN encrypted_code TEXT;`
-- **Safety**: Fully backward-compatible; idempotent `IF NOT EXISTS`; non-destructive.
+- **Scope Model Schema Compatibility**: The existing canonical RBAC schema (`role_scope_presets`, `permission_scope_grants`, `staff_assignments`) fully represents Organization and Department assignments. The `branch_id` foreign key on `staff_invitations` anchors to the business's primary branch for DB integrity, requiring no additional schema migration.
 - **Production Status**: `READY FOR MIGRATION` (apply SQL in Supabase console or migration runner).

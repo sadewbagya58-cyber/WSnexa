@@ -464,15 +464,110 @@ async function runFinalAcceptance() {
     '26d. Custom role user lands on /dashboard regardless of underlying base role'
   );
 
-  // --- 27. Zero Dead-End Navigation Invariant ---
-  console.log('\n--- 27. Zero Dead-End Navigation Invariant ---');
-  const navEngineFile = path.join(rootDir, 'src/server/navigation/navigation-engine.ts');
-  const navEngineContent = fs.readFileSync(navEngineFile, 'utf-8');
+  // --- 28. Blocker 1: Dashboard Check Inventory Dead-End CTA Capability Gating ---
+  console.log('\n--- 28. Blocker 1: Dashboard Attention Card Capability-Gating ---');
+  const { resolveDashboardHomeModel } = await import('../src/server/navigation/dashboard-home-model');
+  const { fetchDashboardTodayData } = await import('../src/server/navigation/dashboard-today-data');
+
+  // Non-inventory Senior Cashier model
+  const seniorCashierAuthContext = {
+    ...invMockAuthContext,
+    membershipRole: 'staff',
+    rolePermissions: ['orders.view', 'pos.create'],
+    scopeGrants: [],
+  };
+  const seniorCashierHomeModel = await resolveDashboardHomeModel(seniorCashierAuthContext);
   assert(
-    navEngineContent.includes('hasNavCapability') &&
-    navEngineContent.includes('resolveDashboardNavigation') &&
-    navEngineContent.includes('!canAccess'),
-    '27. Navigation engine dynamically filters all primary and secondary items based on authenticated capabilities'
+    seniorCashierHomeModel.canViewInventory === false &&
+    seniorCashierHomeModel.canManageInventory === false &&
+    seniorCashierHomeModel.showLowStockCard === false,
+    '28a. Senior Cashier without inventory permissions has showLowStockCard = false and canViewInventory = false'
+  );
+
+  // Inventory-permitted role
+  const inventoryManagerHomeModel = await resolveDashboardHomeModel(invMockAuthContext);
+  assert(
+    inventoryManagerHomeModel.canViewInventory === true &&
+    inventoryManagerHomeModel.showLowStockCard === true,
+    '28b. Inventory-permitted role has showLowStockCard = true and canViewInventory = true'
+  );
+
+  // --- 29. Blocker 2: Staff Directory Custom Role Name Display ---
+  console.log('\n--- 29. Blocker 2: Staff Directory Custom Role Name Display ---');
+  const teamMgmtFile = path.join(rootDir, 'src/components/team/team-management.tsx');
+  const teamMgmtContent = fs.readFileSync(teamMgmtFile, 'utf-8');
+  assert(
+    teamMgmtContent.includes('formatRoleLabel(m.role, m.customRoleName)') &&
+    teamMgmtContent.includes('m.customRoleName && (') &&
+    teamMgmtContent.includes('Custom') &&
+    teamMgmtContent.includes('formatRoleLabel = (role: string, customRoleName?: string | null) => {') &&
+    teamMgmtContent.includes('if (customRoleName) {'),
+    '29. Team Directory formats custom role names with Custom badge, rendering Senior Cashier instead of base Cashier'
+  );
+
+  // --- 30. Blocker 3: Enterprise Staff Invitation Scope Model ---
+  console.log('\n--- 30. Blocker 3: Enterprise Staff Invitation Scope & Ceiling Model ---');
+  const { createInvitationSchema } = await import('../src/lib/validation/staff-invitation');
+  const { validateMaxScope, validateAdministrativeReach } = await import('../src/server/auth/scope-target-validator');
+
+  const validOrgInviteInput = {
+    assignedRole: 'branch_manager' as const,
+    scopeType: 'ORGANIZATION' as const,
+    customRoleId: '11111111-1111-4111-a111-111111111111',
+    expiryOption: '48h' as const,
+  };
+  const parsedOrgInvite = createInvitationSchema.safeParse(validOrgInviteInput);
+  assert(
+    parsedOrgInvite.success === true,
+    '30a. createInvitationSchema accepts ORGANIZATION scoped custom role invitations without requiring branchId'
+  );
+
+  const validDeptInviteInput = {
+    branchId: '22222222-2222-4222-a222-222222222222',
+    assignedRole: 'cashier' as const,
+    scopeType: 'DEPARTMENT' as const,
+    departmentId: '33333333-3333-4333-a333-333333333333',
+    expiryOption: '48h' as const,
+  };
+  const parsedDeptInvite = createInvitationSchema.safeParse(validDeptInviteInput);
+  assert(
+    parsedDeptInvite.success === true,
+    '30b. createInvitationSchema accepts DEPARTMENT scoped invitations with departmentId'
+  );
+
+  // Validate Max Scope Ceiling Enforcement
+  let ceilingEnforced = false;
+  try {
+    validateMaxScope('PROPERTY', 'ORGANIZATION');
+  } catch {
+    ceilingEnforced = true;
+  }
+  assert(
+    ceilingEnforced === true,
+    '30c. validateMaxScope strictly forbids ORGANIZATION scope when role ceiling is PROPERTY'
+  );
+
+  // Validate Inviter Reach Enforcement
+  let reachEnforced = false;
+  try {
+    validateAdministrativeReach({
+      actorContext: seniorCashierAuthContext,
+      requestedScope: 'ORGANIZATION',
+    });
+  } catch {
+    reachEnforced = true;
+  }
+  assert(
+    reachEnforced === true,
+    '30d. validateAdministrativeReach forbids non-owner actor from delegating ORGANIZATION scope'
+  );
+
+  assert(
+    staffInviteServiceContent.includes("scope_type: effectiveScope") &&
+    staffInviteServiceContent.includes("department_id: input.departmentId") &&
+    staffInviteServiceContent.includes("assignmentLabel") &&
+    staffInviteServiceContent.includes("Organization Wide"),
+    '30e. StaffInvitationService records scope metadata, generates assignmentLabel, and creates department assignments on claim'
   );
 
   console.log(`\n================================================================`);

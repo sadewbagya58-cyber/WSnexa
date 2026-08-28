@@ -16,6 +16,10 @@ export interface FormattedInvitation {
   assignedRole: StaffRole;
   customRoleId?: string | null;
   customRoleName?: string | null;
+  scopeType?: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF' | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  assignmentLabel?: string;
   invitedEmail: string | null;
   tokenPrefix: string;
   rawCode?: string | null;
@@ -33,7 +37,7 @@ export interface FormattedInvitation {
 
 export class StaffInvitationService {
   /**
-   * Creates a cryptographically secure, branch-bound manager or staff invitation code.
+   * Creates a cryptographically secure, scope-aware manager or staff invitation code.
    */
   static async createInvitation(
     userId: string,
@@ -47,6 +51,7 @@ export class StaffInvitationService {
     invitation?: FormattedInvitation;
   }> {
     const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    const { validateMaxScope, validateAdministrativeReach } = await import('@/server/auth/scope-target-validator');
     let authContext;
     try {
       authContext = await resolveAuthorizationContext({ overrideUserId: userId, requestedBusinessId: businessId });
@@ -58,7 +63,7 @@ export class StaffInvitationService {
       return { success: false, message: 'Unauthorized business context.' };
     }
 
-    const branchResource = { type: 'branch' as const, id: input.branchId };
+    const branchResource = input.branchId ? { type: 'branch' as const, id: input.branchId } : undefined;
     const canInvite =
       (await can({ context: authContext, permission: 'staff.invite', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'staff.manage', resource: branchResource }));
@@ -78,25 +83,15 @@ export class StaffInvitationService {
 
     const admin = createAdminClient();
 
-    // 2. Verify branch belongs to the business
-    const { data: branch } = await admin
-      .from('branches')
-      .select('id, name')
-      .eq('id', input.branchId)
-      .eq('business_id', businessId)
-      .is('deleted_at', null)
-      .single();
-
-    if (!branch) {
-      return { success: false, message: 'Invalid or deleted branch selected.' };
-    }
-
-    // 2b. If custom role specified, verify it belongs to this business and is active
+    // 2. Custom Role & Scope Preset Resolution
     let customRoleName: string | null = null;
+    let effectiveScope: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF' = 'PROPERTY';
+    let targetMaxScope: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF' = 'PROPERTY';
+
     if (input.customRoleId) {
       const { data: customRole } = await admin
         .from('custom_roles')
-        .select('id, name, is_active')
+        .select('id, name, is_active, role_scope_presets(default_scope, max_scope)')
         .eq('id', input.customRoleId)
         .eq('business_id', businessId)
         .maybeSingle();
@@ -110,21 +105,148 @@ export class StaffInvitationService {
       }
 
       customRoleName = customRole.name;
+      const preset = (customRole.role_scope_presets && customRole.role_scope_presets[0]) || {
+        default_scope: 'PROPERTY' as const,
+        max_scope: 'PROPERTY' as const,
+      };
+
+      targetMaxScope = preset.max_scope;
+      effectiveScope = input.scopeType || preset.default_scope || 'PROPERTY';
+
+      // Enforce role maximum scope ceiling
+      try {
+        validateMaxScope(targetMaxScope, effectiveScope);
+      } catch (err: unknown) {
+        return {
+          success: false,
+          message: err instanceof Error ? err.message : 'Requested scope exceeds custom role maximum allowed scope.',
+        };
+      }
+    } else {
+      effectiveScope = input.scopeType || 'PROPERTY';
     }
 
-    // 3. Service Area Validation
+    // 2b. Validate Inviter Authority (Administrative Reach)
+    try {
+      validateAdministrativeReach({
+        actorContext: authContext,
+        requestedScope: effectiveScope,
+        targetBranchId: input.branchId || undefined,
+        targetDepartmentId: input.departmentId || undefined,
+        targetServiceAreaId: input.serviceAreaIds?.[0],
+      });
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Forbidden: Actor lacks authority to delegate the requested scope.',
+      };
+    }
+
+    // 3. Resolve Target Branch & Department
+    let effectiveBranchId = input.branchId || null;
+    let effectiveBranchName = 'Organization Wide';
+    let departmentName: string | null = null;
+
+    if (effectiveScope === 'ORGANIZATION') {
+      if (effectiveBranchId) {
+        const { data: b } = await admin
+          .from('branches')
+          .select('id, name')
+          .eq('id', effectiveBranchId)
+          .eq('business_id', businessId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (!b) {
+          return { success: false, message: 'Invalid branch selected.' };
+        }
+        effectiveBranchName = b.name;
+      } else {
+        const { data: defaultBranch } = await admin
+          .from('branches')
+          .select('id, name')
+          .eq('business_id', businessId)
+          .is('deleted_at', null)
+          .order('is_default', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!defaultBranch) {
+          return { success: false, message: 'No active branch found in business.' };
+        }
+        effectiveBranchId = defaultBranch.id;
+        effectiveBranchName = 'All Branches';
+      }
+    } else if (effectiveScope === 'DEPARTMENT') {
+      if (!input.departmentId) {
+        return { success: false, message: 'Department is required for department-scoped invitations.' };
+      }
+      const { data: dept } = await admin
+        .from('organization_departments')
+        .select('id, name, branch_id, is_active')
+        .eq('id', input.departmentId)
+        .eq('business_id', businessId)
+        .is('archived_at', null)
+        .maybeSingle();
+
+      if (!dept || !dept.is_active) {
+        return { success: false, message: 'Invalid or inactive department selected.' };
+      }
+      departmentName = dept.name;
+
+      if (dept.branch_id) {
+        if (effectiveBranchId && effectiveBranchId !== dept.branch_id) {
+          return { success: false, message: 'Department does not belong to the selected branch.' };
+        }
+        effectiveBranchId = dept.branch_id;
+      }
+
+      if (!effectiveBranchId) {
+        const { data: defaultBranch } = await admin
+          .from('branches')
+          .select('id, name')
+          .eq('business_id', businessId)
+          .is('deleted_at', null)
+          .order('is_default', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        effectiveBranchId = defaultBranch?.id || null;
+      }
+
+      const { data: b } = await admin
+        .from('branches')
+        .select('name')
+        .eq('id', effectiveBranchId!)
+        .maybeSingle();
+      effectiveBranchName = b?.name || 'Assigned Branch';
+    } else {
+      // PROPERTY, AREA_TEAM, or built-in operational role
+      if (!effectiveBranchId) {
+        return { success: false, message: 'Please select a branch.' };
+      }
+      const { data: b } = await admin
+        .from('branches')
+        .select('id, name')
+        .eq('id', effectiveBranchId)
+        .eq('business_id', businessId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (!b) {
+        return { success: false, message: 'Invalid or deleted branch selected.' };
+      }
+      effectiveBranchName = b.name;
+    }
+
+    // 4. Service Area Validation
     let reqAreas = input.serviceAreaIds;
-    if (input.assignedRole === 'waiter') {
+    if (input.assignedRole === 'waiter' && !input.customRoleId) {
       if (reqAreas && reqAreas.length === 0) {
         return { success: false, message: 'At least one Service Area is required when inviting a Waiter.' };
       }
-      if (!reqAreas) {
-        // Fallback for legacy Phase 14 invites without serviceAreaIds property
+      if (!reqAreas && effectiveBranchId) {
         const { data: existingAreas } = await admin
           .from('service_areas')
           .select('id')
           .eq('business_id', businessId)
-          .eq('branch_id', input.branchId)
+          .eq('branch_id', effectiveBranchId)
           .eq('is_active', true)
           .is('deleted_at', null);
 
@@ -135,7 +257,7 @@ export class StaffInvitationService {
             .from('service_areas')
             .insert({
               business_id: businessId,
-              branch_id: input.branchId,
+              branch_id: effectiveBranchId,
               name: 'Main Area',
               code: `MAIN_${Date.now().toString(36).slice(-4)}`,
               is_active: true,
@@ -150,13 +272,13 @@ export class StaffInvitationService {
     }
     const finalAreas = reqAreas || [];
 
-    if (finalAreas.length > 0) {
+    if (finalAreas.length > 0 && effectiveBranchId) {
       const { data: validAreas } = await admin
         .from('service_areas')
         .select('id, name')
         .in('id', finalAreas)
         .eq('business_id', businessId)
-        .eq('branch_id', input.branchId)
+        .eq('branch_id', effectiveBranchId)
         .is('deleted_at', null);
 
       if (!validAreas || validAreas.length !== finalAreas.length) {
@@ -167,7 +289,7 @@ export class StaffInvitationService {
       }
     }
 
-    // 4. Compute expiry timestamp
+    // 5. Compute expiry timestamp
     const now = new Date();
     let hours = 48;
     if (input.expiryOption === '24h') hours = 24;
@@ -183,12 +305,12 @@ export class StaffInvitationService {
       ? input.invitedEmail.trim().toLowerCase()
       : null;
 
-    // 5. Insert into staff_invitations
+    // 6. Insert into staff_invitations
     const { data: inviteRow, error: insertErr } = await admin
       .from('staff_invitations')
       .insert({
         business_id: businessId,
-        branch_id: input.branchId,
+        branch_id: effectiveBranchId!,
         invitation_type: invitationType,
         assigned_role: input.assignedRole,
         custom_role_id: input.customRoleId || null,
@@ -209,14 +331,14 @@ export class StaffInvitationService {
       return { success: false, message: `Failed to create invitation: ${insertErr?.message || 'DB error'}` };
     }
 
-    // 6. Insert service area mappings if any
+    // 7. Insert service area mappings if any
     let assignedAreaNames: string[] = [];
     if (finalAreas.length > 0) {
       const inviteAreaRows = finalAreas.map((areaId) => ({
         invitation_id: inviteRow.id,
         service_area_id: areaId,
         business_id: businessId,
-        branch_id: input.branchId,
+        branch_id: effectiveBranchId!,
       }));
       const { error: inviteAreaErr } = await admin.from('staff_invitation_areas').insert(inviteAreaRows);
       if (inviteAreaErr) {
@@ -230,7 +352,7 @@ export class StaffInvitationService {
       assignedAreaNames = areaRows?.map((a: { name: string }) => a.name) || [];
     }
 
-    // 7. Log audit event
+    // 8. Log audit event with comprehensive scope metadata
     await admin.from('audit_logs').insert({
       business_id: businessId,
       actor_id: userId,
@@ -238,7 +360,10 @@ export class StaffInvitationService {
       target_type: 'staff_invitation',
       target_id: inviteRow.id,
       payload: {
-        branch_id: input.branchId,
+        branch_id: effectiveBranchId,
+        scope_type: effectiveScope,
+        department_id: input.departmentId || null,
+        department_name: departmentName,
         assigned_role: input.assignedRole,
         custom_role_id: input.customRoleId || null,
         invited_email: invitedEmail,
@@ -248,26 +373,39 @@ export class StaffInvitationService {
       },
     });
 
+    let assignmentLabel = effectiveBranchName;
+    if (effectiveScope === 'ORGANIZATION') {
+      assignmentLabel = 'Organization Wide';
+    } else if (departmentName) {
+      assignmentLabel = `${effectiveBranchName} · ${departmentName}`;
+    } else if (assignedAreaNames.length > 0) {
+      assignmentLabel = `${effectiveBranchName} · ${assignedAreaNames.join(', ')}`;
+    }
+
     const formatted: FormattedInvitation = {
       id: inviteRow.id,
       businessId: inviteRow.business_id,
       branchId: inviteRow.branch_id,
-      branchName: branch.name,
+      branchName: effectiveBranchName,
       invitationType: inviteRow.invitation_type,
       assignedRole: inviteRow.assigned_role,
       customRoleId: inviteRow.custom_role_id || null,
       customRoleName,
+      scopeType: effectiveScope,
+      departmentId: input.departmentId || null,
+      departmentName,
+      assignmentLabel,
       invitedEmail: inviteRow.invited_email,
       tokenPrefix: inviteRow.token_prefix,
-      rawCode,
-      status: inviteRow.status,
+      rawCode: rawCode,
+      status: 'pending',
       createdBy: inviteRow.created_by,
-      claimedBy: inviteRow.claimed_by,
+      claimedBy: null,
       expiresAt: inviteRow.expires_at,
-      claimedAt: inviteRow.claimed_at,
-      revokedAt: inviteRow.revoked_at,
+      claimedAt: null,
+      revokedAt: null,
       createdAt: inviteRow.created_at,
-      serviceAreaIds: reqAreas,
+      serviceAreaIds: finalAreas,
       serviceAreaNames: assignedAreaNames,
     };
 
@@ -517,8 +655,7 @@ export class StaffInvitationService {
       });
     }
 
-    // 8. STAFF AREA ASSIGNMENTS CREATION
-    // Check if this invitation has pre-assigned service areas
+    // 8. STAFF AREA & DEPARTMENT ASSIGNMENTS CREATION
     let targetAreaIds: string[] = [];
     const { data: inviteAreas, error: fetchAreasErr } = await admin
       .from('staff_invitation_areas')
@@ -527,19 +664,19 @@ export class StaffInvitationService {
 
     if (!fetchAreasErr && inviteAreas && inviteAreas.length > 0) {
       targetAreaIds = inviteAreas.map((ia) => ia.service_area_id);
-    } else {
-      // Fallback: Query audit_logs for pre-assigned area IDs
-      const { data: auditLog } = await admin
-        .from('audit_logs')
-        .select('payload')
-        .eq('target_id', invite.id)
-        .eq('action', 'invitation.created')
-        .maybeSingle();
+    }
 
-      const payloadAreaIds = (auditLog?.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
-      if (Array.isArray(payloadAreaIds)) {
-        targetAreaIds = payloadAreaIds;
-      }
+    // Query audit_logs for scope metadata (department_id, service_area_ids)
+    const { data: auditLog } = await admin
+      .from('audit_logs')
+      .select('payload')
+      .eq('target_id', invite.id)
+      .eq('action', 'invitation.created')
+      .maybeSingle();
+
+    const payloadData = auditLog?.payload as { service_area_ids?: string[]; department_id?: string; scope_type?: string } | null;
+    if (targetAreaIds.length === 0 && Array.isArray(payloadData?.service_area_ids)) {
+      targetAreaIds = payloadData.service_area_ids;
     }
 
     if (targetAreaIds.length > 0) {
@@ -561,6 +698,39 @@ export class StaffInvitationService {
       const { error: areaInsertErr } = await admin.from('staff_area_assignments').insert(areaRowsToInsert);
       if (areaInsertErr) {
         console.error('Failed to insert staff_area_assignments on claim:', areaInsertErr.message);
+      }
+    }
+
+    // Assign department if invitation was department-scoped
+    if (payloadData?.department_id) {
+      const { data: existingStaffAssign } = await admin
+        .from('staff_assignments')
+        .select('id')
+        .eq('business_membership_id', membershipId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (existingStaffAssign) {
+        await admin
+          .from('staff_assignments')
+          .update({
+            department_id: payloadData.department_id,
+            branch_id: invite.branch_id,
+            updated_at: now.toISOString(),
+          })
+          .eq('id', existingStaffAssign.id);
+      } else {
+        await admin.from('staff_assignments').insert({
+          business_membership_id: membershipId,
+          assignment_type: 'primary',
+          status: 'active',
+          is_primary: true,
+          branch_id: invite.branch_id,
+          department_id: payloadData.department_id,
+          starts_at: now.toISOString(),
+          created_at: now.toISOString(),
+          updated_at: now.toISOString(),
+        });
       }
     }
 
@@ -590,6 +760,7 @@ export class StaffInvitationService {
         assigned_role: invite.assigned_role,
         custom_role_id: invite.custom_role_id || null,
         claimed_by_email: userEmail,
+        department_id: payloadData?.department_id || null,
         previous_overrides_cleared: existingMem ? true : false,
       },
     });
@@ -621,6 +792,7 @@ export class StaffInvitationService {
 
     return {
       success: true,
+      message: 'Invitation claimed successfully.',
       targetRoute,
       role: invite.assigned_role as StaffRole,
     };
@@ -646,6 +818,7 @@ export class StaffInvitationService {
     }
 
     const canManage =
+      authContext.isBusinessOwner ||
       (await can({ context: authContext, permission: 'staff.manage' })) ||
       (await can({ context: authContext, permission: 'staff.invite' })) ||
       (await can({ context: authContext, permission: 'invitations.manage' }));
@@ -785,14 +958,21 @@ export class StaffInvitationService {
     if (!rows || rows.length === 0) return [];
 
     const inviteIds = rows.map((r) => r.id as string);
-    const { data: areaRows, error: areaRowsErr } = await admin
-      .from('staff_invitation_areas')
-      .select('invitation_id, service_area_id, service_areas(id, name)')
-      .in('invitation_id', inviteIds);
+    const [areaRowsRes, auditLogsRes] = await Promise.all([
+      admin
+        .from('staff_invitation_areas')
+        .select('invitation_id, service_area_id, service_areas(id, name)')
+        .in('invitation_id', inviteIds),
+      admin
+        .from('audit_logs')
+        .select('target_id, payload')
+        .in('target_id', inviteIds)
+        .eq('action', 'invitation.created'),
+    ]);
 
     const inviteAreaMap = new Map<string, { ids: string[]; names: string[] }>();
-    if (!areaRowsErr && areaRows && areaRows.length > 0) {
-      for (const ar of areaRows) {
+    if (!areaRowsRes.error && areaRowsRes.data && areaRowsRes.data.length > 0) {
+      for (const ar of areaRowsRes.data) {
         const invId = ar.invitation_id as string;
         const sa = (Array.isArray(ar.service_areas) ? ar.service_areas[0] : ar.service_areas) as { id?: string; name?: string } | null;
         if (!inviteAreaMap.has(invId)) {
@@ -804,40 +984,19 @@ export class StaffInvitationService {
           entry.names.push(sa.name);
         }
       }
-    } else {
-      // Fallback to audit_logs
-      const { data: auditLogs } = await admin
-        .from('audit_logs')
-        .select('target_id, payload')
-        .in('target_id', inviteIds)
-        .eq('action', 'invitation.created');
+    }
 
-      if (auditLogs) {
-        const allAreaIdsSet = new Set<string>();
-        for (const log of auditLogs) {
-          const areaIds = (log.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
-          if (Array.isArray(areaIds)) {
-            areaIds.forEach((id) => allAreaIdsSet.add(id));
-          }
-        }
-
-        if (allAreaIdsSet.size > 0) {
-          const { data: saList } = await admin
-            .from('service_areas')
-            .select('id, name')
-            .in('id', Array.from(allAreaIdsSet));
-
-          const saNameMap = new Map<string, string>();
-          saList?.forEach((sa) => saNameMap.set(sa.id, sa.name));
-
-          for (const log of auditLogs) {
-            const invId = log.target_id;
-            const areaIds = (log.payload as { service_area_ids?: string[] } | null)?.service_area_ids;
-            if (invId && Array.isArray(areaIds)) {
-              const names = areaIds.map((id) => saNameMap.get(id)).filter(Boolean) as string[];
-              inviteAreaMap.set(invId, { ids: areaIds, names });
-            }
-          }
+    const inviteScopeMap = new Map<string, { scopeType?: string; departmentId?: string; departmentName?: string }>();
+    if (auditLogsRes.data) {
+      for (const log of auditLogsRes.data) {
+        const invId = log.target_id;
+        const payload = log.payload as { scope_type?: string; department_id?: string; department_name?: string } | null;
+        if (invId && payload) {
+          inviteScopeMap.set(invId, {
+            scopeType: payload.scope_type,
+            departmentId: payload.department_id,
+            departmentName: payload.department_name,
+          });
         }
       }
     }
@@ -848,12 +1007,23 @@ export class StaffInvitationService {
       const b = r.branches as { name?: string } | null;
       const cr = r.custom_roles as { id?: string; name?: string } | null;
       const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
+      const scopeInfo = inviteScopeMap.get(r.id as string);
       const isExpired = new Date(r.expires_at) <= now;
       const isValidPending = r.status === 'pending' && !isExpired;
 
       let decryptedCode: string | null = null;
       if (isValidPending && r.encrypted_code) {
         decryptedCode = decryptInvitationCode(r.encrypted_code);
+      }
+
+      const scopeType = (scopeInfo?.scopeType || (r.custom_role_id ? 'PROPERTY' : 'PROPERTY')) as 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF';
+      let assignmentLabel = b?.name || 'Assigned Branch';
+      if (scopeType === 'ORGANIZATION') {
+        assignmentLabel = 'Organization Wide';
+      } else if (scopeInfo?.departmentName) {
+        assignmentLabel = `${b?.name || 'Branch'} · ${scopeInfo.departmentName}`;
+      } else if (areaInfo.names.length > 0) {
+        assignmentLabel = `${b?.name || 'Branch'} · ${areaInfo.names.join(', ')}`;
       }
 
       return {
@@ -865,6 +1035,10 @@ export class StaffInvitationService {
         assignedRole: r.assigned_role as StaffRole,
         customRoleId: (r.custom_role_id as string) || cr?.id || null,
         customRoleName: cr?.name || null,
+        scopeType,
+        departmentId: scopeInfo?.departmentId || null,
+        departmentName: scopeInfo?.departmentName || null,
+        assignmentLabel,
         invitedEmail: (r.invited_email as string) || null,
         tokenPrefix: r.token_prefix as string,
         rawCode: decryptedCode,

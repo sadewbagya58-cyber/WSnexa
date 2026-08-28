@@ -262,7 +262,7 @@ export function StaffInvitesManagement({
 
         {isOwner && (
           <Button variant="primary" onClick={() => setIsModalOpen(true)} className="flex items-center gap-2">
-            <span>➕</span> Generate New Invitation
+            <span>➕</span> Invite Staff
           </Button>
         )}
       </div>
@@ -275,7 +275,7 @@ export function StaffInvitesManagement({
             <div>No staff invitations generated yet.</div>
             {isOwner && (
               <div className="text-[11px] text-zinc-400">
-                Click <strong>Generate New Invitation</strong> to invite Branch Managers, Cashiers, Kitchen Staff, Waiters, or custom role staff.
+                Click <strong>Invite Staff</strong> to invite Branch Managers, Cashiers, Kitchen Staff, Waiters, or custom role staff.
               </div>
             )}
           </div>
@@ -444,7 +444,7 @@ export function StaffInvitesManagement({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-zinc-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-              <h3 className="text-lg font-bold text-zinc-950">Generate Staff Invitation</h3>
+              <h3 className="text-lg font-bold text-zinc-950">New Staff Invite</h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
@@ -563,7 +563,7 @@ export function StaffInvitesManagement({
 
               <div>
                 <label className="block text-zinc-700 font-bold mb-1">
-                  Invited Email <span className="text-zinc-400 font-normal">(Optional Binding)</span>
+                  Email <span className="text-zinc-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="email"
@@ -573,12 +573,12 @@ export function StaffInvitesManagement({
                   className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none"
                 />
                 <p className="text-[10px] text-zinc-500 mt-1">
-                  If set, only an account registered with this exact email can claim this code.
+                  If provided, only an account registered with this email can claim this code.
                 </p>
               </div>
 
               <div>
-                <label className="block text-zinc-700 font-bold mb-1">Code Expiry Duration *</label>
+                <label className="block text-zinc-700 font-bold mb-1">Invite expires in *</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['24h', '48h', '7d'] as ExpiryOption[]).map((exp) => (
                     <button

@@ -4,6 +4,7 @@ import { SubscriptionService } from '@/server/services/subscription.service';
 import { SubscriptionPaymentQueryService } from '@/server/services/subscription-payment-query.service';
 import { OwnerSubscriptionClient } from '@/components/subscription/owner-subscription-client';
 import { OwnerBillingHistoryClient } from '@/components/subscription/owner-billing-history-client';
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
 
 export const metadata = {
   title: 'Subscription & Plan Management — WSNexa',
@@ -34,7 +35,9 @@ export default async function OwnerSubscriptionPage({ searchParams }: PageProps)
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <SettingsSubNav canViewSubscription={true} />
+
       <OwnerSubscriptionClient
         businessName={context.business.name}
         subContext={subContext}

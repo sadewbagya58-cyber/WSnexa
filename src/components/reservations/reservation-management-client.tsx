@@ -1085,7 +1085,7 @@ export function ReservationManagementClient({
       {showStaffCreateModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleStaffCreateReservation} className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-900 border-b pb-2">New Staff Reservation</h3>
+            <h3 className="text-lg font-bold text-slate-900 border-b pb-2">New Reservation</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
               <div>

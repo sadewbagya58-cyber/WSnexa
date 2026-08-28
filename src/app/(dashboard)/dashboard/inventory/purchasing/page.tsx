@@ -9,6 +9,7 @@ import { PurchasingService } from '@/server/services/purchasing.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Purchase Orders & Deliveries | WSNexa Inventory',
@@ -89,6 +90,10 @@ export default async function PurchasingPage() {
             </Link>
           ) : undefined
         }
+      />
+
+      <InventorySubNav
+        canViewReceiving={canReceive}
       />
 
       {purchaseOrders.length === 0 ? (

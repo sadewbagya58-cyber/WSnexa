@@ -121,59 +121,108 @@ export function OwnerBillingHistoryClient({
           <p className="text-xs text-zinc-400">Payment records will appear here when checkout intents are initiated.</p>
         </div>
       ) : (
-        /* Payment History Table */
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-zinc-200 text-zinc-500 uppercase tracking-wider text-[10px] font-black bg-zinc-50/50">
-                <th className="py-3 px-3">Date</th>
-                <th className="py-3 px-3">Plan</th>
-                <th className="py-3 px-3">Purpose</th>
-                <th className="py-3 px-3">Amount</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Provider</th>
-                <th className="py-3 px-3">Ref ID</th>
-                <th className="py-3 px-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 font-medium text-zinc-900">
-              {payments.map((item) => (
-                <tr key={item.id} className="hover:bg-zinc-50/80 transition-colors">
-                  <td className="py-3 px-3 font-mono text-zinc-600 whitespace-nowrap">
-                    {new Date(item.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </td>
-                  <td className="py-3 px-3 font-extrabold capitalize text-zinc-950">{item.plan_code}</td>
-                  <td className="py-3 px-3 capitalize text-zinc-700">
-                    {(item.payment_purpose || 'new_subscription').replace('_', ' ')}
-                  </td>
-                  <td className="py-3 px-3 font-mono font-black text-zinc-950">
-                    LKR {item.amount_lkr.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-3 whitespace-nowrap">{renderStatusBadge(item.status)}</td>
-                  <td className="py-3 px-3 text-zinc-500 font-medium">
-                    {item.provider ? item.provider.toUpperCase() : 'Not connected'}
-                  </td>
-                  <td className="py-3 px-3 font-mono text-zinc-500 text-[11px]">
-                    #{item.id.slice(0, 8)}
-                  </td>
-                  <td className="py-3 px-3 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPayment(item)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-extrabold text-[11px] transition-all cursor-pointer"
-                    >
-                      View Details
-                    </button>
-                  </td>
+        <>
+          {/* Mobile Card List View (< 768px) */}
+          <div className="block md:hidden space-y-3">
+            {payments.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 rounded-xl border border-zinc-200 bg-white shadow-2xs space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-mono text-zinc-400 block">
+                      #{item.id.slice(0, 8)} • {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <span className="text-sm font-black text-zinc-950 capitalize mt-0.5 block">
+                      {item.plan_code} Plan
+                    </span>
+                  </div>
+                  {renderStatusBadge(item.status)}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-100">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 block">Amount</span>
+                    <span className="font-mono font-black text-zinc-950">
+                      LKR {item.amount_lkr.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-400 block">Purpose</span>
+                    <span className="capitalize text-zinc-700 font-semibold">
+                      {(item.payment_purpose || 'subscription').replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPayment(item)}
+                    className="w-full py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-bold text-xs transition-colors min-h-[44px] flex items-center justify-center cursor-pointer"
+                  >
+                    View Details & Invoice →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Payment History Table (>= 768px) */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-zinc-200 text-zinc-500 uppercase tracking-wider text-[10px] font-black bg-zinc-50/50">
+                  <th className="py-3 px-3">Date</th>
+                  <th className="py-3 px-3">Plan</th>
+                  <th className="py-3 px-3">Purpose</th>
+                  <th className="py-3 px-3">Amount</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Provider</th>
+                  <th className="py-3 px-3">Ref ID</th>
+                  <th className="py-3 px-3 text-right">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 font-medium text-zinc-900">
+                {payments.map((item) => (
+                  <tr key={item.id} className="hover:bg-zinc-50/80 transition-colors">
+                    <td className="py-3 px-3 font-mono text-zinc-600 whitespace-nowrap">
+                      {new Date(item.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="py-3 px-3 font-extrabold capitalize text-zinc-950">{item.plan_code}</td>
+                    <td className="py-3 px-3 capitalize text-zinc-700">
+                      {(item.payment_purpose || 'new_subscription').replace('_', ' ')}
+                    </td>
+                    <td className="py-3 px-3 font-mono font-black text-zinc-950">
+                      LKR {item.amount_lkr.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 whitespace-nowrap">{renderStatusBadge(item.status)}</td>
+                    <td className="py-3 px-3 text-zinc-500 font-medium">
+                      {item.provider ? item.provider.toUpperCase() : 'Not connected'}
+                    </td>
+                    <td className="py-3 px-3 font-mono text-zinc-500 text-[11px]">
+                      #{item.id.slice(0, 8)}
+                    </td>
+                    <td className="py-3 px-3 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPayment(item)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-extrabold text-[11px] transition-all cursor-pointer"
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Pagination Footer */}

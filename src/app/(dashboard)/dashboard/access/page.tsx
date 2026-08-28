@@ -15,6 +15,8 @@ export const metadata = {
 
 import { PageHeader } from '@/components/layout/page-header';
 
+import { TeamSubNav } from '@/components/team/team-subnav';
+
 export default async function AccessHubPage() {
   const { allowed } = await requireRoutePermission('/dashboard/access');
 
@@ -48,9 +50,12 @@ export default async function AccessHubPage() {
         description="Manage staff roles, custom permission bundles, and location access."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Team', href: '/dashboard/team' },
           { label: 'Access Control Hub' },
         ]}
       />
+
+      <TeamSubNav />
 
       <AccessHubOverview
         builtInTemplates={builtInTemplates}

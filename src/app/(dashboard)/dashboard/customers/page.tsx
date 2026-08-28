@@ -5,6 +5,7 @@ import { CRMOverviewService } from '@/server/crm/crm-overview.service';
 import { CustomerDirectoryService } from '@/server/crm/customer-directory.service';
 import { CustomerActionService } from '@/server/crm/customer-action.service';
 import { CRMHubClient } from '@/components/crm/crm-hub-client';
+import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,14 @@ export default async function CustomersPage() {
     permission: 'customers.contact_view',
   });
 
+  const isOwner = authContext.isBusinessOwner;
+
+  const [hasReviewsPermission, hasReputationPermission, hasLoyaltyPermission] = await Promise.all([
+    can({ context: authContext, permission: 'reviews.view' }).then((v) => v || isOwner),
+    can({ context: authContext, permission: 'reputation.view' }).then((v) => v || isOwner),
+    can({ context: authContext, permission: 'loyalty.view' }).then((v) => (v || isOwner) && IS_LOYALTY_ENABLED),
+  ]);
+
   const [overview, directoryResult, actionsResult] = await Promise.all([
     CRMOverviewService.getCRMOverview({
       businessId: authContext.businessId,
@@ -91,6 +100,9 @@ export default async function CustomersPage() {
       initialTotalActions={actionsResult.total}
       canManage={canManage}
       hasContactView={hasContactView}
+      hasReviewsPermission={hasReviewsPermission}
+      hasReputationPermission={hasReputationPermission}
+      hasLoyaltyPermission={hasLoyaltyPermission}
       authorizedBranchIds={authContext.authorizedBranchIds}
     />
   );

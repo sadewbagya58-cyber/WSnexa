@@ -14,6 +14,7 @@ export const metadata = {
 };
 
 import { PageHeader } from '@/components/layout/page-header';
+import { TeamSubNav } from '@/components/team/team-subnav';
 
 export default async function AccessDiagnosticsPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/access/diagnostics');
@@ -48,10 +49,12 @@ export default async function AccessDiagnosticsPage() {
         description="Interactive Policy Engine evaluation tracer, provenance breakdown, and permission simulation."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Team', href: '/dashboard/team' },
           { label: 'Diagnostics' },
         ]}
       />
+
+      <TeamSubNav />
 
       <AccessDiagnosticsClient
         members={members}

@@ -231,8 +231,8 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
       {/* Image Upload */}
       <div>
         <label className="block text-xs font-medium text-zinc-700">Item Image (Optional)</label>
-        <div className="mt-2 flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 overflow-hidden">
+        <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 overflow-hidden">
             {imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={imageUrl} alt="Preview" className="h-full w-full object-cover" />
@@ -245,22 +245,27 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
             accept="image/png, image/jpeg, image/webp"
             onChange={handleImageUpload}
             disabled={uploading}
-            className="text-xs text-zinc-500"
+            className="text-xs text-zinc-500 max-w-full file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 cursor-pointer"
           />
         </div>
       </div>
 
-      <div className="flex items-center gap-2 pt-2">
+      <div className="flex items-start gap-2.5 pt-2">
         <input
           type="checkbox"
           id="isFeatured"
           checked={formData.isFeatured}
           onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-          className="h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
+          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 cursor-pointer"
         />
-        <label htmlFor="isFeatured" className="text-xs font-medium text-zinc-900">
-          Feature this item on the menu highlight list
-        </label>
+        <div>
+          <label htmlFor="isFeatured" className="text-xs font-semibold text-zinc-900 cursor-pointer block">
+            Feature this item
+          </label>
+          <p className="text-[11px] text-zinc-500">
+            Show this item prominently on the menu.
+          </p>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-4">

@@ -103,15 +103,52 @@ Resolved the deferred Step 3 Inventory RBAC issue: A custom role with ONLY `inve
 
 ---
 
-## 6. Automated Verification
+## 6. Final Manual QA UX Closure Hotfix
 
-- **Script**: `scripts/verify-phase37-step4-ux.ts` (21/21 assertions passed).
+Following production manual QA, the 15 discoverability, navigation, and responsiveness issues were resolved:
+
+1. **Settings Hub vs Billing Separation (Issues 1, 2, 3)**:
+   - Restored `/dashboard/settings` as a comprehensive, capability-aware Settings Hub surfacing Business Profile, Public Venue Profile, Branch Management, Order Security & Anti-Fraud, Payment Settings, and Inventory Policies.
+   - Subscription & Billing (`/dashboard/settings/subscription`) is surfaced as a dedicated card for Business Owners only, and linked from the user profile dropdown and mobile drawer.
+   - Created reusable `<SettingsSubNav />` component and integrated across all settings subpages.
+2. **Team & Access Secondary Discoverability (Issue 4)**:
+   - Created `<TeamSubNav />` and integrated across `/dashboard/team`, `/dashboard/team/invites`, `/dashboard/access`, `/dashboard/access/roles`, `/dashboard/access/diagnostics`, and `/dashboard/organization`.
+3. **Operations / Inventory Subsection Discoverability (Issue 5)**:
+   - Created `<InventorySubNav />` and integrated across `/dashboard/inventory`, `/items`, `/counts`, `/recipes`, `/purchasing`, `/receiving`, `/transfers`, `/suppliers`, `/locations`, `/waste`, and `/settings`.
+4. **Global Help & Documentation Entry Point (Issue 6)**:
+   - Added global Help link (`/dashboard/help`) in `DashboardShell` header, desktop user profile dropdown, and mobile drawer footer.
+5. **Mobile Branch Switcher (Issue 7)**:
+   - Restored `ActiveBranchSwitcher` prominently in the mobile navigation drawer with zero horizontal overflow.
+6. **Subscription / Billing Purchase History Mobile Responsiveness (Issue 8)**:
+   - Added responsive mobile card list view (`block md:hidden`) alongside desktop table (`hidden md:block`) in `OwnerBillingHistoryClient`.
+7. **View-Only Stock Mutation Action Suppressed (Issue 9)**:
+   - In `InventoryNeedsAttention`, out-of-stock items now strictly hide `Add Stock →` and `Replenish →` mutation CTAs for users with only `inventory.view`.
+8. **Role Wizard Raw Permission Keys Cleaned (Issue 10)**:
+   - In `PermissionMatrix` (Step 3 of Custom Role Creation), raw permission keys are hidden by default, with an optional "Show Technical IDs" disclosure toggle.
+9. **Customer Secondary Tabs Gating (Issue 11)**:
+   - Gated secondary customer workspaces (`Directory`, `Reviews`, `Reputation`, `Loyalty`) based on individual capabilities via `<CRMSubNav />`.
+10. **Staff Invitation Microcopy (Issue 12)**:
+    - Updated wording: `Generate Staff Invitation` $\rightarrow$ `New Staff Invite`; `Generate New Invitation` $\rightarrow$ `Invite Staff`; `Invited Email (Optional Binding)` $\rightarrow$ `Email (Optional)`; `Code Expiry Duration` $\rightarrow$ `Invite expires in`.
+11. **Menu Item Feature Wording (Issue 13)**:
+    - Updated: `Feature this item` (helper: `Show this item prominently on the menu.`).
+12. **Reservation Modal Title (Issue 14)**:
+    - Renamed modal title from `New Staff Reservation` to `New Reservation`.
+13. **Mobile Menu Item Image Picker Layout (Issue 15)**:
+    - Updated image upload container to stack preview and file chooser responsively (`flex-col sm:flex-row`).
+
+---
+
+## 7. Automated Verification
+
+- **UX Verification Script**: `scripts/verify-phase37-step4-ux.ts` (34/34 assertions passed).
 - **Regression Suite Passing**:
   - `npx tsx scripts/verify-phase37-dashboard.ts` (82/82 passed)
   - `npx tsx scripts/verify-phase37-navigation.ts` (63/63 passed)
   - `npm run verify:phase31-role-aware-navigation` (42/42 passed)
   - `npm run verify:phase31-navigation-ia` (60/60 passed)
-  - `npx tsx scripts/verify-phase37-step3-closure.ts` (17/17 passed)
   - `npm run verify:v1-subscriptions` (30/30 passed)
   - `npm run verify:v1-notifications` (43/43 passed)
   - `npx tsc --noEmit` (0 errors)
+  - `npm run lint` (0 errors)
+  - `npm run build` (179/179 routes compiled successfully)
+

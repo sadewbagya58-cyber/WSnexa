@@ -6,6 +6,7 @@ import { OrderSecuritySettings } from '@/components/settings/order-security-sett
 import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveAuthorizationContext } from '@/server/auth';
 import { can } from '@/server/auth/policy-engine';
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
 
 export default async function OrderSecurityPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/settings/order-security');
@@ -44,15 +45,18 @@ export default async function OrderSecurityPage() {
   } catch {
     canManage = tenantContext.membership?.role === 'business_owner';
   }
-
   const initialSettings = await OrderSecurityService.getBranchSecuritySettings(branchId);
+  const isOwner = tenantContext.membership?.role === 'business_owner';
 
   return (
-    <OrderSecuritySettings
-      branchId={branchId}
-      branchName={tenantContext.activeBranch.name}
-      initialSettings={initialSettings}
-      canManage={canManage}
-    />
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <SettingsSubNav canViewSubscription={isOwner} />
+      <OrderSecuritySettings
+        branchId={branchId}
+        branchName={tenantContext.activeBranch.name}
+        initialSettings={initialSettings}
+        canManage={canManage}
+      />
+    </div>
   );
 }

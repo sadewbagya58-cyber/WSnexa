@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { StaffInvitationService } from '@/server/services/staff-invitation.service';
 import { StaffInvitesManagement } from '@/components/team/staff-invites-management';
+import { TeamSubNav } from '@/components/team/team-subnav';
 
 export const metadata: Metadata = {
   title: 'Staff Invitations | WSNexa Business',
@@ -57,13 +58,16 @@ export default async function StaffInvitesPage() {
   }));
 
   return (
-    <StaffInvitesManagement
-      branches={formattedBranches}
-      branchAreas={branchAreas}
-      customRoles={customRoles}
-      initialInvitations={invitations}
-      userRole={membership.role}
-      activeBranchId={activeBranch?.id}
-    />
+    <div className="max-w-7xl mx-auto space-y-6">
+      <TeamSubNav />
+      <StaffInvitesManagement
+        branches={formattedBranches}
+        branchAreas={branchAreas}
+        customRoles={customRoles}
+        initialInvitations={invitations}
+        userRole={membership.role}
+        activeBranchId={targetBranchId}
+      />
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { createAdminClient } from '@/lib/supabase/server';
 import { InventorySettingsClient } from '@/components/inventory/inventory-settings-client';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Inventory & Recipe Settings | WSNexa POS',
@@ -59,11 +60,13 @@ export default async function InventorySettingsPage() {
         description={`Customize stock deduction stages, valuation rules, and replenishment thresholds for ${context.activeBranch.name}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Inventory', href: '/dashboard/inventory' },
+          { label: 'Inventory Hub', href: '/dashboard/inventory' },
           { label: 'Settings' },
         ]}
         helpSlug="automatic-stock-deduction-timing"
       />
+
+      <InventorySubNav />
 
       <InventorySettingsClient
         branchId={context.activeBranch.id}

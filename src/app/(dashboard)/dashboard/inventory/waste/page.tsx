@@ -6,6 +6,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Waste Tracking | WSNexa Inventory',
@@ -58,7 +59,8 @@ export default async function InventoryWastePage() {
       case 'dropped': return 'Dropped on Floor';
       case 'customer_return': return 'Customer Return';
       case 'staff_meal': return 'Staff Meal';
-      case 'damaged': return 'Packaging Damaged';
+      case 'sample': return 'Tasting / QC Sample';
+      case 'damaged': return 'Damaged Packaging';
       default: return reason;
     }
   };
@@ -75,6 +77,8 @@ export default async function InventoryWastePage() {
         ]}
         helpSlug="recording-stock-adjustments-and-waste"
       />
+
+      <InventorySubNav />
 
       {wasteRecords.length === 0 ? (
         <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-10 text-center shadow-xs">

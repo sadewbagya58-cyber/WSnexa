@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { GoodsReceivingClient } from '@/components/inventory/goods-receiving-client';
 import { SupplierReturnsClient } from '@/components/inventory/supplier-returns-client';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -165,6 +166,8 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
         ]}
         helpSlug="receiving-goods-and-grn"
       />
+
+      <InventorySubNav />
 
       {/* Navigation Subtabs */}
       <div className="flex border-b border-zinc-200 gap-6 text-xs font-bold overflow-x-auto whitespace-nowrap py-0.5 no-scrollbar">

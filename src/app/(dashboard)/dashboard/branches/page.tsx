@@ -4,6 +4,7 @@ import { checkBranchQuota } from '@/server/services/branch-limit.service';
 import { BranchManager } from '@/components/branch/branch-manager';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
 
 export default async function BranchesPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/branches');
@@ -43,16 +44,19 @@ export default async function BranchesPage() {
   }));
 
   return (
-    <BranchManager
-      business={{
-        id: business.id,
-        name: business.name,
-        defaultCurrency: business.defaultCurrency,
-        timezone: business.timezone,
-      }}
-      branches={formattedBranches}
-      quota={quota}
-      isOwner={isOwner}
-    />
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <SettingsSubNav canViewSubscription={isOwner} />
+      <BranchManager
+        business={{
+          id: business.id,
+          name: business.name,
+          defaultCurrency: business.defaultCurrency,
+          timezone: business.timezone,
+        }}
+        branches={formattedBranches}
+        quota={quota}
+        isOwner={isOwner}
+      />
+    </div>
   );
 }

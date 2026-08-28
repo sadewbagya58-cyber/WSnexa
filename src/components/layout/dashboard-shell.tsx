@@ -255,8 +255,19 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </div>
 
-        {/* Right: Notification Bell + Desktop profile dropdown + mobile hamburger */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Help & Guides + Notification Bell + Desktop profile dropdown + mobile hamburger */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <Link
+            href="/dashboard/help"
+            title="Help & Guides"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+            aria-label="Help and Documentation"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </Link>
+
           {userId && businessId && (
             <NotificationBell userId={userId} businessId={businessId} />
           )}
@@ -285,6 +296,26 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   <p className="text-xs font-bold text-zinc-950">{userName || 'User Profile'}</p>
                   <p className="text-[11px] text-zinc-500 truncate">{userEmail}</p>
                   <p className="mt-1 text-[10px] text-zinc-400 font-medium">Role: {formatRoleLabel(userRole, userCustomRoleName)}</p>
+                </div>
+                <div className="py-1 border-b border-zinc-100">
+                  <Link
+                    href="/dashboard/help"
+                    role="menuitem"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                  >
+                    ❓ Help & Guides
+                  </Link>
+                  {userRole === 'business_owner' && (
+                    <Link
+                      href="/dashboard/settings/subscription"
+                      role="menuitem"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                    >
+                      💳 Subscription & Billing
+                    </Link>
+                  )}
                 </div>
                 <div className="py-1">
                   <form action="/api/auth/logout" method="POST">
@@ -352,7 +383,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               aria-label="Navigation drawer"
               className="relative z-50 w-72 sm:w-80 max-w-[85vw] bg-white p-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl overflow-y-auto max-h-screen"
             >
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Drawer header */}
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                   <span className="font-black text-sm text-zinc-950 uppercase tracking-wider">Navigation</span>
@@ -371,6 +402,18 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   <p className="text-xs font-black text-zinc-950 truncate">🏢 {businessName}</p>
                 </div>
 
+                {/* Mobile Branch Switcher */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                    Active Branch
+                  </span>
+                  <ActiveBranchSwitcher
+                    activeBranch={activeBranch}
+                    branches={branches}
+                    isOwner={userRole === 'business_owner'}
+                  />
+                </div>
+
                 {/* Mobile nav links (with SidebarBranchPicker for Branches) */}
                 {renderMobileNavLinks()}
               </div>
@@ -383,6 +426,25 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     <span className="font-bold text-zinc-700">{formatRoleLabel(userRole, userCustomRoleName)}</span>
                     <span className="text-zinc-500 truncate max-w-[120px]">📍 {activeBranch?.name || 'Branch'}</span>
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Link
+                    href="/dashboard/help"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors"
+                  >
+                    ❓ Help & Guides
+                  </Link>
+                  {userRole === 'business_owner' && (
+                    <Link
+                      href="/dashboard/settings/subscription"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors"
+                    >
+                      💳 Subscription & Billing
+                    </Link>
+                  )}
                 </div>
 
                 <form action="/api/auth/logout" method="POST">

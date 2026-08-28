@@ -6,6 +6,8 @@ import { VenueProfileService } from '@/server/services/venue-profile.service';
 import { VenueProfileForm } from '@/components/dashboard/venue-profile-form';
 import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
+
 export const metadata: Metadata = {
   title: 'Public Venue Profile | WSNexa B2B',
   description: 'Manage your public venue discovery profile, branding, and publication status',
@@ -27,7 +29,7 @@ export default async function VenueProfileDashboardPage() {
     permission: 'venue_profile.manage',
   });
 
-  if (!hasPerm) {
+  if (!hasPerm && !authContext.isBusinessOwner) {
     redirect('/dashboard');
   }
 
@@ -43,7 +45,7 @@ export default async function VenueProfileDashboardPage() {
     .eq('status', 'active');
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-200 pb-4">
         <div>
           <h1 className="text-2xl font-black text-zinc-950">Public Venue Profile</h1>
@@ -55,6 +57,8 @@ export default async function VenueProfileDashboardPage() {
           <ContextualHelpButton explicitSlug="setting-up-public-venue-profile" />
         </div>
       </div>
+
+      <SettingsSubNav canViewSubscription={authContext.isBusinessOwner} />
 
       <VenueProfileForm
         businessId={authContext.businessId}

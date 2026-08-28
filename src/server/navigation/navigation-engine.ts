@@ -108,8 +108,8 @@ export function resolveDashboardNavigation(
       // 3. Dynamic target href resolution for restricted roles
       let href = item.href;
       if (item.id === 'settings') {
-        if (hasNavCapability(context, ['business.settings.manage', 'owner.transfer']) || context.isBusinessOwner) {
-          href = '/dashboard/settings/subscription';
+        if (context.isBusinessOwner || hasNavCapability(context, 'business.settings.manage')) {
+          href = '/dashboard/settings';
         } else if (hasNavCapability(context, 'business.view')) {
           href = '/dashboard/business';
         } else if (hasNavCapability(context, ['branches.view', 'branches.manage', 'branches.operational.manage'])) {
@@ -118,6 +118,8 @@ export function resolveDashboardNavigation(
           href = '/dashboard/venue-profile';
         } else if (hasNavCapability(context, ['order_security.view', 'order_security.manage'])) {
           href = '/dashboard/settings/order-security';
+        } else {
+          href = '/dashboard/settings';
         }
       } else if (item.id === 'dining') {
         if (hasNavCapability(context, ['tables.view', 'tables.manage']) || context.isBusinessOwner) {

@@ -9,6 +9,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { sendStockTransferAction, receiveStockTransferAction } from '@/server/actions/inventory';
 import { can, resolveAuthorizationContext } from '@/server/auth';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Stock Transfers | WSNexa Inventory',
@@ -77,6 +78,8 @@ export default async function StockTransfersPage() {
             : undefined
         }
       />
+
+      <InventorySubNav />
 
       {/* Transfer Lifecycle Flow Guide */}
       <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 text-xs text-zinc-600">

@@ -6,6 +6,7 @@ import { BranchPaymentSettings } from '@/components/settings/branch-payment-sett
 import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveAuthorizationContext } from '@/server/auth';
 import { can } from '@/server/auth/policy-engine';
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
 
 export default async function BranchPaymentsPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/settings/payments');
@@ -46,13 +47,17 @@ export default async function BranchPaymentsPage() {
   }
 
   const initialMethods = await BranchPaymentService.getBranchPaymentMethods(branchId);
+  const isOwner = tenantContext.membership?.role === 'business_owner';
 
   return (
-    <BranchPaymentSettings
-      branchId={branchId}
-      branchName={tenantContext.activeBranch.name}
-      initialMethods={initialMethods}
-      canManage={canManage}
-    />
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <SettingsSubNav canViewSubscription={isOwner} />
+      <BranchPaymentSettings
+        branchId={branchId}
+        branchName={tenantContext.activeBranch.name}
+        initialMethods={initialMethods}
+        canManage={canManage}
+      />
+    </div>
   );
 }

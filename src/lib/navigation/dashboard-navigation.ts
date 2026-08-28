@@ -213,7 +213,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
       {
         id: 'settings',
         label: 'Settings',
-        href: '/dashboard/settings/subscription',
+        href: '/dashboard/settings',
         requiredPermission: [
           'business.view',
           'business.settings.manage',
@@ -292,14 +292,15 @@ export const DETAIL_ROUTE_PARENT_MAP: Record<string, string> = {
   '/dashboard/access/members': '/dashboard/team',
 
   // Settings Subroutes
-  '/dashboard/settings': '/dashboard/settings/subscription',
-  '/dashboard/business': '/dashboard/settings/subscription',
-  '/dashboard/venue-profile': '/dashboard/settings/subscription',
-  '/dashboard/branches': '/dashboard/settings/subscription',
-  '/dashboard/settings/order-security': '/dashboard/settings/subscription',
-  '/dashboard/settings/payments': '/dashboard/settings/subscription',
-  '/dashboard/help': '/dashboard/settings/subscription',
-  '/dashboard/help/troubleshooting': '/dashboard/settings/subscription',
+  '/dashboard/settings': '/dashboard/settings',
+  '/dashboard/business': '/dashboard/settings',
+  '/dashboard/venue-profile': '/dashboard/settings',
+  '/dashboard/branches': '/dashboard/settings',
+  '/dashboard/settings/order-security': '/dashboard/settings',
+  '/dashboard/settings/payments': '/dashboard/settings',
+  '/dashboard/settings/subscription': '/dashboard/settings',
+  '/dashboard/help': '/dashboard/settings',
+  '/dashboard/help/troubleshooting': '/dashboard/settings',
 };
 
 /**

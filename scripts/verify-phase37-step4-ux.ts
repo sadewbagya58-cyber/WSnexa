@@ -250,6 +250,111 @@ function runStep4Verification() {
   }
   assert(!rawCodeFound, 'All raw permission codes removed from access denied screens');
 
+  // Test 5: Final Manual QA Hotfix Discoverability & Responsiveness Audits
+  console.log('\n--- 5. Final Manual QA Hotfix Discoverability & IA Audits ---');
+
+  // QA 1-3: Settings Hub Restored
+  const settingsHubFile = join(rootDir, 'src/app/(dashboard)/dashboard/settings/page.tsx');
+  const settingsHubContent = readFileSync(settingsHubFile, 'utf-8');
+  assert(
+    !settingsHubContent.includes("redirect('/dashboard/settings/subscription')") &&
+    settingsHubContent.includes('Settings Hub') &&
+    settingsHubContent.includes('Business Profile') &&
+    settingsHubContent.includes('Branch Management') &&
+    settingsHubContent.includes('Order Security & Anti-Fraud') &&
+    settingsHubContent.includes('Payment Settings') &&
+    settingsHubContent.includes('isOwner && ('),
+    'Settings Hub restored with capability-gated cards for business, branches, security, payments, and billing'
+  );
+
+  const settingsSubNavFile = join(rootDir, 'src/components/settings/settings-subnav.tsx');
+  assert(existsSync(settingsSubNavFile), 'SettingsSubNav component exists and provides secondary navigation');
+
+  // QA 4: Team Hub Discoverability
+  const teamSubNavFile = join(rootDir, 'src/components/team/team-subnav.tsx');
+  assert(existsSync(teamSubNavFile), 'TeamSubNav component exists and provides secondary navigation for Team and Access Control');
+
+  const accessRolesPageFile = join(rootDir, 'src/app/(dashboard)/dashboard/access/roles/page.tsx');
+  const accessRolesContent = readFileSync(accessRolesPageFile, 'utf-8');
+  assert(accessRolesContent.includes('TeamSubNav'), 'Roles & Templates page includes TeamSubNav');
+
+  // QA 5: Operations / Inventory Discoverability
+  const inventorySubNavFile = join(rootDir, 'src/components/inventory/inventory-subnav.tsx');
+  assert(existsSync(inventorySubNavFile), 'InventorySubNav component exists and provides secondary navigation for Operations');
+
+  // QA 6 & 7: Mobile Branch Switcher & Global Help Entry
+  const dashboardShellFile = join(rootDir, 'src/components/layout/dashboard-shell.tsx');
+  const dashboardShellContent = readFileSync(dashboardShellFile, 'utf-8');
+  assert(
+    dashboardShellContent.includes('/dashboard/help') &&
+    dashboardShellContent.includes('Active Branch') &&
+    dashboardShellContent.includes('ActiveBranchSwitcher'),
+    'DashboardShell restores global Help link and mobile branch switching'
+  );
+
+  // QA 8: Subscription Purchase History Mobile Card View
+  const billingHistoryFile = join(rootDir, 'src/components/subscription/owner-billing-history-client.tsx');
+  const billingHistoryContent = readFileSync(billingHistoryFile, 'utf-8');
+  assert(
+    billingHistoryContent.includes('block md:hidden') &&
+    billingHistoryContent.includes('hidden md:block') &&
+    billingHistoryContent.includes('View Details & Invoice →'),
+    'OwnerBillingHistoryClient includes responsive mobile card layout and desktop table'
+  );
+
+  // QA 9: Inventory Needs Attention View-Only Gating
+  const needsAttentionFile = join(rootDir, 'src/components/inventory/inventory-needs-attention.tsx');
+  const needsAttentionContent = readFileSync(needsAttentionFile, 'utf-8');
+  assert(
+    needsAttentionContent.includes('canAdjust = true') &&
+    needsAttentionContent.includes('canPerformAction ?'),
+    'InventoryNeedsAttention correctly gates Add Stock / Replenish action buttons'
+  );
+
+  // QA 10: Role Wizard Raw Keys Cleaned Up
+  const permMatrixFile = join(rootDir, 'src/components/access/permission-matrix.tsx');
+  const permMatrixContent = readFileSync(permMatrixFile, 'utf-8');
+  assert(
+    permMatrixContent.includes('showTechnicalKeys') &&
+    permMatrixContent.includes('Show Technical IDs'),
+    'PermissionMatrix hides raw permission keys by default and provides optional disclosure toggle'
+  );
+
+  // QA 11: Customer Hub Secondary Navigation Gating
+  const customerPageFile = join(rootDir, 'src/app/(dashboard)/dashboard/customers/page.tsx');
+  const customerPageContent = readFileSync(customerPageFile, 'utf-8');
+  assert(
+    customerPageContent.includes('hasReviewsPermission') &&
+    customerPageContent.includes('hasReputationPermission') &&
+    customerPageContent.includes('hasLoyaltyPermission'),
+    'Customers Page gates secondary hubs with individual capabilities'
+  );
+
+  // QA 12: Staff Invite Microcopy
+  assert(
+    staffInvitesContent.includes('Invite Staff') &&
+    staffInvitesContent.includes('New Staff Invite') &&
+    staffInvitesContent.includes('Invite expires in *'),
+    'StaffInvitesManagement uses friendly hospitality wording'
+  );
+
+  // QA 13 & 15: Menu Item Feature Copy & Responsive Image Picker
+  assert(
+    createItemFormContent.includes('Feature this item') &&
+    createItemFormContent.includes('Show this item prominently on the menu.') &&
+    createItemFormContent.includes('flex flex-col sm:flex-row'),
+    'CreateItemForm has simplified feature microcopy and mobile-responsive image picker'
+  );
+
+  // QA 14: Reservation Modal Title
+  const resClientFile = join(rootDir, 'src/components/reservations/reservation-management-client.tsx');
+  const resClientContent = readFileSync(resClientFile, 'utf-8');
+  assert(
+    resClientContent.includes('New Reservation') &&
+    !resClientContent.includes('New Staff Reservation'),
+    'Reservation management client uses clean "New Reservation" modal title'
+  );
+
   console.log(`\n========================================`);
   console.log(`Phase 37 Step 4 Verification Summary: ${passedTests}/${totalTests} Tests Passed`);
   console.log(`========================================\n`);

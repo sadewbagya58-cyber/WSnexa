@@ -8,6 +8,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Stock Counts | WSNexa Inventory',
@@ -75,6 +76,8 @@ export default async function StockCountsPage() {
           ) : undefined
         }
       />
+
+      <InventorySubNav />
 
       {counts.length === 0 ? (
         <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-10 text-center shadow-xs">

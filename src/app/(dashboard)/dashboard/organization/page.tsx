@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 import { PageHeader } from '@/components/layout/page-header';
+import { TeamSubNav } from '@/components/team/team-subnav';
 
 export default async function OrganizationOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/organization');
@@ -45,9 +46,12 @@ export default async function OrganizationOverviewPage() {
         description="Multi-branch organizational architecture, department hierarchy, and headcount hub."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Team', href: '/dashboard/team' },
           { label: 'Organization Hub' },
         ]}
       />
+
+      <TeamSubNav />
 
       <OrganizationOverviewClient
         summary={summary}

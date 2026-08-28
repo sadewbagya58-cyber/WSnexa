@@ -22,6 +22,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [collapsedDomains, setCollapsedDomains] = useState<Record<string, boolean>>({});
+  const [showTechnicalKeys, setShowTechnicalKeys] = useState(false);
 
   // Group catalog permissions by category/domain
   const groupedCatalog = useMemo(() => {
@@ -103,7 +104,16 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-zinc-600 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex items-center gap-3 text-xs text-zinc-600 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+          <label className="flex items-center gap-1.5 text-[11px] text-zinc-500 cursor-pointer select-none hover:text-zinc-800">
+            <input
+              type="checkbox"
+              checked={showTechnicalKeys}
+              onChange={(e) => setShowTechnicalKeys(e.target.checked)}
+              className="rounded text-emerald-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+            />
+            <span>Show Technical IDs</span>
+          </label>
           <span className="font-medium text-zinc-900">
             Selected:{' '}
             <span className="font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
@@ -201,21 +211,27 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
                               />
                             </div>
 
-                            <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed mb-2">
+                            <p className="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">
                               {item.description || 'Provides operational access for this domain action.'}
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between pt-1 border-t border-zinc-100/80">
-                            <span className="text-[10px] font-mono text-zinc-600 truncate max-w-[170px]" title={item.key}>
-                              {item.key}
-                            </span>
-                            {isSuperAdminPerm && (
-                              <span className="flex items-center gap-1 text-[9px] font-mono bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded">
-                                <IconShieldAlert className="w-3 h-3 text-red-600" /> Platform Only
-                              </span>
-                            )}
-                          </div>
+                          {(showTechnicalKeys || isSuperAdminPerm) && (
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-zinc-100/80">
+                              {showTechnicalKeys ? (
+                                <span className="text-[10px] font-mono text-zinc-500 truncate max-w-[170px]" title={item.key}>
+                                  {item.key}
+                                </span>
+                              ) : (
+                                <span />
+                              )}
+                              {isSuperAdminPerm && (
+                                <span className="flex items-center gap-1 text-[9px] font-mono bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded">
+                                  <IconShieldAlert className="w-3 h-3 text-red-600" /> Platform Only
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

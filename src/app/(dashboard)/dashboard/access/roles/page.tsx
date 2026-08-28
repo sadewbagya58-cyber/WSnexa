@@ -15,6 +15,7 @@ export const metadata = {
 };
 
 import { PageHeader } from '@/components/layout/page-header';
+import { TeamSubNav } from '@/components/team/team-subnav';
 
 export default async function RolesManagementPage() {
   const { allowed } = await requireRoutePermission('/dashboard/access/roles');
@@ -47,10 +48,12 @@ export default async function RolesManagementPage() {
         description="Manage built-in role templates and custom capability permission bundles."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Access Control Hub', href: '/dashboard/access' },
+          { label: 'Team', href: '/dashboard/team' },
           { label: 'Roles & Templates' },
         ]}
       />
+
+      <TeamSubNav />
 
       {/* Built-In Templates Section */}
       <div className="space-y-3">

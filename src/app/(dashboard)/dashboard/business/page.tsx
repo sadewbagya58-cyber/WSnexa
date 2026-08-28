@@ -5,6 +5,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
 
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
+
 export default async function BusinessProfilePage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/business');
 
@@ -16,14 +18,22 @@ export default async function BusinessProfilePage() {
     redirect('/login');
   }
 
+  const isOwner = tenantContext.membership?.role === 'business_owner';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title={tenantContext ? tenantContext.business.name : 'Business Profile'}
         description="Core business profile, default currency, and regional settings."
-        breadcrumbs={[{ label: 'Business Profile' }]}
-        backHref="/dashboard"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Settings', href: '/dashboard/settings' },
+          { label: 'Business Profile' },
+        ]}
+        backHref="/dashboard/settings"
       />
+
+      <SettingsSubNav canViewSubscription={isOwner} />
 
       <Card className="p-6">
         <h2 className="text-base font-semibold text-zinc-950">Business Information</h2>

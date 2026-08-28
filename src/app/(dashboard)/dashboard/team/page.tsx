@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PermissionService } from '@/server/services/permission.service';
 import { TeamManagement } from '@/components/team/team-management';
+import { TeamSubNav } from '@/components/team/team-subnav';
 
 export const metadata: Metadata = {
   title: 'Team & Staff | WSNexa Business',
@@ -35,13 +36,16 @@ export default async function TeamDirectoryPage() {
   ]);
 
   return (
-    <TeamManagement
-      catalog={catalog}
-      initialMembers={members}
-      customRoles={customRoles}
-      userRole={membership.role}
-      activeBranchName={activeBranch?.name || 'Main Branch'}
-      branchAreas={branchAreas.map((a) => ({ id: a.id, name: a.name }))}
-    />
+    <div className="max-w-7xl mx-auto space-y-6">
+      <TeamSubNav />
+      <TeamManagement
+        catalog={catalog}
+        initialMembers={members}
+        customRoles={customRoles}
+        userRole={membership.role}
+        activeBranchName={activeBranch?.name || 'Main Branch'}
+        branchAreas={branchAreas.map((a) => ({ id: a.id, name: a.name }))}
+      />
+    </div>
   );
 }

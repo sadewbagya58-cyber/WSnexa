@@ -8,6 +8,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { RecipeService } from '@/server/services/recipe.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 export const metadata: Metadata = {
   title: 'Recipes & BOM Costing | WSNexa Inventory',
@@ -85,6 +86,8 @@ export default async function RecipesPage() {
           ) : undefined
         }
       />
+
+      <InventorySubNav />
 
       {/* Overview Filter Tabs */}
       <div className="flex items-center gap-3 border-b border-zinc-200 pb-3">

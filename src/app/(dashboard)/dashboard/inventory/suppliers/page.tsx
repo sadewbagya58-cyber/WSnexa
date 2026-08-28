@@ -6,6 +6,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { SupplierManagerClient } from '@/components/inventory/supplier-manager-client';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
@@ -60,8 +61,10 @@ export default async function SuppliersPage() {
           { label: 'Inventory', href: '/dashboard/inventory' },
           { label: 'Suppliers' },
         ]}
-        helpSlug="supplier-management"
+        helpSlug="managing-suppliers-and-vendor-catalogs"
       />
+
+      <InventorySubNav />
 
       <SupplierManagerClient
         initialSuppliers={suppliers}

@@ -7,6 +7,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { InventoryItemsTable } from '@/components/inventory/inventory-items-table';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -79,7 +80,7 @@ export default async function InventoryItemsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Stock Items"
-        description={`Tracked ingredients and inventory balances for ${context.activeBranch.name}`}
+        description={`Manage physical ingredient stock, units, reorder levels, and balances for ${context.activeBranch.name}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Inventory Hub', href: '/dashboard/inventory' },
@@ -106,6 +107,11 @@ export default async function InventoryItemsPage() {
             </Link>
           ) : undefined
         }
+      />
+
+      <InventorySubNav
+        canViewLocations={canManageLocations}
+        canViewWaste={canWaste}
       />
 
       <InventoryItemsTable

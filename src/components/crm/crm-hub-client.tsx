@@ -13,6 +13,7 @@ import {
   snoozeCRMActionServerAction,
   startCRMActionServerAction,
 } from '@/server/actions/crm';
+import { CRMSubNav } from '@/components/crm/crm-subnav';
 
 interface CRMHubClientProps {
   businessId: string;
@@ -23,6 +24,9 @@ interface CRMHubClientProps {
   initialTotalActions: number;
   canManage: boolean;
   hasContactView: boolean;
+  hasReviewsPermission?: boolean;
+  hasReputationPermission?: boolean;
+  hasLoyaltyPermission?: boolean;
   authorizedBranchIds: string[] | null;
 }
 
@@ -35,6 +39,9 @@ export function CRMHubClient({
   initialTotalActions,
   canManage,
   hasContactView,
+  hasReviewsPermission = false,
+  hasReputationPermission = false,
+  hasLoyaltyPermission = false,
   authorizedBranchIds,
 }: CRMHubClientProps) {
   const [activeTab, setActiveTab] = useState<'directory' | 'intelligence' | 'actions'>('directory');
@@ -167,21 +174,13 @@ export function CRMHubClient({
         </div>
       </div>
 
-      {/* Workspace Quick Links */}
-      <div className="flex flex-wrap gap-2 pb-2">
-        <Link href="/dashboard/customers" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white shadow-xs">
-          👥 Customer Directory
-        </Link>
-        <Link href="/dashboard/reviews" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
-          ⭐ Customer Reviews
-        </Link>
-        <Link href="/dashboard/reputation" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
-          📊 Reputation & Scores
-        </Link>
-        <Link href="/dashboard/loyalty" className="min-h-[44px] inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-extrabold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors">
-          🎁 Loyalty Program
-        </Link>
-      </div>
+      {/* Workspace Quick Links (Permission-Aware) */}
+      <CRMSubNav
+        canViewCustomers={true}
+        canViewReviews={hasReviewsPermission}
+        canViewReputation={hasReputationPermission}
+        canViewLoyalty={hasLoyaltyPermission}
+      />
 
       {errorMessage && (
         <div className="rounded-md bg-red-50 p-4 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm flex items-center justify-between">

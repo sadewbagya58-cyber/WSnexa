@@ -6,7 +6,7 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { StorageLocationManager } from '@/components/inventory/storage-location-manager';
-
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -61,6 +61,10 @@ export default async function StorageLocationsPage() {
           { label: 'Storage Locations' },
         ]}
         helpSlug="understanding-storage-locations"
+      />
+
+      <InventorySubNav
+        canViewLocations={canManageLocations}
       />
 
       <StorageLocationManager

@@ -19,6 +19,13 @@ export interface FormattedInvitation {
   scopeType?: 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF' | null;
   departmentId?: string | null;
   departmentName?: string | null;
+  positionId?: string | null;
+  positionCode?: string | null;
+  positionName?: string | null;
+  jobTitleId?: string | null;
+  jobTitleName?: string | null;
+  unitId?: string | null;
+  unitName?: string | null;
   assignmentLabel?: string;
   invitedEmail: string | null;
   tokenPrefix: string;
@@ -235,6 +242,78 @@ export class StaffInvitationService {
       effectiveBranchName = b.name;
     }
 
+    // 3b. Organization Position Validation & Resolution
+    let positionId: string | null = null;
+    let positionCode: string | null = null;
+    let positionJobTitleId: string | null = null;
+    let positionJobTitleName: string | null = null;
+    let positionUnitId: string | null = null;
+    let positionUnitName: string | null = null;
+
+    if (input.positionId) {
+      const { data: pos } = await admin
+        .from('organization_positions')
+        .select(`
+          id,
+          position_code,
+          name_override,
+          branch_id,
+          department_id,
+          unit_id,
+          job_title_id,
+          status,
+          headcount_limit,
+          is_active,
+          job_title:organization_job_titles(id, name, code),
+          department:organization_departments(id, name),
+          unit:organization_units(id, name),
+          branch:branches(id, name)
+        `)
+        .eq('id', input.positionId)
+        .eq('business_id', businessId)
+        .is('archived_at', null)
+        .maybeSingle();
+
+      if (!pos || !pos.is_active) {
+        return { success: false, message: 'Invalid, archived, or inactive organization position selected.' };
+      }
+
+      if (pos.status === 'frozen' || pos.status === 'archived') {
+        return { success: false, message: `Target position is ${pos.status} and cannot accept new staff assignments.` };
+      }
+
+      // Check position occupancy
+      const { OrganizationService } = await import('./organization.service');
+      const occ = await OrganizationService.getPositionOccupancy(pos.id);
+      if (occ.isFull) {
+        return {
+          success: false,
+          message: `Target position ${pos.position_code || ''} has reached maximum headcount limit (${occ.occupiedCount} / ${occ.headcountLimit} occupied).`,
+        };
+      }
+
+      positionId = pos.id;
+      positionCode = pos.position_code || null;
+      const jt = (Array.isArray(pos.job_title) ? pos.job_title[0] : pos.job_title) as { id?: string; name?: string } | null;
+      const dept = (Array.isArray(pos.department) ? pos.department[0] : pos.department) as { id?: string; name?: string } | null;
+      const unit = (Array.isArray(pos.unit) ? pos.unit[0] : pos.unit) as { id?: string; name?: string } | null;
+      const b = (Array.isArray(pos.branch) ? pos.branch[0] : pos.branch) as { id?: string; name?: string } | null;
+
+      positionJobTitleId = pos.job_title_id;
+      positionJobTitleName = jt?.name || null;
+      positionUnitId = pos.unit_id || null;
+      positionUnitName = unit?.name || null;
+
+      if (pos.department_id) {
+        input.departmentId = pos.department_id;
+        departmentName = dept?.name || departmentName;
+      }
+      if (pos.branch_id) {
+        effectiveBranchId = pos.branch_id;
+        effectiveBranchName = b?.name || effectiveBranchName;
+      }
+    }
+
     // 4. Service Area Validation
     let reqAreas = input.serviceAreaIds;
     if (input.assignedRole === 'waiter' && !input.customRoleId) {
@@ -311,6 +390,10 @@ export class StaffInvitationService {
       .insert({
         business_id: businessId,
         branch_id: effectiveBranchId!,
+        department_id: input.departmentId || null,
+        position_id: positionId || null,
+        unit_id: positionUnitId || null,
+        job_title_id: positionJobTitleId || null,
         invitation_type: invitationType,
         assigned_role: input.assignedRole,
         custom_role_id: input.customRoleId || null,
@@ -352,7 +435,7 @@ export class StaffInvitationService {
       assignedAreaNames = areaRows?.map((a: { name: string }) => a.name) || [];
     }
 
-    // 8. Log audit event with comprehensive scope metadata
+    // 8. Log audit event with comprehensive scope and position metadata
     await admin.from('audit_logs').insert({
       business_id: businessId,
       actor_id: userId,
@@ -364,6 +447,12 @@ export class StaffInvitationService {
         scope_type: effectiveScope,
         department_id: input.departmentId || null,
         department_name: departmentName,
+        position_id: positionId,
+        position_code: positionCode,
+        job_title_id: positionJobTitleId,
+        job_title_name: positionJobTitleName,
+        unit_id: positionUnitId,
+        unit_name: positionUnitName,
         assigned_role: input.assignedRole,
         custom_role_id: input.customRoleId || null,
         invited_email: invitedEmail,
@@ -376,6 +465,8 @@ export class StaffInvitationService {
     let assignmentLabel = effectiveBranchName;
     if (effectiveScope === 'ORGANIZATION') {
       assignmentLabel = 'Organization Wide';
+    } else if (positionCode) {
+      assignmentLabel = `${effectiveBranchName} · ${positionCode}${positionJobTitleName ? ` (${positionJobTitleName})` : ''}`;
     } else if (departmentName) {
       assignmentLabel = `${effectiveBranchName} · ${departmentName}`;
     } else if (assignedAreaNames.length > 0) {
@@ -394,6 +485,13 @@ export class StaffInvitationService {
       scopeType: effectiveScope,
       departmentId: input.departmentId || null,
       departmentName,
+      positionId,
+      positionCode,
+      positionName: positionJobTitleName,
+      jobTitleId: positionJobTitleId,
+      jobTitleName: positionJobTitleName,
+      unitId: positionUnitId,
+      unitName: positionUnitName,
       assignmentLabel,
       invitedEmail: inviteRow.invited_email,
       tokenPrefix: inviteRow.token_prefix,
@@ -674,7 +772,14 @@ export class StaffInvitationService {
       .eq('action', 'invitation.created')
       .maybeSingle();
 
-    const payloadData = auditLog?.payload as { service_area_ids?: string[]; department_id?: string; scope_type?: string } | null;
+    const payloadData = auditLog?.payload as {
+      service_area_ids?: string[];
+      department_id?: string;
+      scope_type?: string;
+      position_id?: string;
+      unit_id?: string;
+      job_title_id?: string;
+    } | null;
     if (targetAreaIds.length === 0 && Array.isArray(payloadData?.service_area_ids)) {
       targetAreaIds = payloadData.service_area_ids;
     }
@@ -701,8 +806,103 @@ export class StaffInvitationService {
       }
     }
 
-    // Assign department if invitation was department-scoped
-    if (payloadData?.department_id) {
+    // 8b. Create/Link Organization Substantive Position Assignment
+    const effectivePositionId = (invite.position_id as string | undefined) || payloadData?.position_id || null;
+    const effectiveDepartmentId = (invite.department_id as string | undefined) || payloadData?.department_id || null;
+    const effectiveUnitId = (invite.unit_id as string | undefined) || payloadData?.unit_id || null;
+    let effectiveJobTitleId = (invite.job_title_id as string | undefined) || payloadData?.job_title_id || null;
+
+    if (effectivePositionId) {
+      const { data: pos } = await admin
+        .from('organization_positions')
+        .select(`
+          id,
+          position_code,
+          job_title_id,
+          department_id,
+          unit_id,
+          branch_id,
+          status,
+          headcount_limit
+        `)
+        .eq('id', effectivePositionId)
+        .eq('business_id', invite.business_id)
+        .maybeSingle();
+
+      if (pos) {
+        effectiveJobTitleId = pos.job_title_id;
+        const targetBranchId = pos.branch_id || invite.branch_id;
+        const targetDeptId = pos.department_id || effectiveDepartmentId;
+        const targetUnitId = pos.unit_id || effectiveUnitId;
+
+        // Check if member already has an active primary assignment (idempotency guard)
+        const { data: existingPrimary } = await admin
+          .from('staff_assignments')
+          .select('id')
+          .eq('business_membership_id', membershipId)
+          .eq('is_primary', true)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (existingPrimary) {
+          await admin
+            .from('staff_assignments')
+            .update({
+              business_id: invite.business_id,
+              position_id: pos.id,
+              job_title_id: pos.job_title_id,
+              branch_id: targetBranchId,
+              department_id: targetDeptId,
+              unit_id: targetUnitId,
+              assignment_type: 'primary',
+              status: 'active',
+              updated_at: now.toISOString(),
+            })
+            .eq('id', existingPrimary.id);
+        } else {
+          const { OrganizationService } = await import('./organization.service');
+          try {
+            await OrganizationService.createStaffAssignment(
+              {
+                businessId: invite.business_id,
+                businessMembershipId: membershipId,
+                jobTitleId: pos.job_title_id,
+                branchId: targetBranchId,
+                departmentId: targetDeptId,
+                unitId: targetUnitId,
+                positionId: pos.id,
+                assignmentType: 'primary',
+                isPrimary: true,
+                status: 'active',
+                startsAt: now.toISOString(),
+                reason: 'Automatic primary assignment from staff invitation claim',
+              },
+              invite.created_by
+            );
+          } catch (assignErr) {
+            console.error('Failed to create substantive staff assignment via service on claim:', assignErr);
+            // Fallback direct insert
+            await admin.from('staff_assignments').insert({
+              business_id: invite.business_id,
+              business_membership_id: membershipId,
+              job_title_id: pos.job_title_id,
+              branch_id: targetBranchId,
+              department_id: targetDeptId,
+              unit_id: targetUnitId,
+              position_id: pos.id,
+              assignment_type: 'primary',
+              is_primary: true,
+              status: 'active',
+              starts_at: now.toISOString(),
+              reason: 'Automatic primary assignment from staff invitation claim',
+              created_at: now.toISOString(),
+              updated_at: now.toISOString(),
+            });
+          }
+        }
+      }
+    } else if (effectiveDepartmentId) {
+      // Assign department if invitation was department-scoped
       const { data: existingStaffAssign } = await admin
         .from('staff_assignments')
         .select('id')
@@ -714,23 +914,11 @@ export class StaffInvitationService {
         await admin
           .from('staff_assignments')
           .update({
-            department_id: payloadData.department_id,
+            department_id: effectiveDepartmentId,
             branch_id: invite.branch_id,
             updated_at: now.toISOString(),
           })
           .eq('id', existingStaffAssign.id);
-      } else {
-        await admin.from('staff_assignments').insert({
-          business_membership_id: membershipId,
-          assignment_type: 'primary',
-          status: 'active',
-          is_primary: true,
-          branch_id: invite.branch_id,
-          department_id: payloadData.department_id,
-          starts_at: now.toISOString(),
-          created_at: now.toISOString(),
-          updated_at: now.toISOString(),
-        });
       }
     }
 
@@ -916,7 +1104,8 @@ export class StaffInvitationService {
         last_regenerated_at: now,
         updated_at: now,
       })
-      .eq('id', invitationId);
+      .eq('id', invitationId)
+      .eq('status', 'pending');
 
     if (updateErr) {
       return { success: false, message: `Failed to regenerate invitation token: ${updateErr.message}` };
@@ -928,7 +1117,10 @@ export class StaffInvitationService {
       action: 'invitation.regenerated',
       target_type: 'staff_invitation',
       target_id: invitationId,
-      payload: { new_token_prefix: tokenPrefix },
+      payload: {
+        token_prefix: tokenPrefix,
+      },
+      created_at: now,
     });
 
     return {
@@ -942,116 +1134,182 @@ export class StaffInvitationService {
    * Fetches formatted list of invitations for business dashboard with branch isolation.
    */
   static async listInvitations(businessId: string, branchId?: string | null): Promise<FormattedInvitation[]> {
-    const admin = createAdminClient();
+      const admin = createAdminClient();
 
-    let query = admin
-      .from('staff_invitations')
-      .select('*, branches(name), custom_roles(id, name)')
-      .eq('business_id', businessId);
+      let query = admin
+        .from('staff_invitations')
+        .select(`
+          *,
+          branches(name),
+          custom_roles(id, name),
+          organization_positions(
+            id,
+            position_code,
+            name_override,
+            department_id,
+            unit_id,
+            job_title:organization_job_titles(id, name),
+            department:organization_departments(id, name),
+            unit:organization_units(id, name)
+          )
+        `)
+        .eq('business_id', businessId);
 
-    if (branchId) {
-      query = query.eq('branch_id', branchId);
-    }
+      if (branchId) {
+        query = query.eq('branch_id', branchId);
+      }
 
-    const { data: rows } = await query.order('created_at', { ascending: false });
+      const { data: rows } = await query.order('created_at', { ascending: false });
 
-    if (!rows || rows.length === 0) return [];
+      if (!rows || rows.length === 0) return [];
 
-    const inviteIds = rows.map((r) => r.id as string);
-    const [areaRowsRes, auditLogsRes] = await Promise.all([
-      admin
-        .from('staff_invitation_areas')
-        .select('invitation_id, service_area_id, service_areas(id, name)')
-        .in('invitation_id', inviteIds),
-      admin
-        .from('audit_logs')
-        .select('target_id, payload')
-        .in('target_id', inviteIds)
-        .eq('action', 'invitation.created'),
-    ]);
+      const inviteIds = rows.map((r) => r.id as string);
+      const [areaRowsRes, auditLogsRes] = await Promise.all([
+        admin
+          .from('staff_invitation_areas')
+          .select('invitation_id, service_area_id, service_areas(id, name)')
+          .in('invitation_id', inviteIds),
+        admin
+          .from('audit_logs')
+          .select('target_id, payload')
+          .in('target_id', inviteIds)
+          .eq('action', 'invitation.created'),
+      ]);
 
-    const inviteAreaMap = new Map<string, { ids: string[]; names: string[] }>();
-    if (!areaRowsRes.error && areaRowsRes.data && areaRowsRes.data.length > 0) {
-      for (const ar of areaRowsRes.data) {
-        const invId = ar.invitation_id as string;
-        const sa = (Array.isArray(ar.service_areas) ? ar.service_areas[0] : ar.service_areas) as { id?: string; name?: string } | null;
-        if (!inviteAreaMap.has(invId)) {
-          inviteAreaMap.set(invId, { ids: [], names: [] });
+      const inviteAreaMap = new Map<string, { ids: string[]; names: string[] }>();
+      if (!areaRowsRes.error && areaRowsRes.data && areaRowsRes.data.length > 0) {
+        for (const ar of areaRowsRes.data) {
+          const invId = ar.invitation_id as string;
+          const sa = (Array.isArray(ar.service_areas) ? ar.service_areas[0] : ar.service_areas) as { id?: string; name?: string } | null;
+          if (!inviteAreaMap.has(invId)) {
+            inviteAreaMap.set(invId, { ids: [], names: [] });
+          }
+          if (sa?.id && sa?.name) {
+            const entry = inviteAreaMap.get(invId)!;
+            entry.ids.push(sa.id);
+            entry.names.push(sa.name);
+          }
         }
-        if (sa?.id && sa?.name) {
-          const entry = inviteAreaMap.get(invId)!;
-          entry.ids.push(sa.id);
-          entry.names.push(sa.name);
+      }
+
+      const inviteScopeMap = new Map<
+        string,
+        {
+          scopeType?: string;
+          departmentId?: string;
+          departmentName?: string;
+          positionId?: string;
+          positionCode?: string;
+          jobTitleName?: string;
+          unitName?: string;
+        }
+      >();
+      if (auditLogsRes.data) {
+        for (const log of auditLogsRes.data) {
+          const invId = log.target_id;
+          const payload = log.payload as {
+            scope_type?: string;
+            department_id?: string;
+            department_name?: string;
+            position_id?: string;
+            position_code?: string;
+            job_title_name?: string;
+            unit_name?: string;
+          } | null;
+          if (invId && payload) {
+            inviteScopeMap.set(invId, {
+              scopeType: payload.scope_type,
+              departmentId: payload.department_id,
+              departmentName: payload.department_name,
+              positionId: payload.position_id,
+              positionCode: payload.position_code,
+              jobTitleName: payload.job_title_name,
+              unitName: payload.unit_name,
+            });
+          }
         }
       }
-    }
 
-    const inviteScopeMap = new Map<string, { scopeType?: string; departmentId?: string; departmentName?: string }>();
-    if (auditLogsRes.data) {
-      for (const log of auditLogsRes.data) {
-        const invId = log.target_id;
-        const payload = log.payload as { scope_type?: string; department_id?: string; department_name?: string } | null;
-        if (invId && payload) {
-          inviteScopeMap.set(invId, {
-            scopeType: payload.scope_type,
-            departmentId: payload.department_id,
-            departmentName: payload.department_name,
-          });
+      const now = new Date();
+
+      return rows.map((r) => {
+        const b = r.branches as { name?: string } | null;
+        const cr = r.custom_roles as { id?: string; name?: string } | null;
+        const pos = r.organization_positions as {
+          id?: string;
+          position_code?: string;
+          name_override?: string | null;
+          job_title?: { id?: string; name?: string } | { id?: string; name?: string }[] | null;
+          department?: { id?: string; name?: string } | { id?: string; name?: string }[] | null;
+          unit?: { id?: string; name?: string } | { id?: string; name?: string }[] | null;
+        } | null;
+
+        const posJt = (Array.isArray(pos?.job_title) ? pos?.job_title[0] : pos?.job_title) as { id?: string; name?: string } | null;
+        const posDept = (Array.isArray(pos?.department) ? pos?.department[0] : pos?.department) as { id?: string; name?: string } | null;
+        const posUnit = (Array.isArray(pos?.unit) ? pos?.unit[0] : pos?.unit) as { id?: string; name?: string } | null;
+
+        const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
+        const scopeInfo = inviteScopeMap.get(r.id as string);
+        const isExpired = new Date(r.expires_at) <= now;
+        const isValidPending = r.status === 'pending' && !isExpired;
+
+        let decryptedCode: string | null = null;
+        if (isValidPending && r.encrypted_code) {
+          decryptedCode = decryptInvitationCode(r.encrypted_code);
         }
-      }
+
+        const scopeType = (scopeInfo?.scopeType || (r.custom_role_id ? 'PROPERTY' : 'PROPERTY')) as 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF';
+
+        const positionId = (r.position_id as string | null) || pos?.id || scopeInfo?.positionId || null;
+        const positionCode = pos?.position_code || scopeInfo?.positionCode || null;
+        const jobTitleName = posJt?.name || scopeInfo?.jobTitleName || null;
+        const departmentName = posDept?.name || scopeInfo?.departmentName || null;
+        const unitName = posUnit?.name || scopeInfo?.unitName || null;
+
+        let assignmentLabel = b?.name || 'Assigned Branch';
+        if (scopeType === 'ORGANIZATION') {
+          assignmentLabel = 'Organization Wide';
+        } else if (positionCode) {
+          assignmentLabel = `${b?.name || 'Branch'} · ${positionCode}${jobTitleName ? ` (${jobTitleName})` : ''}`;
+        } else if (departmentName) {
+          assignmentLabel = `${b?.name || 'Branch'} · ${departmentName}`;
+        } else if (areaInfo.names.length > 0) {
+          assignmentLabel = `${b?.name || 'Branch'} · ${areaInfo.names.join(', ')}`;
+        }
+
+        return {
+          id: r.id as string,
+          businessId: r.business_id as string,
+          branchId: r.branch_id as string,
+          branchName: b?.name || 'Assigned Branch',
+          invitationType: r.invitation_type as 'manager' | 'staff',
+          assignedRole: r.assigned_role as StaffRole,
+          customRoleId: (r.custom_role_id as string) || cr?.id || null,
+          customRoleName: cr?.name || null,
+          scopeType,
+          departmentId: (r.department_id as string | null) || scopeInfo?.departmentId || null,
+          departmentName,
+          positionId,
+          positionCode,
+          positionName: pos?.name_override || jobTitleName,
+          jobTitleId: (r.job_title_id as string | null) || posJt?.id || null,
+          jobTitleName,
+          unitId: (r.unit_id as string | null) || posUnit?.id || null,
+          unitName,
+          assignmentLabel,
+          invitedEmail: (r.invited_email as string) || null,
+          tokenPrefix: r.token_prefix as string,
+          rawCode: decryptedCode,
+          status: (isExpired && r.status === 'pending' ? 'expired' : r.status) as 'pending' | 'claimed' | 'expired' | 'revoked',
+          createdBy: r.created_by as string,
+          claimedBy: (r.claimed_by as string) || null,
+          expiresAt: r.expires_at as string,
+          claimedAt: (r.claimed_at as string) || null,
+          revokedAt: (r.revoked_at as string) || null,
+          createdAt: r.created_at as string,
+          serviceAreaIds: areaInfo.ids,
+          serviceAreaNames: areaInfo.names,
+        };
+      });
     }
-
-    const now = new Date();
-
-    return rows.map((r) => {
-      const b = r.branches as { name?: string } | null;
-      const cr = r.custom_roles as { id?: string; name?: string } | null;
-      const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
-      const scopeInfo = inviteScopeMap.get(r.id as string);
-      const isExpired = new Date(r.expires_at) <= now;
-      const isValidPending = r.status === 'pending' && !isExpired;
-
-      let decryptedCode: string | null = null;
-      if (isValidPending && r.encrypted_code) {
-        decryptedCode = decryptInvitationCode(r.encrypted_code);
-      }
-
-      const scopeType = (scopeInfo?.scopeType || (r.custom_role_id ? 'PROPERTY' : 'PROPERTY')) as 'ORGANIZATION' | 'PROPERTY' | 'DEPARTMENT' | 'AREA_TEAM' | 'SELF';
-      let assignmentLabel = b?.name || 'Assigned Branch';
-      if (scopeType === 'ORGANIZATION') {
-        assignmentLabel = 'Organization Wide';
-      } else if (scopeInfo?.departmentName) {
-        assignmentLabel = `${b?.name || 'Branch'} · ${scopeInfo.departmentName}`;
-      } else if (areaInfo.names.length > 0) {
-        assignmentLabel = `${b?.name || 'Branch'} · ${areaInfo.names.join(', ')}`;
-      }
-
-      return {
-        id: r.id as string,
-        businessId: r.business_id as string,
-        branchId: r.branch_id as string,
-        branchName: b?.name || 'Assigned Branch',
-        invitationType: r.invitation_type as 'manager' | 'staff',
-        assignedRole: r.assigned_role as StaffRole,
-        customRoleId: (r.custom_role_id as string) || cr?.id || null,
-        customRoleName: cr?.name || null,
-        scopeType,
-        departmentId: scopeInfo?.departmentId || null,
-        departmentName: scopeInfo?.departmentName || null,
-        assignmentLabel,
-        invitedEmail: (r.invited_email as string) || null,
-        tokenPrefix: r.token_prefix as string,
-        rawCode: decryptedCode,
-        status: (isExpired && r.status === 'pending' ? 'expired' : r.status) as 'pending' | 'claimed' | 'expired' | 'revoked',
-        createdBy: r.created_by as string,
-        claimedBy: (r.claimed_by as string) || null,
-        expiresAt: r.expires_at as string,
-        claimedAt: (r.claimed_at as string) || null,
-        revokedAt: (r.revoked_at as string) || null,
-        createdAt: r.created_at as string,
-        serviceAreaIds: areaInfo.ids,
-        serviceAreaNames: areaInfo.names,
-      };
-    });
   }
-}

@@ -38,10 +38,32 @@ export interface DepartmentOption {
   branchId?: string | null;
 }
 
+export interface PositionOption {
+  id: string;
+  positionCode: string | null;
+  nameOverride?: string | null;
+  jobTitleId: string;
+  jobTitleName: string;
+  jobTitleCode?: string | null;
+  branchId?: string | null;
+  branchName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  unitId?: string | null;
+  unitName?: string | null;
+  headcountLimit: number;
+  occupiedCount: number;
+  availableSlots: number;
+  isFull: boolean;
+  status: string;
+  isActive?: boolean;
+}
+
 interface StaffInvitesManagementProps {
   branches: BranchOption[];
   branchAreas?: AreaOption[];
   departments?: DepartmentOption[];
+  positions?: PositionOption[];
   customRoles?: CustomRoleOption[];
   initialInvitations: FormattedInvitation[];
   userRole: string;
@@ -52,6 +74,7 @@ export function StaffInvitesManagement({
   branches,
   branchAreas = [],
   departments = [],
+  positions = [],
   customRoles: initialCustomRoles = [],
   initialInvitations,
   userRole,
@@ -70,6 +93,7 @@ export function StaffInvitesManagement({
   // Form states
   const [branchId, setBranchId] = useState<string>(activeBranchId || branches[0]?.id || '');
   const [departmentId, setDepartmentId] = useState<string>('');
+  const [positionId, setPositionId] = useState<string>('');
   const [scopeChoice, setScopeChoice] = useState<'ORGANIZATION' | 'PROPERTY'>('ORGANIZATION');
   const [selectedRoleKey, setSelectedRoleKey] = useState<string>('builtin:cashier');
   const [invitedEmail, setInvitedEmail] = useState<string>('');
@@ -115,6 +139,9 @@ export function StaffInvitesManagement({
   const isDeptScopeRole = selectedCustomRole?.defaultScope === 'DEPARTMENT';
   const isAreaScopeRole = selectedCustomRole?.defaultScope === 'AREA_TEAM';
   const canChooseOrgScope = selectedCustomRole?.maxScope === 'ORGANIZATION' && !isOrgScopeRole;
+
+  const filteredPositions = positions.filter((p) => !p.branchId || p.branchId === branchId);
+  const selectedPosition = positions.find((p) => p.id === positionId);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,6 +193,7 @@ export function StaffInvitesManagement({
       branchId: scopeType === 'ORGANIZATION' ? (branchId || undefined) : branchId,
       scopeType,
       departmentId: scopeType === 'DEPARTMENT' ? departmentId : undefined,
+      positionId: positionId || undefined,
       assignedRole,
       customRoleId,
       invitedEmail,
@@ -191,6 +219,7 @@ export function StaffInvitesManagement({
       setInvitedEmail('');
       setSelectedAreaIds([]);
       setDepartmentId('');
+      setPositionId('');
       setSelectedRoleKey('builtin:cashier');
     } else {
       setErrorMsg(res.message || 'Failed to generate invitation.');
@@ -374,7 +403,12 @@ export function StaffInvitesManagement({
                         ) : (
                           <div className="space-y-0.5">
                             <div className="font-semibold text-zinc-800">📍 {inv.branchName}</div>
-                            {inv.departmentName && (
+                            {inv.positionCode && (
+                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                🏷️ {inv.positionCode} {inv.jobTitleName ? `(${inv.jobTitleName})` : ''}
+                              </div>
+                            )}
+                            {inv.departmentName && !inv.positionCode && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                                 👥 {inv.departmentName}
                               </span>
@@ -489,6 +523,11 @@ export function StaffInvitesManagement({
                       )}
                     </span>
                   </div>
+                  {inv.positionCode && (
+                    <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      🏷️ Position: {inv.positionCode} {inv.jobTitleName ? `(${inv.jobTitleName})` : ''}
+                    </div>
+                  )}
 
                   {/* Mobile Invitation Code & Persistent Copy Button */}
                   {inv.status === 'pending' ? (
@@ -782,6 +821,94 @@ export function StaffInvitesManagement({
                   )}
                 </div>
               )}
+
+              {/* Organization Position Slot Selector */}
+              <div className="space-y-2 border-b border-zinc-100 pb-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-zinc-900 font-bold text-xs">
+                    Organization Position Slot
+                  </label>
+                  <span className="text-[10px] text-zinc-500 font-normal">
+                    Connects Staff to Org Management
+                  </span>
+                </div>
+
+                {filteredPositions.length === 0 ? (
+                  <div className="p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-500 text-[11px]">
+                    No organization positions configured for this branch. Staff will join as unassigned until placed.
+                  </div>
+                ) : (
+                  <select
+                    value={positionId}
+                    onChange={(e) => {
+                      const posId = e.target.value;
+                      setPositionId(posId);
+                      const p = positions.find((item) => item.id === posId);
+                      if (p?.branchId && p.branchId !== branchId) {
+                        setBranchId(p.branchId);
+                      }
+                      if (p?.departmentId) {
+                        setDepartmentId(p.departmentId);
+                      }
+                    }}
+                    className="w-full h-10 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-medium text-zinc-900 focus:border-zinc-950 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">None / Assign Later (Organization Assignment Required)</option>
+                    {filteredPositions.map((pos) => {
+                      const isPosRoleMatch =
+                        (selectedRoleKey === 'builtin:waiter' && pos.jobTitleName.toLowerCase().includes('waiter')) ||
+                        (selectedRoleKey === 'builtin:cashier' && pos.jobTitleName.toLowerCase().includes('cashier')) ||
+                        (selectedRoleKey === 'builtin:kitchen_staff' &&
+                          (pos.jobTitleName.toLowerCase().includes('chef') ||
+                            pos.jobTitleName.toLowerCase().includes('cook') ||
+                            pos.jobTitleName.toLowerCase().includes('kitchen'))) ||
+                        (selectedRoleKey === 'builtin:branch_manager' && pos.jobTitleName.toLowerCase().includes('manager'));
+
+                      const disabled = pos.isFull || pos.status === 'frozen' || pos.status === 'archived';
+                      const statusLabel = pos.isFull
+                        ? ` [FULL: ${pos.occupiedCount}/${pos.headcountLimit}]`
+                        : pos.status === 'frozen'
+                        ? ' [FROZEN]'
+                        : ` [${pos.occupiedCount}/${pos.headcountLimit} occupied]`;
+
+                      const deptUnit = [pos.departmentName, pos.unitName].filter(Boolean).join(' / ');
+
+                      return (
+                        <option
+                          key={pos.id}
+                          value={pos.id}
+                          disabled={disabled}
+                          className={disabled ? 'text-zinc-400' : isPosRoleMatch ? 'font-bold' : ''}
+                        >
+                          {isPosRoleMatch ? '⭐ ' : ''}{pos.jobTitleName} — {pos.positionCode || 'POS'} {deptUnit ? `(${deptUnit})` : ''}{statusLabel}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+
+                {selectedPosition && (
+                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1 text-blue-950">
+                    <div className="flex items-center justify-between font-bold text-xs">
+                      <span>🏷️ {selectedPosition.jobTitleName} ({selectedPosition.positionCode})</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-extrabold">
+                        {selectedPosition.availableSlots} slot{selectedPosition.availableSlots !== 1 ? 's' : ''} open
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-blue-800">
+                      Placement:{' '}
+                      <strong>
+                        {[selectedPosition.branchName, selectedPosition.departmentName, selectedPosition.unitName]
+                          .filter(Boolean)
+                          .join(' › ')}
+                      </strong>
+                    </p>
+                    <p className="text-[10px] text-blue-700">
+                      Claiming this invite will automatically create the primary staff assignment, link the employee into People Directory, and update headcount occupancy.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* 3. Optional Bound Email */}
               <div>

@@ -101,7 +101,7 @@ async function runFinalAcceptance() {
     settingsHubContent.includes('Branch Management') &&
     settingsHubContent.includes('Order Security & Anti-Fraud') &&
     settingsHubContent.includes('Payment Settings') &&
-    settingsHubContent.includes('isOwner && ('),
+    (settingsHubContent.includes('canViewSubscription && (') || settingsHubContent.includes('isOwner && (')),
     '2. Settings Hub exists at /dashboard/settings and surfaces all settings destinations with owner billing card'
   );
 

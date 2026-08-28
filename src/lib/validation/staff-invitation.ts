@@ -17,6 +17,7 @@ export const createInvitationSchema = z
     branchId: z.string().uuid('Invalid branch selected').optional().nullable(),
     scopeType: z.enum(['ORGANIZATION', 'PROPERTY', 'DEPARTMENT', 'AREA_TEAM', 'SELF']).optional(),
     departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
+    positionId: z.string().uuid('Invalid position ID').optional().nullable(),
     assignedRole: staffRoleEnum,
     customRoleId: z.string().uuid('Invalid custom role ID').optional().nullable(),
     invitedEmail: z.string().email('Invalid email address').optional().or(z.literal('')),

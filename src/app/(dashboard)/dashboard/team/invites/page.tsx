@@ -28,10 +28,11 @@ export default async function StaffInvitesPage() {
 
   const { business, membership, branches, activeBranch } = context;
 
-  const [invitations, rawCustomRoles, rawDepartments] = await Promise.all([
+  const [invitations, rawCustomRoles, rawDepartments, rawPositions] = await Promise.all([
     StaffInvitationService.listInvitations(business.id, activeBranch?.id),
     RoleGovernanceService.listCustomRoles(business.id, { includeArchived: false }),
     OrganizationService.getDepartments(business.id),
+    OrganizationService.listAllPositionsWithCoverage(business.id),
   ]);
 
   const customRoles = rawCustomRoles
@@ -68,6 +69,34 @@ export default async function StaffInvitesPage() {
     code: a.code,
   }));
 
+  const positions = (rawPositions || []).map((p) => {
+    const jt = p.job_title as { id?: string; name?: string; code?: string } | null;
+    const dept = p.department as { id?: string; name?: string; code?: string } | null;
+    const unit = p.unit as { id?: string; name?: string; code?: string } | null;
+    const br = p.branch as { id?: string; name?: string; code?: string } | null;
+
+    return {
+      id: p.id,
+      positionCode: p.position_code || null,
+      nameOverride: p.name_override || null,
+      jobTitleId: p.job_title_id,
+      jobTitleName: jt?.name || 'Position',
+      jobTitleCode: jt?.code || null,
+      branchId: p.branch_id || null,
+      branchName: br?.name || null,
+      departmentId: p.department_id || null,
+      departmentName: dept?.name || null,
+      unitId: p.unit_id || null,
+      unitName: unit?.name || null,
+      headcountLimit: p.headcount_limit || 1,
+      occupiedCount: p.occupiedCount || 0,
+      availableSlots: p.availableSlots || 0,
+      isFull: p.isFull || false,
+      status: p.status,
+      isActive: p.is_active,
+    };
+  });
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <TeamSubNav />
@@ -75,6 +104,7 @@ export default async function StaffInvitesPage() {
         branches={formattedBranches}
         branchAreas={branchAreas}
         departments={departments}
+        positions={positions}
         customRoles={customRoles}
         initialInvitations={invitations}
         userRole={membership.role}

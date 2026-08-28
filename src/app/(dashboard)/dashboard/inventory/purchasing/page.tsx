@@ -10,6 +10,7 @@ import { can, resolveAuthorizationContext } from '@/server/auth';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 import { PurchaseOrderActions } from '@/components/inventory/purchase-order-actions';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Purchase Orders & Deliveries | WSNexa Inventory',
@@ -17,9 +18,9 @@ export const metadata: Metadata = {
 };
 
 export default async function PurchasingPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/purchasing');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.activeBranch) {
@@ -28,6 +29,20 @@ export default async function PurchasingPage() {
 
   let canManagePO = false;
   let canReceive = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -51,6 +66,12 @@ export default async function PurchasingPage() {
 
     canManagePO = hasPOManage || hasManage || authContext.isBusinessOwner;
     canReceive = hasReceive || hasManage || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canManagePO = false;
     canReceive = false;
@@ -92,9 +113,7 @@ export default async function PurchasingPage() {
         }
       />
 
-      <InventorySubNav
-        canViewReceiving={canReceive}
-      />
+      <InventorySubNav {...navPermissions} />
 
       {purchaseOrders.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-200 p-12 text-center space-y-3 shadow-xs">

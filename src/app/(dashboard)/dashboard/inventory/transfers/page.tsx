@@ -10,6 +10,7 @@ import { InventoryService } from '@/server/services/inventory.service';
 import { sendStockTransferAction, receiveStockTransferAction } from '@/server/actions/inventory';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Stock Transfers | WSNexa Inventory',
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 export default async function StockTransfersPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/inventory/transfers');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.activeBranch) {
@@ -27,6 +28,20 @@ export default async function StockTransfersPage() {
   }
 
   let canManageTransfers = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -43,6 +58,12 @@ export default async function StockTransfersPage() {
       (await can({ context: authContext, permission: 'inventory.transfers.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     canManageTransfers = hasPerm || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canManageTransfers = false;
   }
@@ -79,7 +100,7 @@ export default async function StockTransfersPage() {
         }
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       {/* Transfer Lifecycle Flow Guide */}
       <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 text-xs text-zinc-600">

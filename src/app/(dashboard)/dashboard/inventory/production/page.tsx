@@ -6,6 +6,8 @@ import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/t
 import { AccessDenied } from '@/components/auth/access-denied';
 import { createAdminClient } from '@/lib/supabase/server';
 import { PrepProductionRunner } from '@/components/inventory/prep-production-runner';
+import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -14,9 +16,9 @@ export const metadata: Metadata = {
 };
 
 export default async function PrepProductionPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/production');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.business || !context.activeBranch) {
@@ -24,6 +26,20 @@ export default async function PrepProductionPage() {
   }
 
   let canProduce = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -40,8 +56,18 @@ export default async function PrepProductionPage() {
       (await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     canProduce = hasProduce || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canProduce = false;
+  }
+
+  if (!canProduce) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context.membership?.role, context.membership?.customRoleId)} />;
   }
 
   const admin = createAdminClient();
@@ -58,23 +84,19 @@ export default async function PrepProductionPage() {
     `)
     .eq('business_id', context.business.id)
     .eq('recipe_type', 'prep_recipe')
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .order('name', { ascending: true });
 
-  interface RawRecipeRow {
-    id: string;
-    name: string;
-    yield_quantity: number;
-    yield_unit: string;
-    output_item?: { name: string } | null;
-  }
-
-  const prepRecipes = ((rawRecipes as unknown as RawRecipeRow[]) || []).map((r) => ({
-    id: r.id,
-    name: r.name,
-    yieldQuantity: Number(r.yield_quantity) || 1.0,
-    yieldUnit: r.yield_unit,
-    outputItemName: r.output_item?.name || null,
-  }));
+  const prepRecipes = (rawRecipes || []).map((r) => {
+    const output = r.output_item as unknown as { name: string } | null;
+    return {
+      id: r.id,
+      name: r.name,
+      yieldQuantity: Number(r.yield_quantity) || 1,
+      yieldUnit: r.yield_unit || 'portion',
+      outputItemName: output?.name || 'Prepared Item',
+    };
+  });
 
   // 2. Fetch storage locations
   const { data: rawLocations } = await admin
@@ -86,31 +108,15 @@ export default async function PrepProductionPage() {
 
   const locations = (rawLocations || []).map((l) => ({ id: l.id, name: l.name }));
 
-  interface BatchRow {
-    id: string;
-    batch_number: string;
-    expected_quantity: number;
-    actual_quantity: number;
-    yield_variance: number;
-    unit: string;
-    total_cost_cents: number;
-    currency: string;
-    produced_at: string;
-    recipe?: { name: string } | null;
-  }
-
-  // 3. Fetch past production batches
+  // 3. Fetch recent production batch logs
   const { data: rawBatches } = await admin
     .from('inventory_production_batches')
     .select(`
       id,
       batch_number,
-      expected_quantity,
       actual_quantity,
-      yield_variance,
       unit,
-      total_cost_cents,
-      currency,
+      yield_variance,
       produced_at,
       recipe:recipe_id(name)
     `)
@@ -118,13 +124,31 @@ export default async function PrepProductionPage() {
     .order('produced_at', { ascending: false })
     .limit(10);
 
-  const batches = (rawBatches as unknown as BatchRow[]) || [];
+  interface RawBatchRow {
+    id: string;
+    batch_number: string;
+    actual_quantity: number;
+    unit: string;
+    yield_variance: number;
+    produced_at: string;
+    recipe?: { name: string } | null;
+  }
+
+  const batches = ((rawBatches || []) as unknown as RawBatchRow[]).map((b) => ({
+    id: b.id,
+    batch_number: b.batch_number,
+    actual_quantity: Number(b.actual_quantity),
+    unit: b.unit,
+    yield_variance: Number(b.yield_variance),
+    produced_at: b.produced_at,
+    recipe: b.recipe,
+  }));
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Prep Batch Production"
-        description="Convert raw ingredients into prepared outputs, deduct raw stock atomically, and log production yield variance"
+        title="Prep Production Batches"
+        description={`Convert raw batch ingredients into pre-prepped sub-recipes for ${context.activeBranch.name}`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Inventory', href: '/dashboard/inventory' },
@@ -132,6 +156,8 @@ export default async function PrepProductionPage() {
         ]}
         helpSlug="sub-recipes-and-prep-production"
       />
+
+      <InventorySubNav {...navPermissions} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">

@@ -19,17 +19,17 @@ interface InventorySubNavProps {
 }
 
 export function InventorySubNav({
-  canViewInventory = true,
-  canViewItems = true,
-  canViewCounts = true,
-  canViewRecipes = true,
-  canViewPurchasing = true,
-  canViewLocations = true,
-  canViewSuppliers = true,
-  canViewReceiving = true,
-  canViewTransfers = true,
-  canViewWaste = true,
-  canViewSettings = true,
+  canViewInventory = false,
+  canViewItems = false,
+  canViewCounts = false,
+  canViewRecipes = false,
+  canViewPurchasing = false,
+  canViewLocations = false,
+  canViewSuppliers = false,
+  canViewReceiving = false,
+  canViewTransfers = false,
+  canViewWaste = false,
+  canViewSettings = false,
   className = '',
 }: InventorySubNavProps) {
   const items: HubNavItem[] = [];

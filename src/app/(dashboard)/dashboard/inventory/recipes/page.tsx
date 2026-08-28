@@ -9,6 +9,7 @@ import { RecipeService } from '@/server/services/recipe.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Recipes & BOM Costing | WSNexa Inventory',
@@ -16,9 +17,9 @@ export const metadata: Metadata = {
 };
 
 export default async function RecipesPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/recipes');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.activeBranch) {
@@ -27,6 +28,20 @@ export default async function RecipesPage() {
 
   let canManageRecipes = false;
   let canProduce = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -46,6 +61,12 @@ export default async function RecipesPage() {
     const hasProduce = await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource });
     canManageRecipes = hasRecipeManage || hasManage || authContext.isBusinessOwner;
     canProduce = hasProduce || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canManageRecipes = false;
     canProduce = false;
@@ -87,7 +108,7 @@ export default async function RecipesPage() {
         }
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       {/* Overview Filter Tabs */}
       <div className="flex items-center gap-3 border-b border-zinc-200 pb-3">

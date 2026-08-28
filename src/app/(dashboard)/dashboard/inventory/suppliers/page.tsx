@@ -7,7 +7,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { PurchasingService } from '@/server/services/purchasing.service';
 import { SupplierManagerClient } from '@/components/inventory/supplier-manager-client';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
-
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -16,9 +16,9 @@ export const metadata: Metadata = {
 };
 
 export default async function SuppliersPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/suppliers');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.business) {
@@ -26,6 +26,20 @@ export default async function SuppliersPage() {
   }
 
   let canManageSuppliers = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = context.activeBranch
@@ -44,6 +58,12 @@ export default async function SuppliersPage() {
       (await can({ context: authContext, permission: 'suppliers.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     canManageSuppliers = hasSuppliersManage || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch?.id,
+      context.business.id
+    );
   } catch {
     canManageSuppliers = false;
   }
@@ -64,7 +84,7 @@ export default async function SuppliersPage() {
         helpSlug="managing-suppliers-and-vendor-catalogs"
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       <SupplierManagerClient
         initialSuppliers={suppliers}

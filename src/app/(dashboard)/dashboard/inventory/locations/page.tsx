@@ -7,6 +7,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { StorageLocationManager } from '@/components/inventory/storage-location-manager';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 export default async function StorageLocationsPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/inventory/locations');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.activeBranch) {
@@ -25,6 +26,20 @@ export default async function StorageLocationsPage() {
   }
 
   let canManageLocations = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -41,6 +56,12 @@ export default async function StorageLocationsPage() {
       (await can({ context: authContext, permission: 'inventory.locations.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     canManageLocations = hasLocationsManage || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canManageLocations = false;
   }
@@ -63,9 +84,7 @@ export default async function StorageLocationsPage() {
         helpSlug="understanding-storage-locations"
       />
 
-      <InventorySubNav
-        canViewLocations={canManageLocations}
-      />
+      <InventorySubNav {...navPermissions} />
 
       <StorageLocationManager
         locations={locations}

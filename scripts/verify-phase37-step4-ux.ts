@@ -355,6 +355,103 @@ function runStep4Verification() {
     'Reservation management client uses clean "New Reservation" modal title'
   );
 
+  // Test 6: Final Blocker — Inventory Subnavigation & Settings Route Hardening Audits
+  console.log('\n--- 6. Inventory Subnavigation & Settings Route Hardening Audits ---');
+
+  // QA Blocker 1 & 2: Route Permission Mapping
+  const routePermsFile = join(rootDir, 'src/lib/security/route-permissions.ts');
+  const routePermsContent = readFileSync(routePermsFile, 'utf-8');
+  assert(
+    routePermsContent.includes("prefix: '/dashboard/inventory/settings'") &&
+    routePermsContent.includes("permission: ['inventory.settings.manage']"),
+    'ROUTE_PERMISSION_MAP registers /dashboard/inventory/settings requiring inventory.settings.manage'
+  );
+
+  assert(
+    routePermsContent.includes("prefix: '/dashboard/inventory/receiving'") &&
+    routePermsContent.includes("permission: ['purchasing.receive']"),
+    'ROUTE_PERMISSION_MAP registers /dashboard/inventory/receiving requiring purchasing.receive'
+  );
+
+  assert(
+    routePermsContent.includes("prefix: '/dashboard/inventory/production'") &&
+    routePermsContent.includes("permission: ['inventory.production.manage']"),
+    'ROUTE_PERMISSION_MAP registers /dashboard/inventory/production requiring inventory.production.manage'
+  );
+
+  // QA Blocker 3: Direct Settings Route Hardening
+  const invSettingsPageFile = join(rootDir, 'src/app/(dashboard)/dashboard/inventory/settings/page.tsx');
+  const invSettingsPageContent = readFileSync(invSettingsPageFile, 'utf-8');
+  assert(
+    invSettingsPageContent.includes("requireRoutePermission('/dashboard/inventory/settings')") &&
+    invSettingsPageContent.includes('!navPermissions.canViewSettings') &&
+    invSettingsPageContent.includes('return <AccessDenied'),
+    'Direct /dashboard/inventory/settings strictly guards against unauthorized users and returns clean AccessDenied'
+  );
+
+  // QA Blocker 4: Server-Side Settings Mutation Authorization
+  const invSettingsActionFile = join(rootDir, 'src/server/actions/inventory-settings.ts');
+  const invSettingsActionContent = readFileSync(invSettingsActionFile, 'utf-8');
+  assert(
+    invSettingsActionContent.includes("permission: 'inventory.settings.manage'") &&
+    invSettingsActionContent.includes("permission: 'inventory.manage'") &&
+    invSettingsActionContent.includes('Forbidden: Missing inventory.settings.manage permission.'),
+    'updateInventorySettingsAction rejects unauthorized mutations without settings manage permission'
+  );
+
+  // QA Blocker 5 & 6: InventorySubNav defaults to false & Helper exists
+  const invSubNavPermissionsHelperFile = join(rootDir, 'src/server/inventory/inventory-nav-permissions.ts');
+  assert(existsSync(invSubNavPermissionsHelperFile), 'resolveInventorySubNavPermissions helper exists');
+
+  const invSubNavHelperContent = readFileSync(invSubNavPermissionsHelperFile, 'utf-8');
+  assert(
+    invSubNavHelperContent.includes('resolveInventorySubNavPermissions') &&
+    invSubNavHelperContent.includes("can({ context: authContext, permission: 'inventory.settings.manage'") &&
+    invSubNavHelperContent.includes('authContext.isBusinessOwner'),
+    'resolveInventorySubNavPermissions helper gates each tab on its canonical permission key'
+  );
+
+  const invSubNavComponentFile = join(rootDir, 'src/components/inventory/inventory-subnav.tsx');
+  const invSubNavComponentContent = readFileSync(invSubNavComponentFile, 'utf-8');
+  assert(
+    invSubNavComponentContent.includes('canViewSettings = false') &&
+    invSubNavComponentContent.includes('canViewCounts = false') &&
+    invSubNavComponentContent.includes('canViewRecipes = false'),
+    'InventorySubNav component defaults all sub-workspace visibility flags to false'
+  );
+
+  // QA Blocker 7: Inventory Hub Gating on Shortcuts and SubNav
+  const inventoryHubUpdated = readFileSync(join(rootDir, 'src/app/(dashboard)/dashboard/inventory/page.tsx'), 'utf-8');
+  assert(
+    inventoryHubUpdated.includes('resolveInventorySubNavPermissions') &&
+    inventoryHubUpdated.includes('<InventorySubNav {...navPermissions} />') &&
+    inventoryHubUpdated.includes('{navPermissions.canViewSettings && (') &&
+    inventoryHubUpdated.includes('{navPermissions.canViewItems && ('),
+    'Inventory Hub uses resolveInventorySubNavPermissions to gate subnav and shortcut action cards'
+  );
+
+  // QA Blocker 8: All other inventory subpages use exact route guards and navPermissions
+  const invPagesToCheck = [
+    'src/app/(dashboard)/dashboard/inventory/items/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/counts/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/recipes/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/purchasing/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/receiving/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/transfers/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/suppliers/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/locations/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/waste/page.tsx',
+    'src/app/(dashboard)/dashboard/inventory/production/page.tsx',
+  ];
+
+  for (const pagePath of invPagesToCheck) {
+    const pageContent = readFileSync(join(rootDir, pagePath), 'utf-8');
+    assert(
+      pageContent.includes('resolveInventorySubNavPermissions') || pageContent.includes('navPermissions'),
+      `${pagePath} integrates permission-aware inventory subnavigation`
+    );
+  }
+
   console.log(`\n========================================`);
   console.log(`Phase 37 Step 4 Verification Summary: ${passedTests}/${totalTests} Tests Passed`);
   console.log(`========================================\n`);

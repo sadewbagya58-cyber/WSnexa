@@ -8,6 +8,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { InventoryItemsTable } from '@/components/inventory/inventory-items-table';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -30,6 +31,19 @@ export default async function InventoryItemsPage() {
   let canAdjust = false;
   let canWaste = false;
   let canManageLocations = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
 
   try {
     const authContext = await resolveAuthorizationContext();
@@ -62,6 +76,12 @@ export default async function InventoryItemsPage() {
     canAdjust = hasAdjustPerm || authContext.isBusinessOwner;
     canWaste = hasWastePerm || authContext.isBusinessOwner;
     canManageLocations = hasLocationsManage || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     hasCostPermission = false;
     canManageItems = false;
@@ -109,10 +129,7 @@ export default async function InventoryItemsPage() {
         }
       />
 
-      <InventorySubNav
-        canViewLocations={canManageLocations}
-        canViewWaste={canWaste}
-      />
+      <InventorySubNav {...navPermissions} />
 
       <InventoryItemsTable
         items={items}

@@ -12,6 +12,7 @@ import { InventoryNeedsAttention } from '@/components/inventory/inventory-needs-
 import { InventoryExpiryAlerts } from '@/components/inventory/inventory-expiry-alerts';
 import { InventoryReorderSuggestions } from '@/components/inventory/inventory-reorder-suggestions';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -35,10 +36,20 @@ export default async function InventoryHubPage() {
   let canManagePurchasing = false;
   let canAdjust = false;
   let canReceive = false;
-  let canManageTransfers = false;
-  let canManageLocations = false;
-  let canWaste = false;
   let canProduce = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
 
   try {
     const authContext = await resolveAuthorizationContext();
@@ -72,15 +83,6 @@ export default async function InventoryHubPage() {
       (await can({ context: authContext, permission: 'purchasing.receive', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.receiving.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
-    const hasTransfers =
-      (await can({ context: authContext, permission: 'inventory.transfers.manage', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
-    const hasLocations =
-      (await can({ context: authContext, permission: 'inventory.locations.manage', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
-    const hasWaste =
-      (await can({ context: authContext, permission: 'inventory.waste.record', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     const hasProduce =
       (await can({ context: authContext, permission: 'inventory.production.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
@@ -90,10 +92,13 @@ export default async function InventoryHubPage() {
     canManagePurchasing = hasPOManage || isOwner;
     canAdjust = hasAdjust || isOwner;
     canReceive = hasReceive || isOwner;
-    canManageTransfers = hasTransfers || isOwner;
-    canManageLocations = hasLocations || isOwner;
-    canWaste = hasWaste || isOwner;
     canProduce = hasProduce || isOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     hasCostPermission = false;
     canManageItems = false;
@@ -101,9 +106,6 @@ export default async function InventoryHubPage() {
     canManagePurchasing = false;
     canAdjust = false;
     canReceive = false;
-    canManageTransfers = false;
-    canManageLocations = false;
-    canWaste = false;
     canProduce = false;
   }
 
@@ -159,14 +161,7 @@ export default async function InventoryHubPage() {
       />
 
       {/* Operations Sub-Navigation Bar */}
-      <InventorySubNav
-        canViewPurchasing={canManagePurchasing}
-        canViewCounts={canManageCounts}
-        canViewReceiving={canReceive}
-        canViewTransfers={canManageTransfers}
-        canViewLocations={canManageLocations}
-        canViewWaste={canWaste}
-      />
+      <InventorySubNav {...navPermissions} />
 
       {/* KPI Cards Summary */}
       <InventoryKpiSummary overview={overview} />
@@ -197,29 +192,33 @@ export default async function InventoryHubPage() {
 
       {/* Quick Navigation Shortcuts */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-        <Link
-          href="/dashboard/inventory/items"
-          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
-        >
-          <span className="text-xl">🥦</span>
-          <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Stock Items</span>
-            <span className="text-[11px] text-zinc-400">View & adjust balances</span>
-          </div>
-        </Link>
+        {navPermissions.canViewItems && (
+          <Link
+            href="/dashboard/inventory/items"
+            className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+          >
+            <span className="text-xl">🥦</span>
+            <div className="mt-3">
+              <span className="text-xs font-bold text-zinc-950 block">Stock Items</span>
+              <span className="text-[11px] text-zinc-400">View & adjust balances</span>
+            </div>
+          </Link>
+        )}
 
-        <Link
-          href="/dashboard/inventory/recipes"
-          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
-        >
-          <span className="text-xl">🍽️</span>
-          <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Recipes & BOM</span>
-            <span className="text-[11px] text-zinc-400">Food cost % & portioning</span>
-          </div>
-        </Link>
+        {navPermissions.canViewRecipes && (
+          <Link
+            href="/dashboard/inventory/recipes"
+            className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+          >
+            <span className="text-xl">🍽️</span>
+            <div className="mt-3">
+              <span className="text-xs font-bold text-zinc-950 block">Recipes & BOM</span>
+              <span className="text-[11px] text-zinc-400">Food cost % & portioning</span>
+            </div>
+          </Link>
+        )}
 
-        {canManagePurchasing && (
+        {navPermissions.canViewPurchasing && (
           <Link
             href="/dashboard/inventory/purchasing"
             className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
@@ -232,7 +231,7 @@ export default async function InventoryHubPage() {
           </Link>
         )}
 
-        {canReceive && (
+        {navPermissions.canViewReceiving && (
           <Link
             href="/dashboard/inventory/receiving"
             className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
@@ -245,16 +244,18 @@ export default async function InventoryHubPage() {
           </Link>
         )}
 
-        <Link
-          href="/dashboard/inventory/suppliers"
-          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
-        >
-          <span className="text-xl">🏢</span>
-          <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Suppliers</span>
-            <span className="text-[11px] text-zinc-400">Vendor directory & terms</span>
-          </div>
-        </Link>
+        {navPermissions.canViewSuppliers && (
+          <Link
+            href="/dashboard/inventory/suppliers"
+            className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+          >
+            <span className="text-xl">🏢</span>
+            <div className="mt-3">
+              <span className="text-xs font-bold text-zinc-950 block">Suppliers</span>
+              <span className="text-[11px] text-zinc-400">Vendor directory & terms</span>
+            </div>
+          </Link>
+        )}
 
         {canProduce && (
           <Link
@@ -269,7 +270,7 @@ export default async function InventoryHubPage() {
           </Link>
         )}
 
-        {canManageCounts && (
+        {navPermissions.canViewCounts && (
           <Link
             href="/dashboard/inventory/counts"
             className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
@@ -282,16 +283,18 @@ export default async function InventoryHubPage() {
           </Link>
         )}
 
-        <Link
-          href="/dashboard/inventory/settings"
-          className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
-        >
-          <span className="text-xl">⚙️</span>
-          <div className="mt-3">
-            <span className="text-xs font-bold text-zinc-950 block">Settings</span>
-            <span className="text-[11px] text-zinc-400">Deduction timing & cost</span>
-          </div>
-        </Link>
+        {navPermissions.canViewSettings && (
+          <Link
+            href="/dashboard/inventory/settings"
+            className="bg-white p-4 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-xs flex flex-col justify-between"
+          >
+            <span className="text-xl">⚙️</span>
+            <div className="mt-3">
+              <span className="text-xs font-bold text-zinc-950 block">Settings</span>
+              <span className="text-[11px] text-zinc-400">Deduction timing & cost</span>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   );

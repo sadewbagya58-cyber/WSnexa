@@ -9,6 +9,7 @@ import { PurchasingService } from '@/server/services/purchasing.service';
 import { GoodsReceivingClient } from '@/components/inventory/goods-receiving-client';
 import { SupplierReturnsClient } from '@/components/inventory/supplier-returns-client';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
@@ -21,9 +22,9 @@ interface GoodsReceivingPageProps {
 }
 
 export default async function GoodsReceivingPage({ searchParams }: GoodsReceivingPageProps) {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/receiving');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.business || !context.activeBranch) {
@@ -31,6 +32,20 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
   }
 
   let canReceive = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     const branchResource = {
@@ -48,6 +63,12 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
       (await can({ context: authContext, permission: 'inventory.receiving.manage', resource: branchResource })) ||
       (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
     canReceive = hasReceive || authContext.isBusinessOwner;
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     canReceive = false;
   }
@@ -167,7 +188,7 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
         helpSlug="receiving-goods-and-grn"
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       {/* Navigation Subtabs */}
       <div className="flex border-b border-zinc-200 gap-6 text-xs font-bold overflow-x-auto whitespace-nowrap py-0.5 no-scrollbar">

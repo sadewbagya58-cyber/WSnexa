@@ -23,13 +23,31 @@ export async function updateInventorySettingsAction(input: UpdateInventorySettin
   }
 
   const targetBranchId = input.branchId || authContext.activeBranchId || null;
-  const targetResource = targetBranchId ? { type: 'branch' as const, id: targetBranchId } : undefined;
+  const targetResource = targetBranchId
+    ? {
+        resourceType: 'branch' as const,
+        resourceId: targetBranchId,
+        businessId: authContext.businessId,
+        branchId: targetBranchId,
+        departmentId: null,
+        organizationUnitId: null,
+        serviceAreaId: null,
+        ownerUserId: null,
+      }
+    : undefined;
 
-  const canManage = await can({
-    context: authContext,
-    permission: 'inventory.settings.manage',
-    resource: targetResource,
-  });
+  const canManage =
+    (await can({
+      context: authContext,
+      permission: 'inventory.settings.manage',
+      resource: targetResource,
+    })) ||
+    (await can({
+      context: authContext,
+      permission: 'inventory.manage',
+      resource: targetResource,
+    })) ||
+    authContext.isBusinessOwner;
 
   if (!canManage) {
     return { success: false, message: 'Forbidden: Missing inventory.settings.manage permission.' };

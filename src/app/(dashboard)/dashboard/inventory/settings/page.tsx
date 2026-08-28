@@ -7,6 +7,8 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { createAdminClient } from '@/lib/supabase/server';
 import { InventorySettingsClient } from '@/components/inventory/inventory-settings-client';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
+import { resolveAuthorizationContext } from '@/server/auth';
 
 export const metadata: Metadata = {
   title: 'Inventory & Recipe Settings | WSNexa POS',
@@ -14,13 +16,30 @@ export const metadata: Metadata = {
 };
 
 export default async function InventorySettingsPage() {
-  const { allowed, context } = await requireRoutePermission('/dashboard/inventory');
+  const { allowed, context } = await requireRoutePermission('/dashboard/inventory/settings');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.business || !context.activeBranch) {
     redirect('/login');
+  }
+
+  let authContext: Awaited<ReturnType<typeof resolveAuthorizationContext>> | null = null;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
+
+  const navPermissions = await resolveInventorySubNavPermissions(
+    authContext,
+    context.activeBranch.id,
+    context.business.id
+  );
+
+  if (!navPermissions.canViewSettings) {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context.membership?.role, context.membership?.customRoleId)} />;
   }
 
   const admin = createAdminClient();
@@ -66,7 +85,7 @@ export default async function InventorySettingsPage() {
         helpSlug="automatic-stock-deduction-timing"
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       <InventorySettingsClient
         branchId={context.activeBranch.id}

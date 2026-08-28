@@ -138,9 +138,44 @@ Following production manual QA, the 15 discoverability, navigation, and responsi
 
 ---
 
-## 7. Automated Verification
+## 7. Inventory Permission-Aware Subnavigation & Direct Route Hardening (Step 4 Final Blocker)
 
-- **UX Verification Script**: `scripts/verify-phase37-step4-ux.ts` (34/34 assertions passed).
+Manual QA identified a final Step 4 blocker where an account with ONLY `inventory.view` could see `Policies & Setup` in `InventorySubNav`, open `/dashboard/inventory/settings`, and observe the management form rendered underneath a forbidden warning banner.
+
+### Root Cause Analysis & Architecture Fix
+1. **Subnavigation Permission Decoupling**:
+   - `InventorySubNav` previously defaulted all tab visibility flags to `true`, which caused client components rendered without explicit booleans to display all 11 inventory destinations.
+   - All subnav props in `src/components/inventory/inventory-subnav.tsx` now default to `false` (fail-safe security).
+   - Created authoritative helper `resolveInventorySubNavPermissions(authContext, branchId, businessId)` (`src/server/inventory/inventory-nav-permissions.ts`) that authoritatively checks canonical capabilities per tab.
+
+2. **Inventory Subnavigation Capability Matrix**:
+   | Sub-Workspace Tab | Route Path | Canonical Permission Required | Visible to `inventory.view` Only? |
+   | :--- | :--- | :--- | :---: |
+   | **Overview Hub** | `/dashboard/inventory` | `inventory.view` \| `inventory.items.manage` \| `inventory.manage` \| Owner | ✅ **Yes** |
+   | **Stock Items** | `/dashboard/inventory/items` | `inventory.view` \| `inventory.items.manage` \| `inventory.manage` \| Owner | ✅ **Yes** |
+   | **Stock Counts** | `/dashboard/inventory/counts` | `inventory.counts.manage` \| `inventory.counts.approve` \| `inventory.manage` \| Owner | ❌ No |
+   | **Recipes & BOM** | `/dashboard/inventory/recipes` | `recipes.view` \| `recipes.manage` \| `recipes.costs.view` \| `inventory.manage` \| Owner | ❌ No |
+   | **Purchasing** | `/dashboard/inventory/purchasing` | `purchasing.view` \| `purchasing.create` \| `purchasing.approve` \| `inventory.manage` \| Owner | ❌ No |
+   | **Receiving** | `/dashboard/inventory/receiving` | `purchasing.receive` \| `inventory.receiving.manage` \| `inventory.manage` \| Owner | ❌ No |
+   | **Transfers** | `/dashboard/inventory/transfers` | `inventory.transfers.manage` \| `inventory.transfers.receive` \| `inventory.manage` \| Owner | ❌ No |
+   | **Suppliers** | `/dashboard/inventory/suppliers` | `suppliers.view` \| `suppliers.manage` \| `inventory.manage` \| Owner | ❌ No |
+   | **Locations** | `/dashboard/inventory/locations` | `inventory.locations.manage` \| `inventory.manage` \| Owner | ❌ No |
+   | **Waste Log** | `/dashboard/inventory/waste` | `inventory.waste.record` \| `inventory.items.manage` \| `inventory.manage` \| Owner | ❌ No |
+   | **Policies & Setup** | `/dashboard/inventory/settings` | `inventory.settings.manage` \| `inventory.manage` \| Owner | ❌ No |
+
+3. **Direct URL Route Hardening**:
+   - `ROUTE_PERMISSION_MAP` in `src/lib/security/route-permissions.ts` updated with exact route prefix `/dashboard/inventory/settings` mapped to `['inventory.settings.manage']`.
+   - `/dashboard/inventory/settings/page.tsx` now calls `requireRoutePermission('/dashboard/inventory/settings')`, resolves `navPermissions`, and if `!allowed || !navPermissions.canViewSettings`, returns `<AccessDenied />` immediately. Management forms and client components are never mounted or rendered for unauthorized users.
+   - All other inventory subpages (`items`, `counts`, `recipes`, `purchasing`, `receiving`, `transfers`, `suppliers`, `locations`, `waste`, `production`) call `requireRoutePermission` with their exact canonical route path and pass resolved `navPermissions` to `<InventorySubNav {...navPermissions} />`.
+
+4. **Server-Side Mutation Protection**:
+   - `updateInventorySettingsAction` in `src/server/actions/inventory-settings.ts` verifies `inventory.settings.manage` (or `inventory.manage` / business ownership) against the targeted branch resource context, rejecting unauthorized callers with `Forbidden: Missing inventory.settings.manage permission.`.
+
+---
+
+## 8. Automated Verification
+
+- **UX Verification Script**: `scripts/verify-phase37-step4-ux.ts` (53/53 assertions passed).
 - **Regression Suite Passing**:
   - `npx tsx scripts/verify-phase37-dashboard.ts` (82/82 passed)
   - `npx tsx scripts/verify-phase37-navigation.ts` (63/63 passed)

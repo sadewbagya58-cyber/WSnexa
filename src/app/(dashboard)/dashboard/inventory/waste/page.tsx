@@ -7,6 +7,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { InventoryService } from '@/server/services/inventory.service';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { InventorySubNav } from '@/components/inventory/inventory-subnav';
+import { resolveInventorySubNavPermissions } from '@/server/inventory/inventory-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Waste Tracking | WSNexa Inventory',
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 export default async function InventoryWastePage() {
   const { allowed, context } = await requireRoutePermission('/dashboard/inventory/waste');
   if (!allowed) {
-    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role)} />;
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   if (!context || !context.user || !context.activeBranch) {
@@ -24,9 +25,29 @@ export default async function InventoryWastePage() {
   }
 
   let hasCostPermission = false;
+  let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
+    canViewInventory: false,
+    canViewItems: false,
+    canViewCounts: false,
+    canViewRecipes: false,
+    canViewPurchasing: false,
+    canViewReceiving: false,
+    canViewTransfers: false,
+    canViewSuppliers: false,
+    canViewLocations: false,
+    canViewWaste: false,
+    canViewSettings: false,
+  };
+
   try {
     const authContext = await resolveAuthorizationContext();
     hasCostPermission = await can({ context: authContext, permission: 'inventory.costs.view' });
+
+    navPermissions = await resolveInventorySubNavPermissions(
+      authContext,
+      context.activeBranch.id,
+      context.business.id
+    );
   } catch {
     hasCostPermission = false;
   }
@@ -78,7 +99,7 @@ export default async function InventoryWastePage() {
         helpSlug="recording-stock-adjustments-and-waste"
       />
 
-      <InventorySubNav />
+      <InventorySubNav {...navPermissions} />
 
       {wasteRecords.length === 0 ? (
         <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-10 text-center shadow-xs">

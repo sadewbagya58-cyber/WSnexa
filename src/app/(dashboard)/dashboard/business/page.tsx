@@ -4,8 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-
+import { resolveAuthorizationContext } from '@/server/auth';
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
 
 export default async function BusinessProfilePage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/business');
@@ -18,7 +19,18 @@ export default async function BusinessProfilePage() {
     redirect('/login');
   }
 
-  const isOwner = tenantContext.membership?.role === 'business_owner';
+  let authContext: Awaited<ReturnType<typeof resolveAuthorizationContext>> | null = null;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
+
+  const navPermissions = await resolveSettingsSubNavPermissions(
+    authContext,
+    tenantContext.activeBranch?.id,
+    tenantContext.business.id
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -33,7 +45,7 @@ export default async function BusinessProfilePage() {
         backHref="/dashboard/settings"
       />
 
-      <SettingsSubNav canViewSubscription={isOwner} />
+      <SettingsSubNav {...navPermissions} />
 
       <Card className="p-6">
         <h2 className="text-base font-semibold text-zinc-950">Business Information</h2>

@@ -7,6 +7,7 @@ import { VenueProfileForm } from '@/components/dashboard/venue-profile-form';
 import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Public Venue Profile | WSNexa B2B',
@@ -33,6 +34,12 @@ export default async function VenueProfileDashboardPage() {
     redirect('/dashboard');
   }
 
+  const navPermissions = await resolveSettingsSubNavPermissions(
+    authContext,
+    authContext.activeBranchId,
+    authContext.businessId
+  );
+
   const profile = await VenueProfileService.getProfileByBusinessId(authContext.businessId);
 
   const supabase = await createClient();
@@ -58,7 +65,7 @@ export default async function VenueProfileDashboardPage() {
         </div>
       </div>
 
-      <SettingsSubNav canViewSubscription={authContext.isBusinessOwner} />
+      <SettingsSubNav {...navPermissions} />
 
       <VenueProfileForm
         businessId={authContext.businessId}

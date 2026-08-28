@@ -86,15 +86,15 @@ export async function getOnboardingDraftAction(): Promise<
     };
   }
 
-  let payloadObj = (draft.payload as Record<string, any>) || {};
+  let payloadObj = (draft.payload as Record<string, unknown>) || {};
 
   // Self-heal legacy drafts where step keys were shifted by 1
-  if (!payloadObj.business && payloadObj.location?.businessType) {
+  if (!payloadObj.business && (payloadObj.location as Record<string, unknown> | undefined)?.businessType) {
     payloadObj = {
       business: payloadObj.location,
-      location: payloadObj.hours?.branchName ? payloadObj.hours : undefined,
-      hours: payloadObj.branding?.hours ? payloadObj.branding : undefined,
-      branding: payloadObj.review?.logoUrl !== undefined ? payloadObj.review : undefined,
+      location: (payloadObj.hours as Record<string, unknown> | undefined)?.branchName ? payloadObj.hours : undefined,
+      hours: (payloadObj.branding as Record<string, unknown> | undefined)?.hours ? payloadObj.branding : undefined,
+      branding: (payloadObj.review as Record<string, unknown> | undefined)?.logoUrl !== undefined ? payloadObj.review : undefined,
     };
   }
 
@@ -136,8 +136,8 @@ export async function completeOnboardingAction(
   // Validate full payload using Zod
   const parsed = fullOnboardingSchema.safeParse(rawPayload);
   if (!parsed.success) {
-    const issues = parsed.error.issues || (parsed.error as any).errors || [];
-    const errorDetails = issues.map((err: any) => {
+    const issues = parsed.error.issues;
+    const errorDetails = issues.map((err) => {
       const step = err.path[0] ? String(err.path[0]).toUpperCase() : 'GENERAL';
       const field = err.path.slice(1).join('.') || String(err.path[0]);
       return `[${step} → ${field}]: ${err.message}`;

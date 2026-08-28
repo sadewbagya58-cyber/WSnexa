@@ -7,6 +7,7 @@ import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveAuthorizationContext } from '@/server/auth';
 import { can } from '@/server/auth/policy-engine';
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
 
 export default async function OrderSecurityPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/settings/order-security');
@@ -23,6 +24,7 @@ export default async function OrderSecurityPage() {
   const branchId = tenantContext.activeBranch.id;
 
   let canManage = false;
+  let navPermissions;
   try {
     const authContext = await resolveAuthorizationContext();
     if (authContext) {
@@ -42,15 +44,16 @@ export default async function OrderSecurityPage() {
       });
       canManage = canManageOrderSecurity || authContext.isBusinessOwner;
     }
+    navPermissions = await resolveSettingsSubNavPermissions(authContext, branchId, businessId);
   } catch {
     canManage = tenantContext.membership?.role === 'business_owner';
+    navPermissions = await resolveSettingsSubNavPermissions(null, branchId, businessId);
   }
   const initialSettings = await OrderSecurityService.getBranchSecuritySettings(branchId);
-  const isOwner = tenantContext.membership?.role === 'business_owner';
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <SettingsSubNav canViewSubscription={isOwner} />
+      <SettingsSubNav {...navPermissions} />
       <OrderSecuritySettings
         branchId={branchId}
         branchName={tenantContext.activeBranch.name}

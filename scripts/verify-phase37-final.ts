@@ -570,6 +570,116 @@ async function runFinalAcceptance() {
     '30e. StaffInvitationService records scope metadata, generates assignmentLabel, and creates department assignments on claim'
   );
 
+  // --- 31. Permission-Aware Settings Secondary Navigation ---
+  console.log('\n--- 31. Permission-Aware Settings Secondary Navigation ---');
+  const { resolveSettingsSubNavPermissions } = await import('../src/server/navigation/settings-nav-permissions');
+  const settingsSubNavFile = path.join(rootDir, 'src/components/settings/settings-subnav.tsx');
+  const settingsSubNavContent = fs.readFileSync(settingsSubNavFile, 'utf-8');
+
+  // 31a. SettingsSubNav defaults must be false for secure-by-default behavior
+  assert(
+    settingsSubNavContent.includes('canViewBusiness = false') &&
+    settingsSubNavContent.includes('canViewVenueProfile = false') &&
+    settingsSubNavContent.includes('canViewBranches = false') &&
+    settingsSubNavContent.includes('canViewOrderSecurity = false') &&
+    settingsSubNavContent.includes('canViewPayments = false') &&
+    settingsSubNavContent.includes('canManageInventorySettings = false') &&
+    settingsSubNavContent.includes('canViewSubscription = false'),
+    '31a. SettingsSubNav defaults all sub-workspace visibility flags to false for fail-safe security'
+  );
+
+  // 31b. Group Viewer QA (business.view only)
+  const groupViewerAuthContext = {
+    ...invMockAuthContext,
+    isBusinessOwner: false,
+    rolePermissions: ['business.view'],
+    scopeGrants: [],
+  };
+  const groupViewerSettingsPerms = await resolveSettingsSubNavPermissions(groupViewerAuthContext);
+  assert(
+    groupViewerSettingsPerms.canViewBusiness === true &&
+    groupViewerSettingsPerms.canViewVenueProfile === false &&
+    groupViewerSettingsPerms.canViewBranches === false &&
+    groupViewerSettingsPerms.canViewOrderSecurity === false &&
+    groupViewerSettingsPerms.canViewPayments === false &&
+    groupViewerSettingsPerms.canManageInventorySettings === false &&
+    groupViewerSettingsPerms.canViewSubscription === false,
+    '31b. business.view-only role reveals exclusively Business Profile and hides all other 6 settings destinations'
+  );
+
+  // 31c. Order Security Viewer (order_security.view only)
+  const orderSecurityAuthContext = {
+    ...invMockAuthContext,
+    isBusinessOwner: false,
+    rolePermissions: ['order_security.view'],
+    scopeGrants: [],
+  };
+  const orderSecurityPerms = await resolveSettingsSubNavPermissions(orderSecurityAuthContext);
+  assert(
+    orderSecurityPerms.canViewOrderSecurity === true &&
+    orderSecurityPerms.canViewBusiness === false &&
+    orderSecurityPerms.canViewPayments === false &&
+    orderSecurityPerms.canManageInventorySettings === false &&
+    orderSecurityPerms.canViewSubscription === false,
+    '31c. order_security.view-only role reveals Order Security while hiding Payment Methods and Billing'
+  );
+
+  // 31d. Branch Manager (branches.view + branches.manage)
+  const branchManagerSettingsContext = {
+    ...invMockAuthContext,
+    isBusinessOwner: false,
+    rolePermissions: ['branches.view', 'branches.manage'],
+    scopeGrants: [],
+  };
+  const branchManagerPerms = await resolveSettingsSubNavPermissions(branchManagerSettingsContext);
+  assert(
+    branchManagerPerms.canViewBranches === true &&
+    branchManagerPerms.canManageBranches === true &&
+    branchManagerPerms.canViewPayments === true &&
+    branchManagerPerms.canViewSubscription === false,
+    '31d. Branch manager reveals Branches and Payment Methods while strictly hiding SaaS Subscription/Billing'
+  );
+
+  // 31e. Business Owner retains all settings destinations
+  const ownerSettingsContext = {
+    ...invMockAuthContext,
+    isBusinessOwner: true,
+    rolePermissions: ['*'],
+    scopeGrants: [],
+  };
+  const ownerSettingsPerms = await resolveSettingsSubNavPermissions(ownerSettingsContext);
+  assert(
+    ownerSettingsPerms.canViewBusiness === true &&
+    ownerSettingsPerms.canViewVenueProfile === true &&
+    ownerSettingsPerms.canViewBranches === true &&
+    ownerSettingsPerms.canManageBranches === true &&
+    ownerSettingsPerms.canViewOrderSecurity === true &&
+    ownerSettingsPerms.canViewPayments === true &&
+    ownerSettingsPerms.canManageInventorySettings === true &&
+    ownerSettingsPerms.canViewSubscription === true,
+    '31e. Business Owner retains all 8 Settings destinations in subnavigation and cards'
+  );
+
+  // 31f. Verify that all Settings pages integrate resolveSettingsSubNavPermissions
+  const businessPageContent = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/business/page.tsx'), 'utf-8');
+  const branchesPageContent = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/branches/page.tsx'), 'utf-8');
+  const venueProfilePageContent = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/venue-profile/page.tsx'), 'utf-8');
+  const orderSecurityPageContent = fs.readFileSync(path.join(rootDir, 'src/app/dashboard/settings/order-security/page.tsx'), 'utf-8');
+  const paymentsPageContent = fs.readFileSync(path.join(rootDir, 'src/app/dashboard/settings/payments/page.tsx'), 'utf-8');
+  const settingsHubPageContent = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/settings/page.tsx'), 'utf-8');
+  const subscriptionPageContent = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/settings/subscription/page.tsx'), 'utf-8');
+
+  assert(
+    businessPageContent.includes('resolveSettingsSubNavPermissions') &&
+    branchesPageContent.includes('resolveSettingsSubNavPermissions') &&
+    venueProfilePageContent.includes('resolveSettingsSubNavPermissions') &&
+    orderSecurityPageContent.includes('resolveSettingsSubNavPermissions') &&
+    paymentsPageContent.includes('resolveSettingsSubNavPermissions') &&
+    settingsHubPageContent.includes('resolveSettingsSubNavPermissions') &&
+    subscriptionPageContent.includes('resolveSettingsSubNavPermissions'),
+    '31f. All Settings sub-pages authoritatively compute dynamic permissions via resolveSettingsSubNavPermissions'
+  );
+
   console.log(`\n================================================================`);
   console.log(`  Phase 37 Step 5 Final Acceptance: ${passedTests} / ${totalTests} Tests Passed`);
   console.log(`================================================================\n`);

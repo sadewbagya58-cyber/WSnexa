@@ -4,7 +4,9 @@ import { checkBranchQuota } from '@/server/services/branch-limit.service';
 import { BranchManager } from '@/components/branch/branch-manager';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
+import { resolveAuthorizationContext } from '@/server/auth';
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
 
 export default async function BranchesPage() {
   const { allowed, context: tenantContext } = await requireRoutePermission('/dashboard/branches');
@@ -19,6 +21,19 @@ export default async function BranchesPage() {
 
   const { business, membership } = tenantContext;
   const isOwner = membership.role === 'business_owner';
+
+  let authContext: Awaited<ReturnType<typeof resolveAuthorizationContext>> | null = null;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    redirect('/login');
+  }
+
+  const navPermissions = await resolveSettingsSubNavPermissions(
+    authContext,
+    tenantContext.activeBranch?.id,
+    business.id
+  );
 
   // Fetch all branches (including archived)
   const branchesData = await BranchService.getBusinessBranches(business.id, true);
@@ -45,7 +60,7 @@ export default async function BranchesPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <SettingsSubNav canViewSubscription={isOwner} />
+      <SettingsSubNav {...navPermissions} />
       <BranchManager
         business={{
           id: business.id,

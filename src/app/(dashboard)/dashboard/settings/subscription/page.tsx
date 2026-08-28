@@ -5,6 +5,8 @@ import { SubscriptionPaymentQueryService } from '@/server/services/subscription-
 import { OwnerSubscriptionClient } from '@/components/subscription/owner-subscription-client';
 import { OwnerBillingHistoryClient } from '@/components/subscription/owner-billing-history-client';
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
+import { resolveAuthorizationContext } from '@/server/auth';
 
 import { AccessDenied } from '@/components/auth/access-denied';
 import { resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
@@ -29,6 +31,19 @@ export default async function OwnerSubscriptionPage({ searchParams }: PageProps)
   const sParams = await searchParams;
   const page = parseInt(sParams.page || '1', 10) || 1;
 
+  let authContext: Awaited<ReturnType<typeof resolveAuthorizationContext>> | null = null;
+  try {
+    authContext = await resolveAuthorizationContext();
+  } catch {
+    // Fallback if needed
+  }
+
+  const navPermissions = await resolveSettingsSubNavPermissions(
+    authContext,
+    context.activeBranch?.id,
+    context.business.id
+  );
+
   const subContext = await SubscriptionService.resolveSubscriptionContext(context.business.id);
   const usage = await SubscriptionService.getUsageSnapshot(context.business.id);
   const paymentHistory = await SubscriptionPaymentQueryService.listOwnerSubscriptionPayments({
@@ -39,7 +54,7 @@ export default async function OwnerSubscriptionPage({ searchParams }: PageProps)
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <SettingsSubNav canViewSubscription={true} />
+      <SettingsSubNav {...navPermissions} />
 
       <OwnerSubscriptionClient
         businessName={context.business.name}

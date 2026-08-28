@@ -5,8 +5,9 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/page-header';
 import { requireRoutePermission, resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
 import { AccessDenied } from '@/components/auth/access-denied';
-import { can, resolveAuthorizationContext } from '@/server/auth';
-import { HubSubNavigation, HubNavItem } from '@/components/layout/hub-sub-navigation';
+import { resolveAuthorizationContext } from '@/server/auth';
+import { SettingsSubNav } from '@/components/settings/settings-subnav';
+import { resolveSettingsSubNavPermissions } from '@/server/navigation/settings-nav-permissions';
 
 export const metadata: Metadata = {
   title: 'Settings & Configuration | WSNexa',
@@ -30,10 +31,14 @@ export default async function SettingsHubPage() {
     redirect('/login');
   }
 
-  const isOwner = authContext?.isBusinessOwner || tenantContext.membership.role === 'business_owner';
+  // Compute authoritative capability permissions for all settings destinations
+  const navPermissions = await resolveSettingsSubNavPermissions(
+    authContext,
+    tenantContext.activeBranch?.id,
+    tenantContext.business.id
+  );
 
-  // Compute capability permissions for each sub-setting area
-  const [
+  const {
     canViewBusiness,
     canViewVenueProfile,
     canViewBranches,
@@ -41,44 +46,8 @@ export default async function SettingsHubPage() {
     canViewOrderSecurity,
     canViewPayments,
     canManageInventorySettings,
-  ] = await Promise.all([
-    can({ context: authContext, permission: 'business.view' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'venue_profile.view' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'branches.view' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'branches.manage' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'order_security.view' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'branches.manage' }).then((v) => v || isOwner),
-    can({ context: authContext, permission: 'inventory.settings.manage' }).then((v) => v || isOwner),
-  ]);
-
-  const canViewSubscription = isOwner;
-
-  // Build capability-gated sub-navigation tabs
-  const navTabs: HubNavItem[] = [
-    { id: 'settings-hub', label: 'Overview', href: '/dashboard/settings', icon: '⚙️', exact: true },
-  ];
-
-  if (canViewBusiness) {
-    navTabs.push({ id: 'business', label: 'Business Profile', href: '/dashboard/business', icon: '🏢' });
-  }
-  if (canViewVenueProfile) {
-    navTabs.push({ id: 'venue-profile', label: 'Venue Profile', href: '/dashboard/venue-profile', icon: '🏬' });
-  }
-  if (canViewBranches) {
-    navTabs.push({ id: 'branches', label: 'Branches', href: '/dashboard/branches', icon: '📍' });
-  }
-  if (canViewOrderSecurity) {
-    navTabs.push({ id: 'order-security', label: 'Order Security', href: '/dashboard/settings/order-security', icon: '🛡️' });
-  }
-  if (canViewPayments) {
-    navTabs.push({ id: 'payments', label: 'Payment Methods', href: '/dashboard/settings/payments', icon: '💳' });
-  }
-  if (canManageInventorySettings) {
-    navTabs.push({ id: 'inventory-settings', label: 'Inventory Policies', href: '/dashboard/inventory/settings', icon: '📦' });
-  }
-  if (canViewSubscription) {
-    navTabs.push({ id: 'subscription', label: 'Billing & Plans', href: '/dashboard/settings/subscription', icon: '💎' });
-  }
+    canViewSubscription,
+  } = navPermissions;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -93,7 +62,7 @@ export default async function SettingsHubPage() {
       />
 
       {/* Secondary Hub Sub-Navigation Bar */}
-      <HubSubNavigation items={navTabs} />
+      <SettingsSubNav {...navPermissions} />
 
       {/* Main Settings Sections Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
@@ -286,7 +255,7 @@ export default async function SettingsHubPage() {
         )}
 
         {/* 7. SaaS Subscription & Billing (Owner Only) */}
-        {isOwner && (
+        {canViewSubscription && (
           <div className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-xs flex flex-col justify-between hover:border-zinc-950 transition-all group bg-gradient-to-b from-white to-zinc-50/50">
             <div className="space-y-2">
               <div className="flex items-center justify-between">

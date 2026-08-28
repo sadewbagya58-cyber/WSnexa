@@ -90,17 +90,34 @@ Phase 37 consolidates the entire tenant operational platform across:
   - On claim, if department-scoped, atomic `staff_assignments` record is created/updated.
   - UI in `StaffInvitesManagement` dynamically adapts based on custom role presets and surfaces `🏢 Organization Wide` and `👥 Department` badges.
 
+### Blocker 4 (Final Closure Hotfix): Permission-Aware Settings Secondary Navigation
+- **Problem**: Custom roles with limited scope (e.g. `Group Viewer QA` with only `business.view`) could see all secondary navigation tabs in `SettingsSubNav` (Order Security, Payment Methods, Venue Profile, Branches, Inventory Policies), leading to dead-end links and Access Denied errors.
+- **Resolution**:
+  - `src/server/navigation/settings-nav-permissions.ts`: Created authoritative helper `resolveSettingsSubNavPermissions` resolving each sub-setting area (`canViewBusiness`, `canViewVenueProfile`, `canViewBranches`, `canManageBranches`, `canViewOrderSecurity`, `canViewPayments`, `canManageInventorySettings`, `canViewSubscription`).
+  - `src/components/settings/settings-subnav.tsx`: Updated `SettingsSubNav` to default all visibility flags to `false` for secure-by-default, fail-safe rendering.
+  - Integrated dynamic permission resolution across all Settings sub-pages:
+    - `/dashboard/settings` (Overview Hub cards & subnavigation)
+    - `/dashboard/business` (Business Profile)
+    - `/dashboard/branches` (Branch Management)
+    - `/dashboard/venue-profile` (Public Venue Profile)
+    - `/dashboard/settings/order-security` (Order Security & Anti-Fraud)
+    - `/dashboard/settings/payments` (Branch Payment Methods)
+    - `/dashboard/settings/subscription` (SaaS Subscription & Billing)
+  - Result: `Group Viewer QA` (`business.view` only) exclusively sees Business Profile in `SettingsSubNav` and Settings Hub; all unauthorized tabs and cards are cleanly hidden.
+
 ---
 
 ## 6. Verification & Test Suite Summary
 
-- `scripts/verify-phase37-final.ts`: **40 / 40 PASSED**
+- `scripts/verify-phase37-final.ts`: **46 / 46 PASSED** (includes 6 new assertions for Settings navigation gating)
 - `scripts/verify-phase37-step4-ux.ts`: **53 / 53 PASSED**
 - `scripts/verify-phase37-step3-closure.ts`: **17 / 17 PASSED**
 - `scripts/verify-phase37-dashboard.ts`: **82 / 82 PASSED**
 - `scripts/verify-phase37-navigation.ts`: **63 / 63 PASSED**
 - `scripts/verify-phase31-role-aware-navigation.ts`: **42 / 42 PASSED**
 - `scripts/verify-phase31-navigation-ia.ts`: **60 / 60 PASSED**
+- `scripts/verify-v1-subscriptions.ts`: **30 / 30 PASSED**
+- `scripts/verify-v1-notifications.ts`: **43 / 43 PASSED**
 - `npm run build`: **179/179 routes compiled successfully with 0 errors**
 
 ---
@@ -110,4 +127,4 @@ Phase 37 consolidates the entire tenant operational platform across:
 - **Migration File**: `supabase/migrations/20260828000000_phase37_staff_invitation_encrypted_code.sql`
 - **SQL Action**: `ALTER TABLE public.staff_invitations ADD COLUMN encrypted_code TEXT;`
 - **Scope Model Schema Compatibility**: The existing canonical RBAC schema (`role_scope_presets`, `permission_scope_grants`, `staff_assignments`) fully represents Organization and Department assignments. The `branch_id` foreign key on `staff_invitations` anchors to the business's primary branch for DB integrity, requiring no additional schema migration.
-- **Production Status**: `READY FOR MIGRATION` (apply SQL in Supabase console or migration runner).
+- **Production Status**: `READY FOR FINAL MANUAL QA`

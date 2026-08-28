@@ -3,7 +3,7 @@
 import React from 'react';
 import { HubSubNavigation, HubNavItem } from '@/components/layout/hub-sub-navigation';
 
-interface SettingsSubNavProps {
+export interface SettingsSubNavProps {
   canViewBusiness?: boolean;
   canViewVenueProfile?: boolean;
   canViewBranches?: boolean;
@@ -15,17 +15,17 @@ interface SettingsSubNavProps {
 }
 
 export function SettingsSubNav({
-  canViewBusiness = true,
-  canViewVenueProfile = true,
-  canViewBranches = true,
-  canViewOrderSecurity = true,
-  canViewPayments = true,
-  canManageInventorySettings = true,
+  canViewBusiness = false,
+  canViewVenueProfile = false,
+  canViewBranches = false,
+  canViewOrderSecurity = false,
+  canViewPayments = false,
+  canManageInventorySettings = false,
   canViewSubscription = false,
   className = '',
 }: SettingsSubNavProps) {
   const items: HubNavItem[] = [
-    { id: 'settings-hub', label: 'Settings Hub', href: '/dashboard/settings', icon: '⚙️', exact: true },
+    { id: 'settings-hub', label: 'Overview', href: '/dashboard/settings', icon: '⚙️', exact: true },
   ];
 
   if (canViewBusiness) {

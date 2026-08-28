@@ -6,6 +6,9 @@ import { OwnerSubscriptionClient } from '@/components/subscription/owner-subscri
 import { OwnerBillingHistoryClient } from '@/components/subscription/owner-billing-history-client';
 import { SettingsSubNav } from '@/components/settings/settings-subnav';
 
+import { AccessDenied } from '@/components/auth/access-denied';
+import { resolveDefaultWorkspaceRoute } from '@/server/tenant/guard';
+
 export const metadata = {
   title: 'Subscription & Plan Management — WSNexa',
   description: 'Manage your WSNexa SaaS subscription, limits, plan upgrades, and billing history.',
@@ -19,8 +22,8 @@ interface PageProps {
 
 export default async function OwnerSubscriptionPage({ searchParams }: PageProps) {
   const context = await resolveActiveBusinessContext();
-  if (!context) {
-    return <div className="p-8 text-center font-bold">Unauthorized business context.</div>;
+  if (!context || context.membership?.role !== 'business_owner') {
+    return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
   const sParams = await searchParams;

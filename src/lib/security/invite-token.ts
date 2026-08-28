@@ -22,6 +22,57 @@ export function hashInvitationCode(rawCode: string): string {
 }
 
 /**
+ * Derives a 32-byte encryption key for invitation tokens.
+ */
+function getEncryptionKey(): Buffer {
+  const secret =
+    process.env.INVITATION_ENCRYPTION_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    'wsnexa-invitation-secure-key-32-byte-default';
+  return crypto.createHash('sha256').update(secret).digest();
+}
+
+/**
+ * Encrypts an invitation code using authenticated AES-256-GCM encryption.
+ * Output format: iv_hex:auth_tag_hex:ciphertext_hex
+ */
+export function encryptInvitationCode(rawCode: string): string {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let encrypted = cipher.update(rawCode, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+/**
+ * Decrypts an invitation code using authenticated AES-256-GCM decryption.
+ * Returns null if the payload is invalid, corrupted, or tampered with.
+ */
+export function decryptInvitationCode(encryptedPayload: string): string | null {
+  if (!encryptedPayload) return null;
+  try {
+    const parts = encryptedPayload.split(':');
+    if (parts.length !== 3) return null;
+    const [ivHex, authTagHex, ciphertextHex] = parts;
+    if (!ivHex || !authTagHex || !ciphertextHex) return null;
+
+    const key = getEncryptionKey();
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(ciphertextHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Generates an unpredictable, cryptographically secure invitation token.
  * Formats: WSN-MGR-XXXX-YYYY-ZZZZ or WSN-STF-XXXX-YYYY-ZZZZ
  */
@@ -29,6 +80,7 @@ export function generateInvitationCode(type: 'manager' | 'staff'): {
   rawCode: string;
   tokenHash: string;
   tokenPrefix: string;
+  encryptedCode: string;
 } {
   const bytes = crypto.randomBytes(9);
   // Base32 character set avoiding ambiguous characters (0, O, 1, I, L)
@@ -46,10 +98,12 @@ export function generateInvitationCode(type: 'manager' | 'staff'): {
   const rawCode = `${prefixTag}-${block1}-${block2}-${block3}`;
   const tokenHash = hashInvitationCode(rawCode);
   const tokenPrefix = `${prefixTag}-${block1}...`;
+  const encryptedCode = encryptInvitationCode(rawCode);
 
   return {
     rawCode,
     tokenHash,
     tokenPrefix,
+    encryptedCode,
   };
 }

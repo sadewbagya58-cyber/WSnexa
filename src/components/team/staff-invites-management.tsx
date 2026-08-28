@@ -68,6 +68,7 @@ export function StaffInvitesManagement({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedInstructions, setCopiedInstructions] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const isOwner = userRole === 'business_owner';
 
@@ -212,6 +213,12 @@ export function StaffInvitesManagement({
     }
   };
 
+  const copyCodeToClipboard = (id: string, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const formatRoleLabel = (role: string, customRoleName?: string | null) => {
     if (customRoleName) {
       return customRoleName;
@@ -289,7 +296,7 @@ export function StaffInvitesManagement({
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Branch</th>
                     <th className="py-3 px-4">Service Areas</th>
-                    <th className="py-3 px-4">Code Prefix</th>
+                    <th className="py-3 px-4">Code / Copy</th>
                     <th className="py-3 px-4">Bound Email</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Expires</th>
@@ -326,7 +333,30 @@ export function StaffInvitesManagement({
                           <span className="text-[11px] text-zinc-400 italic">Branch Wide</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 font-mono text-zinc-500 font-semibold">{inv.tokenPrefix}</td>
+                      <td className="py-3 px-4">
+                        {inv.status === 'pending' ? (
+                          inv.rawCode ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-zinc-900 font-bold tracking-wider">{inv.rawCode}</span>
+                              <button
+                                type="button"
+                                onClick={() => copyCodeToClipboard(inv.id, inv.rawCode!)}
+                                className="inline-flex min-h-[30px] items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 rounded-lg transition-colors cursor-pointer border border-zinc-200"
+                                title="Copy invitation code"
+                              >
+                                {copiedId === inv.id ? '✓ Copied' : '📋 Copy Code'}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-zinc-500 font-semibold">{inv.tokenPrefix}</span>
+                          )
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-zinc-400">
+                            <span className="font-mono">{inv.tokenPrefix}</span>
+                            <span className="text-[10px] italic">(Code unavailable)</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-zinc-500 font-mono">
                         {inv.invitedEmail || <span className="text-zinc-400 italic">Any email</span>}
                       </td>
@@ -390,8 +420,36 @@ export function StaffInvitesManagement({
                   </div>
                   <div className="flex justify-between text-zinc-600">
                     <span>Branch: <strong>{inv.branchName}</strong></span>
-                    <span className="font-mono text-zinc-500">{inv.tokenPrefix}</span>
                   </div>
+
+                  {/* Mobile Invitation Code & Persistent Copy Button */}
+                  {inv.status === 'pending' ? (
+                    inv.rawCode ? (
+                      <div className="flex items-center justify-between bg-zinc-50 p-2.5 rounded-xl border border-zinc-200 my-1">
+                        <div>
+                          <div className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Invitation Code</div>
+                          <div className="font-mono text-zinc-900 font-bold text-xs tracking-wider">{inv.rawCode}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copyCodeToClipboard(inv.id, inv.rawCode!)}
+                          className="flex min-h-[36px] items-center gap-1 px-3 py-1 text-xs font-bold text-zinc-800 bg-white border border-zinc-300 rounded-lg hover:bg-zinc-100 active:bg-zinc-200 transition-colors cursor-pointer shadow-xs"
+                        >
+                          {copiedId === inv.id ? '✓ Copied' : '📋 Copy Code'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between text-zinc-600">
+                        <span>Code: <strong className="font-mono">{inv.tokenPrefix}</strong></span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex justify-between items-center text-zinc-400 text-xs py-0.5">
+                      <span>Code: <strong className="font-mono font-normal">{inv.tokenPrefix}</strong></span>
+                      <span className="text-[10px] italic">Code unavailable</span>
+                    </div>
+                  )}
+
                   {inv.serviceAreaNames && inv.serviceAreaNames.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {inv.serviceAreaNames.map((areaName, i) => (

@@ -3,6 +3,7 @@ import {
   generateInvitationCode,
   hashInvitationCode,
   normalizeInvitationCode,
+  decryptInvitationCode,
 } from '@/lib/security/invite-token';
 import { CreateInvitationInput, StaffRole } from '@/lib/validation/staff-invitation';
 
@@ -17,6 +18,7 @@ export interface FormattedInvitation {
   customRoleName?: string | null;
   invitedEmail: string | null;
   tokenPrefix: string;
+  rawCode?: string | null;
   status: 'pending' | 'claimed' | 'expired' | 'revoked';
   createdBy: string;
   claimedBy: string | null;
@@ -175,7 +177,7 @@ export class StaffInvitationService {
     const expiresAt = new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
 
     const invitationType = input.assignedRole === 'branch_manager' ? 'manager' : 'staff';
-    const { rawCode, tokenHash, tokenPrefix } = generateInvitationCode(invitationType);
+    const { rawCode, tokenHash, tokenPrefix, encryptedCode } = generateInvitationCode(invitationType);
 
     const invitedEmail = input.invitedEmail && input.invitedEmail.trim().length > 0
       ? input.invitedEmail.trim().toLowerCase()
@@ -193,6 +195,7 @@ export class StaffInvitationService {
         invited_email: invitedEmail,
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
+        encrypted_code: encryptedCode,
         status: 'pending',
         created_by: userId,
         expires_at: expiresAt,
@@ -256,6 +259,7 @@ export class StaffInvitationService {
       customRoleName,
       invitedEmail: inviteRow.invited_email,
       tokenPrefix: inviteRow.token_prefix,
+      rawCode,
       status: inviteRow.status,
       createdBy: inviteRow.created_by,
       claimedBy: inviteRow.claimed_by,
@@ -727,7 +731,7 @@ export class StaffInvitationService {
     }
 
     const invitationType = invite.invitation_type;
-    const { rawCode, tokenHash, tokenPrefix } = generateInvitationCode(invitationType);
+    const { rawCode, tokenHash, tokenPrefix, encryptedCode } = generateInvitationCode(invitationType);
     const now = new Date().toISOString();
 
     const { error: updateErr } = await admin
@@ -735,6 +739,7 @@ export class StaffInvitationService {
       .update({
         token_hash: tokenHash,
         token_prefix: tokenPrefix,
+        encrypted_code: encryptedCode,
         last_regenerated_at: now,
         updated_at: now,
       })
@@ -837,10 +842,20 @@ export class StaffInvitationService {
       }
     }
 
+    const now = new Date();
+
     return rows.map((r) => {
       const b = r.branches as { name?: string } | null;
       const cr = r.custom_roles as { id?: string; name?: string } | null;
       const areaInfo = inviteAreaMap.get(r.id as string) || { ids: [], names: [] };
+      const isExpired = new Date(r.expires_at) <= now;
+      const isValidPending = r.status === 'pending' && !isExpired;
+
+      let decryptedCode: string | null = null;
+      if (isValidPending && r.encrypted_code) {
+        decryptedCode = decryptInvitationCode(r.encrypted_code);
+      }
+
       return {
         id: r.id as string,
         businessId: r.business_id as string,
@@ -852,7 +867,8 @@ export class StaffInvitationService {
         customRoleName: cr?.name || null,
         invitedEmail: (r.invited_email as string) || null,
         tokenPrefix: r.token_prefix as string,
-        status: r.status as 'pending' | 'claimed' | 'expired' | 'revoked',
+        rawCode: decryptedCode,
+        status: (isExpired && r.status === 'pending' ? 'expired' : r.status) as 'pending' | 'claimed' | 'expired' | 'revoked',
         createdBy: r.created_by as string,
         claimedBy: (r.claimed_by as string) || null,
         expiresAt: r.expires_at as string,

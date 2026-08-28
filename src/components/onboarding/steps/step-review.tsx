@@ -36,6 +36,25 @@ export const StepReview: React.FC<StepReviewProps> = ({
     }
   };
 
+  const getFailingStepInfo = (msg: string | null): { stepId: string; label: string } | null => {
+    if (!msg) return null;
+    const lower = msg.toLowerCase();
+    if (lower.includes('[business') || lower.includes('[profile') || lower.includes('business name') || lower.includes('country code') || lower.includes('currency')) {
+      return { stepId: 'business', label: '1. Business Profile' };
+    }
+    if (lower.includes('[location') || lower.includes('branch') || lower.includes('email') || lower.includes('phone') || lower.includes('address')) {
+      return { stepId: 'location', label: '2. Location & Contact' };
+    }
+    if (lower.includes('[hours') || lower.includes('operating') || lower.includes('opening') || lower.includes('closing')) {
+      return { stepId: 'hours', label: '3. Operating Hours' };
+    }
+    if (lower.includes('[branding') || lower.includes('logo')) {
+      return { stepId: 'branding', label: '4. Branding & Logo' };
+    }
+    return null;
+  };
+
+  const failingStep = getFailingStepInfo(errorMsg);
   const { business, location, hours, branding } = payload;
 
   return (
@@ -48,8 +67,23 @@ export const StepReview: React.FC<StepReviewProps> = ({
       </div>
 
       {errorMsg && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          {errorMsg}
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 space-y-2.5">
+          <div className="flex items-center gap-2 font-bold text-red-950">
+            <span className="text-base">⚠️</span>
+            <span>Onboarding Validation Error</span>
+          </div>
+          <p className="text-red-700 leading-relaxed">{errorMsg}</p>
+          {failingStep && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => onGoToStep(failingStep.stepId)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Go to {failingStep.label} to Fix →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

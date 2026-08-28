@@ -39,8 +39,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setPayload(updatedPayload);
     setCurrentStep(nextStep);
 
-    // Save draft server-side
-    await saveOnboardingDraftAction(nextStep, data);
+    // Save draft server-side: stepKey is the payload section, nextStep is current navigation position
+    await saveOnboardingDraftAction(stepKey, data, nextStep);
   };
 
   const handleGoToStep = (stepId: string) => {

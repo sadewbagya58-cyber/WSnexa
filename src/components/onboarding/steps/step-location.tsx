@@ -24,8 +24,33 @@ export const StepLocation: React.FC<StepLocationProps> = ({ initialData, onBack,
     branchCode: initialData?.branchCode || 'MAIN',
   });
 
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.branchName.trim()) {
+      newErrors.branchName = 'Branch name is required';
+    }
+
+    if (!formData.branchCode.trim()) {
+      newErrors.branchCode = 'Branch code is required';
+    }
+
+    if (formData.email && formData.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email.trim())) {
+        newErrors.email = 'Invalid email address';
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     onNext(formData);
   };
 
@@ -42,7 +67,7 @@ export const StepLocation: React.FC<StepLocationProps> = ({ initialData, onBack,
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="branchName" className="block text-xs font-medium text-zinc-700">
-              Branch Name
+              Branch Name <span className="text-red-500">*</span>
             </label>
             <input
               id="branchName"
@@ -52,11 +77,12 @@ export const StepLocation: React.FC<StepLocationProps> = ({ initialData, onBack,
               onChange={(e) => setFormData({ ...formData, branchName: e.target.value })}
               className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
             />
+            {errors.branchName && <p className="mt-1 text-xs text-red-600">{errors.branchName}</p>}
           </div>
 
           <div>
             <label htmlFor="branchCode" className="block text-xs font-medium text-zinc-700">
-              Branch Code
+              Branch Code <span className="text-red-500">*</span>
             </label>
             <input
               id="branchCode"
@@ -66,6 +92,7 @@ export const StepLocation: React.FC<StepLocationProps> = ({ initialData, onBack,
               onChange={(e) => setFormData({ ...formData, branchCode: e.target.value.toUpperCase() })}
               className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
             />
+            {errors.branchCode && <p className="mt-1 text-xs text-red-600">{errors.branchCode}</p>}
           </div>
         </div>
 

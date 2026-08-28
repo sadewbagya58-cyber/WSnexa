@@ -13,8 +13,9 @@ import { Json } from '@/types/database.types';
  * Saves onboarding progress into onboarding_drafts table server-side.
  */
 export async function saveOnboardingDraftAction(
-  step: string,
-  stepPayload: Record<string, unknown>
+  stepKey: string,
+  stepPayload: Record<string, unknown>,
+  nextStep?: string
 ): Promise<ActionResponse<{ currentStep: string }>> {
   const user = await getCurrentUser();
   if (!user) {
@@ -31,13 +32,14 @@ export async function saveOnboardingDraftAction(
     .single();
 
   const currentPayload = (existingDraft?.payload as Record<string, unknown>) || {};
-  const updatedPayload = { ...currentPayload, [step]: stepPayload };
+  const updatedPayload = { ...currentPayload, [stepKey]: stepPayload };
+  const targetStep = nextStep || stepKey;
 
   const { error: draftError } = await supabase
     .from('onboarding_drafts')
     .upsert({
       user_id: user.id,
-      current_step: step,
+      current_step: targetStep,
       payload: updatedPayload as unknown as Json,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
@@ -55,7 +57,7 @@ export async function saveOnboardingDraftAction(
   return {
     success: true,
     message: 'Progress saved.',
-    data: { currentStep: step },
+    data: { currentStep: targetStep },
   };
 }
 
@@ -84,11 +86,23 @@ export async function getOnboardingDraftAction(): Promise<
     };
   }
 
+  let payloadObj = (draft.payload as Record<string, any>) || {};
+
+  // Self-heal legacy drafts where step keys were shifted by 1
+  if (!payloadObj.business && payloadObj.location?.businessType) {
+    payloadObj = {
+      business: payloadObj.location,
+      location: payloadObj.hours?.branchName ? payloadObj.hours : undefined,
+      hours: payloadObj.branding?.hours ? payloadObj.branding : undefined,
+      branding: payloadObj.review?.logoUrl !== undefined ? payloadObj.review : undefined,
+    };
+  }
+
   return {
     success: true,
     data: {
       currentStep: draft.current_step,
-      payload: (draft.payload as unknown as Partial<FullOnboardingPayload>) || {},
+      payload: (payloadObj as unknown as Partial<FullOnboardingPayload>) || {},
     },
   };
 }
@@ -122,9 +136,16 @@ export async function completeOnboardingAction(
   // Validate full payload using Zod
   const parsed = fullOnboardingSchema.safeParse(rawPayload);
   if (!parsed.success) {
+    const issues = parsed.error.issues || (parsed.error as any).errors || [];
+    const errorDetails = issues.map((err: any) => {
+      const step = err.path[0] ? String(err.path[0]).toUpperCase() : 'GENERAL';
+      const field = err.path.slice(1).join('.') || String(err.path[0]);
+      return `[${step} → ${field}]: ${err.message}`;
+    });
+
     return {
       success: false,
-      message: 'Onboarding validation failed. Please check all steps.',
+      message: `Onboarding validation failed. Please check: ${errorDetails.join('; ')}`,
       errors: parsed.error.flatten().fieldErrors,
     };
   }

@@ -125,9 +125,9 @@ export const operatingDaySchema = z.object({
   closesAt: z.string().default('22:00'),
 }).refine((data) => {
   if (data.isClosed) return true;
-  return data.closesAt > data.opensAt;
+  return typeof data.opensAt === 'string' && typeof data.closesAt === 'string' && data.opensAt.trim().length > 0 && data.closesAt.trim().length > 0;
 }, {
-  message: 'Closing time must be after opening time',
+  message: 'Valid opening and closing times are required',
   path: ['closesAt'],
 });
 

@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { createRecipeAction } from '@/server/actions/recipe';
+import { createRecipeAction, updateRecipeAction } from '@/server/actions/recipe';
 import { STANDARD_UNITS } from '@/lib/inventory/unit-converter';
 import { formatCurrencyMinor } from '@/lib/utils/currency';
 
@@ -27,11 +27,30 @@ interface AvailableSubRecipe {
   yieldUnit: string;
 }
 
+export interface InitialRecipeData {
+  id: string;
+  name: string;
+  recipeType: 'menu_item' | 'prep_recipe';
+  menuItemId?: string | null;
+  outputInventoryItemId?: string | null;
+  yieldQuantity: number;
+  yieldUnit: string;
+  portionSize?: string | null;
+  ingredients: Array<{
+    itemId?: string | null;
+    subRecipeId?: string | null;
+    quantity: number;
+    unit: string;
+    yieldFactor?: number | null;
+  }>;
+}
+
 interface RecipeBuilderFormProps {
   availableItems: AvailableItem[];
   availableMenuItems: AvailableMenuItem[];
   availableSubRecipes: AvailableSubRecipe[];
   currency: string;
+  initialRecipe?: InitialRecipeData;
 }
 
 export function RecipeBuilderForm({
@@ -39,19 +58,24 @@ export function RecipeBuilderForm({
   availableMenuItems,
   availableSubRecipes,
   currency,
+  initialRecipe,
 }: RecipeBuilderFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Form State
-  const [name, setName] = useState('');
-  const [recipeType, setRecipeType] = useState<'menu_item' | 'prep_recipe'>('menu_item');
-  const [menuItemId, setMenuItemId] = useState<string>('');
-  const [outputInventoryItemId, setOutputInventoryItemId] = useState<string>('');
-  const [yieldQuantity, setYieldQuantity] = useState<number>(1.0);
-  const [yieldUnit, setYieldUnit] = useState<string>('portion');
-  const [portionSize, setPortionSize] = useState<string>('');
+  const [name, setName] = useState(initialRecipe?.name || '');
+  const [recipeType, setRecipeType] = useState<'menu_item' | 'prep_recipe'>(
+    initialRecipe?.recipeType || 'menu_item'
+  );
+  const [menuItemId, setMenuItemId] = useState<string>(initialRecipe?.menuItemId || '');
+  const [outputInventoryItemId, setOutputInventoryItemId] = useState<string>(
+    initialRecipe?.outputInventoryItemId || ''
+  );
+  const [yieldQuantity, setYieldQuantity] = useState<number>(initialRecipe?.yieldQuantity || 1.0);
+  const [yieldUnit, setYieldUnit] = useState<string>(initialRecipe?.yieldUnit || 'portion');
+  const [portionSize, setPortionSize] = useState<string>(initialRecipe?.portionSize || '');
 
   const [ingredients, setIngredients] = useState<
     Array<{
@@ -61,15 +85,25 @@ export function RecipeBuilderForm({
       unit: string;
       yieldFactor: number;
     }>
-  >([
-    {
-      itemId: availableItems[0]?.id || '',
-      subRecipeId: '',
-      quantity: 1,
-      unit: availableItems[0]?.baseUnit || 'kg',
-      yieldFactor: 1.0,
-    },
-  ]);
+  >(
+    initialRecipe?.ingredients && initialRecipe.ingredients.length > 0
+      ? initialRecipe.ingredients.map((ing) => ({
+          itemId: ing.itemId || '',
+          subRecipeId: ing.subRecipeId || '',
+          quantity: ing.quantity || 1,
+          unit: ing.unit || availableItems[0]?.baseUnit || 'kg',
+          yieldFactor: ing.yieldFactor || 1.0,
+        }))
+      : [
+          {
+            itemId: availableItems[0]?.id || '',
+            subRecipeId: '',
+            quantity: 1,
+            unit: availableItems[0]?.baseUnit || 'kg',
+            yieldFactor: 1.0,
+          },
+        ]
+  );
 
   // Live Cost & Margin Calculations
   const selectedMenuItem = availableMenuItems.find((m) => m.id === menuItemId);
@@ -140,9 +174,16 @@ export function RecipeBuilderForm({
         })),
       };
 
-      const res = await createRecipeAction(payload);
+      let res;
+      if (initialRecipe?.id) {
+        res = await updateRecipeAction({ id: initialRecipe.id, ...payload });
+      } else {
+        res = await createRecipeAction(payload);
+      }
+
       if (res.success) {
-        router.push('/dashboard/inventory/recipes');
+        router.push(initialRecipe?.id ? `/dashboard/inventory/recipes/${initialRecipe.id}` : '/dashboard/inventory/recipes');
+        router.refresh();
       } else {
         setErrorMsg(res.message || 'Failed to save recipe.');
       }
@@ -490,7 +531,7 @@ export function RecipeBuilderForm({
           disabled={isPending}
           className="text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-w-32"
         >
-          {isPending ? 'Saving…' : 'Save Recipe'}
+          {isPending ? 'Saving…' : initialRecipe ? 'Update Recipe' : 'Save Recipe'}
         </Button>
       </div>
     </form>

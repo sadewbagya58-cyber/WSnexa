@@ -103,11 +103,15 @@ export async function createInventoryItemAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const tenantCtx = await resolveActiveBusinessContext();
+  const businessCurrency = tenantCtx?.activeBranch?.currency || tenantCtx?.business?.defaultCurrency || 'USD';
+
   const res = await InventoryService.createInventoryItem(
     authContext.businessId,
     authContext.activeBranchId,
     authContext.userId,
-    'USD',
+    businessCurrency,
     parsed.data
   );
 
@@ -223,11 +227,15 @@ export async function createStockCountAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const tenantCtx = await resolveActiveBusinessContext();
+  const businessCurrency = tenantCtx?.activeBranch?.currency || tenantCtx?.business?.defaultCurrency || 'USD';
+
   const res = await InventoryService.createStockCount(
     authContext.businessId,
     authContext.activeBranchId,
     authContext.userId,
-    'USD',
+    businessCurrency,
     parsed.data
   );
 
@@ -334,10 +342,14 @@ export async function createStockTransferAction(rawInput: unknown) {
     return { success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors };
   }
 
+  const { resolveActiveBusinessContext } = await import('@/server/tenant/resolver');
+  const tenantCtx = await resolveActiveBusinessContext();
+  const businessCurrency = tenantCtx?.activeBranch?.currency || tenantCtx?.business?.defaultCurrency || 'USD';
+
   const res = await InventoryService.createStockTransfer(
     authContext.businessId,
     authContext.userId,
-    'USD',
+    businessCurrency,
     parsed.data
   );
 

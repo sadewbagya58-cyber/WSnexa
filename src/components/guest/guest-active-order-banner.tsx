@@ -24,7 +24,10 @@ export const GuestActiveOrderBanner: React.FC<GuestActiveOrderBannerProps> = ({
   useEffect(() => {
     const handleStorage = () => {
       const orders = getActiveOrdersFromStorage(branchId);
-      setActiveOrders(orders);
+      const liveOrders = orders.filter(
+        (o) => o.latestStatus !== 'completed' && o.latestStatus !== 'cancelled'
+      );
+      setActiveOrders(liveOrders);
     };
 
     handleStorage();

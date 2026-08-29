@@ -7,6 +7,7 @@ import { formatCurrencyMinor } from '@/lib/utils/currency';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
+import { RecipeDetailActions } from '@/components/inventory/recipe-detail-actions';
 
 interface RecipeDetailPageProps {
   params: Promise<{ id: string }>;
@@ -37,6 +38,9 @@ export default async function RecipeDetailPage({ params }: RecipeDetailPageProps
           { label: recipe.name },
         ]}
         badge={<Badge variant="neutral">{recipe.recipeType === 'prep_recipe' ? 'Prep Formula' : 'Menu Item'}</Badge>}
+        primaryAction={
+          <RecipeDetailActions recipeId={recipe.id} isActive={recipe.isActive} />
+        }
         secondaryActions={
           <Link
             href="/dashboard/inventory/recipes"

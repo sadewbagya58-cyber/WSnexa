@@ -291,24 +291,50 @@ export function PositionsClient({
                           </span>
                         ) : pos.isFull ? (
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-zinc-100 text-zinc-800">
-                            Substantive Full
+                            Substantively Filled
+                          </span>
+                        ) : pos.occupiedCount > 0 ? (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 border border-amber-200 text-amber-800">
+                            Partially Filled ({pos.occupiedCount}/{pos.headcount_limit})
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
-                            Vacant Slot
+                            Vacant ({pos.availableSlots} {pos.availableSlots === 1 ? 'slot' : 'slots'})
                           </span>
                         )}
                       </td>
                       {canManage && (
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEdit(pos)}
-                            className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
-                          >
-                            Edit
-                          </Button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {pos.availableSlots > 0 && pos.status === 'active' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => router.push(`/dashboard/access/invites?positionId=${pos.id}`)}
+                                  className="text-[11px] h-7 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-800 font-semibold"
+                                >
+                                  + Invite
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => router.push(`/dashboard/people?assignPositionId=${pos.id}`)}
+                                  className="text-[11px] h-7 bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-800 font-semibold"
+                                >
+                                  Assign
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenEdit(pos)}
+                              className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
+                            >
+                              Edit
+                            </Button>
+                          </div>
                         </td>
                       )}
                     </tr>

@@ -356,7 +356,6 @@ export async function resolveResourceScope(
         .from('branches')
         .select('id, business_id')
         .eq('id', resourceId)
-        .is('deleted_at', null)
         .maybeSingle();
 
       if (error || !data) {
@@ -381,7 +380,7 @@ export async function resolveResourceScope(
         .from('organization_departments')
         .select('id, business_id, branch_id')
         .eq('id', resourceId)
-        .is('deleted_at', null)
+        .is('archived_at', null)
         .maybeSingle();
 
       if (error || !data) {
@@ -406,7 +405,7 @@ export async function resolveResourceScope(
         .from('organization_units')
         .select('id, business_id, branch_id, department_id')
         .eq('id', resourceId)
-        .is('deleted_at', null)
+        .is('archived_at', null)
         .maybeSingle();
 
       if (error || !data) {
@@ -431,7 +430,6 @@ export async function resolveResourceScope(
         .from('inventory_suppliers')
         .select('id, business_id')
         .eq('id', resourceId)
-        .is('deleted_at', null)
         .maybeSingle();
 
       if (error || !data) {

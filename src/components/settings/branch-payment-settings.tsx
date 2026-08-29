@@ -112,20 +112,20 @@ export function BranchPaymentSettings({
               m.is_enabled ? 'border-zinc-300 ring-1 ring-zinc-950/5' : 'border-zinc-200 bg-zinc-50/50 opacity-75'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div
-                  className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm ${
+                  className={`h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
                     m.is_enabled ? 'bg-zinc-950 text-white' : 'bg-zinc-200 text-zinc-500'
                   }`}
                 >
                   💳
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-zinc-950">
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-zinc-950 break-words">
                     {m.display_name || m.method}
                   </h3>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block">
                     Method Key: {m.method}
                   </span>
                 </div>
@@ -135,7 +135,7 @@ export function BranchPaymentSettings({
                 type="button"
                 onClick={() => handleToggle(m)}
                 disabled={!canManage || isSaving}
-                className={`px-4 py-1.5 rounded-full text-xs font-black transition-all min-h-[44px] touch-manipulation border ${
+                className={`px-4 py-1.5 rounded-full text-xs font-black transition-all min-h-[44px] touch-manipulation border self-start sm:self-auto shrink-0 ${
                   m.is_enabled
                     ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
                     : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'

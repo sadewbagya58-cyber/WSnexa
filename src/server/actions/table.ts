@@ -699,21 +699,42 @@ export async function bulkGenerateBranchTablePinsAction(onlyMissing: boolean = t
 
 /**
  * Validates table selection and PIN access during guest checkout.
+ * Enforces branch and service-area scope isolation.
  */
 export async function verifyTableAccessAction(
   branchId: string,
   tableId: string,
   inputPin?: string,
-  qrVisitSessionToken?: string
+  qrVisitSessionToken?: string,
+  expectedServiceAreaId?: string
 ): Promise<
   ActionResponse<{
-    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number };
+    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number; service_area_id?: string | null };
     signedTableAccessProof?: string;
     verifiedAt?: string;
     expiresAt?: string;
   }>
 > {
   const supabase = await createClient();
+
+  // If area scope is constrained, verify table belongs to expected service area
+  if (expectedServiceAreaId) {
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const admin = createAdminClient();
+    const { data: tableArea } = await admin
+      .from('dining_tables')
+      .select('id, service_area_id')
+      .eq('id', tableId)
+      .eq('branch_id', branchId)
+      .maybeSingle();
+
+    if (!tableArea || tableArea.service_area_id !== expectedServiceAreaId) {
+      return {
+        success: false,
+        message: 'Selected table does not belong to the active service area.',
+      };
+    }
+  }
 
   const pinHash = inputPin ? hashTablePin(inputPin.trim()) : null;
 
@@ -730,7 +751,7 @@ export async function verifyTableAccessAction(
   const payload = data as {
     success: boolean;
     error?: string;
-    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number };
+    table?: { id: string; name: string; code: string; table_number: number | null; capacity: number; service_area_id?: string | null };
     bypass_table?: boolean;
   };
 

@@ -50,10 +50,10 @@ export const StepHours: React.FC<StepHoursProps> = ({ initialData, onBack, onNex
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validate closing times
+    // Validate opening and closing times
     for (const h of hours) {
-      if (!h.isClosed && h.closesAt <= h.opensAt) {
-        setErrorMsg(`Invalid hours for ${DAYS_OF_WEEK[h.dayOfWeek]}: Closing time must be after opening time.`);
+      if (!h.isClosed && (!h.opensAt || !h.closesAt)) {
+        setErrorMsg(`Invalid hours for ${DAYS_OF_WEEK[h.dayOfWeek]}: Please specify both opening and closing times.`);
         return;
       }
     }

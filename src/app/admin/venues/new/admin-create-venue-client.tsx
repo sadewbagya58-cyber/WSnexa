@@ -289,7 +289,12 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               value={formData.slug}
               onChange={(e) => {
                 setIsSlugEdited(true);
-                setFormData({ ...formData, slug: normalizeVenueSlug(e.target.value) });
+                const cleaned = e.target.value
+                  .toLowerCase()
+                  .replace(/[\s_]+/g, '-')
+                  .replace(/[^a-z0-9-]/g, '')
+                  .replace(/-+/g, '-');
+                setFormData({ ...formData, slug: cleaned });
               }}
               placeholder="ocean-blue-resort"
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 font-mono"

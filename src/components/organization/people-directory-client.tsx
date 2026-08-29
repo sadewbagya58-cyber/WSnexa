@@ -10,6 +10,8 @@ export interface StaffRow {
   userId: string;
   fullName: string;
   role: string;
+  customRoleId?: string | null;
+  customRoleName?: string | null;
   status: string;
   hasPrimaryAssignment?: boolean;
   isCorporate?: boolean;
@@ -295,7 +297,7 @@ export function PeopleDirectoryClient({
                               {s.fullName}
                             </Link>
                             <div className="flex items-center gap-2 text-[10px] text-zinc-500 capitalize">
-                              <span>Auth Role: {s.role.replace(/_/g, ' ')}</span>
+                              <span>Role: <strong className="text-zinc-800 font-semibold">{s.customRoleName || s.role.replace(/_/g, ' ')}</strong></span>
                               <span>•</span>
                               <Link
                                 href={`/dashboard/access/members/${s.membershipId}`}

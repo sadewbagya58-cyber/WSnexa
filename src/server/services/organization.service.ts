@@ -2944,6 +2944,8 @@ export class OrganizationService {
           business_id,
           user_id,
           role,
+          custom_role_id,
+          custom_role:custom_roles(id, name),
           membership_status,
           created_at
         `)
@@ -3124,11 +3126,18 @@ export class OrganizationService {
       const isCorporate = Boolean(primaryAssign && !primaryAssign.branch);
       const isUnassigned = !primaryAssign;
 
+      const rawCustomRole = (m as unknown as { custom_role?: { id?: string; name?: string } | Array<{ id?: string; name?: string }> })?.custom_role;
+      const customRoleObj = Array.isArray(rawCustomRole) ? rawCustomRole[0] : rawCustomRole;
+      const customRoleName = customRoleObj?.name || null;
+      const customRoleId = m.custom_role_id || customRoleObj?.id || null;
+
       return {
         membershipId: m.id,
         userId: m.user_id,
         fullName,
         role: m.role,
+        customRoleId,
+        customRoleName,
         status: m.membership_status,
         primaryAssignment: primaryAssign,
         actingAssignments: actingAssigns,

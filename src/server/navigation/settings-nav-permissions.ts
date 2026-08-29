@@ -51,19 +51,6 @@ export async function resolveSettingsSubNavPermissions(
     };
   }
 
-  if (authContext.isBusinessOwner) {
-    return {
-      canViewBusiness: true,
-      canViewVenueProfile: true,
-      canViewBranches: true,
-      canManageBranches: true,
-      canViewOrderSecurity: true,
-      canViewPayments: true,
-      canManageInventorySettings: true,
-      canViewSubscription: true,
-    };
-  }
-
   const targetBranchId = branchId || authContext.activeBranchId || null;
   const targetBusinessId = businessId || authContext.businessId || '';
 
@@ -112,6 +99,6 @@ export async function resolveSettingsSubNavPermissions(
     canViewOrderSecurity: hasOrderSecurityView || hasOrderSecurityManage,
     canViewPayments: hasBranchesManage || hasBusinessSettingsManage,
     canManageInventorySettings: hasInventorySettingsManage,
-    canViewSubscription: false, // strictly owner only
+    canViewSubscription: hasBusinessSettingsManage,
   };
 }

@@ -239,6 +239,30 @@ export default async function RecipesPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Action Bar */}
+                <div className="pt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${r.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                    {r.isActive ? '● ACTIVE' : 'ARCHIVED'}
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/dashboard/inventory/recipes/${r.id}`}
+                      className="px-2.5 py-1 text-xs font-bold text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100 rounded-lg transition-colors"
+                    >
+                      View BOM →
+                    </Link>
+                    {canManageRecipes && (
+                      <Link
+                        href={`/dashboard/inventory/recipes/${r.id}/edit`}
+                        className="px-2 py-1 text-xs font-bold text-zinc-900 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
+                      >
+                        Edit
+                      </Link>
+                    )}
+                  </div>
+                </div>
               </div>
             );
           })}

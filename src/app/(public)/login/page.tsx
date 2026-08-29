@@ -149,12 +149,12 @@ function LoginFormContent() {
               type={showPassword ? 'text' : 'password'}
               required
               placeholder="••••••••"
-              className="block w-full rounded-xl border border-zinc-300 px-3 py-2 pr-10 text-sm text-zinc-900 shadow-2xs focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
+              className="block w-full rounded-xl border border-zinc-300 px-3 py-2 pr-14 text-sm text-zinc-900 shadow-2xs focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-zinc-500 hover:text-zinc-900"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-semibold text-zinc-500 hover:text-zinc-900 cursor-pointer"
             >
               {showPassword ? 'Hide' : 'Show'}
             </button>

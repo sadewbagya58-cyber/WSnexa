@@ -128,19 +128,19 @@ export function OrderSecuritySettings({
           <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Quick Preset Configuration</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <button
             type="button"
             onClick={() => handleApplyPreset('low')}
             disabled={isSaving}
-            className={`p-3 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
               activePreset === 'low'
                 ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
             <div className="font-extrabold text-xs">🟢 Low Security</div>
-            <p className={`text-[10px] mt-1 ${activePreset === 'low' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'low' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               QR session required. Immediate customer ordering.
             </p>
           </button>
@@ -149,14 +149,14 @@ export function OrderSecuritySettings({
             type="button"
             onClick={() => handleApplyPreset('balanced')}
             disabled={isSaving}
-            className={`p-3 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
               activePreset === 'balanced'
                 ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
             <div className="font-extrabold text-xs">🟡 Balanced</div>
-            <p className={`text-[10px] mt-1 ${activePreset === 'balanced' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'balanced' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               Account login + waiter approval for QR orders.
             </p>
           </button>
@@ -165,14 +165,14 @@ export function OrderSecuritySettings({
             type="button"
             onClick={() => handleApplyPreset('high')}
             disabled={isSaving}
-            className={`p-3 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
               activePreset === 'high'
                 ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
             <div className="font-extrabold text-xs">🔴 High Security</div>
-            <p className={`text-[10px] mt-1 ${activePreset === 'high' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'high' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               QR session + account + location + waiter approval.
             </p>
           </button>
@@ -180,14 +180,14 @@ export function OrderSecuritySettings({
           <button
             type="button"
             onClick={() => setActivePreset('custom')}
-            className={`p-3 rounded-xl border text-left transition-all min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-3.5 rounded-xl border text-left transition-all min-h-[44px] touch-manipulation flex flex-col justify-between ${
               activePreset === 'custom'
                 ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
             <div className="font-extrabold text-xs">⚙️ Custom</div>
-            <p className={`text-[10px] mt-1 ${activePreset === 'custom' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'custom' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               Configure individual controls below.
             </p>
           </button>
@@ -195,7 +195,7 @@ export function OrderSecuritySettings({
       </div>
 
       {/* Security Control Toggles */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs space-y-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
         <h3 className="font-extrabold text-sm text-zinc-950 border-b border-zinc-100 pb-2">
           Granular Security Controls
         </h3>
@@ -204,20 +204,20 @@ export function OrderSecuritySettings({
           {/* Active QR Session */}
           <div
             onClick={() => handleToggle('require_active_qr_session')}
-            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
               settings.require_active_qr_session
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div>
+            <div className="min-w-0">
               <h4 className="font-extrabold text-xs text-zinc-950">Require Active QR Visit Session</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words">
                 Ensures ordering is only allowed from recent valid QR scans. Prevents saved URLs from creating remote orders.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ml-3 ${
+              className={`px-3 py-1 rounded-full text-xs font-black self-start sm:self-auto shrink-0 ${
                 settings.require_active_qr_session ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >

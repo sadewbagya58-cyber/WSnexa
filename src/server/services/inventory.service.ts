@@ -1068,11 +1068,15 @@ export class InventoryService {
       .eq('business_id', businessId)
       .is('archived_at', null);
 
-    if (input.categoryId) {
+    if (input.categoryId && input.categoryId !== 'all') {
       itemsQuery = itemsQuery.eq('category_id', input.categoryId);
     }
 
-    const { data: eligibleItems } = await itemsQuery;
+    const { data: eligibleItems, error: itemsErr } = await itemsQuery;
+    if (itemsErr) {
+      await admin.from('inventory_stock_counts').delete().eq('id', count.id);
+      return { success: false, message: `Failed to query inventory items: ${itemsErr.message}` };
+    }
 
     // Fetch current balances for location
     const { data: balances } = await admin
@@ -1090,14 +1094,18 @@ export class InventoryService {
         count_id: count.id,
         item_id: it.id,
         expected_quantity_base: expQty,
-        unit_cost_cents: it.cost_per_unit_cents,
-        currency: currency,
+        unit_cost_cents: it.cost_per_unit_cents || 0,
+        currency: currency || 'USD',
         is_counted: false,
       };
     });
 
     if (countItemsToInsert.length > 0) {
-      await admin.from('inventory_stock_count_items').insert(countItemsToInsert);
+      const { error: insErr } = await admin.from('inventory_stock_count_items').insert(countItemsToInsert);
+      if (insErr) {
+        await admin.from('inventory_stock_counts').delete().eq('id', count.id);
+        return { success: false, message: `Failed to populate count sheet items: ${insErr.message}` };
+      }
     }
 
     return { success: true, countId: count.id, countNumber };
@@ -1419,6 +1427,20 @@ export class InventoryService {
 
     const { data: movements } = await q;
 
+    const actorIds = Array.from(new Set((movements || []).map((m) => m.actor_id).filter(Boolean))) as string[];
+    const actorMap = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const { data: profiles } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, email')
+        .in('id', actorIds);
+
+      (profiles || []).forEach((p) => {
+        const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Staff';
+        actorMap.set(p.id, fullName);
+      });
+    }
+
     return (movements || []).map((m) => ({
       id: m.id,
       businessId: m.business_id,
@@ -1440,6 +1462,7 @@ export class InventoryService {
       reason: m.reason,
       notes: m.notes,
       actorId: m.actor_id,
+      actorName: m.actor_id ? actorMap.get(m.actor_id) || 'Staff' : 'System',
       createdAt: m.created_at,
     }));
   }

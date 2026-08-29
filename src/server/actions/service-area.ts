@@ -30,6 +30,10 @@ export async function createServiceAreaAction(name: string, description?: string
 
     if (res.success) {
       revalidatePath('/dashboard/areas');
+      revalidatePath('/dashboard/tables');
+      revalidatePath('/dashboard/tables/areas');
+      revalidatePath('/dashboard/dining');
+      revalidatePath('/dashboard');
     }
 
     return res;
@@ -70,6 +74,10 @@ export async function updateServiceAreaAction(
 
     if (res.success) {
       revalidatePath('/dashboard/areas');
+      revalidatePath('/dashboard/tables');
+      revalidatePath('/dashboard/tables/areas');
+      revalidatePath('/dashboard/dining');
+      revalidatePath('/dashboard');
     }
 
     return res;
@@ -102,6 +110,10 @@ export async function deleteServiceAreaAction(areaId: string) {
 
     if (res.success) {
       revalidatePath('/dashboard/areas');
+      revalidatePath('/dashboard/tables');
+      revalidatePath('/dashboard/tables/areas');
+      revalidatePath('/dashboard/dining');
+      revalidatePath('/dashboard');
     }
 
     return res;

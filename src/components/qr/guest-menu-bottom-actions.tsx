@@ -35,10 +35,15 @@ export function GuestMenuBottomActions({
   useEffect(() => {
     const handleStorage = () => {
       const orders = getActiveOrdersFromStorage(branchId);
-      // Explicit deduplication by stable orderId
       const uniqueOrdersMap = new Map<string, SafeActiveOrderRecord>();
       for (const ord of orders) {
-        if (ord && ord.orderId && !uniqueOrdersMap.has(ord.orderId)) {
+        if (
+          ord &&
+          ord.orderId &&
+          ord.latestStatus !== 'completed' &&
+          ord.latestStatus !== 'cancelled' &&
+          !uniqueOrdersMap.has(ord.orderId)
+        ) {
           uniqueOrdersMap.set(ord.orderId, ord);
         }
       }

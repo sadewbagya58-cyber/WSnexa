@@ -58,10 +58,18 @@ export async function upsertVenueProfileAction(
     return { success: false, message: 'Forbidden: You do not have permission to manage the venue profile.' };
   }
 
+  const { venueProfileSchema } = await import('@/lib/validation/venue');
+  const parsed = venueProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    return { success: false, message: firstIssue?.message || 'Invalid venue profile details.' };
+  }
+
   const result = await VenueProfileService.upsertProfile(authContext.businessId, input);
 
   if (result.success) {
     revalidatePath('/dashboard/venue-profile');
+    revalidatePath('/dashboard/settings/venue');
     revalidatePath('/explore');
     revalidatePath(`/venues/${input.slug}`);
   }

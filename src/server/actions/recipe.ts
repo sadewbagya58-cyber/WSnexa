@@ -40,6 +40,42 @@ export async function createRecipeAction(input: CreateRecipeInput) {
   return res;
 }
 
+export async function updateRecipeAction(input: import('@/lib/validation/recipe').UpdateRecipeInput) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized session.' };
+  }
+
+  const { updateRecipeSchema } = await import('@/lib/validation/recipe');
+  const parsed = updateRecipeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message || 'Invalid recipe data.' };
+  }
+
+  const res = await RecipeService.updateRecipe(parsed.data);
+  if (res.success) {
+    revalidatePath('/dashboard/inventory/recipes');
+    revalidatePath(`/dashboard/inventory/recipes/${input.id}`);
+    revalidatePath('/dashboard/inventory');
+  }
+  return res;
+}
+
+export async function archiveRecipeAction(recipeId: string) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized session.' };
+  }
+
+  const res = await RecipeService.archiveRecipe(recipeId);
+  if (res.success) {
+    revalidatePath('/dashboard/inventory/recipes');
+    revalidatePath(`/dashboard/inventory/recipes/${recipeId}`);
+    revalidatePath('/dashboard/inventory');
+  }
+  return res;
+}
+
 export async function producePrepBatchAction(input: ProducePrepBatchInput) {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.businessId) {

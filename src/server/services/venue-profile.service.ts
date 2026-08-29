@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { VenueProfileInput, normalizeVenueSlug } from '@/lib/validation/venue';
+import { VenueProfileInput, normalizeVenueSlug, isValidVenueSlug } from '@/lib/validation/venue';
 import { VenuePublicProfileRecord } from './venue-discovery.service';
 
 export class VenueProfileService {
@@ -28,10 +28,9 @@ export class VenueProfileService {
   ): Promise<{ success: boolean; message: string; data?: VenuePublicProfileRecord }> {
     const admin = createAdminClient();
 
-    // Always normalize slug server-side regardless of client input
-    const normalizedSlug = normalizeVenueSlug(input.slug || input.displayName);
+    const targetSlug = input.slug?.trim() || normalizeVenueSlug(input.displayName);
 
-    if (!normalizedSlug || normalizedSlug.length < 2) {
+    if (!isValidVenueSlug(targetSlug)) {
       return {
         success: false,
         message: 'Please enter a valid venue URL (letters, numbers, single hyphens only).',
@@ -42,7 +41,7 @@ export class VenueProfileService {
     const { data: existingSlug } = await admin
       .from('venue_public_profiles')
       .select('id, business_id')
-      .eq('slug', normalizedSlug)
+      .eq('slug', targetSlug)
       .maybeSingle();
 
     if (existingSlug && existingSlug.business_id !== businessId) {
@@ -105,7 +104,7 @@ export class VenueProfileService {
 
     const payload = {
       business_id: businessId,
-      slug: normalizedSlug,
+      slug: targetSlug,
       display_name: input.displayName,
       short_description: input.shortDescription || null,
       description: input.description || null,
@@ -150,14 +149,35 @@ export class VenueProfileService {
         };
       }
 
-      if (code === '23514' || msg.includes('check constraint') || msg.includes('venue_public_profiles_slug_check')) {
+      if (msg.includes('venue_public_profiles_slug_check') || msg.includes('slug')) {
         return {
           success: false,
           message: 'Please enter a valid venue URL (letters, numbers, single hyphens only).',
         };
       }
 
-      return { success: false, message: 'Unable to save venue profile. Please check your information and try again.' };
+      if (msg.includes('country') || msg.includes('venue_public_profiles_country_check')) {
+        return {
+          success: false,
+          message: 'Country code must be 2 uppercase letters (e.g. LK, US).',
+        };
+      }
+
+      if (msg.includes('price_level')) {
+        return {
+          success: false,
+          message: 'Price level must be between 1 and 4.',
+        };
+      }
+
+      if (msg.includes('latitude') || msg.includes('longitude')) {
+        return {
+          success: false,
+          message: 'Coordinates must be valid latitude (-90 to 90) and longitude (-180 to 180).',
+        };
+      }
+
+      return { success: false, message: error?.message || 'Unable to save venue profile. Please check your information and try again.' };
     }
 
     return {

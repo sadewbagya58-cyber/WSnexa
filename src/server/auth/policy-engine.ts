@@ -454,10 +454,10 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
 
   // 9.3 Property-level resource (branchId is not null)
   // Check if the resource's branch is in the user's authorized branches
-  if (context.authorizedBranchIds.includes(resourceScope.branchId)) {
+  if ((context.authorizedBranchIds || []).includes(resourceScope.branchId)) {
     // Check for Service Area target restriction
     if (resourceScope.serviceAreaId) {
-      if (context.serviceAreaIds.includes(resourceScope.serviceAreaId)) {
+      if ((context.serviceAreaIds || []).includes(resourceScope.serviceAreaId)) {
         return createDecision({
           allowed: true,
           permission,

@@ -126,19 +126,34 @@ export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ data }) => {
       </div>
 
       {/* Payment Breakdown */}
-      <div className="space-y-1 text-[11px] border-b border-dashed border-zinc-400 pb-3 mb-3">
+      <div className="space-y-1.5 text-[11px] border-b border-dashed border-zinc-400 pb-3 mb-3">
         <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-500 block mb-1">
-          Payment Breakdown
+          Payment Breakdown ({payments.length} {payments.length === 1 ? 'transaction' : 'transactions'})
         </span>
         {payments.length === 0 ? (
           <p className="text-zinc-500 italic">No payments recorded</p>
         ) : (
-          payments.map((p) => (
-            <div key={p.id} className="flex justify-between">
-              <span className="capitalize">{p.payment_method.replace('_', ' ')} ({p.payment_reference}):</span>
-              <span className="font-bold">{formatCurrency(p.amount_cents, order.currency)}</span>
-            </div>
-          ))
+          payments.map((p, idx) => {
+            const pTime = p.created_at
+              ? new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '';
+            const cashierText = (p as unknown as { cashier_name?: string }).cashier_name;
+
+            return (
+              <div key={p.id || idx} className="border-b border-dotted border-zinc-200 pb-1 last:border-0 last:pb-0">
+                <div className="flex justify-between font-bold">
+                  <span className="capitalize">
+                    #{idx + 1} {p.payment_method.replace('_', ' ')}:
+                  </span>
+                  <span>{formatCurrency(p.amount_cents, order.currency)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-zinc-500">
+                  <span>Ref: {p.payment_reference || p.id.slice(0, 8)}</span>
+                  <span>{pTime}{cashierText ? ` • ${cashierText}` : ''}</span>
+                </div>
+              </div>
+            );
+          })
         )}
         <div className="flex justify-between font-bold border-t border-zinc-200 pt-1">
           <span>Total Paid:</span>

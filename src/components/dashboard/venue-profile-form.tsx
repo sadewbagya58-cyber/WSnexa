@@ -84,9 +84,14 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
   const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIsSlugManuallyEdited(true);
     const val = e.target.value;
+    const cleaned = val
+      .toLowerCase()
+      .replace(/[\s_]+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/-+/g, '-');
     setFormData((prev) => ({
       ...prev,
-      slug: normalizeVenueSlug(val),
+      slug: cleaned,
     }));
   };
 
@@ -192,7 +197,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
             <Badge variant={formData.isPublished ? 'success' : 'warning'} className="font-extrabold text-xs">
               {formData.isPublished ? '• LIVE & PUBLISHED' : '• UNPUBLISHED DRAFT'}
             </Badge>
-            <span className="text-xs font-mono">/venues/{formData.slug || 'your-slug'}</span>
+            <span className="text-xs font-mono break-all">/venues/{formData.slug || 'your-slug'}</span>
           </div>
           <p className="text-xs font-medium leading-relaxed">
             {formData.isPublished
@@ -201,7 +206,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {formData.slug && (
             <Link
               href={`/venues/${formData.slug}`}
@@ -265,8 +270,8 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-mono font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
               required
             />
-            <p className="text-[11px] text-zinc-500 font-medium">
-              Web Address: <span className="font-mono text-amber-700 font-bold">w-snexa.vercel.app/venues/{formData.slug || 'your-slug'}</span>
+            <p className="text-[11px] text-zinc-500 font-medium break-all">
+              Web Address: <span className="font-mono text-amber-700 font-bold break-all">w-snexa.vercel.app/venues/{formData.slug || 'your-slug'}</span>
             </p>
           </div>
 

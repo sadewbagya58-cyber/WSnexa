@@ -85,12 +85,12 @@ export default function ResetPasswordPage() {
                   type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="At least 8 chars, 1 upper, 1 lower, 1 number"
-                  className="block w-full rounded-md border border-zinc-300 px-3 py-2 pr-10 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                  className="block w-full rounded-md border border-zinc-300 px-3 py-2 pr-14 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-zinc-500 hover:text-zinc-900"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-semibold text-zinc-500 hover:text-zinc-900 cursor-pointer"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -107,8 +107,8 @@ export default function ResetPasswordPage() {
                   name="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
-                  placeholder="Repeat your new password"
-                  className="block w-full rounded-md border border-zinc-300 px-3 py-2 pr-10 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
+                  placeholder="Re-enter password"
+                  className="block w-full rounded-md border border-zinc-300 px-3 py-2 pr-14 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950"
                 />
                 <button
                   type="button"

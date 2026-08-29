@@ -49,6 +49,12 @@ export function isVenueLocationComplete(profileOrBranch: {
   return hasAddress && hasCity && hasCountry && hasLat && hasLng;
 }
 
+export function isValidVenueSlug(slug: string): boolean {
+  if (!slug || typeof slug !== 'string') return false;
+  if (slug.length < 2 || slug.length > 120) return false;
+  return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug);
+}
+
 export const venueProfileSchema = z.object({
   displayName: z
     .string()
@@ -58,11 +64,10 @@ export const venueProfileSchema = z.object({
   slug: z
     .string()
     .trim()
-    .transform((val) => normalizeVenueSlug(val))
-    .refine((val) => val.length >= 2, { message: 'Venue URL slug must be at least 2 characters' })
-    .refine((val) => val.length <= 120, { message: 'Venue URL slug too long' })
-    .refine((val) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(val), {
-      message: 'Please enter a valid venue URL (letters, numbers, single hyphens only)',
+    .min(2, 'Venue URL slug must be at least 2 characters')
+    .max(120, 'Venue URL slug too long')
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, {
+      message: 'Please enter a valid venue URL (letters, numbers, single hyphens only).',
     }),
   shortDescription: z.string().max(300, 'Short description too long').optional().nullable(),
   description: z.string().max(2000, 'Description too long').optional().nullable(),

@@ -3,6 +3,7 @@ import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { UnitConverter } from '@/lib/inventory/unit-converter';
 import {
   CreateRecipeInput,
+  UpdateRecipeInput,
   ProducePrepBatchInput,
 } from '@/lib/validation/recipe';
 
@@ -467,7 +468,45 @@ export class RecipeService {
     const itemMap = new Map<string, { base_unit: string; cost_per_unit_cents: number }>();
     (invItems || []).forEach((i) => itemMap.set(i.id, i));
 
-    // 3. Insert Recipe Header
+    // 3. Check for existing active recipe for this menu item and determine next version
+    let nextVersion = 1;
+    if (input.menuItemId) {
+      let activeQuery = admin
+        .from('inventory_recipes')
+        .select('id, version')
+        .eq('business_id', authContext.businessId)
+        .eq('menu_item_id', input.menuItemId);
+
+      if (input.branchId) {
+        activeQuery = activeQuery.eq('branch_id', input.branchId);
+      } else {
+        activeQuery = activeQuery.is('branch_id', null);
+      }
+
+      const { data: existingList } = await activeQuery;
+      if (existingList && existingList.length > 0) {
+        const maxV = Math.max(...existingList.map((r) => r.version || 1));
+        nextVersion = maxV + 1;
+
+        // Deactivate previous active versions to satisfy single-active invariant
+        let deactQuery = admin
+          .from('inventory_recipes')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('business_id', authContext.businessId)
+          .eq('menu_item_id', input.menuItemId)
+          .eq('is_active', true);
+
+        if (input.branchId) {
+          deactQuery = deactQuery.eq('branch_id', input.branchId);
+        } else {
+          deactQuery = deactQuery.is('branch_id', null);
+        }
+
+        await deactQuery;
+      }
+    }
+
+    // 4. Insert Recipe Header
     const { data: recipe, error: recipeErr } = await admin
       .from('inventory_recipes')
       .insert({
@@ -476,7 +515,7 @@ export class RecipeService {
         name: input.name.trim(),
         recipe_type: input.recipeType,
         output_inventory_item_id: input.outputInventoryItemId || null,
-        version: 1,
+        version: nextVersion,
         yield_quantity: input.yieldQuantity,
         yield_unit: input.yieldUnit.trim(),
         portion_size: input.portionSize || null,
@@ -492,7 +531,7 @@ export class RecipeService {
       return { success: false, message: recipeErr?.message || 'Failed to create recipe.' };
     }
 
-    // 4. Normalize & Insert Ingredients
+    // 5. Normalize & Insert Ingredients
     const ingredientRows = input.ingredients.map((ing, idx) => {
       let quantityBase = ing.quantity;
       const matchedItem = ing.itemId ? itemMap.get(ing.itemId) : null;
@@ -528,6 +567,197 @@ export class RecipeService {
     }
 
     return { success: true, recipeId: recipe.id, message: 'Recipe created successfully.' };
+  }
+
+  /**
+   * Updates an existing recipe and its ingredients in-place.
+   */
+  static async updateRecipe(input: UpdateRecipeInput) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const admin = createAdminClient();
+
+    // 1. Fetch existing recipe to verify tenant boundary
+    const { data: existing, error: fetchErr } = await admin
+      .from('inventory_recipes')
+      .select('*')
+      .eq('id', input.id)
+      .eq('business_id', authContext.businessId)
+      .maybeSingle();
+
+    if (fetchErr || !existing) {
+      return { success: false, message: 'Recipe not found.' };
+    }
+
+    const branchResource = existing.branch_id
+      ? { type: 'branch' as const, id: existing.branch_id }
+      : (authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined);
+
+    const canManage =
+      (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
+    }
+
+    // 2. Validate DAG cycles if ingredients are updated
+    if (input.ingredients && input.ingredients.length > 0) {
+      const subRecipeIds = input.ingredients
+        .filter((i) => !!i.subRecipeId)
+        .map((i) => i.subRecipeId as string);
+
+      const cycleCheck = await this.validateNoCycles(authContext.businessId, input.id, subRecipeIds);
+      if (!cycleCheck.valid) {
+        return {
+          success: false,
+          message: `Recursive recipe cycle detected: ${cycleCheck.cyclePath?.join(' -> ')}. Sub-recipe references must form a directed acyclic graph.`,
+        };
+      }
+    }
+
+    // 3. Update Recipe Header
+    const updateHeader: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (input.name !== undefined) updateHeader.name = input.name.trim();
+    if (input.yieldQuantity !== undefined) updateHeader.yield_quantity = input.yieldQuantity;
+    if (input.yieldUnit !== undefined) updateHeader.yield_unit = input.yieldUnit.trim();
+    if (input.portionSize !== undefined) updateHeader.portion_size = input.portionSize || null;
+    if (input.preparationInstructions !== undefined) updateHeader.preparation_instructions = input.preparationInstructions || null;
+    if (input.outputInventoryItemId !== undefined) updateHeader.output_inventory_item_id = input.outputInventoryItemId || null;
+    if (input.isActive !== undefined) updateHeader.is_active = input.isActive;
+
+    const { error: updateErr } = await admin
+      .from('inventory_recipes')
+      .update(updateHeader)
+      .eq('id', input.id)
+      .eq('business_id', authContext.businessId);
+
+    if (updateErr) {
+      return { success: false, message: updateErr.message || 'Failed to update recipe header.' };
+    }
+
+    // 4. Update Ingredients if provided
+    if (input.ingredients && input.ingredients.length > 0) {
+      const itemIds = input.ingredients.filter((i) => !!i.itemId).map((i) => i.itemId as string);
+      const { data: invItems } = await admin
+        .from('inventory_items')
+        .select('id, base_unit, cost_per_unit_cents')
+        .in('id', itemIds.length > 0 ? itemIds : ['00000000-0000-0000-0000-000000000000']);
+
+      const itemMap = new Map<string, { base_unit: string; cost_per_unit_cents: number }>();
+      (invItems || []).forEach((i) => itemMap.set(i.id, i));
+
+      // Remove existing ingredients
+      await admin.from('inventory_recipe_ingredients').delete().eq('recipe_id', input.id);
+
+      // Insert new ingredients
+      const ingredientRows = input.ingredients.map((ing, idx) => {
+        let quantityBase = ing.quantity;
+        const matchedItem = ing.itemId ? itemMap.get(ing.itemId) : null;
+        if (matchedItem && ing.unit) {
+          try {
+            quantityBase = UnitConverter.normalizeToBase(ing.quantity, ing.unit, matchedItem.base_unit);
+          } catch {
+            quantityBase = ing.quantity;
+          }
+        }
+
+        return {
+          recipe_id: input.id,
+          item_id: ing.itemId || null,
+          sub_recipe_id: ing.subRecipeId || null,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          quantity_base: quantityBase,
+          yield_factor: ing.yieldFactor ?? 1.0,
+          default_location_id: ing.defaultLocationId || null,
+          display_order: idx + 1,
+          notes: ing.notes || null,
+        };
+      });
+
+      const { error: ingErr } = await admin
+        .from('inventory_recipe_ingredients')
+        .insert(ingredientRows);
+
+      if (ingErr) {
+        return { success: false, message: `Failed to update ingredients: ${ingErr.message}` };
+      }
+    }
+
+    return { success: true, recipeId: input.id, message: 'Recipe updated successfully.' };
+  }
+
+  /**
+   * Safely archives/deactivates a recipe.
+   */
+  static async archiveRecipe(recipeId: string) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from('inventory_recipes')
+      .select('id, branch_id')
+      .eq('id', recipeId)
+      .eq('business_id', authContext.businessId)
+      .maybeSingle();
+
+    if (!existing) {
+      return { success: false, message: 'Recipe not found.' };
+    }
+
+    const branchResource = existing.branch_id
+      ? { type: 'branch' as const, id: existing.branch_id }
+      : (authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined);
+
+    const canManage =
+      (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
+    }
+
+    const { error } = await admin
+      .from('inventory_recipes')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', recipeId)
+      .eq('business_id', authContext.businessId);
+
+    if (error) {
+      return { success: false, message: error.message };
+    }
+
+    return { success: true, message: 'Recipe archived successfully.' };
+  }
+
+  /**
+   * Deletes a recipe if unreferenced in history, or archives it.
+   */
+  static async deleteRecipe(recipeId: string) {
+    return this.archiveRecipe(recipeId);
   }
 
   /**

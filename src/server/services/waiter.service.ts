@@ -17,6 +17,11 @@ export interface WaiterRequestRecord {
   request_type: string;
   status: WaiterRequestStatus;
   notes: string | null;
+  accepted_by?: string | null;
+  accepted_at?: string | null;
+  accepted_staff_name?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
   created_at: string;
   updated_at: string;
   table?: {
@@ -196,14 +201,36 @@ export class WaiterService {
 
     if (error || !data) return [];
 
-    const records = data as unknown as Array<
+    let records = data as unknown as Array<
       WaiterRequestRecord & { table?: { service_area_id?: string } | null }
     >;
 
     if (allowedAreaIds !== null) {
-      return records.filter(
+      records = records.filter(
         (r) => r.table?.service_area_id && allowedAreaIds!.includes(r.table.service_area_id)
       );
+    }
+
+    const acceptedByIds = Array.from(new Set(records.map((r) => r.accepted_by).filter(Boolean))) as string[];
+    if (acceptedByIds.length > 0) {
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      const admin = createAdminClient();
+      const { data: profs } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, email')
+        .in('id', acceptedByIds);
+
+      const staffMap = new Map<string, string>();
+      (profs || []).forEach((p) => {
+        const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Staff';
+        staffMap.set(p.id, name);
+      });
+
+      records.forEach((r) => {
+        if (r.accepted_by) {
+          r.accepted_staff_name = staffMap.get(r.accepted_by) || 'Staff';
+        }
+      });
     }
 
     return records;
@@ -371,7 +398,7 @@ export class WaiterService {
   }
 
   /**
-   * Updates status of a waiter request (Accepted / Completed / Dismissed).
+   * Updates status of a waiter request (Accepted / Completed / Dismissed) with strict state machine and concurrency protection.
    */
   static async updateWaiterRequestStatus(requestId: string, status: WaiterRequestStatus) {
     const tenantContext = await resolveActiveBusinessContext();
@@ -379,29 +406,144 @@ export class WaiterService {
       return { success: false, message: 'Unauthorized or active branch context not found.' };
     }
 
-    const supabase = await createClient();
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const admin = createAdminClient();
 
-    const updatePayload: Record<string, unknown> = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (status === 'completed' || status === 'dismissed') {
-      updatePayload.resolved_at = new Date().toISOString();
-      updatePayload.resolved_by = tenantContext.user.id;
-    }
-
-    const { error } = await supabase
+    // 1. Fetch current request state
+    const { data: currentReq } = await admin
       .from('waiter_requests')
-      .update(updatePayload)
+      .select('id, business_id, branch_id, status, accepted_by, accepted_at')
       .eq('id', requestId)
       .eq('business_id', tenantContext.business.id)
-      .eq('branch_id', tenantContext.activeBranch.id);
+      .maybeSingle();
 
-    if (error) {
-      return { success: false, message: error.message };
+    if (!currentReq) {
+      return { success: false, message: 'Waiter request not found.' };
     }
 
-    return { success: true, message: `Request marked as ${status}.` };
+    // 2. Idempotent check: already at target status
+    if (currentReq.status === status) {
+      return { success: true, message: `Request is already ${status}.` };
+    }
+
+    // 3. Terminal state check: completed or dismissed requests cannot be transitioned
+    if (currentReq.status === 'completed' || currentReq.status === 'dismissed') {
+      return { success: false, message: `Request has already been ${currentReq.status} and cannot be modified.` };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 4. State Machine Transition: PENDING -> ACCEPTED
+    if (status === 'accepted') {
+      if (currentReq.status !== 'pending') {
+        return { success: false, message: `Request is in ${currentReq.status} state, cannot accept.` };
+      }
+
+      // Atomic conditional update: only update if status is still 'pending'
+      const { data: updated, error } = await admin
+        .from('waiter_requests')
+        .update({
+          status: 'accepted',
+          accepted_by: tenantContext.user.id,
+          accepted_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', requestId)
+        .eq('status', 'pending')
+        .select();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      if (!updated || updated.length === 0) {
+        return {
+          success: false,
+          message: 'This request has already been accepted or handled by another staff member.',
+        };
+      }
+
+      return { success: true, message: 'Request accepted successfully.' };
+    }
+
+    // 5. State Machine Transition: ACCEPTED -> COMPLETED
+    if (status === 'completed') {
+      // Normal waiter must NOT directly complete a PENDING request
+      if (currentReq.status === 'pending') {
+        const isManager =
+          tenantContext.membership?.role === 'business_owner' ||
+          tenantContext.membership?.role === 'branch_manager';
+
+        if (!isManager) {
+          return {
+            success: false,
+            message: 'Waiter assistance requests must be accepted before they can be completed.',
+          };
+        }
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        status: 'completed',
+        resolved_by: tenantContext.user.id,
+        resolved_at: nowIso,
+        updated_at: nowIso,
+      };
+
+      // If completing directly via manager override, snapshot accepted details as well
+      if (!currentReq.accepted_by) {
+        updatePayload.accepted_by = tenantContext.user.id;
+        updatePayload.accepted_at = nowIso;
+      }
+
+      const { data: updated, error } = await admin
+        .from('waiter_requests')
+        .update(updatePayload)
+        .eq('id', requestId)
+        .in('status', ['pending', 'accepted'])
+        .select();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      if (!updated || updated.length === 0) {
+        return {
+          success: false,
+          message: 'This request has already been completed or dismissed.',
+        };
+      }
+
+      return { success: true, message: 'Request marked as completed.' };
+    }
+
+    // 6. State Machine Transition: -> DISMISSED
+    if (status === 'dismissed') {
+      const { data: updated, error } = await admin
+        .from('waiter_requests')
+        .update({
+          status: 'dismissed',
+          resolved_by: tenantContext.user.id,
+          resolved_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', requestId)
+        .in('status', ['pending', 'accepted'])
+        .select();
+
+      if (error) {
+        return { success: false, message: error.message };
+      }
+
+      if (!updated || updated.length === 0) {
+        return {
+          success: false,
+          message: 'This request has already been handled.',
+        };
+      }
+
+      return { success: true, message: 'Request dismissed.' };
+    }
+
+    return { success: false, message: `Unsupported status transition to ${status}.` };
   }
 }

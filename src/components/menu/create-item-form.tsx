@@ -20,6 +20,8 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: '',
     categoryId: categories[0]?.id || '',
@@ -35,6 +37,7 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
     if (!file) return;
 
     setErrorMsg(null);
+    setSuccessMsg(null);
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       setErrorMsg('Invalid image format. PNG, JPG, and WEBP supported.');
@@ -75,9 +78,9 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveItem = async (addAnother: boolean) => {
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     const numericPrice = parseFloat(formData.price);
     if (isNaN(numericPrice) || numericPrice < 0) {
@@ -87,6 +90,11 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
 
     if (!formData.categoryId) {
       setErrorMsg('Please select or create a menu category first.');
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setErrorMsg('Please enter an item name.');
       return;
     }
 
@@ -107,17 +115,44 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
       primaryImageUrl: imageUrl,
     });
 
+    setLoading(false);
+
     if (!res.success) {
       setErrorMsg(res.message || 'Failed to create menu item.');
-      setLoading(false);
     } else {
-      router.push('/dashboard/menu/items');
-      router.refresh();
+      if (addAnother) {
+        const savedName = formData.name.trim();
+        setSuccessMsg(`✓ "${savedName}" added to menu! You can create another item below.`);
+        setFormData((prev) => ({
+          ...prev,
+          name: '',
+          description: '',
+          price: '',
+          preparationTimeMinutes: '',
+          isFeatured: false,
+        }));
+        setImageUrl(null);
+        router.refresh();
+      } else {
+        router.push('/dashboard/menu/items');
+        router.refresh();
+      }
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleSaveItem(false);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {successMsg && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-900 animate-in fade-in">
+          {successMsg}
+        </div>
+      )}
+
       {errorMsg && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
           {errorMsg}
@@ -268,7 +303,7 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-4">
+      <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
         <button
           type="button"
           onClick={() => router.push('/dashboard/menu/items')}
@@ -277,7 +312,20 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
         >
           Cancel
         </button>
-        <Button type="submit" disabled={loading || uploading} className="min-h-[44px] px-5 py-2 font-bold text-xs">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => handleSaveItem(true)}
+          disabled={loading || uploading}
+          className="min-h-[44px] px-4 py-2 font-bold text-xs border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+        >
+          {loading ? 'Saving…' : 'Save & Add Another +'}
+        </Button>
+        <Button
+          type="submit"
+          disabled={loading || uploading}
+          className="min-h-[44px] px-5 py-2 font-bold text-xs bg-zinc-950 hover:bg-zinc-800 text-white"
+        >
           {loading ? 'Saving…' : 'Add Menu Item'}
         </Button>
       </div>

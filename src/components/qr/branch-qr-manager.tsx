@@ -12,6 +12,7 @@ import {
 } from '@/server/actions/qr';
 import { bulkGenerateBranchTablePinsAction } from '@/server/actions/table';
 import { generateQrSvgString, generateQrPngDataUrl } from '@/lib/qr/qr-generator';
+import Link from 'next/link';
 
 interface BranchQrManagerProps {
   businessName: string;
@@ -328,6 +329,13 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
               ⚡ Bulk Generate Missing PINs ({tablesSummary.missingPin})
             </Button>
           )}
+
+          <div className="pt-2 border-t border-zinc-100">
+            <Link href="/dashboard/tables" className="text-xs font-bold text-zinc-900 hover:text-zinc-700 flex items-center justify-between group">
+              <span>Manage Tables & Areas</span>
+              <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+            </Link>
+          </div>
         </Card>
       </div>
 

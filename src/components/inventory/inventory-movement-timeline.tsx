@@ -68,6 +68,7 @@ export function InventoryMovementTimeline({
                   <span className="text-xs font-bold text-zinc-900">{m.locationName}</span>
                   <span className="text-[11px] text-zinc-400">
                     {new Date(m.createdAt).toLocaleDateString()} {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {m.actorName ? ` • by ${m.actorName}` : ''}
                   </span>
                 </div>
                 {m.reason && (

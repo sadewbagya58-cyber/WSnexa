@@ -157,6 +157,17 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                     </span>
                   </div>
 
+                  {req.status === 'accepted' && (
+                    <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1 flex items-center justify-between">
+                      <span>✓ Accepted by {req.accepted_staff_name || 'Staff'}</span>
+                      {req.accepted_at && (
+                        <span className="text-[10px] text-purple-500 font-mono">
+                          {new Date(req.accepted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {req.notes && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-950 italic font-medium">
                       📝 Note: &quot;{req.notes}&quot;
@@ -171,30 +182,40 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                         <>
                           <Button
                             variant="outline"
-                            className="text-xs font-bold"
+                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900"
+                            onClick={() => handleStatusChange(req.id, 'dismissed')}
+                            disabled={isPending}
+                          >
+                            Dismiss
+                          </Button>
+                          <Button
+                            className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white"
                             onClick={() => handleStatusChange(req.id, 'accepted')}
                             disabled={isPending}
                           >
-                            Accept
+                            Accept Request ⚡
+                          </Button>
+                        </>
+                      )}
+
+                      {req.status === 'accepted' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900"
+                            onClick={() => handleStatusChange(req.id, 'dismissed')}
+                            disabled={isPending}
+                          >
+                            Dismiss
                           </Button>
                           <Button
                             className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
                             onClick={() => handleStatusChange(req.id, 'completed')}
                             disabled={isPending}
                           >
-                            Complete
+                            Mark Completed ✓
                           </Button>
                         </>
-                      )}
-
-                      {req.status === 'accepted' && (
-                        <Button
-                          className="col-span-2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => handleStatusChange(req.id, 'completed')}
-                          disabled={isPending}
-                        >
-                          Mark Completed
-                        </Button>
                       )}
                     </>
                   ) : (

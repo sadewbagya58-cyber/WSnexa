@@ -372,6 +372,27 @@ export class PaymentService {
     const paidCents = completedPayments.reduce((sum, p) => sum + p.amount_cents, 0);
     const balanceDueCents = Math.max(0, order.total_cents - paidCents);
 
+    const userIds = Array.from(new Set(orderPayments.map((p) => p.received_by).filter(Boolean))) as string[];
+    const cashierMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: profs } = await admin
+        .from('user_profiles')
+        .select('id, first_name, last_name, email')
+        .in('id', userIds);
+      (profs || []).forEach((p) => {
+        const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Cashier';
+        cashierMap.set(p.id, name);
+      });
+    }
+
+    const paymentsWithCashier = orderPayments.map((p) => {
+      const actorId = p.received_by;
+      return {
+        ...p,
+        cashier_name: actorId ? cashierMap.get(actorId) || 'Staff Cashier' : 'Direct POS',
+      };
+    });
+
     const bizObj = context.business as unknown as { logo_url?: string };
     const branchObj = context.activeBranch as unknown as { address?: string };
 
@@ -424,7 +445,7 @@ export class PaymentService {
           additional_price_cents: mod.additional_price_cents_snapshot,
         })),
       })),
-      payments: orderPayments,
+      payments: paymentsWithCashier,
     };
   }
 

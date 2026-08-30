@@ -16,7 +16,7 @@ interface RewardsDrawerProps {
   subtotalCents: number;
 }
 
-export function RewardsDrawer({
+export const RewardsDrawer = React.memo(function RewardsDrawer({
   isOpen,
   onClose,
   isAuthenticated,
@@ -60,10 +60,10 @@ export function RewardsDrawer({
       role="dialog"
       aria-modal="true"
       aria-labelledby="rewards-modal-title"
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-lg bg-white border border-zinc-200 text-zinc-950 rounded-3xl shadow-2xl p-5 sm:p-6 space-y-5 max-h-[85vh] flex flex-col animate-in zoom-in-95">
+      <div className="w-full max-w-lg bg-white border border-zinc-200 text-zinc-950 rounded-3xl shadow-xl p-5 sm:p-6 space-y-5 max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
           <div>
@@ -84,7 +84,7 @@ export function RewardsDrawer({
             type="button"
             aria-label="Close rewards modal"
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-700 font-bold text-lg p-2 rounded-full hover:bg-zinc-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation focus:outline-none focus:ring-2 focus:ring-zinc-300"
+            className="text-zinc-400 hover:text-zinc-700 font-bold text-lg p-2 rounded-full hover:bg-zinc-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation focus:outline-none focus:ring-2 focus:ring-zinc-300 cursor-pointer"
           >
             ✕
           </button>
@@ -103,7 +103,7 @@ export function RewardsDrawer({
               </div>
               <div className="pt-2 space-y-2">
                 <Link href={`/login?returnTo=${encodeURIComponent(pathname)}`}>
-                  <Button className="w-full font-extrabold text-xs py-3.5 bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white rounded-xl min-h-[44px] touch-manipulation shadow-xs">
+                  <Button className="w-full font-extrabold text-xs py-3.5 bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white rounded-xl min-h-[44px] touch-manipulation shadow-xs cursor-pointer">
                     Sign In to Account
                   </Button>
                 </Link>
@@ -180,7 +180,7 @@ export function RewardsDrawer({
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedReward(null)}
-                          className="text-xs border-zinc-300 text-rose-600 hover:bg-rose-50 font-extrabold min-h-[40px] touch-manipulation"
+                          className="text-xs border-zinc-300 text-rose-600 hover:bg-rose-50 font-extrabold min-h-[40px] touch-manipulation cursor-pointer"
                         >
                           Remove
                         </Button>
@@ -193,7 +193,7 @@ export function RewardsDrawer({
                           setSelectedReward(reward);
                           onClose();
                         }}
-                        className="w-full font-extrabold bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs py-3 rounded-xl min-h-[44px] touch-manipulation shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+                        className="w-full font-extrabold bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs py-3 rounded-xl min-h-[44px] touch-manipulation shadow-xs disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                       >
                         {minSpendMet
                           ? `Use ${reward.pointsRequired} Points`
@@ -216,7 +216,7 @@ export function RewardsDrawer({
           <Button
             variant="outline"
             onClick={onClose}
-            className="bg-white border-zinc-300 text-zinc-900 hover:bg-zinc-100 text-xs font-extrabold px-5 py-2.5 rounded-xl min-h-[44px] touch-manipulation focus:ring-2 focus:ring-zinc-300"
+            className="bg-white border-zinc-300 text-zinc-900 hover:bg-zinc-100 text-xs font-extrabold px-5 py-2.5 rounded-xl min-h-[44px] touch-manipulation focus:ring-2 focus:ring-zinc-300 cursor-pointer"
           >
             Close
           </Button>
@@ -224,4 +224,4 @@ export function RewardsDrawer({
       </div>
     </div>
   );
-}
+});

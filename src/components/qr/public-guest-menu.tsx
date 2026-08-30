@@ -1,9 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { verifyTableAccessAction } from '@/server/actions/table';
-import { useCart } from '@/features/cart/cart-context';
+import {
+  useCartActions,
+  useConfirmedTable,
+  useCartTotalQuantity,
+} from '@/features/cart/cart-context';
 import { MenuBrandHeader } from '@/components/menu/menu-brand-header';
 import { MenuSearch } from '@/components/menu/menu-search';
 import { CategoryTabs } from '@/components/menu/category-tabs';
@@ -93,6 +97,26 @@ interface PublicGuestMenuProps {
   isOrderingUnavailable?: boolean;
 }
 
+const HeaderCartButton = React.memo(function HeaderCartButton({
+  onOpenCart,
+}: {
+  onOpenCart: () => void;
+}) {
+  const totalQty = useCartTotalQuantity();
+  if (totalQty <= 0) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpenCart}
+      className="flex items-center justify-center rounded-full bg-zinc-950 p-2 text-white shadow-xs hover:bg-zinc-800 active:scale-95 transition-transform cursor-pointer"
+      aria-label="Open cart"
+    >
+      🛒
+    </button>
+  );
+});
+
 export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   token,
   business,
@@ -106,7 +130,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   availableRewards = [],
   isOrderingUnavailable = false,
 }) => {
-  const { state, addLine, editLine, setConfirmedTable } = useCart();
+  const { addLine, editLine, setConfirmedTable } = useCartActions();
+  const confirmedTable = useConfirmedTable();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -133,15 +158,15 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  const handleSelectCategory = React.useCallback((catId: string) => {
+  const handleSelectCategory = useCallback((catId: string) => {
     setSelectedCategory(catId);
   }, []);
 
-  const handleSearchChange = React.useCallback((query: string) => {
+  const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
 
-  const handleItemClick = React.useCallback(
+  const handleItemClick = useCallback(
     (item: MenuItemCardProps['item']) => {
       const fullItem = items.find((i) => i.id === item.id);
       if (fullItem) {
@@ -152,16 +177,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     [items]
   );
 
-  const handleCloseItemDetails = React.useCallback(() => {
+  const handleCloseItemDetails = useCallback(() => {
     setSelectedItem(null);
     setEditingCartLine(null);
   }, []);
 
-  const handleStateChange = React.useCallback((st: 'none' | 'cart_only' | 'order_only' | 'dual') => {
-    setBottomState(st);
-  }, []);
-
-  const filteredItems = React.useMemo(() => {
+  const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
       const matchesSearch =
@@ -172,15 +193,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     });
   }, [items, selectedCategory, searchQuery]);
 
-  const lineQuantitiesByItemId = React.useMemo(() => {
-    const map = new Map<string, number>();
-    for (const line of state.lines) {
-      map.set(line.menuItemId, (map.get(line.menuItemId) || 0) + line.quantity);
-    }
-    return map;
-  }, [state.lines]);
-
-  const handleQuickAdd = React.useCallback(
+  const handleQuickAdd = useCallback(
     (item: MenuItemCardProps['item'], e: React.MouseEvent) => {
       e.stopPropagation();
       const fullItem = items.find((i) => i.id === item.id);
@@ -222,8 +235,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     const res = await verifyTableAccessAction(
       branch.id,
       selectedTableId,
-      pinInput,
-      state.qrVisitSessionToken || undefined
+      pinInput
     );
 
     setVerifying(false);
@@ -301,17 +313,10 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     setCartDrawerOpen(false);
   };
 
-  const [bottomState, setBottomState] = useState<'none' | 'cart_only' | 'order_only' | 'dual'>('none');
-
-  const bottomPaddingClass =
-    bottomState === 'dual'
-      ? 'pb-44 sm:pb-48'
-      : bottomState === 'none'
-      ? 'pb-8'
-      : 'pb-24 sm:pb-28';
+  const isTableVerified = isTableAccessVerified(confirmedTable);
 
   return (
-    <div className={`min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 ${bottomPaddingClass}`}>
+    <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-32">
       {/* Brand Header */}
       <MenuBrandHeader
         logoUrl={business.logo_url}
@@ -325,7 +330,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               <button
                 type="button"
                 onClick={() => setRewardsDrawerOpen(true)}
-                className="flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 hover:bg-amber-100 transition-all shadow-2xs"
+                className="flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-950 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
               >
                 <span>🎁</span>
                 {isAuthenticated ? (
@@ -341,11 +346,11 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               <button
                 type="button"
                 onClick={() => setTableModalOpen(true)}
-                className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-all"
+                className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-colors cursor-pointer"
               >
                 <span>📍</span>
-                {isTableAccessVerified(state.confirmedTable) ? (
-                  <span className="text-emerald-800 font-extrabold">{state.confirmedTable!.tableName}</span>
+                {isTableVerified ? (
+                  <span className="text-emerald-800 font-extrabold">{confirmedTable!.tableName}</span>
                 ) : (
                   <span className="text-zinc-600">Select Table</span>
                 )}
@@ -353,16 +358,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
             )}
 
             {/* Cart Icon Action Button */}
-            {state.isHydrated && state.totalQuantity > 0 && (
-              <button
-                type="button"
-                onClick={() => setCartDrawerOpen(true)}
-                className="flex items-center justify-center rounded-full bg-zinc-950 p-2 text-white shadow-xs hover:bg-zinc-800 transition-all"
-                aria-label="Open cart"
-              >
-                🛒
-              </button>
-            )}
+            <HeaderCartButton onOpenCart={() => setCartDrawerOpen(true)} />
           </div>
         }
       />
@@ -381,7 +377,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         )}
 
         {/* Table Selection Prompt Banner */}
-        {branch.require_table_selection && !isTableAccessVerified(state.confirmedTable) && (
+        {branch.require_table_selection && !isTableVerified && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center justify-between text-xs text-amber-900">
             <div>
               <span className="font-bold">Select your Table Number</span>
@@ -413,7 +409,6 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               key={item.id}
               item={item}
               currency={branch.currency || business.currency || 'USD'}
-              addedQuantity={lineQuantitiesByItemId.get(item.id) || 0}
               onClick={handleItemClick}
               onQuickAdd={handleQuickAdd}
             />
@@ -444,7 +439,6 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         token={token}
         currency={branch.currency || business.currency || 'USD'}
         onOpenCart={() => setCartDrawerOpen(true)}
-        onStateChange={handleStateChange}
       />
 
       {/* Slide-Over Cart Drawer */}
@@ -463,10 +457,10 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
       {/* Table Selection & PIN Verification Modal */}
       {tableModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-150">
           <form
             onSubmit={handleConfirmTable}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-5"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-zinc-200 space-y-5"
           >
             <div className="space-y-1 border-b border-zinc-100 pb-3">
               <h2 className="text-lg font-bold text-zinc-950">Select Dining Table</h2>
@@ -532,12 +526,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                className="flex-1"
+                className="flex-1 cursor-pointer"
                 onClick={() => setTableModalOpen(false)}
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1" disabled={verifying}>
+              <Button type="submit" className="flex-1 cursor-pointer" disabled={verifying}>
                 {verifying ? 'Verifying...' : 'Confirm Table'}
               </Button>
             </div>
@@ -553,7 +547,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           isAuthenticated={isAuthenticated}
           loyaltyAccount={loyaltyAccount}
           availableRewards={availableRewards}
-          subtotalCents={state.subtotalCents}
+          subtotalCents={0}
         />
       )}
     </div>

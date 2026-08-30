@@ -13,13 +13,28 @@ interface ModifierGroupSelectorProps {
   onChange: (groupId: string, optionIds: string[]) => void;
 }
 
-export const ModifierGroupSelector: React.FC<ModifierGroupSelectorProps> = ({
+function areGroupPropsEqual(
+  prev: ModifierGroupSelectorProps,
+  next: ModifierGroupSelectorProps
+): boolean {
+  if (prev.group.id !== next.group.id) return false;
+  if (prev.currency !== next.currency) return false;
+  if (prev.errorMessage !== next.errorMessage) return false;
+  if (prev.selectedOptionIds.length !== next.selectedOptionIds.length) return false;
+
+  for (let i = 0; i < prev.selectedOptionIds.length; i++) {
+    if (prev.selectedOptionIds[i] !== next.selectedOptionIds[i]) return false;
+  }
+  return true;
+}
+
+export const ModifierGroupSelector = React.memo(function ModifierGroupSelector({
   group,
   selectedOptionIds,
   currency,
   errorMessage,
   onChange,
-}) => {
+}: ModifierGroupSelectorProps) {
   const isSingle = group.selection_type === 'single';
   const availableOptions = (group.options || []).filter((o) => o.is_available);
   const isRequired = group.is_required && availableOptions.length > 0;
@@ -107,8 +122,7 @@ export const ModifierGroupSelector: React.FC<ModifierGroupSelectorProps> = ({
             return (
               <label
                 key={option.id}
-                onClick={() => !isDisabled && handleOptionToggle(option.id)}
-                className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer text-xs transition-all ${
+                className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer text-xs select-none touch-manipulation active:scale-[0.99] ${
                   isSelected
                     ? 'border-zinc-950 bg-zinc-900/5 font-semibold'
                     : isDisabled
@@ -122,7 +136,7 @@ export const ModifierGroupSelector: React.FC<ModifierGroupSelectorProps> = ({
                     name={`group-${group.id}`}
                     checked={isSelected}
                     disabled={isDisabled}
-                    onChange={() => {}} // Handled by label click
+                    onChange={() => !isDisabled && handleOptionToggle(option.id)}
                     className="h-4 w-4 accent-zinc-950 cursor-pointer"
                   />
                   <span className="text-zinc-900 font-medium">{option.name}</span>
@@ -145,4 +159,4 @@ export const ModifierGroupSelector: React.FC<ModifierGroupSelectorProps> = ({
       )}
     </div>
   );
-};
+}, areGroupPropsEqual);

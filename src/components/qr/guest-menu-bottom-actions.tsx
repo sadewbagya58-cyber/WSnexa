@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useCart } from '@/features/cart/cart-context';
+import { useCartSummary } from '@/features/cart/cart-context';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import {
   getActiveOrdersFromStorage,
@@ -14,19 +14,16 @@ interface GuestMenuBottomActionsProps {
   token: string;
   currency: string;
   onOpenCart: () => void;
-  onStateChange?: (state: 'none' | 'cart_only' | 'order_only' | 'dual') => void;
 }
 
-export function GuestMenuBottomActions({
+export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions({
   branchId,
   token,
   currency,
   onOpenCart,
-  onStateChange,
 }: GuestMenuBottomActionsProps) {
-  const { state } = useCart();
-  const subtotalCents = state.subtotalCents || 0;
-  const totalCartQuantity = state.isHydrated ? state.totalQuantity : 0;
+  const { totalQuantity, subtotalCents, isHydrated } = useCartSummary();
+  const totalCartQuantity = isHydrated ? totalQuantity : 0;
   const hasCartItems = totalCartQuantity > 0;
 
   const [activeOrders, setActiveOrders] = useState<SafeActiveOrderRecord[]>([]);
@@ -70,13 +67,6 @@ export function GuestMenuBottomActions({
     currentState = 'dual';
   }
 
-  // Notify parent component of state change to adapt scroll padding dynamically
-  useEffect(() => {
-    if (onStateChange) {
-      onStateChange(currentState);
-    }
-  }, [currentState, onStateChange]);
-
   if (currentState === 'none') {
     return null;
   }
@@ -110,7 +100,7 @@ export function GuestMenuBottomActions({
         <div className="max-w-xl mx-auto pointer-events-auto">
           {/* STATE 2: Cart Only */}
           {currentState === 'cart_only' && (
-            <div className="rounded-2xl bg-zinc-950 text-white p-3 sm:p-3.5 shadow-2xl border border-zinc-800 backdrop-blur-md flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="rounded-2xl bg-zinc-950 text-white p-3 sm:p-3.5 shadow-lg border border-zinc-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800 text-lg">
                   🛒
@@ -137,7 +127,7 @@ export function GuestMenuBottomActions({
 
           {/* STATE 3: Active Order Only */}
           {currentState === 'order_only' && primaryOrder && (
-            <div className="rounded-2xl bg-zinc-950 text-white p-3 sm:p-3.5 shadow-2xl border border-zinc-800 backdrop-blur-md flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="rounded-2xl bg-zinc-950 text-white p-3 sm:p-3.5 shadow-lg border border-zinc-800 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 text-lg border border-emerald-500/30">
                   🛎️
@@ -179,9 +169,9 @@ export function GuestMenuBottomActions({
 
           {/* STATE 4: Unified Active Order AND New Cart Container */}
           {currentState === 'dual' && primaryOrder && (
-            <div className="rounded-2xl bg-zinc-950 text-white shadow-2xl border border-zinc-800 backdrop-blur-md overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+            <div className="rounded-2xl bg-zinc-950 text-white shadow-lg border border-zinc-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
               {/* TOP SECTION: ACTIVE ORDER */}
-              <div className="p-3 sm:p-3.5 bg-zinc-900/90 border-b border-zinc-800/80 flex items-center justify-between gap-3">
+              <div className="p-3 sm:p-3.5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 text-base border border-emerald-500/30">
                     🛎️
@@ -250,8 +240,8 @@ export function GuestMenuBottomActions({
 
       {/* Multiple Active Orders Modal */}
       {showOrdersModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4 max-h-[80vh] overflow-y-auto border border-zinc-200">
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl space-y-4 max-h-[80vh] overflow-y-auto border border-zinc-200">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
               <h3 className="text-sm font-black text-zinc-950">Active Orders ({activeOrders.length})</h3>
               <button
@@ -300,4 +290,4 @@ export function GuestMenuBottomActions({
       )}
     </>
   );
-}
+});

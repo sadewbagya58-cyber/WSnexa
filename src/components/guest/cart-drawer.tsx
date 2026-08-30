@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/features/cart/cart-context';
@@ -27,6 +28,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onSelectTable,
   onEditLine,
 }) => {
+  const router = useRouter();
   const { state, updateQuantity, removeLine, clearCart, setSelectedReward } = useCart();
 
   // Body scroll lock
@@ -61,10 +63,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleCheckoutClick = () => {
     if (!canProceedToCheckout) return;
     onClose();
-    // Navigate to checkout preview route
-    if (typeof window !== 'undefined') {
-      window.location.href = `/m/${token}/checkout`;
-    }
+    router.push(`/m/${token}/checkout`);
   };
 
   return (
@@ -72,10 +71,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="cart-drawer-title"
-      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-50 flex justify-end bg-black/70 animate-in fade-in duration-150"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-200">
+      <div className="w-full max-w-md bg-white h-full shadow-xl flex flex-col justify-between animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
           <div className="space-y-1">
@@ -96,7 +95,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <button
                     type="button"
                     onClick={onSelectTable}
-                    className="text-amber-800 font-bold underline hover:text-amber-900"
+                    className="text-amber-800 font-bold underline hover:text-amber-900 cursor-pointer"
                   >
                     ⚠️ Table selection required. Click to select.
                   </button>
@@ -109,7 +108,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             type="button"
             aria-label="Close cart"
             onClick={onClose}
-            className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
+            className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           >
             ✕
           </button>
@@ -170,14 +169,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <button
                     type="button"
                     onClick={() => onEditLine(line)}
-                    className="rounded bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-800 hover:bg-zinc-200"
+                    className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-800 hover:bg-zinc-200 min-h-[36px] cursor-pointer"
                   >
                     ✏️ Edit
                   </button>
                   <button
                     type="button"
                     onClick={() => removeLine(line.lineId)}
-                    className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 border border-red-200 hover:bg-red-100"
+                    className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 border border-red-200 hover:bg-red-100 min-h-[36px] cursor-pointer"
                   >
                     🗑️ Remove
                   </button>
@@ -212,7 +211,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedReward(null)}
-                  className="text-xs text-rose-700 font-bold hover:underline px-2 py-1"
+                  className="text-xs text-rose-700 font-bold hover:underline px-2 py-1 cursor-pointer"
                 >
                   Remove
                 </button>
@@ -237,13 +236,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={clearCart}
-                className="text-xs text-zinc-600"
+                className="text-xs text-zinc-600 cursor-pointer"
               >
                 Clear Cart
               </Button>
 
               <Button
-                className="flex-1 text-sm font-bold py-3"
+                className="flex-1 text-sm font-bold py-3 cursor-pointer"
                 disabled={!canProceedToCheckout}
                 onClick={handleCheckoutClick}
               >

@@ -47,12 +47,12 @@ export const CategoryTabs = React.memo(function CategoryTabs({
   }, [totalItemsCount, items, categories]);
 
   return (
-    <div className="sticky top-0 z-30 bg-zinc-50/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 border-b border-zinc-200/60 shadow-2xs">
+    <div className="sticky top-0 z-30 bg-zinc-50 pt-2 pb-2 -mx-4 px-4 border-b border-zinc-200 shadow-2xs">
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5 touch-pan-x">
         <button
           type="button"
           onClick={() => onSelectCategory('all')}
-          className={`shrink-0 rounded-full px-4 py-2 text-xs font-black transition-all cursor-pointer min-h-[44px] flex items-center justify-center ${
+          className={`shrink-0 rounded-full px-4 py-2 text-xs font-black cursor-pointer min-h-[44px] flex items-center justify-center touch-manipulation active:scale-[0.98] ${
             activeCategoryId === 'all'
               ? 'bg-zinc-950 text-white shadow-xs'
               : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
@@ -72,7 +72,7 @@ export const CategoryTabs = React.memo(function CategoryTabs({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black transition-all cursor-pointer min-h-[44px] flex items-center justify-center ${
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black cursor-pointer min-h-[44px] flex items-center justify-center touch-manipulation active:scale-[0.98] ${
                 isSelected
                   ? 'bg-zinc-950 text-white shadow-xs'
                   : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'

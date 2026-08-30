@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ModifierGroupSelector } from './modifier-group-selector';
@@ -8,6 +8,7 @@ import { QuantityStepper } from './quantity-stepper';
 import { validateItemModifiers, CatalogModifierGroup } from '@/features/cart/cart-validation';
 import { calculateLineUnitPriceCents, calculateLineTotalCents, formatCurrency } from '@/features/cart/cart-calculations';
 import { SelectedModifierSnapshot } from '@/features/cart/cart-types';
+import { getMenuThumbnailUrl } from '@/lib/image-optimizer';
 
 export interface ItemDetailSheetProps {
   item: {
@@ -43,13 +44,13 @@ export interface ItemDetailSheetProps {
   }) => void;
 }
 
-export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
+export const ItemDetailSheet = React.memo(function ItemDetailSheet({
   item,
   currency,
   editingLine,
   onClose,
   onAddToCart,
-}) => {
+}: ItemDetailSheetProps) {
   const [quantity, setQuantity] = useState<number>(editingLine?.quantity || 1);
   const [notes, setNotes] = useState<string>(editingLine?.specialInstructions || '');
   const [selectedOptionsMap, setSelectedOptionsMap] = useState<Record<string, string[]>>(() => {
@@ -107,21 +108,25 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
     });
   }, []);
 
-  // Revalidate modifier selections against current catalog
-  const validation = validateItemModifiers(item.modifier_groups, selectedOptionsMap);
+  // Revalidate modifier selections against current catalog with useMemo
+  const validation = useMemo(
+    () => validateItemModifiers(item.modifier_groups, selectedOptionsMap),
+    [item.modifier_groups, selectedOptionsMap]
+  );
 
-  // Calculate live unit price and line total
-  let lineUnitPriceCents = item.price_cents;
-  let lineTotalCents = item.price_cents * quantity;
-
-  try {
-    lineUnitPriceCents = calculateLineUnitPriceCents(item.price_cents, validation.selectedSnapshots);
-    lineTotalCents = calculateLineTotalCents(lineUnitPriceCents, quantity);
-  } catch (err) {
-    console.error('Calculation error:', err);
-  }
+  // Calculate live unit price and line total with useMemo
+  const { lineUnitPriceCents, lineTotalCents } = useMemo(() => {
+    try {
+      const unit = calculateLineUnitPriceCents(item.price_cents, validation.selectedSnapshots);
+      const total = calculateLineTotalCents(unit, quantity);
+      return { lineUnitPriceCents: unit, lineTotalCents: total };
+    } catch {
+      return { lineUnitPriceCents: item.price_cents, lineTotalCents: item.price_cents * quantity };
+    }
+  }, [item.price_cents, validation.selectedSnapshots, quantity]);
 
   const isOutOfStock = item.availability_status === 'out_of_stock';
+  const previewImageUrl = getMenuThumbnailUrl(item.primary_image_url, 400);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,12 +155,12 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="item-sheet-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4 animate-in fade-in duration-150"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         ref={modalRef}
-        className="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-6 max-h-[90vh] overflow-y-auto flex flex-col justify-between"
+        className="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white p-6 shadow-xl border border-zinc-200 space-y-6 max-h-[90vh] overflow-y-auto flex flex-col justify-between"
       >
         {/* Header */}
         <div className="space-y-4">
@@ -177,20 +182,21 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
               type="button"
               aria-label="Close sheet"
               onClick={onClose}
-              className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
+              className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               ✕
             </button>
           </div>
 
           {/* Item Image */}
-          {item.primary_image_url && (
+          {previewImageUrl && (
             <div className="h-44 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={item.primary_image_url}
+                src={previewImageUrl}
                 alt={item.name}
                 loading="lazy"
+                decoding="async"
                 className="h-full w-full object-cover"
               />
             </div>
@@ -253,7 +259,7 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
             type="button"
             disabled={isOutOfStock}
             onClick={handleFormSubmit}
-            className="flex-1 py-3.5 text-sm font-bold shadow-md min-h-[44px] touch-manipulation"
+            className="flex-1 py-3.5 text-sm font-bold shadow-xs min-h-[44px] touch-manipulation cursor-pointer active:scale-[0.98]"
           >
             {isOutOfStock
               ? 'Out of Stock'
@@ -265,4 +271,4 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
       </div>
     </div>
   );
-};
+});

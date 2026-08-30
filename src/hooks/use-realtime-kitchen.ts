@@ -26,11 +26,11 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
             event: 'INSERT',
             schema: 'public',
             table: 'orders',
-            filter: `branch_id=eq.${branchId}`,
+            filter: 'approval_status=eq.approved',
           },
           async (payload) => {
             const newOrder = payload.new as OrderRecord;
-            if (!newOrder || !newOrder.id) return;
+            if (!newOrder || !newOrder.id || newOrder.branch_id !== branchId) return;
 
             // Fetch complete order with item relations
             const { data } = await supabase
@@ -57,10 +57,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
               .eq('id', newOrder.id)
               .maybeSingle();
 
-            const fullOrder = (data as unknown as OrderRecord & { approval_status?: string }) || newOrder;
-            if (fullOrder.approval_status === 'pending_waiter_approval' || fullOrder.approval_status === 'rejected') {
-              return;
-            }
+            const fullOrder = (data as unknown as OrderRecord) || newOrder;
 
             setOrders((prev) => {
               const exists = prev.some((o) => o.id === fullOrder.id);
@@ -81,16 +78,11 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
             event: 'UPDATE',
             schema: 'public',
             table: 'orders',
-            filter: `branch_id=eq.${branchId}`,
+            filter: 'approval_status=eq.approved',
           },
           async (payload) => {
-            const updatedRow = payload.new as Partial<OrderRecord & { approval_status?: string }>;
-            if (!updatedRow.id) return;
-
-            if (updatedRow.approval_status === 'pending_waiter_approval' || updatedRow.approval_status === 'rejected') {
-              setOrders((prev) => prev.filter((o) => o.id !== updatedRow.id));
-              return;
-            }
+            const updatedRow = payload.new as Partial<OrderRecord>;
+            if (!updatedRow.id || updatedRow.branch_id !== branchId) return;
 
             setOrders((prev) => {
               const existingIndex = prev.findIndex((o) => o.id === updatedRow.id);
@@ -185,6 +177,7 @@ export function useRealtimeKitchen(initialOrders: OrderRecord[], branchId: strin
           `)
           .eq('branch_id', branchId)
           .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+          .eq('approval_status', 'approved')
           .order('created_at', { ascending: false });
 
         if (data) {

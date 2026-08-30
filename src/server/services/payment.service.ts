@@ -271,6 +271,7 @@ export class PaymentService {
           )
         `)
         .eq('branch_id', authContext.activeBranchId)
+        .eq('approval_status', 'approved')
         .or(`payment_status.neq.paid,created_at.gte.${sinceDate}`)
         .order('created_at', { ascending: false })
         .limit(150),

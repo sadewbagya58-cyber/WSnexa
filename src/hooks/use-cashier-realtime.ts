@@ -41,11 +41,13 @@ export function useCashierRealtime(
           event: '*',
           schema: 'public',
           table: 'orders',
-          filter: `branch_id=eq.${branchId}`,
+          filter: 'approval_status=eq.approved',
         },
         (payload) => {
-          const newRow = payload.new as { id?: string } | null;
-          const oldRow = payload.old as { id?: string } | null;
+          const newRow = payload.new as { id?: string; branch_id?: string } | null;
+          const oldRow = payload.old as { id?: string; branch_id?: string } | null;
+          if (newRow?.branch_id && newRow.branch_id !== branchId) return;
+          if (oldRow?.branch_id && oldRow.branch_id !== branchId) return;
           handleEvent(`order:${newRow?.id || oldRow?.id || 'unknown'}`);
         }
       )

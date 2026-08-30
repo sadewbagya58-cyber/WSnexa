@@ -132,9 +132,9 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             )}
             <Badge variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}>
               {order.approval_status === 'pending_waiter_approval'
-                ? '🛡️ WAITING FOR WAITER'
+                ? '⏳ WAITING FOR STAFF APPROVAL'
                 : order.approval_status === 'rejected'
-                ? '❌ REJECTED'
+                ? '❌ NOT APPROVED'
                 : `${statusEmojiMap[order.status] || '📦'} ${order.status.toUpperCase()}`}
             </Badge>
           </div>
@@ -146,7 +146,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm text-center space-y-3">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-4xl border border-amber-200 shadow-inner">
             {order.approval_status === 'pending_waiter_approval'
-              ? '🛡️'
+              ? '⏳'
               : order.approval_status === 'rejected'
               ? '🛑'
               : statusEmojiMap[order.status] || '🎉'}
@@ -162,15 +162,15 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           <p className="text-xs text-zinc-600 max-w-sm mx-auto leading-relaxed font-medium">
             {order.approval_status === 'pending_waiter_approval' && (
               <span className="text-amber-800 font-bold">
-                Your order is awaiting waiter confirmation before being sent to the kitchen.
+                Your order has been submitted and is waiting for staff approval before being sent to the kitchen.
               </span>
             )}
             {order.approval_status === 'rejected' && (
               <span className="text-rose-700 font-bold">
-                Order rejected by staff. Reason: {order.rejection_reason || 'Table/session verification failed.'}
+                Order was not accepted by staff. Reason: {order.rejection_reason || 'Table/session verification failed.'}
               </span>
             )}
-            {order.approval_status !== 'pending_waiter_approval' && order.approval_status !== 'rejected' && (
+            {order.approval_status === 'approved' && (
               <>
                 {order.status === 'pending' && 'Your order has been received by the kitchen. Preparation will begin shortly.'}
                 {order.status === 'confirmed' && 'Your order has been confirmed by the kitchen.'}
@@ -183,7 +183,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           </p>
 
           {/* Timeline Progress Tracker */}
-          {order.status !== 'cancelled' && order.approval_status !== 'pending_waiter_approval' && order.approval_status !== 'rejected' && (
+          {order.status !== 'cancelled' && order.approval_status === 'approved' && (
             <div className="pt-4 border-t border-zinc-100">
               <div className="relative flex items-center justify-between">
                 {steps.map((step, idx) => {

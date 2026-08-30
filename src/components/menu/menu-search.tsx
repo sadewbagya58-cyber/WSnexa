@@ -23,7 +23,7 @@ export const MenuSearch = React.memo(function MenuSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-zinc-200 bg-white pl-10 pr-9 py-2.5 text-xs sm:text-sm font-semibold text-zinc-950 placeholder-zinc-400 shadow-2xs focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 focus:outline-none transition-all min-h-[44px]"
+        className="w-full rounded-2xl border border-zinc-200 bg-white pl-10 pr-9 py-2.5 text-xs sm:text-sm font-semibold text-zinc-950 placeholder-zinc-400 shadow-2xs focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 focus:outline-none min-h-[44px]"
       />
       {value && (
         <button

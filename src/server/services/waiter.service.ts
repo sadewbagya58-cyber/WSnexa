@@ -299,25 +299,7 @@ export class WaiterService {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
 
-    const { data: order } = await admin
-      .from('orders')
-      .select('id, business_id, branch_id, approval_status, status')
-      .eq('id', orderId)
-      .single();
-
-    if (!order) {
-      return { success: false, message: 'Order not found.' };
-    }
-
-    if (order.approval_status === 'approved') {
-      return { success: false, message: 'Order has already been approved.' };
-    }
-
-    if (order.approval_status === 'rejected') {
-      return { success: false, message: 'Order has already been rejected.' };
-    }
-
-    const { error } = await admin
+    const { data: updatedRows, error } = await admin
       .from('orders')
       .update({
         approval_status: 'approved',
@@ -327,20 +309,47 @@ export class WaiterService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderId)
-      .eq('approval_status', 'pending_waiter_approval');
+      .eq('approval_status', 'pending_waiter_approval')
+      .select('id, business_id, branch_id, order_number_formatted');
 
     if (error) {
       return { success: false, message: error.message };
     }
 
+    if (!updatedRows || updatedRows.length === 0) {
+      return { success: false, message: 'Order is no longer pending approval.' };
+    }
+
+    const updatedOrder = updatedRows[0];
+
     const { OrderSecurityService } = await import('./order-security.service');
     await OrderSecurityService.logSecurityEvent({
-      businessId: order.business_id,
-      branchId: order.branch_id,
-      orderId: order.id,
+      businessId: updatedOrder.business_id,
+      branchId: updatedOrder.branch_id,
+      orderId: updatedOrder.id,
       actorUserId: waiterUserId,
       eventType: 'WAITER_APPROVED_ORDER',
     });
+
+    // Notify Kitchen of newly approved order
+    try {
+      const { NotificationService } = await import('./notification.service');
+      const orderNum = updatedOrder.order_number_formatted || updatedOrder.id.slice(0, 6);
+      await NotificationService.createNotificationsForCapability({
+        businessId: updatedOrder.business_id,
+        branchId: updatedOrder.branch_id,
+        capability: 'kitchen.access',
+        notificationType: 'ORDER_CREATED',
+        priority: 'high',
+        title: 'New Order (Approved by Waiter)',
+        message: `Order #${orderNum} has been approved and sent to kitchen`,
+        entityType: 'order',
+        entityId: updatedOrder.id,
+        actionUrl: '/dashboard/kitchen',
+      });
+    } catch (notifErr) {
+      console.warn('[WaiterService] Kitchen notification after approval warning:', notifErr);
+    }
 
     return { success: true, message: 'Order approved successfully and sent to kitchen.' };
   }
@@ -352,21 +361,7 @@ export class WaiterService {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
 
-    const { data: order } = await admin
-      .from('orders')
-      .select('id, business_id, branch_id, approval_status')
-      .eq('id', orderId)
-      .single();
-
-    if (!order) {
-      return { success: false, message: 'Order not found.' };
-    }
-
-    if (order.approval_status !== 'pending_waiter_approval') {
-      return { success: false, message: `Order status is ${order.approval_status}, cannot reject.` };
-    }
-
-    const { error } = await admin
+    const { data: updatedRows, error } = await admin
       .from('orders')
       .update({
         approval_status: 'rejected',
@@ -378,17 +373,24 @@ export class WaiterService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderId)
-      .eq('approval_status', 'pending_waiter_approval');
+      .eq('approval_status', 'pending_waiter_approval')
+      .select('id, business_id, branch_id');
 
     if (error) {
       return { success: false, message: error.message };
     }
 
+    if (!updatedRows || updatedRows.length === 0) {
+      return { success: false, message: 'Order is no longer pending approval.' };
+    }
+
+    const updatedOrder = updatedRows[0];
+
     const { OrderSecurityService } = await import('./order-security.service');
     await OrderSecurityService.logSecurityEvent({
-      businessId: order.business_id,
-      branchId: order.branch_id,
-      orderId: order.id,
+      businessId: updatedOrder.business_id,
+      branchId: updatedOrder.branch_id,
+      orderId: updatedOrder.id,
       actorUserId: waiterUserId,
       eventType: 'WAITER_REJECTED_ORDER',
       safeMetadata: { reason },

@@ -478,18 +478,33 @@ export class OrderService {
     if (payload.success && payload.order_id && targetBusinessId && targetBranchId) {
       const { NotificationService } = await import('./notification.service');
       const orderNum = payload.order_number_formatted || payload.order_id.slice(0, 6);
-      NotificationService.createNotificationsForCapability({
-        businessId: targetBusinessId,
-        branchId: targetBranchId,
-        capability: 'orders.view',
-        notificationType: 'ORDER_CREATED',
-        priority: 'high',
-        title: 'New Guest Order',
-        message: `Order #${orderNum} placed`,
-        entityType: 'order',
-        entityId: payload.order_id,
-        actionUrl: '/dashboard/kitchen',
-      }).catch((err) => console.warn('[OrderService] Notification dispatch failed:', err));
+      if (secEvalResult?.requiresWaiterApproval) {
+        NotificationService.createNotificationsForCapability({
+          businessId: targetBusinessId,
+          branchId: targetBranchId,
+          capability: 'waiter.access',
+          notificationType: 'ORDER_CREATED',
+          priority: 'high',
+          title: 'New Guest Order Awaiting Approval',
+          message: `Order #${orderNum} requires waiter review`,
+          entityType: 'order',
+          entityId: payload.order_id,
+          actionUrl: '/dashboard/waiter/order',
+        }).catch((err) => console.warn('[OrderService] Waiter notification dispatch failed:', err));
+      } else {
+        NotificationService.createNotificationsForCapability({
+          businessId: targetBusinessId,
+          branchId: targetBranchId,
+          capability: 'kitchen.access',
+          notificationType: 'ORDER_CREATED',
+          priority: 'high',
+          title: 'New Guest Order',
+          message: `Order #${orderNum} placed`,
+          entityType: 'order',
+          entityId: payload.order_id,
+          actionUrl: '/dashboard/kitchen',
+        }).catch((err) => console.warn('[OrderService] Kitchen notification dispatch failed:', err));
+      }
     }
 
     return {
@@ -574,8 +589,7 @@ export class OrderService {
       `)
       .eq('branch_id', context.activeBranch.id)
       .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
-      .neq('approval_status', 'pending_waiter_approval')
-      .neq('approval_status', 'rejected')
+      .eq('approval_status', 'approved')
       .order('created_at', { ascending: false });
 
     return (data as unknown as OrderRecord[]) || [];

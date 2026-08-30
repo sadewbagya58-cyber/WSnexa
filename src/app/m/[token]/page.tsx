@@ -71,6 +71,10 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
 
   const isOrderingUnavailable = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
 
+  const rawPayload = menuData as Record<string, unknown>;
+  const serviceAreaId = (rawPayload.service_area_id as string) || null;
+  const initialTableId = (rawPayload.table_id as string) || (rawPayload.table as { id?: string })?.id || null;
+
   return (
     <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
       <PublicGuestMenu
@@ -85,6 +89,8 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
         loyaltyAccount={loyaltyAccount}
         availableRewards={availableRewards}
         isOrderingUnavailable={isOrderingUnavailable}
+        serviceAreaId={serviceAreaId}
+        initialTableId={initialTableId}
       />
     </CartProvider>
   );

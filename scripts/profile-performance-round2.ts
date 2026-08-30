@@ -173,21 +173,23 @@ async function runRound2Benchmarks() {
     status: missingCount === 0 ? 'PASS' : 'FAIL',
   });
 
-  // ── TEST 4: Next.js Activity State Preservation Configuration ───────────
-  console.log('\n--- 4. Testing Next.js Configuration for State Preservation ---');
+  // ── TEST 4: Navigation Architecture & Route Prefetch Verification ─────────
+  console.log('\n--- 4. Testing Navigation Architecture & Link Prefetch Configuration ---');
 
-  const nextConfigContent = readFileSync('next.config.ts', 'utf-8');
-  const hasCacheComponents = nextConfigContent.includes('cacheComponents: true');
+  const shellContent = readFileSync('src/components/layout/dashboard-shell.tsx', 'utf-8');
+  const hasRoutePrefetcherMounted = shellContent.includes('<RoutePrefetcher />');
+  const hasPrefetchOnLinks = shellContent.includes('prefetch={true}');
 
-  console.log(`  cacheComponents configured in next.config.ts: ${hasCacheComponents ? 'YES (Active)' : 'NO'}`);
+  console.log(`  RoutePrefetcher mounted in DashboardShell: ${hasRoutePrefetcherMounted ? 'YES' : 'NO'}`);
+  console.log(`  prefetch={true} configured on nav links:   ${hasPrefetchOnLinks ? 'YES' : 'NO'}`);
 
   results.push({
-    suite: 'Next.js Router Cache',
-    metric: 'Activity UI State Preservation',
-    beforeValue: 'Disabled (Full skeleton on return)',
-    afterValue: 'Enabled (React 19 Activity preservation)',
-    improvement: 'Zero-flash repeat navigation',
-    status: hasCacheComponents ? 'PASS' : 'FAIL',
+    suite: 'Navigation Architecture',
+    metric: 'Client Route Prefetching & Isolation',
+    beforeValue: 'Unprefetched links, unmounted prefetcher',
+    afterValue: 'RoutePrefetcher mounted + prefetch={true}',
+    improvement: 'Instant route transition readiness',
+    status: hasRoutePrefetcherMounted && hasPrefetchOnLinks ? 'PASS' : 'FAIL',
   });
 
   // ── SUMMARY MATRIX ────────────────────────────────────────────────────────

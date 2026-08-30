@@ -7,7 +7,7 @@ import { useCart } from '@/features/cart/cart-context';
 import { MenuBrandHeader } from '@/components/menu/menu-brand-header';
 import { MenuSearch } from '@/components/menu/menu-search';
 import { CategoryTabs } from '@/components/menu/category-tabs';
-import { MenuItemCard } from '@/components/menu/menu-item-card';
+import { MenuItemCard, MenuItemCardProps } from '@/components/menu/menu-item-card';
 import { MenuItemDetails } from '@/components/menu/menu-item-details';
 import { GuestMenuBottomActions } from './guest-menu-bottom-actions';
 import { CartDrawer } from '../guest/cart-drawer';
@@ -133,14 +133,76 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  const filteredItems = items.filter((item) => {
-    const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
-    const matchesSearch =
-      !searchQuery.trim() ||
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
-  });
+  const handleSelectCategory = React.useCallback((catId: string) => {
+    setSelectedCategory(catId);
+  }, []);
+
+  const handleSearchChange = React.useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  const handleItemClick = React.useCallback(
+    (item: MenuItemCardProps['item']) => {
+      const fullItem = items.find((i) => i.id === item.id);
+      if (fullItem) {
+        setEditingCartLine(null);
+        setSelectedItem(fullItem);
+      }
+    },
+    [items]
+  );
+
+  const handleCloseItemDetails = React.useCallback(() => {
+    setSelectedItem(null);
+    setEditingCartLine(null);
+  }, []);
+
+  const handleStateChange = React.useCallback((st: 'none' | 'cart_only' | 'order_only' | 'dual') => {
+    setBottomState(st);
+  }, []);
+
+  const filteredItems = React.useMemo(() => {
+    return items.filter((item) => {
+      const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
+      const matchesSearch =
+        !searchQuery.trim() ||
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchesCategory && matchesSearch;
+    });
+  }, [items, selectedCategory, searchQuery]);
+
+  const lineQuantitiesByItemId = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of state.lines) {
+      map.set(line.menuItemId, (map.get(line.menuItemId) || 0) + line.quantity);
+    }
+    return map;
+  }, [state.lines]);
+
+  const handleQuickAdd = React.useCallback(
+    (item: MenuItemCardProps['item'], e: React.MouseEvent) => {
+      e.stopPropagation();
+      const fullItem = items.find((i) => i.id === item.id);
+      if (!fullItem) return;
+
+      const hasModifiers = fullItem.modifier_groups && fullItem.modifier_groups.length > 0;
+      if (hasModifiers) {
+        setEditingCartLine(null);
+        setSelectedItem(fullItem);
+      } else {
+        addLine({
+          menuItemId: fullItem.id,
+          itemName: fullItem.name,
+          imageUrl: fullItem.primary_image_url,
+          quantity: 1,
+          basePriceCents: fullItem.price_cents,
+          selectedModifiers: [],
+        });
+      }
+    },
+    [items, addLine]
+  );
 
   const handleConfirmTable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -334,14 +396,14 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         )}
 
         {/* Search Bar */}
-        <MenuSearch value={searchQuery} onChange={setSearchQuery} />
+        <MenuSearch value={searchQuery} onChange={handleSearchChange} />
 
         {/* Categories Horizontal Sticky Tabs */}
         <CategoryTabs
           categories={categories}
           items={items}
           selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
+          onSelectCategory={handleSelectCategory}
         />
 
         {/* Menu Items Grid/List */}
@@ -351,10 +413,9 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               key={item.id}
               item={item}
               currency={branch.currency || business.currency || 'USD'}
-              onClick={() => {
-                setEditingCartLine(null);
-                setSelectedItem(item);
-              }}
+              addedQuantity={lineQuantitiesByItemId.get(item.id) || 0}
+              onClick={handleItemClick}
+              onQuickAdd={handleQuickAdd}
             />
           ))}
 
@@ -372,10 +433,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           item={selectedItem}
           currency={branch.currency || business.currency || 'USD'}
           editingLine={editingCartLine}
-          onClose={() => {
-            setSelectedItem(null);
-            setEditingCartLine(null);
-          }}
+          onClose={handleCloseItemDetails}
           onAddToCart={handleAddToCart}
         />
       )}
@@ -386,7 +444,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         token={token}
         currency={branch.currency || business.currency || 'USD'}
         onOpenCart={() => setCartDrawerOpen(true)}
-        onStateChange={setBottomState}
+        onStateChange={handleStateChange}
       />
 
       {/* Slide-Over Cart Drawer */}

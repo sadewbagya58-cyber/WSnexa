@@ -8,7 +8,7 @@ interface MenuSearchProps {
   placeholder?: string;
 }
 
-export function MenuSearch({
+export const MenuSearch = React.memo(function MenuSearch({
   value,
   onChange,
   placeholder = 'Search menu items or categories...',
@@ -37,4 +37,4 @@ export function MenuSearch({
       )}
     </div>
   );
-}
+});

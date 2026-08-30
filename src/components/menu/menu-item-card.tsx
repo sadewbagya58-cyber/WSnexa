@@ -24,6 +24,19 @@ export interface MenuItemCardProps {
   addedQuantity?: number;
 }
 
+function arePropsEqual(prev: MenuItemCardProps, next: MenuItemCardProps): boolean {
+  if (prev.item.id !== next.item.id) return false;
+  if (prev.item.name !== next.item.name) return false;
+  if (prev.item.price_cents !== next.item.price_cents) return false;
+  if (prev.item.availability_status !== next.item.availability_status) return false;
+  if (prev.item.is_available !== next.item.is_available) return false;
+  if (prev.item.is_featured !== next.item.is_featured) return false;
+  if (prev.item.primary_image_url !== next.item.primary_image_url) return false;
+  if (prev.addedQuantity !== next.addedQuantity) return false;
+  if (prev.currency !== next.currency) return false;
+  return true;
+}
+
 export const MenuItemCard = React.memo(function MenuItemCard({
   item,
   currency,
@@ -44,6 +57,7 @@ export const MenuItemCard = React.memo(function MenuItemCard({
   return (
     <div
       onClick={handleItemClick}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '88px' }}
       className={`group cursor-pointer rounded-2xl border bg-white p-3.5 sm:p-4 shadow-2xs transition-all flex items-start justify-between gap-3 sm:gap-4 relative overflow-hidden select-none touch-manipulation ${
         isSoldOut
           ? 'border-zinc-200 bg-zinc-50/70 opacity-75'
@@ -144,4 +158,4 @@ export const MenuItemCard = React.memo(function MenuItemCard({
       </div>
     </div>
   );
-});
+}, arePropsEqual);

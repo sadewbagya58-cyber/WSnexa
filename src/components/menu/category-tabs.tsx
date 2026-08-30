@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
 export interface CategoryOption {
   id: string;
@@ -21,7 +21,7 @@ export interface CategoryTabsProps {
   totalItemsCount?: number;
 }
 
-export function CategoryTabs({
+export const CategoryTabs = React.memo(function CategoryTabs({
   categories,
   items,
   selectedCategoryId,
@@ -30,12 +30,21 @@ export function CategoryTabs({
   totalItemsCount,
 }: CategoryTabsProps) {
   const activeCategoryId = selectedCategoryId || selectedCategory || 'all';
-  const totalCount =
-    totalItemsCount != null
-      ? totalItemsCount
-      : items
-      ? items.length
-      : categories.reduce((sum, c) => sum + (c.count || 0), 0);
+
+  const countsMap = useMemo(() => {
+    if (!items) return null;
+    const map = new Map<string, number>();
+    for (const item of items) {
+      map.set(item.category_id, (map.get(item.category_id) || 0) + 1);
+    }
+    return map;
+  }, [items]);
+
+  const totalCount = useMemo(() => {
+    if (totalItemsCount != null) return totalItemsCount;
+    if (items) return items.length;
+    return categories.reduce((sum, c) => sum + (c.count || 0), 0);
+  }, [totalItemsCount, items, categories]);
 
   return (
     <div className="sticky top-0 z-30 bg-zinc-50/95 backdrop-blur-md pt-2 pb-2 -mx-4 px-4 border-b border-zinc-200/60 shadow-2xs">
@@ -54,7 +63,7 @@ export function CategoryTabs({
 
         {categories.map((cat) => {
           const itemCount =
-            cat.count != null ? cat.count : items ? items.filter((i) => i.category_id === cat.id).length : null;
+            cat.count != null ? cat.count : countsMap ? countsMap.get(cat.id) || 0 : null;
           if (itemCount === 0) return null;
           const isSelected = activeCategoryId === cat.id;
 
@@ -69,11 +78,11 @@ export function CategoryTabs({
                   : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
               }`}
             >
-              {cat.name} {cat.count != null ? `(${cat.count})` : ''}
+              {cat.name} {cat.count != null ? `(${cat.count})` : itemCount != null ? `(${itemCount})` : ''}
             </button>
           );
         })}
       </div>
     </div>
   );
-}
+});

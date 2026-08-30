@@ -17,6 +17,7 @@ import { BranchInfo, TenantSubscriptionInfo } from '@/types';
 
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SubscriptionRealtimeListener } from '@/components/subscription/subscription-realtime-listener';
+import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -145,6 +146,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={true}
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
                     isActive
@@ -193,6 +195,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={true}
                   onClick={() => setMobileOpen(false)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
@@ -216,6 +219,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
+      <RoutePrefetcher />
       {businessId && (
         <SubscriptionRealtimeListener
           businessId={businessId}

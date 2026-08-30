@@ -93,20 +93,19 @@ export const ItemDetailSheet: React.FC<ItemDetailSheetProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleGroupSelectionChange = (groupId: string, optionIds: string[]) => {
+  const handleGroupSelectionChange = React.useCallback((groupId: string, optionIds: string[]) => {
     setSelectedOptionsMap((prev) => ({
       ...prev,
       [groupId]: optionIds,
     }));
 
-    if (validationErrors[groupId]) {
-      setValidationErrors((prev) => {
-        const next = { ...prev };
-        delete next[groupId];
-        return next;
-      });
-    }
-  };
+    setValidationErrors((prev) => {
+      if (!prev[groupId]) return prev;
+      const next = { ...prev };
+      delete next[groupId];
+      return next;
+    });
+  }, []);
 
   // Revalidate modifier selections against current catalog
   const validation = validateItemModifiers(item.modifier_groups, selectedOptionsMap);

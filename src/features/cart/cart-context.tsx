@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { CartState, CartLine, ConfirmedTableContext, SelectedModifierSnapshot } from './cart-types';
 import { generateCartLineKey, normalizeNotes } from './cart-line-key';
 import { calculateLineUnitPriceCents, calculateLineTotalCents, calculateCartTotals } from './cart-calculations';
@@ -338,7 +338,7 @@ export const CartProvider: React.FC<{
     }
   }, [branchId, currency, qrVisitSessionToken]);
 
-  const addLine = (item: {
+  const addLine = useCallback((item: {
     menuItemId: string;
     itemName: string;
     imageUrl?: string | null;
@@ -348,13 +348,13 @@ export const CartProvider: React.FC<{
     specialInstructions?: string;
   }) => {
     dispatch({ type: 'ADD_LINE', payload: item });
-  };
+  }, []);
 
-  const updateQuantity = (lineId: string, quantity: number) => {
+  const updateQuantity = useCallback((lineId: string, quantity: number) => {
     dispatch({ type: 'UPDATE_LINE_QUANTITY', payload: { lineId, quantity } });
-  };
+  }, []);
 
-  const editLine = (
+  const editLine = useCallback((
     oldLineId: string,
     quantity: number,
     selectedModifiers: SelectedModifierSnapshot[],
@@ -364,42 +364,55 @@ export const CartProvider: React.FC<{
       type: 'EDIT_LINE',
       payload: { oldLineId, quantity, selectedModifiers, specialInstructions },
     });
-  };
+  }, []);
 
-  const removeLine = (lineId: string) => {
+  const removeLine = useCallback((lineId: string) => {
     dispatch({ type: 'REMOVE_LINE', payload: { lineId } });
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     dispatch({ type: 'CLEAR_CART' });
-  };
+  }, []);
 
-  const setConfirmedTable = (table: ConfirmedTableContext | null) => {
+  const setConfirmedTable = useCallback((table: ConfirmedTableContext | null) => {
     dispatch({ type: 'SET_TABLE_CONTEXT', payload: table });
-  };
+  }, []);
 
-  const setSelectedReward = (reward: LoyaltyRewardRecord | null) => {
+  const setSelectedReward = useCallback((reward: LoyaltyRewardRecord | null) => {
     dispatch({ type: 'SET_SELECTED_REWARD', payload: reward });
-  };
+  }, []);
 
-  const setQrVisitSessionToken = (token: string | null) => {
+  const setQrVisitSessionToken = useCallback((token: string | null) => {
     dispatch({ type: 'SET_QR_VISIT_SESSION_TOKEN', payload: token });
-  };
+  }, []);
+
+  const contextValue = useMemo<CartContextValue>(
+    () => ({
+      state,
+      addLine,
+      updateQuantity,
+      editLine,
+      removeLine,
+      clearCart,
+      setConfirmedTable,
+      setSelectedReward,
+      setQrVisitSessionToken,
+    }),
+    [
+      state,
+      addLine,
+      updateQuantity,
+      editLine,
+      removeLine,
+      clearCart,
+      setConfirmedTable,
+      setSelectedReward,
+      setQrVisitSessionToken,
+    ]
+  );
 
   return (
-    <CartContext.Provider
-      value={{
-        state,
-        addLine,
-        updateQuantity,
-        editLine,
-        removeLine,
-        clearCart,
-        setConfirmedTable,
-        setSelectedReward,
-        setQrVisitSessionToken,
-      }}
-    >
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );

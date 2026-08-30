@@ -136,15 +136,45 @@ export const resolveActiveBusinessContext = cache(
       return null;
     }
 
-    // Fetch all active/non-deleted branches for the business
-    const { data: allBranches } = await supabase
-      .from('branches')
-      .select('*')
-      .eq('business_id', business.id)
-      .is('deleted_at', null)
-      .order('is_default', { ascending: false });
+    // Concurrently fetch branches, branch assignments, subscription, and custom role in 1 parallel batch
+    const memberCustomRoleId: string | null = (activeMembership as unknown as { custom_role_id?: string | null }).custom_role_id || null;
 
-    const formattedBranches = (allBranches || []).map((b) => ({
+    const [branchesRes, assignmentsRes, subContextRes, customRoleRes] = await Promise.all([
+      supabase
+        .from('branches')
+        .select('id, name, code, phone, email, address_line_1, city, timezone, is_default, status, require_table_selection, require_table_pin, table_pin_length')
+        .eq('business_id', business.id)
+        .is('deleted_at', null)
+        .order('is_default', { ascending: false }),
+
+      activeMembership.role !== 'business_owner'
+        ? supabase
+            .from('branch_assignments')
+            .select('branch_id')
+            .eq('business_membership_id', activeMembership.id)
+        : Promise.resolve({ data: null, error: null }),
+
+      (async () => {
+        try {
+          const { SubscriptionService } = await import('@/server/services/subscription.service');
+          return await SubscriptionService.resolveSubscriptionContext(business.id);
+        } catch {
+          return null;
+        }
+      })(),
+
+      memberCustomRoleId
+        ? supabase
+            .from('custom_roles')
+            .select('name')
+            .eq('id', memberCustomRoleId)
+            .eq('business_id', business.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    const allBranches = branchesRes.data || [];
+    const formattedBranches = allBranches.map((b) => ({
       id: b.id,
       name: b.name,
       code: b.code,
@@ -162,12 +192,8 @@ export const resolveActiveBusinessContext = cache(
     }));
 
     let userAssignedBranchIds: string[] | null = null;
-    if (activeMembership.role !== 'business_owner') {
-      const { data: assignments } = await supabase
-        .from('branch_assignments')
-        .select('branch_id')
-        .eq('business_membership_id', activeMembership.id);
-      userAssignedBranchIds = (assignments || []).map((a) => a.branch_id);
+    if (activeMembership.role !== 'business_owner' && assignmentsRes.data) {
+      userAssignedBranchIds = assignmentsRes.data.map((a) => a.branch_id);
     }
 
     const userAccessibleBranches =
@@ -184,39 +210,20 @@ export const resolveActiveBusinessContext = cache(
     }
 
     let subscriptionInfo = undefined;
-    try {
-      const { SubscriptionService } = await import('@/server/services/subscription.service');
-      const subContext = await SubscriptionService.resolveSubscriptionContext(business.id);
+    if (subContextRes) {
       subscriptionInfo = {
-        planCode: subContext.subscription.plan_code,
-        status: subContext.subscription.status,
-        effectiveStatus: subContext.effectiveStatus,
-        trialEndsAt: subContext.subscription.trial_ends_at,
-        periodEndsAt: subContext.periodEndsAt ? subContext.periodEndsAt.toISOString() : null,
-        graceEndsAt: subContext.graceEndsAt ? subContext.graceEndsAt.toISOString() : null,
-        daysRemaining: subContext.daysRemaining,
-        effectiveLimits: subContext.effectiveLimits,
+        planCode: subContextRes.subscription.plan_code,
+        status: subContextRes.subscription.status,
+        effectiveStatus: subContextRes.effectiveStatus,
+        trialEndsAt: subContextRes.subscription.trial_ends_at,
+        periodEndsAt: subContextRes.periodEndsAt ? subContextRes.periodEndsAt.toISOString() : null,
+        graceEndsAt: subContextRes.graceEndsAt ? subContextRes.graceEndsAt.toISOString() : null,
+        daysRemaining: subContextRes.daysRemaining,
+        effectiveLimits: subContextRes.effectiveLimits,
       };
-    } catch (subErr) {
-      console.warn('[resolveActiveBusinessContext] Failed to resolve subscription context:', subErr);
     }
 
-    // Fetch custom role name if member has a custom role
-    let customRoleName: string | null = null;
-    const memberCustomRoleId: string | null = (activeMembership as unknown as { custom_role_id?: string | null }).custom_role_id || null;
-    if (memberCustomRoleId) {
-      try {
-        const { data: customRoleRow } = await supabase
-          .from('custom_roles')
-          .select('name')
-          .eq('id', memberCustomRoleId)
-          .eq('business_id', business.id)
-          .maybeSingle();
-        customRoleName = customRoleRow?.name || null;
-      } catch {
-        // Non-fatal: if lookup fails, fall back to null (shell will use base role label)
-      }
-    }
+    const customRoleName: string | null = customRoleRes?.data?.name || null;
 
     const duration = stopTimer(startTime);
     logPerformanceMetric('RESOLVE_TENANT_CONTEXT', business.slug, duration);

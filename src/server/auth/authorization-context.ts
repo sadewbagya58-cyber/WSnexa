@@ -153,109 +153,149 @@ async function _resolveAuthorizationContext(
   const nowIso = now.toISOString();
 
   // 3. Concurrently fetch all authorization dimensions in a single bounded batch
-  const [
-    branchesRes,
-    branchAssignmentsRes,
-    staffAssignmentsRes,
-    staffAreaAssignmentsRes,
-    rolePermissionsRes,
-    overridesRes,
-    scopeGrantsRes,
-    roleScopePresetsRes,
-    departmentsRes,
-    unitsRes,
-  ] = await Promise.all([
-    // 3.1 All active branches for the business
-    admin
-      .from('branches')
-      .select('id, name, code, is_default, status, deleted_at')
-      .eq('business_id', business.id)
-      .is('deleted_at', null)
-      .order('is_default', { ascending: false }),
+  // Fast-path: Business Owner has full root access across the entire tenant by definition.
+  // We can safely skip fetching staff assignments, overrides, scope grants, and role presets for owner.
+  let branchesRes: { data: any[] | null; error?: any };
+  let branchAssignmentsRes: { data: any[] | null; error?: any } = { data: [] };
+  let staffAssignmentsRes: { data: any[] | null; error?: any } = { data: [] };
+  let staffAreaAssignmentsRes: { data: any[] | null; error?: any } = { data: [] };
+  let rolePermissionsRes: { data: any; error?: any } = { data: [] };
+  let overridesRes: { data: any[] | null; error?: any } = { data: [] };
+  let scopeGrantsRes: { data: any[] | null; error?: any } = { data: [] };
+  let roleScopePresetsRes: { data: any[] | null; error?: any } = { data: [] };
+  let departmentsRes: { data: any[] | null; error?: any };
+  let unitsRes: { data: any[] | null; error?: any };
 
-    // 3.2 Branch assignments for current membership
-    admin
-      .from('branch_assignments')
-      .select('id, branch_id, is_primary, created_at')
-      .eq('business_membership_id', activeMembership.id),
+  if (isBusinessOwner) {
+    const [bRes, dRes, uRes] = await Promise.all([
+      admin
+        .from('branches')
+        .select('id, name, code, is_default, status, deleted_at')
+        .eq('business_id', business.id)
+        .is('deleted_at', null)
+        .order('is_default', { ascending: false }),
+      admin
+        .from('organization_departments')
+        .select('id, name, code, branch_id, is_active')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+      admin
+        .from('organization_units')
+        .select('id, name, unit_type, department_id, branch_id, is_active')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+    ]);
+    branchesRes = bRes;
+    departmentsRes = dRes;
+    unitsRes = uRes;
+  } else {
+    const [
+      bRes,
+      baRes,
+      saRes,
+      saaRes,
+      rpRes,
+      oRes,
+      sgRes,
+      rspRes,
+      dRes,
+      uRes,
+    ] = await Promise.all([
+      // 3.1 All active branches for the business
+      admin
+        .from('branches')
+        .select('id, name, code, is_default, status, deleted_at')
+        .eq('business_id', business.id)
+        .is('deleted_at', null)
+        .order('is_default', { ascending: false }),
 
-    // 3.3 Staff assignments from Phase 29
-    admin
-      .from('staff_assignments')
-      .select(
-        'id, business_membership_id, assignment_type, status, is_primary, branch_id, department_id, unit_id, position_id, starts_at, ends_at, source_assignment_id, acting_for_assignment_id, coverage_absence_id, organization_positions(id, position_code)'
-      )
-      .eq('business_membership_id', activeMembership.id)
-      .eq('status', 'active'),
+      // 3.2 Branch assignments for current membership
+      admin
+        .from('branch_assignments')
+        .select('id, branch_id, is_primary, created_at')
+        .eq('business_membership_id', activeMembership.id),
 
-    // 3.4 Staff area assignments (waiter service areas)
-    admin
-      .from('staff_area_assignments')
-      .select('id, service_area_id, service_areas(id, name, code, branch_id)')
-      .eq('business_membership_id', activeMembership.id),
+      // 3.3 Staff assignments from Phase 29
+      admin
+        .from('staff_assignments')
+        .select(
+          'id, business_membership_id, assignment_type, status, is_primary, branch_id, department_id, unit_id, position_id, starts_at, ends_at, source_assignment_id, acting_for_assignment_id, coverage_absence_id, organization_positions(id, position_code)'
+        )
+        .eq('business_membership_id', activeMembership.id)
+        .eq('status', 'active'),
 
-    // 3.5 Role permissions (custom or built-in)
-    activeMembership.custom_role_id
-      ? admin
-          .from('custom_roles')
-          .select('id, is_active, role_permissions(permission_key)')
-          .eq('id', activeMembership.custom_role_id)
-          .eq('business_id', business.id)
-          .maybeSingle()
-      : admin
-          .from('role_permissions')
-          .select('permission_key')
-          .eq('role_key', activeMembership.role)
-          .is('business_id', null),
+      // 3.4 Staff area assignments (waiter service areas)
+      admin
+        .from('staff_area_assignments')
+        .select('id, service_area_id, service_areas(id, name, code, branch_id)')
+        .eq('business_membership_id', activeMembership.id),
 
-    // 3.6 Member permission overrides
-    admin
-      .from('member_permission_overrides')
-      .select('id, business_membership_id, permission_key, effect, scope_type, branch_id, department_id, organization_unit_id, service_area_id, created_at')
-      .eq('business_membership_id', activeMembership.id),
+      // 3.5 Role permissions (custom or built-in)
+      activeMembership.custom_role_id
+        ? admin
+            .from('custom_roles')
+            .select('id, is_active, role_permissions(permission_key)')
+            .eq('id', activeMembership.custom_role_id)
+            .eq('business_id', business.id)
+            .maybeSingle()
+        : admin
+            .from('role_permissions')
+            .select('permission_key')
+            .eq('role_key', activeMembership.role)
+            .is('business_id', null),
 
-    // 3.7 Applicable permission scope grants
-    // When the member has a custom_role_id, we intentionally do NOT include
-    // role_key.eq.${activeMembership.role} in the .or() filter.
-    // This prevents built-in role (e.g. 'cashier') scope grants from being
-    // applied to a custom-role member whose base compatibility role happens
-    // to match a built-in role key. Only membership-level and custom-role-level
-    // scope grants should apply.
-    admin
-      .from('permission_scope_grants')
-      .select('id, permission_key, effect, scope_type, branch_id, department_id, organization_unit_id, service_area_id, grant_source, source_id')
-      .or(
-        activeMembership.custom_role_id
-          ? `business_membership_id.eq.${activeMembership.id},custom_role_id.eq.${activeMembership.custom_role_id}`
-          : `business_membership_id.eq.${activeMembership.id},role_key.eq.${activeMembership.role}`
-      ),
+      // 3.6 Member permission overrides
+      admin
+        .from('member_permission_overrides')
+        .select('id, business_membership_id, permission_key, effect, scope_type, branch_id, department_id, organization_unit_id, service_area_id, created_at')
+        .eq('business_membership_id', activeMembership.id),
 
-    // 3.8 Role scope presets
-    // Same isolation rule: when a custom_role_id is present, only load the
-    // custom-role-specific preset (if any), not the built-in role preset.
-    admin
-      .from('role_scope_presets')
-      .select('role_key, custom_role_id, default_scope, max_scope')
-      .or(
-        activeMembership.custom_role_id
-          ? `custom_role_id.eq.${activeMembership.custom_role_id}`
-          : `role_key.eq.${activeMembership.role}`
-      ),
+      // 3.7 Applicable permission scope grants
+      admin
+        .from('permission_scope_grants')
+        .select('id, permission_key, effect, scope_type, branch_id, department_id, organization_unit_id, service_area_id, grant_source, source_id')
+        .or(
+          activeMembership.custom_role_id
+            ? `business_membership_id.eq.${activeMembership.id},custom_role_id.eq.${activeMembership.custom_role_id}`
+            : `business_membership_id.eq.${activeMembership.id},role_key.eq.${activeMembership.role}`
+        ),
 
-    // 3.9 Organization departments
-    admin
-      .from('organization_departments')
-      .select('id, name, code, branch_id, is_active')
-      .eq('business_id', business.id)
-      .eq('is_active', true),
+      // 3.8 Role scope presets
+      admin
+        .from('role_scope_presets')
+        .select('role_key, custom_role_id, default_scope, max_scope')
+        .or(
+          activeMembership.custom_role_id
+            ? `custom_role_id.eq.${activeMembership.custom_role_id}`
+            : `role_key.eq.${activeMembership.role}`
+        ),
 
-    // 3.10 Organization units
-    admin
-      .from('organization_units')
-      .select('id, name, unit_type, department_id, branch_id, is_active')
-      .eq('business_id', business.id)
-      .eq('is_active', true),
-  ]);
+      // 3.9 Organization departments
+      admin
+        .from('organization_departments')
+        .select('id, name, code, branch_id, is_active')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+
+      // 3.10 Organization units
+      admin
+        .from('organization_units')
+        .select('id, name, unit_type, department_id, branch_id, is_active')
+        .eq('business_id', business.id)
+        .eq('is_active', true),
+    ]);
+
+    branchesRes = bRes;
+    branchAssignmentsRes = baRes;
+    staffAssignmentsRes = saRes;
+    staffAreaAssignmentsRes = saaRes;
+    rolePermissionsRes = rpRes;
+    overridesRes = oRes;
+    scopeGrantsRes = sgRes;
+    roleScopePresetsRes = rspRes;
+    departmentsRes = dRes;
+    unitsRes = uRes;
+  }
 
   const allBranches = branchesRes.data || [];
   const branchMap = new Map(allBranches.map((b) => [b.id, b]));

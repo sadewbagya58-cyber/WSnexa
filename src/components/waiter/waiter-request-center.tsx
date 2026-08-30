@@ -28,19 +28,23 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 }) => {
   const router = useRouter();
   const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
-  const [isPending, startTransition] = useTransition();
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const handleStatusChange = (requestId: string, nextStatus: WaiterRequestStatus) => {
+  const handleStatusChange = async (requestId: string, nextStatus: WaiterRequestStatus) => {
     setActionError(null);
-    startTransition(async () => {
+    setProcessingRequestId(requestId);
+    try {
       const res = await updateWaiterRequestStatusAction(requestId, nextStatus);
       if (!res.success) {
         setActionError(res.message || 'Failed to update request status');
-      } else {
-        router.refresh();
       }
-    });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update request status';
+      setActionError(msg);
+    } finally {
+      setProcessingRequestId(null);
+    }
   };
 
   const typeMap: Record<string, { label: string; icon: string }> = {
@@ -100,9 +104,9 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
             variant="outline"
             className="text-xs font-bold min-h-[40px]"
             onClick={() => router.refresh()}
-            disabled={isPending}
+            disabled={processingRequestId !== null}
           >
-            {isPending ? 'Updating...' : '🔄 Refresh Queue'}
+            🔄 Refresh Queue
           </Button>
         </div>
       </div>
@@ -121,6 +125,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {requests.map((req) => {
             const typeInfo = typeMap[req.request_type] || { label: req.request_type, icon: '🛎️' };
+            const isProcessing = processingRequestId === req.id;
 
             return (
               <div
@@ -182,18 +187,18 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                         <>
                           <Button
                             variant="outline"
-                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900"
+                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
                             onClick={() => handleStatusChange(req.id, 'dismissed')}
-                            disabled={isPending}
+                            disabled={isProcessing}
                           >
-                            Dismiss
+                            {isProcessing ? '...' : 'Dismiss'}
                           </Button>
                           <Button
-                            className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white"
+                            className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px]"
                             onClick={() => handleStatusChange(req.id, 'accepted')}
-                            disabled={isPending}
+                            disabled={isProcessing}
                           >
-                            Accept Request ⚡
+                            {isProcessing ? 'Accepting...' : 'Accept Request ⚡'}
                           </Button>
                         </>
                       )}
@@ -202,18 +207,18 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                         <>
                           <Button
                             variant="outline"
-                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900"
+                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
                             onClick={() => handleStatusChange(req.id, 'dismissed')}
-                            disabled={isPending}
+                            disabled={isProcessing}
                           >
-                            Dismiss
+                            {isProcessing ? '...' : 'Dismiss'}
                           </Button>
                           <Button
-                            className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
                             onClick={() => handleStatusChange(req.id, 'completed')}
-                            disabled={isPending}
+                            disabled={isProcessing}
                           >
-                            Mark Completed ✓
+                            {isProcessing ? 'Completing...' : 'Mark Completed ✓'}
                           </Button>
                         </>
                       )}
@@ -246,13 +251,8 @@ function PendingOrderApprovalsSection({
 
   const fetchApprovals = React.useCallback(async () => {
     try {
-      const { createClient } = await import('@/lib/supabase/client');
-      const supabase = createClient();
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) return;
-
       const { getPendingApprovalsAction } = await import('@/server/actions/waiter-approval');
-      const res = await getPendingApprovalsAction(branchId, user.user.id);
+      const res = await getPendingApprovalsAction(branchId);
       if (res.success && res.orders) {
         setApprovals(res.orders as unknown as OrderRecord[]);
       }
@@ -267,12 +267,7 @@ function PendingOrderApprovalsSection({
     let isMounted = true;
     let channel: RealtimeChannel | null = null;
 
-    const loadData = async () => {
-      if (isMounted) {
-        await fetchApprovals();
-      }
-    };
-    loadData();
+    fetchApprovals();
 
     // Subscribe to realtime changes on orders table for this branch
     const initRealtime = async () => {
@@ -321,28 +316,32 @@ function PendingOrderApprovalsSection({
 
   const handleApprove = async (orderId: string) => {
     setProcessingId(orderId);
-    const { createClient } = await import('@/lib/supabase/client');
-    const supabase = createClient();
-    const { data: user } = await supabase.auth.getUser();
-    if (user.user) {
+    try {
       const { approveGuestOrderAction } = await import('@/server/actions/waiter-approval');
-      await approveGuestOrderAction(orderId, user.user.id);
-      await fetchApprovals();
+      const res = await approveGuestOrderAction(orderId);
+      if (res.success) {
+        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+      }
+    } catch (err) {
+      console.warn('Approve order error:', err);
+    } finally {
+      setProcessingId(null);
     }
-    setProcessingId(null);
   };
 
   const handleReject = async (orderId: string) => {
     setProcessingId(orderId);
-    const { createClient } = await import('@/lib/supabase/client');
-    const supabase = createClient();
-    const { data: user } = await supabase.auth.getUser();
-    if (user.user) {
+    try {
       const { rejectGuestOrderAction } = await import('@/server/actions/waiter-approval');
-      await rejectGuestOrderAction(orderId, user.user.id, 'Rejected by waiter');
-      await fetchApprovals();
+      const res = await rejectGuestOrderAction(orderId, undefined, 'Rejected by waiter');
+      if (res.success) {
+        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+      }
+    } catch (err) {
+      console.warn('Reject order error:', err);
+    } finally {
+      setProcessingId(null);
     }
-    setProcessingId(null);
   };
 
   if (loading) return null;
@@ -426,7 +425,7 @@ function PendingOrderApprovalsSection({
                   disabled={processingId === ord.id}
                   className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px]"
                 >
-                  Reject
+                  {processingId === ord.id ? '...' : 'Reject'}
                 </Button>
                 <Button
                   type="button"

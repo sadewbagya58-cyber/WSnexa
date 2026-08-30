@@ -18,6 +18,8 @@ import { resolveResourceScope } from './resource-scope-resolver';
 import { resolveAuthorizationContext } from './authorization-context';
 import { permissionKeyEnum } from '@/lib/validation/permission';
 
+const CANONICAL_PERMISSION_KEYS = new Set(permissionKeyEnum.options as readonly string[]);
+
 interface CreateDecisionParams {
   allowed: boolean;
   permission: string;
@@ -334,8 +336,7 @@ export async function authorize(options: AuthorizeOptions): Promise<Authorizatio
   // 6. Business Owner Centralized Policy (Task 14, 15)
   // Active owner has tenant-wide authority for valid canonical business permissions
   if (context.isBusinessOwner || context.membershipRole === 'business_owner') {
-    const canonicalKeys = permissionKeyEnum.options as readonly string[];
-    if (canonicalKeys.includes(permission)) {
+    if (CANONICAL_PERMISSION_KEYS.has(permission)) {
       return createDecision({
         allowed: true,
         permission,

@@ -24,7 +24,7 @@ export interface MenuItemCardProps {
   addedQuantity?: number;
 }
 
-export function MenuItemCard({
+export const MenuItemCard = React.memo(function MenuItemCard({
   item,
   currency,
   onClick,
@@ -44,10 +44,10 @@ export function MenuItemCard({
   return (
     <div
       onClick={handleItemClick}
-      className={`group cursor-pointer rounded-2xl border bg-white p-3.5 sm:p-4 shadow-2xs transition-all flex items-start justify-between gap-3 sm:gap-4 relative overflow-hidden select-none ${
+      className={`group cursor-pointer rounded-2xl border bg-white p-3.5 sm:p-4 shadow-2xs transition-all flex items-start justify-between gap-3 sm:gap-4 relative overflow-hidden select-none touch-manipulation ${
         isSoldOut
           ? 'border-zinc-200 bg-zinc-50/70 opacity-75'
-          : 'border-zinc-200 hover:border-zinc-400 hover:shadow-xs active:scale-[0.995]'
+          : 'border-zinc-200 hover:border-zinc-400 hover:shadow-xs active:scale-[0.98]'
       }`}
     >
       {/* Left Content Column */}
@@ -99,6 +99,9 @@ export function MenuItemCard({
               src={item.primary_image_url}
               alt={item.name}
               loading="lazy"
+              decoding="async"
+              width={80}
+              height={80}
               className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
                 isSoldOut ? 'grayscale brightness-90' : ''
               }`}
@@ -118,27 +121,27 @@ export function MenuItemCard({
         </div>
 
         {/* Add / Sold Out Button */}
-        {isSoldOut ? (
-          <span className="inline-flex items-center justify-center rounded-xl bg-zinc-200 text-zinc-500 font-extrabold text-xs px-3 py-1.5 cursor-not-allowed">
-            Unavailable
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onQuickAdd) {
-                onQuickAdd(item, e);
-              } else {
-                handleItemClick();
-              }
-            }}
-            className="inline-flex items-center justify-center rounded-xl bg-zinc-950 text-white font-extrabold text-xs px-3.5 py-1.5 shadow-xs hover:bg-zinc-800 active:scale-95 transition-all min-h-[44px] cursor-pointer touch-manipulation"
-          >
-            {hasModifiers ? 'Options →' : '+ Add'}
-          </button>
-        )}
+        <div>
+          {isSoldOut ? (
+            <span className="text-[11px] font-extrabold text-zinc-400 uppercase px-2.5 py-1 bg-zinc-100 rounded-lg">
+              Unavailable
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onQuickAdd) onQuickAdd(item, e);
+                else handleItemClick();
+              }}
+              className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-950 px-3 py-1.5 text-xs font-extrabold text-white shadow-xs hover:bg-zinc-800 active:scale-95 transition-transform cursor-pointer"
+            >
+              <span>{hasModifiers ? 'Customize' : 'Add'}</span>
+              <span>{hasModifiers ? '⚙️' : '+'}</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
-}
+});

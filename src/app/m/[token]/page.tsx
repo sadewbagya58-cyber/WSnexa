@@ -10,7 +10,19 @@ interface PublicMenuPageProps {
 
 export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
   const { token } = await params;
-  const menuData = await QrService.resolvePublicBranchMenuByToken(token);
+
+  const [menuData, userRes] = await Promise.all([
+    QrService.resolvePublicBranchMenuByToken(token),
+    (async () => {
+      try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        return user;
+      } catch {
+        return null;
+      }
+    })(),
+  ]);
 
   if (!menuData || !menuData.success || typeof menuData.business !== 'object') {
     return (
@@ -33,6 +45,7 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
   const businessId = payload.business.id;
   const currency = payload.branch.currency || payload.business.currency || 'USD';
   const qrVisitSessionToken = payload.qrVisitSessionToken || null;
+  const user = userRes;
 
   if (qrVisitSessionToken) {
     try {
@@ -48,11 +61,6 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
       // ignore outside request context
     }
   }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { SubscriptionService } = await import('@/server/services/subscription.service');
   const [availableRewards, loyaltyAccount, subContext] = await Promise.all([

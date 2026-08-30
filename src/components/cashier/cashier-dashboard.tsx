@@ -98,8 +98,18 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
   useCashierRealtime(branchId, refreshCashierData, handleNewBillRequest);
 
   const handleAcknowledgeBill = async (requestId: string) => {
-    await acknowledgeBillRequestAction(requestId);
-    refreshCashierData();
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.waiter_request_id === requestId
+          ? { ...o, bill_requested: false, waiter_request_id: undefined }
+          : o
+      )
+    );
+    try {
+      await acknowledgeBillRequestAction(requestId);
+    } catch {
+      refreshCashierData();
+    }
   };
 
   // Filter & Search Logic

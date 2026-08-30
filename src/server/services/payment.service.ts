@@ -245,36 +245,48 @@ export class PaymentService {
     if (!canAccess) return [];
 
     const admin = createAdminClient();
+    const sinceDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-    // 1. Fetch Orders with Items and Table details
-    const { data: orders, error: ordersErr } = await admin
-      .from('orders')
-      .select(`
-        *,
-        table:dining_tables(id, name, code, table_number),
-        items:order_items(
-          id,
-          menu_item_id,
-          item_name_snapshot,
-          unit_price_cents_snapshot,
-          quantity,
-          line_subtotal_cents,
-          special_instructions,
-          order_item_modifiers(
+    // 1. Concurrently fetch bounded orders and pending bill requests
+    const [ordersRes, billRequestsRes] = await Promise.all([
+      admin
+        .from('orders')
+        .select(`
+          *,
+          table:dining_tables(id, name, code, table_number),
+          items:order_items(
             id,
-            group_name_snapshot,
-            option_name_snapshot,
-            additional_price_cents_snapshot
+            menu_item_id,
+            item_name_snapshot,
+            unit_price_cents_snapshot,
+            quantity,
+            line_subtotal_cents,
+            special_instructions,
+            order_item_modifiers(
+              id,
+              group_name_snapshot,
+              option_name_snapshot,
+              additional_price_cents_snapshot
+            )
           )
-        )
-      `)
-      .eq('branch_id', authContext.activeBranchId)
-      .order('created_at', { ascending: false });
+        `)
+        .eq('branch_id', authContext.activeBranchId)
+        .or(`payment_status.neq.paid,created_at.gte.${sinceDate}`)
+        .order('created_at', { ascending: false })
+        .limit(150),
 
-    if (ordersErr || !orders) return [];
+      admin
+        .from('waiter_requests')
+        .select('id, order_id')
+        .eq('branch_id', authContext.activeBranchId)
+        .eq('request_type', 'need_bill')
+        .eq('status', 'pending'),
+    ]);
+
+    const orders = ordersRes.data;
+    if (ordersRes.error || !orders || orders.length === 0) return [];
 
     const orderIds = orders.map((o) => o.id);
-    if (orderIds.length === 0) return [];
 
     // 2. Fetch Payments for Branch Orders
     const { data: payments } = await admin
@@ -292,17 +304,9 @@ export class PaymentService {
       }
     }
 
-    // 3. Fetch Pending "Need Bill" Requests for Branch
-    const { data: billRequests } = await admin
-      .from('waiter_requests')
-      .select('id, order_id')
-      .eq('branch_id', authContext.activeBranchId)
-      .eq('request_type', 'need_bill')
-      .eq('status', 'pending');
-
     const pendingBillMap = new Map<string, string>();
-    if (billRequests) {
-      for (const req of billRequests) {
+    if (billRequestsRes.data) {
+      for (const req of billRequestsRes.data) {
         if (req.order_id) pendingBillMap.set(req.order_id, req.id);
       }
     }

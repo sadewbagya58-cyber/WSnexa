@@ -10,7 +10,9 @@ import {
   DashboardNavSectionDTO,
   CANONICAL_DASHBOARD_NAV_SECTIONS,
   isNavItemActive,
+  getParentNavPath,
 } from '@/lib/navigation/dashboard-navigation';
+import { NavSearchTrigger, NavSearchModal } from '@/components/layout/nav-search';
 import { getPageMetadata } from '@/lib/navigation/dashboard-page-metadata';
 import { getRequiredPermissionForRoute } from '@/lib/security/route-permissions';
 import { BranchInfo, TenantSubscriptionInfo } from '@/types';
@@ -108,6 +110,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   // Derived or injected navigation sections (Single Source of Truth for Desktop & Mobile)
   const allowedNavSections: DashboardNavSectionDTO[] = navSections ||
     CANONICAL_DASHBOARD_NAV_SECTIONS
@@ -124,94 +129,194 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           id: item.id,
           label: item.label,
           href: item.href,
+          icon: item.icon,
           badge: item.badge,
+          aliases: item.aliases,
           custom: item.custom,
+          children: item.children?.filter((child) => {
+            if (userRole === 'business_owner') return true;
+            const requiredPerm = child.requiredPermission || getRequiredPermissionForRoute(child.href);
+            if (!requiredPerm) return true;
+            const candidatePerms = Array.isArray(requiredPerm) ? requiredPerm : [requiredPerm];
+            return candidatePerms.some((p) => userPermissions.includes(p));
+          }).map((child) => ({
+            id: child.id,
+            label: child.label,
+            href: child.href,
+            icon: child.icon,
+            badge: child.badge,
+            aliases: child.aliases,
+            custom: child.custom,
+          })),
         })),
       }))
       .filter((sec) => sec.items.length > 0);
 
-  // ── Desktop nav: plain links for every item ──────────────────────────────
+  // Auto-expand active group containing current route on mount / route transition
+  useEffect(() => {
+    const activeParent = getParentNavPath(pathname);
+    allowedNavSections.forEach((sec) => {
+      sec.items.forEach((item) => {
+        if (item.children && item.children.length > 0) {
+          if (
+            item.href === activeParent ||
+            item.children.some((c) => isNavItemActive(c, pathname))
+          ) {
+            setExpandedGroups((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: true }));
+          }
+        }
+      });
+    });
+  }, [pathname, allowedNavSections]);
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const renderNavSection = (sec: DashboardNavSectionDTO, isMobile: boolean) => (
+    <div key={sec.id} className="space-y-1">
+      <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+        {sec.title}
+      </h3>
+      <div className="space-y-1 pt-1">
+        {sec.items.map((item) => {
+          const hasChildren = Boolean(item.children && item.children.length > 0);
+          const isExpanded = Boolean(expandedGroups[item.id]);
+          const isGroupActive = isNavItemActive(item, pathname);
+          const hasActiveChild = Boolean(item.children?.some((c) => isNavItemActive(c, pathname)));
+
+          // Single direct destination (Dashboard, Reservations, Reports)
+          if (!hasChildren) {
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={true}
+                onClick={() => {
+                  if (isMobile) setMobileOpen(false);
+                }}
+                aria-current={isGroupActive ? 'page' : undefined}
+                className={`flex min-h-[42px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
+                  isGroupActive
+                    ? 'bg-zinc-950 text-white shadow-xs'
+                    : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 truncate">
+                  {item.icon && <span className="text-base select-none shrink-0">{item.icon}</span>}
+                  <span className="truncate">{item.label}</span>
+                </div>
+                {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
+              </Link>
+            );
+          }
+
+          // Collapsible Group
+          return (
+            <div key={item.id} className="space-y-0.5">
+              {/* Group Header Button */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(item.id)}
+                aria-expanded={isExpanded}
+                className={`w-full flex min-h-[42px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
+                  hasActiveChild || isGroupActive
+                    ? 'bg-zinc-100/90 text-zinc-950 font-black'
+                    : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0 truncate">
+                  {item.icon && <span className="text-base select-none shrink-0">{item.icon}</span>}
+                  <span className="truncate">{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
+                  <svg
+                    className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
+                      isExpanded ? 'rotate-90 text-zinc-800' : ''
+                    }`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+
+              {/* Collapsible Children */}
+              {isExpanded && item.children && (
+                <div className="ml-4 pl-2.5 border-l-2 border-zinc-200 space-y-0.5 py-0.5">
+                  {item.children.map((child) => {
+                    const isChildActive = isNavItemActive(child, pathname);
+
+                    // Mobile custom branch picker
+                    if (child.custom && child.href === '/dashboard/branches' && isMobile) {
+                      return (
+                        <SidebarBranchPicker
+                          key={child.href}
+                          activeBranch={activeBranch}
+                          branches={branches}
+                          isOwner={userRole === 'business_owner'}
+                          onClose={() => setMobileOpen(false)}
+                        />
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        prefetch={true}
+                        onClick={() => {
+                          if (isMobile) setMobileOpen(false);
+                        }}
+                        aria-current={isChildActive ? 'page' : undefined}
+                        className={`flex min-h-[38px] items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-all touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
+                          isChildActive
+                            ? 'bg-zinc-950 text-white shadow-xs font-bold'
+                            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 font-medium'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 truncate">
+                          {child.icon && (
+                            <span className="text-xs select-none shrink-0 opacity-80">{child.icon}</span>
+                          )}
+                          <span className="truncate">{child.label}</span>
+                        </div>
+                        {child.badge && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono uppercase font-semibold ${
+                              isChildActive ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-100 text-zinc-600'
+                            }`}
+                          >
+                            {child.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const renderDesktopNavLinks = () => (
     <nav aria-label="Desktop Navigation" className="space-y-6">
-      {allowedNavSections.map((sec) => (
-        <div key={sec.id} className="space-y-1">
-          <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
-            {sec.title}
-          </h3>
-          <div className="space-y-0.5 pt-1">
-            {sec.items.map((item) => {
-              const isActive = isNavItemActive(item, pathname);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch={true}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
-                    isActive
-                      ? 'bg-zinc-950 text-white shadow-xs'
-                      : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
-                  }`}
-                >
-                  <span className="truncate">{item.label}</span>
-                  {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      {allowedNavSections.map((sec) => renderNavSection(sec, false))}
     </nav>
   );
 
-  // ── Mobile nav: Branches item replaced by SidebarBranchPicker ────────────
-
   const renderMobileNavLinks = () => (
     <nav aria-label="Mobile Navigation" className="space-y-6">
-      {allowedNavSections.map((sec) => (
-        <div key={sec.id} className="space-y-1">
-          <h3 className="px-3 text-[10px] font-black uppercase tracking-wider text-zinc-400">
-            {sec.title}
-          </h3>
-          <div className="space-y-0.5 pt-1">
-            {sec.items.map((item) => {
-              const isActive = isNavItemActive(item, pathname);
-
-              // Branches: render expandable picker on mobile
-              if (item.custom && item.href === '/dashboard/branches') {
-                return (
-                  <SidebarBranchPicker
-                    key={item.href}
-                    activeBranch={activeBranch}
-                    branches={branches}
-                    isOwner={userRole === 'business_owner'}
-                    onClose={() => setMobileOpen(false)}
-                  />
-                );
-              }
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch={true}
-                  onClick={() => setMobileOpen(false)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex min-h-[44px] items-center justify-between rounded-xl px-3 py-2 text-xs font-bold transition-all touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 ${
-                    isActive
-                      ? 'bg-zinc-950 text-white shadow-xs'
-                      : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 active:bg-zinc-200'
-                  }`}
-                >
-                  <span className="truncate">{item.label}</span>
-                  {item.badge && <Badge variant="neutral">{item.badge}</Badge>}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      {allowedNavSections.map((sec) => renderNavSection(sec, true))}
     </nav>
   );
 
@@ -360,6 +465,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
         {/* Desktop Sidebar */}
         <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem-env(safe-area-inset-top,0px))] sticky top-[calc(4rem+env(safe-area-inset-top,0px))]">
+          <NavSearchTrigger onClick={() => setIsSearchOpen(true)} className="mb-4" />
           {renderDesktopNavLinks()}
         </aside>
 
@@ -405,6 +511,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 <div className="rounded-2xl bg-zinc-50 p-3.5 border border-zinc-200/80">
                   <p className="text-xs font-black text-zinc-950 truncate">🏢 {businessName}</p>
                 </div>
+
+                {/* Mobile Navigation Search Trigger */}
+                <NavSearchTrigger
+                  onClick={() => setIsSearchOpen(true)}
+                  isMobile={true}
+                  className="mb-1"
+                />
 
                 {/* Mobile Branch Switcher */}
                 <div className="space-y-1">
@@ -525,6 +638,18 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           );
         })()}
       </div>
+
+      {/* Singleton Global Navigation Search Modal */}
+      <NavSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onOpen={() => setIsSearchOpen(true)}
+        navSections={allowedNavSections}
+        onSelectDestination={() => {
+          setIsSearchOpen(false);
+          setMobileOpen(false);
+        }}
+      />
     </div>
   );
 };

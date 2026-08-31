@@ -61,6 +61,19 @@ export default async function NewTablePage() {
         backHref="/dashboard/tables"
       />
 
+      <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900">
+        <div className="flex items-center gap-2">
+          <span className="text-base">⚡</span>
+          <span>Want to create multiple tables at once?</span>
+        </div>
+        <Link
+          href="/dashboard/tables/bulk"
+          className="font-bold text-emerald-800 hover:text-emerald-950 underline underline-offset-2 shrink-0"
+        >
+          Bulk Generator →
+        </Link>
+      </div>
+
       <Card className="p-6">
         <CreateTableForm areas={areas} />
       </Card>

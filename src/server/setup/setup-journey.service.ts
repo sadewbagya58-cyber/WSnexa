@@ -309,15 +309,15 @@ export class SetupJourneyService {
             nextActionHref = '/dashboard/areas';
             nextActionLabel = '+ Add Service Area';
           } else if (!hasTables) {
-            completionDetail = `${serviceAreasCount} area(s) ready. Add dining tables.`;
+            completionDetail = `${serviceAreasCount} area(s) ready. Add dining tables (single or bulk).`;
             nextActionHref = '/dashboard/tables/new';
-            nextActionLabel = '+ Add Table';
+            nextActionLabel = '+ Add Tables';
           } else if (!pinSatisfied) {
             completionDetail = `${tablesWithPinCount}/${tablesCount} tables have security PINs. PIN protection is enabled.`;
             nextActionHref = '/dashboard/tables/qr';
             nextActionLabel = 'Set Table PINs';
           } else if (!hasActiveAreaQr) {
-            completionDetail = `${tablesCount} table(s) ready. Generate an Area QR code for your dining area to enable customer ordering.`;
+            completionDetail = `${tablesCount} table(s) ready. Generate an Area QR for customer table ordering. The dining area is selected automatically when guests scan it.`;
             nextActionHref = '/dashboard/tables/qr';
             nextActionLabel = 'Generate Area QR';
           } else {

@@ -66,6 +66,19 @@ export default async function BulkGeneratorPage() {
         backHref="/dashboard/tables"
       />
 
+      <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🪑</span>
+          <span>Want to configure an individual table instead?</span>
+        </div>
+        <Link
+          href="/dashboard/tables/new"
+          className="font-bold text-zinc-900 hover:text-zinc-950 underline underline-offset-2 shrink-0"
+        >
+          Add Single Table →
+        </Link>
+      </div>
+
       <Card className="p-6">
         <BulkGeneratorForm areas={areas} />
       </Card>

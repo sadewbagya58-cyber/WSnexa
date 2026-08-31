@@ -7,14 +7,16 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextualHelpButton } from '@/components/help/contextual-help-button';
-
+import { AddTableChooserModal } from './add-table-chooser-modal';
 
 interface SetupJourneyViewProps {
   report: SetupJourneyReport;
 }
 
 export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) => {
+  const [isAddTableModalOpen, setIsAddTableModalOpen] = React.useState(false);
   const requiredStages = report.stages.filter((s) => s.tier === 'required');
+
   const recommendedStages = report.stages.filter((s) => s.tier === 'recommended');
   const optionalStages = report.stages.filter((s) => s.tier === 'optional');
 
@@ -87,7 +89,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
                   {stage.title}
                 </h3>
                 {isNext && (
-                  <Badge variant="neutral" className="bg-zinc-950 text-white text-[10px] uppercase tracking-wider">
+                  <Badge variant="solid" className="text-[10px] font-black uppercase tracking-wider text-white shadow-sm">
                     Recommended Next Step
                   </Badge>
                 )}
@@ -153,15 +155,26 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
                 className="w-full sm:w-auto shrink-0 justify-center"
               />
             )}
-            <Link href={stage.nextActionHref} className="w-full sm:w-auto shrink-0">
+            {stage.id === 'dining_qr' && stage.nextActionLabel.toLowerCase().includes('table') ? (
               <Button
                 variant={isNext ? 'primary' : stage.isCompleted ? 'outline' : 'primary'}
                 size="sm"
-                className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center"
+                className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center cursor-pointer"
+                onClick={() => setIsAddTableModalOpen(true)}
               >
                 {stage.nextActionLabel} →
               </Button>
-            </Link>
+            ) : (
+              <Link href={stage.nextActionHref} className="w-full sm:w-auto shrink-0">
+                <Button
+                  variant={isNext ? 'primary' : stage.isCompleted ? 'outline' : 'primary'}
+                  size="sm"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center"
+                >
+                  {stage.nextActionLabel} →
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </Card>
@@ -327,6 +340,13 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
           {optionalStages.map((stage) => renderStageCard(stage))}
         </div>
       </section>
+
+      {/* Add Table Chooser Modal */}
+      <AddTableChooserModal
+        isOpen={isAddTableModalOpen}
+        onClose={() => setIsAddTableModalOpen(false)}
+        branchName={report.branchName}
+      />
     </div>
   );
 };

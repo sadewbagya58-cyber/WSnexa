@@ -44,8 +44,8 @@ export default async function TablesDashboardPage() {
           href: '/dashboard/tables/new',
         }}
         secondaryAction={{
-          label: '📱 Branch QR & PIN Settings',
-          href: '/dashboard/tables/qr',
+          label: '⚡ Bulk Generator',
+          href: '/dashboard/tables/bulk',
         }}
       />
 

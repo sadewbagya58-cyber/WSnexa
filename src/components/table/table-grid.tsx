@@ -290,11 +290,18 @@ export const TableGrid: React.FC<TableGridProps> = ({
           )}
 
           {canManage && (
-            <Link href="/dashboard/tables/qr">
-              <Button variant="outline" size="sm">
-                📱 Branch QR & Settings
-              </Button>
-            </Link>
+            <>
+              <Link href="/dashboard/tables/bulk">
+                <Button variant="outline" size="sm">
+                  ⚡ Bulk Generator
+                </Button>
+              </Link>
+              <Link href="/dashboard/tables/qr">
+                <Button variant="outline" size="sm">
+                  📱 QR Codes & PINs
+                </Button>
+              </Link>
+            </>
           )}
         </div>
       </div>

@@ -123,8 +123,8 @@ function simulateSetupReport(branchId: string, branchName: string, state: Simula
           completionDetail = 'Create a Service Area first.';
         } else if (!hasTables) {
           nextActionHref = '/dashboard/tables/new';
-          nextActionLabel = '+ Add Table';
-          completionDetail = `${state.serviceAreasCount} area(s) ready. Add dining tables.`;
+          nextActionLabel = '+ Add Tables';
+          completionDetail = `${state.serviceAreasCount} area(s) ready. Add dining tables (single or bulk).`;
         } else if (!pinSatisfied) {
           nextActionHref = '/dashboard/tables/qr';
           nextActionLabel = 'Set Table PINs';
@@ -391,7 +391,7 @@ async function runVerification() {
 
   assert(reportB.nextStage?.id === 'dining_qr', 'Scenario B: Area exists but 0 tables -> nextStage is dining_qr');
   assert(reportB.nextStage?.nextActionHref === '/dashboard/tables/new', 'Scenario B: Next action is /dashboard/tables/new');
-  assert(reportB.nextStage?.nextActionLabel === '+ Add Table', 'Scenario B: Next action label is + Add Table');
+  assert(reportB.nextStage?.nextActionLabel === '+ Add Tables', 'Scenario B: Next action label is + Add Tables');
 
   // Scenario C: Tables present but PIN disabled (require_table_pin = false) & QR active
   const reportC = simulateSetupReport('br_1', 'Main Wing', {
@@ -1200,6 +1200,42 @@ async function runVerification() {
   assert(scenH_SelectedActiveBranch.branchName === 'Galle Fort Outlet', 'Issue 3 Scenario H: Branch Name matches selected branch');
 
 
+
+  // ── 7. Issue Batch #2 Regressions (Bulk Add Discoverability, Contrast, QR Setup Model) ──
+  console.log('\n--- 7. Issue Batch #2 Regressions ---');
+
+  const setupJourneyViewSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/setup/setup-journey-view.tsx'), 'utf-8');
+  const addTableModalSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/setup/add-table-chooser-modal.tsx'), 'utf-8');
+  const badgeSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/ui/badge.tsx'), 'utf-8');
+  const newTablePageSrc = fs.readFileSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/tables/new/page.tsx'), 'utf-8');
+  const bulkTablePageSrc = fs.readFileSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/tables/bulk/page.tsx'), 'utf-8');
+  const tablesPageSrc = fs.readFileSync(path.join(process.cwd(), 'src/app/(dashboard)/dashboard/tables/page.tsx'), 'utf-8');
+  const branchQrManagerSrc = fs.readFileSync(path.join(process.cwd(), 'src/components/qr/branch-qr-manager.tsx'), 'utf-8');
+  const setupJourneyServiceSrc = fs.readFileSync(path.join(process.cwd(), 'src/server/setup/setup-journey.service.ts'), 'utf-8');
+
+  // Issue 1 Tests: Bulk Add Discoverability
+  assert(setupJourneyViewSrc.includes('AddTableChooserModal'), 'Issue 1A: SetupJourneyView integrates AddTableChooserModal');
+  assert(setupJourneyViewSrc.includes('setIsAddTableModalOpen(true)'), 'Issue 1A: SetupJourneyView triggers AddTableChooserModal on table action click');
+  assert(addTableModalSrc.includes('/dashboard/tables/new'), 'Issue 1A: AddTableChooserModal exposes Single Table creation route');
+  assert(addTableModalSrc.includes('/dashboard/tables/bulk'), 'Issue 1B: AddTableChooserModal exposes Bulk Add Tables creation route');
+  assert(!setupJourneyViewSrc.includes('⚡ Bulk Add Tables'), 'Issue 1B: SetupJourneyView keeps clean single entry point without redundant footer Bulk button');
+  assert(bulkTablePageSrc.includes('BulkGeneratorForm'), 'Issue 1C: Bulk Add reuses existing BulkGeneratorForm component');
+  assert(newTablePageSrc.includes('/dashboard/tables/bulk'), 'Issue 1C: NewTablePage cross-links to Bulk Generator');
+  assert(tablesPageSrc.includes('/dashboard/tables/bulk'), 'Issue 1C: Tables page header exposes Bulk Generator');
+
+  // Issue 2 Tests: Recommended Next Step Contrast
+  assert(badgeSrc.includes('solid:'), 'Issue 2E: Badge component defines solid variant');
+  assert(setupJourneyViewSrc.includes('variant="solid"'), 'Issue 2E: Recommended Next Step badge uses variant="solid"');
+  assert(!setupJourneyViewSrc.includes('variant="neutral" className="bg-zinc-950 text-white'), 'Issue 2F: No dark-on-dark variant="neutral" + bg-zinc-950 class combination remains');
+
+  // Issue 3 Tests: QR Journey Model & Backwards Compatibility
+  assert(setupJourneyServiceSrc.includes('Area QR'), 'Issue 3G: Guided Setup Stage 3 explicitly references Area QR');
+  assert(setupJourneyServiceSrc.includes('hasActiveAreaQr'), 'Issue 3G: Guided Setup Stage 3 checks for active Area QR');
+  assert(!setupJourneyServiceSrc.includes('Branch QR Code Active'), 'Issue 3H: Branch QR is NOT a required substep in initial Business Setup');
+  assert(branchQrManagerSrc.includes('Branch Entry QR Code') || branchQrManagerSrc.includes('Branch QR Code'), 'Issue 3I: Branch QR still exists in QR Management');
+  assert(branchQrManagerSrc.includes('generateBranchQrAction'), 'Issue 3J: Existing Branch QR generation action remains available');
+  assert(branchQrManagerSrc.includes('regenerateBranchQrAction'), 'Issue 3J: Existing Branch QR regeneration action remains available');
+  assert(branchQrManagerSrc.includes('Dining Area QR Codes'), 'Issue 3M: Area QR codes are presented prominently for dine-in ordering');
 
   // ── Summary ──────────────────────────────────────────────────
 

@@ -60,7 +60,9 @@ interface SimulationState {
   defaultCurrency?: string;
   timezone?: string;
   branchName?: string;
+  branchStatus?: 'active' | 'inactive' | 'suspended' | string | null;
   isBranchActive?: boolean;
+  isBranchDeleted?: boolean;
   requireTablePin?: boolean;
   serviceAreasCount: number;
   tablesCount: number;
@@ -80,7 +82,10 @@ interface SimulationState {
 
 function simulateSetupReport(branchId: string, branchName: string, state: SimulationState): SetupJourneyReport {
   const hasBusinessBasics = Boolean(state.businessName?.trim()) && Boolean(state.defaultCurrency) && Boolean(state.timezone);
-  const hasBranchLocation = Boolean(state.branchName?.trim()) && state.isBranchActive !== false;
+  const isBranchActive =
+    (state.branchStatus !== undefined ? state.branchStatus === 'active' : state.isBranchActive !== false) &&
+    !state.isBranchDeleted;
+  const hasBranchLocation = Boolean(state.branchName?.trim()) && Boolean(isBranchActive);
 
   const stages = CANONICAL_SETUP_STAGES.map((config) => {
     let isCompleted = false;
@@ -101,6 +106,7 @@ function simulateSetupReport(branchId: string, branchName: string, state: Simula
         status = isCompleted ? 'completed' : 'in_progress';
         completionDetail = isCompleted ? `${state.branchName} ready.` : 'Add branch outlet.';
         break;
+
 
       case 'dining_qr': {
         const hasAreas = state.serviceAreasCount > 0;
@@ -913,7 +919,288 @@ async function runVerification() {
   assert(smallCafeReport.completedOptional === 0, 'Small Café: 0 optional stages completed does not block launch');
 
 
+  // ── 6. Fresh Business Setup QA Round 2 — Issue Batch #1 Regressions ──
+  console.log('\n--- 6. Issue Batch #1 Regressions (Issues 1, 2, 3) ---');
+
+  // Issue 1 Regression: Mobile Setup Assistant Header Overflow
+  assert(
+    setupCardCode.includes('flex flex-col sm:flex-row sm:items-center sm:justify-between'),
+    'Issue 1: Top header row wraps into multi-row layout on mobile (flex-col sm:flex-row) to prevent overflow'
+  );
+  assert(
+    !setupCardCode.includes('<div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">'),
+    'Issue 1: Old rigid single-row nowrap header is removed'
+  );
+  assert(
+    setupCardCode.includes('min-h-[36px] sm:min-h-[32px]') && setupCardCode.includes('touch-manipulation'),
+    'Issue 1: Action links/buttons provide minimum touch targets and mobile touch-manipulation'
+  );
+
+  // Issue 2 Regression: Owner Dashboard Cashier POS CTA Prominence
+  assert(
+    dashboardPageCode.includes('if (model.isBusinessOwner || model.isBranchManager)') &&
+    dashboardPageCode.includes('📦 View Orders'),
+    'Issue 2: Business Owner and Branch Manager dashboard header primary action displays "View Orders"'
+  );
+  assert(
+    dashboardPageCode.includes('else if (model.canCreateOrders)') &&
+    dashboardPageCode.includes('💳 Open Cashier POS'),
+    'Issue 2: Cashier operational staff retain "Open Cashier POS" primary CTA when visiting dashboard'
+  );
+
+  // Issue 3 Regression: Primary Branch Outlet Evaluation & Root-Cause Data Selection
+  assert(
+    !serviceCode.includes(".from('branches')\n        .select('id, name, address_line_1, is_active"),
+    'Issue 3: branches query does NOT select non-existent "is_active" column from branches table'
+  );
+  assert(
+    serviceCode.includes(".from('branches')") &&
+    serviceCode.includes('status, require_table_pin, table_pin_length, deleted_at'),
+    'Issue 3: branches query correctly selects authoritative "status" and "deleted_at" columns'
+  );
+  assert(
+    serviceCode.includes("branchData?.status === 'active'"),
+    'Issue 3: location stage completion explicitly requires status === "active"'
+  );
+  assert(
+    serviceCode.includes("if (!targetBranchId) {") &&
+    serviceCode.includes(".eq('status', 'active')") &&
+    serviceCode.includes("order('is_default', { ascending: false })"),
+    'Issue 3: resolves default active branch ONLY when no branch context was provided'
+  );
+
+  // Issue 3 Scenario A: active status -> complete
+  const scenA_Active = simulateSetupReport('br_active', 'Colombo Main', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Colombo Main',
+    branchStatus: 'active',
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageA = scenA_Active.stages.find((s) => s.id === 'location');
+  assert(locStageA?.isCompleted === true, 'Issue 3 Scenario A: active status -> location stage IS complete');
+  assert(locStageA?.status === 'completed', 'Issue 3 Scenario A: status is "completed"');
+
+  // Issue 3 Scenario B: inactive status -> incomplete
+  const scenB_Inactive = simulateSetupReport('br_inactive', 'Seasonal Outlet', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Seasonal Outlet',
+    branchStatus: 'inactive',
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageB = scenB_Inactive.stages.find((s) => s.id === 'location');
+  assert(locStageB?.isCompleted === false, 'Issue 3 Scenario B: inactive status -> location stage is NOT complete');
+  assert(locStageB?.status === 'in_progress', 'Issue 3 Scenario B: status is "in_progress"');
+
+  // Issue 3 Scenario C: suspended status -> incomplete
+  const scenC_Suspended = simulateSetupReport('br_suspended', 'Audited Branch', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Audited Branch',
+    branchStatus: 'suspended',
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageC = scenC_Suspended.stages.find((s) => s.id === 'location');
+  assert(locStageC?.isCompleted === false, 'Issue 3 Scenario C: suspended status -> location stage is NOT complete');
+  assert(locStageC?.status === 'in_progress', 'Issue 3 Scenario C: status is "in_progress"');
+
+  // Issue 3 Scenario D: deleted branch -> incomplete
+  const scenD_Deleted = simulateSetupReport('br_deleted', 'Old Demolished Wing', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Old Demolished Wing',
+    branchStatus: 'active',
+    isBranchDeleted: true,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageD = scenD_Deleted.stages.find((s) => s.id === 'location');
+  assert(locStageD?.isCompleted === false, 'Issue 3 Scenario D: deleted branch (deleted_at set) -> location stage is NOT complete');
+
+  // Issue 3 Scenario E: null / unknown status -> incomplete
+  const scenE_NullStatus = simulateSetupReport('br_unknown', 'Unconfigured Outlet', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Unconfigured Outlet',
+    branchStatus: null,
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageE = scenE_NullStatus.stages.find((s) => s.id === 'location');
+  assert(locStageE?.isCompleted === false, 'Issue 3 Scenario E: null/unknown status -> location stage is NOT complete');
+
+  // Issue 3 Scenario F: Selected Branch A missing/inactive while Branch B active -> must NOT silently evaluate Branch B
+  const scenF_BranchA_Missing = simulateSetupReport('br_A_missing', '', {
+    businessName: 'Multi Branch Group',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: '', // Branch A not found / inactive
+    branchStatus: null,
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 2,
+    usableMenuItemsCount: 5,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 1,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: true,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageF = scenF_BranchA_Missing.stages.find((s) => s.id === 'location');
+  assert(
+    locStageF?.isCompleted === false,
+    'Issue 3 Scenario F: Explicitly requested Branch A is missing/inactive -> location is NOT complete (does NOT silently switch to Branch B)'
+  );
+
+  // Issue 3 Scenario G: No selected branch context + one valid onboarding active branch -> resolve that branch and complete
+  const scenG_FreshOnboarding = simulateSetupReport('br_onboarding', 'Colombo Main', {
+    businessName: 'Luna Garden Restaurant',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Colombo Main',
+    branchStatus: 'active',
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 0,
+    tablesCount: 0,
+    tablesWithPinCount: 0,
+    hasActiveQr: false,
+    categoriesCount: 0,
+    usableMenuItemsCount: 0,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false,
+    inventoryCount: 0,
+    allOrdersCount: 0,
+    validOrdersCount: 0,
+  });
+  const locStageG = scenG_FreshOnboarding.stages.find((s) => s.id === 'location');
+  assert(locStageG?.isCompleted === true, 'Issue 3 Scenario G: No selected branch context + one valid onboarding branch -> location IS complete');
+  assert(
+    scenG_FreshOnboarding.nextStage?.id === 'dining_qr',
+    `Issue 3 Scenario G: Advances to dining_qr (Stage 3), not location (got ${scenG_FreshOnboarding.nextStage?.id})`
+  );
+
+  // Issue 3 Scenario H: Multi-branch current selected active branch -> correct branch evaluated
+  const scenH_SelectedActiveBranch = simulateSetupReport('br_galle', 'Galle Fort Outlet', {
+    businessName: 'Luna Garden Group',
+    defaultCurrency: 'LKR',
+    timezone: 'Asia/Colombo',
+    branchName: 'Galle Fort Outlet',
+    branchStatus: 'active',
+    isBranchDeleted: false,
+    requireTablePin: false,
+    serviceAreasCount: 2,
+    tablesCount: 8,
+    tablesWithPinCount: 0,
+    hasActiveQr: true,
+    categoriesCount: 3,
+    usableMenuItemsCount: 15,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 2,
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: true,
+    inventoryCount: 5,
+    allOrdersCount: 10,
+    validOrdersCount: 8,
+  });
+  const locStageH = scenH_SelectedActiveBranch.stages.find((s) => s.id === 'location');
+  assert(locStageH?.isCompleted === true, 'Issue 3 Scenario H: Multi-branch explicitly selected active branch -> evaluated as complete');
+  assert(scenH_SelectedActiveBranch.branchId === 'br_galle', 'Issue 3 Scenario H: Branch ID matches selected branch (br_galle)');
+  assert(scenH_SelectedActiveBranch.branchName === 'Galle Fort Outlet', 'Issue 3 Scenario H: Branch Name matches selected branch');
+
+
+
   // ── Summary ──────────────────────────────────────────────────
+
   console.log('\n============================================================');
   console.log(`Verification Complete: ${passed} Passed, ${failed} Failed`);
   console.log('============================================================\n');

@@ -81,10 +81,10 @@ export const DashboardSetupProgress: React.FC<DashboardSetupProgressProps> = ({
 
   return (
     <Card className="p-4 sm:p-5 space-y-4 border-zinc-950/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white shadow-xl rounded-2xl">
-      {/* Top Header Row: Badges & Dismiss Action */}
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
+      {/* Top Header Row: Badges & Dismiss Action (Responsive wrapping prevents mobile overflow) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 border-b border-zinc-800 pb-3">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/40 shrink-0">
             Core Setup
           </span>
           <span className="text-xs font-semibold text-zinc-300">
@@ -92,10 +92,10 @@ export const DashboardSetupProgress: React.FC<DashboardSetupProgressProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60 sm:border-transparent">
           <Link
             href="/dashboard/help"
-            className="text-xs font-semibold text-amber-300/90 hover:text-amber-200 transition-colors flex items-center gap-1"
+            className="text-xs font-semibold text-amber-300/90 hover:text-amber-200 transition-colors flex items-center gap-1 min-h-[36px] sm:min-h-[32px] px-1 touch-manipulation"
           >
             <span>💡</span>
             <span>Guides</span>
@@ -103,13 +103,14 @@ export const DashboardSetupProgress: React.FC<DashboardSetupProgressProps> = ({
           <button
             type="button"
             onClick={handleDismiss}
-            className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition-colors underline-offset-2 hover:underline shrink-0 touch-manipulation px-1 py-0.5"
+            className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition-colors underline-offset-2 hover:underline shrink-0 min-h-[36px] sm:min-h-[32px] flex items-center px-1.5 touch-manipulation"
             title="Hide setup assistant on dashboard (accessible anytime in Settings)"
           >
             Hide for now
           </button>
         </div>
       </div>
+
 
       {/* Title & Progress Bar */}
       <div className="space-y-2">

@@ -60,11 +60,22 @@ export default async function DashboardOverviewPage() {
       : Promise.resolve(undefined),
   ]);
 
-  // 3. Capability-Gated Header Actions
+  // 3. Capability-Gated Header Actions (Role-aware & owner-appropriate)
   let primaryAction: React.ReactNode = null;
   let secondaryActions: React.ReactNode = null;
 
-  if (model.canCreateOrders) {
+  if (model.isBusinessOwner || model.isBranchManager) {
+    // Strategic overview action for business owners and branch managers
+    primaryAction = (
+      <Link
+        href="/dashboard/orders"
+        className="flex min-h-[44px] items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-zinc-950 rounded-xl hover:bg-zinc-800 transition-colors shadow-xs touch-manipulation"
+      >
+        📦 View Orders
+      </Link>
+    );
+  } else if (model.canCreateOrders) {
+    // Dedicated operational action for cashier role visiting dashboard
     primaryAction = (
       <Link
         href="/dashboard/cashier"
@@ -73,7 +84,7 @@ export default async function DashboardOverviewPage() {
         💳 Open Cashier POS
       </Link>
     );
-  } else if (model.canManageTables || model.isBusinessOwner) {
+  } else if (model.canManageTables) {
     primaryAction = (
       <Link
         href="/dashboard/dining"
@@ -101,6 +112,7 @@ export default async function DashboardOverviewPage() {
       </Link>
     );
   }
+
 
   if (model.canManageMenu || model.isBusinessOwner) {
     secondaryActions = (

@@ -14,10 +14,32 @@ export class SetupJourneyService {
    */
   static async resolveSetupJourney(
     businessId: string,
-    activeBranch: { id: string; name: string },
+    activeBranch?: { id: string; name: string } | null,
     _authContext?: AuthorizationContext
   ): Promise<SetupJourneyReport> {
     const admin = createAdminClient();
+
+    // Determine target branch ID: if explicitly provided, evaluate it strictly.
+    // If no branch context is supplied at all (fresh session/onboarding), resolve the business's default active branch.
+    let targetBranchId: string | null = activeBranch?.id || null;
+    let resolvedBranchName = activeBranch?.name || '';
+
+    if (!targetBranchId) {
+      const defaultBranchRes = await admin
+        .from('branches')
+        .select('id, name, address_line_1, status, require_table_pin, table_pin_length, deleted_at')
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .is('deleted_at', null)
+        .order('is_default', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultBranchRes.data) {
+        targetBranchId = defaultBranchRes.data.id;
+        resolvedBranchName = defaultBranchRes.data.name;
+      }
+    }
 
     // 1. Parallel batch fetch for all setup signals strictly scoped by business / branch
     const [
@@ -44,38 +66,46 @@ export class SetupJourneyService {
         .eq('id', businessId)
         .maybeSingle(),
 
-      // Branch details (active branch)
-      admin
-        .from('branches')
-        .select('id, name, address_line_1, is_active, require_table_pin, table_pin_length')
-        .eq('id', activeBranch.id)
-        .eq('business_id', businessId)
-        .maybeSingle(),
+      // Branch details (strictly evaluate targetBranchId if known)
+      targetBranchId
+        ? admin
+            .from('branches')
+            .select('id, name, address_line_1, status, require_table_pin, table_pin_length, deleted_at')
+            .eq('id', targetBranchId)
+            .eq('business_id', businessId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
 
       // Dining service areas (active branch)
-      admin
-        .from('service_areas')
-        .select('id', { count: 'exact', head: true })
-        .eq('business_id', businessId)
-        .eq('branch_id', activeBranch.id)
-        .is('deleted_at', null),
+      targetBranchId
+        ? admin
+            .from('service_areas')
+            .select('id', { count: 'exact', head: true })
+            .eq('business_id', businessId)
+            .eq('branch_id', targetBranchId)
+            .is('deleted_at', null)
+        : Promise.resolve({ count: 0, data: null, error: null }),
 
       // Dining tables (active branch)
-      admin
-        .from('dining_tables')
-        .select('id, table_pin_hash, is_active')
-        .eq('business_id', businessId)
-        .eq('branch_id', activeBranch.id)
-        .eq('is_active', true)
-        .is('deleted_at', null),
+      targetBranchId
+        ? admin
+            .from('dining_tables')
+            .select('id, table_pin_hash, is_active')
+            .eq('business_id', businessId)
+            .eq('branch_id', targetBranchId)
+            .eq('is_active', true)
+            .is('deleted_at', null)
+        : Promise.resolve({ count: 0, data: [], error: null }),
 
       // Active Branch QR codes (active branch)
-      admin
-        .from('branch_qr_codes')
-        .select('id', { count: 'exact', head: true })
-        .eq('branch_id', activeBranch.id)
-        .eq('is_active', true)
-        .is('revoked_at', null),
+      targetBranchId
+        ? admin
+            .from('branch_qr_codes')
+            .select('id', { count: 'exact', head: true })
+            .eq('branch_id', targetBranchId)
+            .eq('is_active', true)
+            .is('revoked_at', null)
+        : Promise.resolve({ count: 0, data: null, error: null }),
 
       // Menu categories (business-wide / branch-scoped)
       admin
@@ -92,25 +122,31 @@ export class SetupJourneyService {
         .is('deleted_at', null),
 
       // Order security settings (active branch)
-      admin
-        .from('branch_order_security_settings')
-        .select('id, require_waiter_approval, require_customer_account, qr_session_duration_minutes')
-        .eq('branch_id', activeBranch.id)
-        .maybeSingle(),
+      targetBranchId
+        ? admin
+            .from('branch_order_security_settings')
+            .select('id, require_waiter_approval, require_customer_account, qr_session_duration_minutes')
+            .eq('branch_id', targetBranchId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
 
       // Payment settings (active branch)
-      admin
-        .from('branch_payment_settings')
-        .select('id, allow_cash, allow_card_pos, allow_online_payment')
-        .eq('branch_id', activeBranch.id)
-        .maybeSingle(),
+      targetBranchId
+        ? admin
+            .from('branch_payment_settings')
+            .select('id, allow_cash, allow_card_pos, allow_online_payment')
+            .eq('branch_id', targetBranchId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
 
       // Payment methods (active branch)
-      admin
-        .from('branch_payment_methods')
-        .select('id, method, is_enabled')
-        .eq('branch_id', activeBranch.id)
-        .eq('is_enabled', true),
+      targetBranchId
+        ? admin
+            .from('branch_payment_methods')
+            .select('id, method, is_enabled')
+            .eq('branch_id', targetBranchId)
+            .eq('is_enabled', true)
+        : Promise.resolve({ data: [], error: null }),
 
       // Non-owner staff memberships (business-wide)
       admin
@@ -143,10 +179,12 @@ export class SetupJourneyService {
         .is('deleted_at', null),
 
       // Orders placed (active branch)
-      admin
-        .from('orders')
-        .select('id, status, approval_status, created_at')
-        .eq('branch_id', activeBranch.id),
+      targetBranchId
+        ? admin
+            .from('orders')
+            .select('id, status, approval_status, created_at')
+            .eq('branch_id', targetBranchId)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     // Extracted counts & data
@@ -222,9 +260,13 @@ export class SetupJourneyService {
           break;
         }
 
-        // 2. Primary Branch Outlet
+        // 2. Primary Branch Outlet (Strictly requires status === 'active', non-deleted, non-empty name)
         case 'location': {
-          const hasBranch = Boolean(branchData?.name?.trim()) && branchData?.is_active !== false;
+          const isBranchActive =
+            Boolean(branchData) &&
+            branchData?.status === 'active' &&
+            !branchData?.deleted_at;
+          const hasBranch = Boolean(branchData?.name?.trim()) && Boolean(isBranchActive);
           isCompleted = hasBranch;
           status = isCompleted ? 'completed' : 'in_progress';
           completionDetail = isCompleted
@@ -237,6 +279,8 @@ export class SetupJourneyService {
           ];
           break;
         }
+
+
 
         // 3. Dining & QR
         case 'dining_qr': {
@@ -462,9 +506,9 @@ export class SetupJourneyService {
 
     return {
       businessId,
-      businessName: businessData?.name || activeBranch.name,
-      branchId: activeBranch.id,
-      branchName: activeBranch.name,
+      businessName: businessData?.name || activeBranch?.name || 'Your Business',
+      branchId: targetBranchId || activeBranch?.id || 'unassigned',
+      branchName: branchData?.name || resolvedBranchName || activeBranch?.name || 'Primary Branch',
       totalRequired,
       completedRequired,
       totalRecommended,
@@ -476,5 +520,6 @@ export class SetupJourneyService {
       nextStage,
       stages,
     };
+
   }
 }

@@ -739,11 +739,11 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
           },
           {
             id: 'guided_setup',
-            label: 'Guided Setup',
+            label: 'Business Setup',
             href: '/dashboard/setup',
             icon: '🚀',
             context: 'MIXED',
-            aliases: ['setup wizard', 'onboarding progress', 'getting started', 'readiness checklist', 'checklist'],
+            aliases: ['setup', 'business setup', 'guided setup', 'setup wizard', 'onboarding', 'onboarding progress', 'getting started', 'readiness checklist', 'checklist', 'readiness'],
             requiredPermission: ['business.view', 'business.settings.manage', 'branches.view'],
           },
           {

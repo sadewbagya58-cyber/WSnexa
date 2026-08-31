@@ -51,7 +51,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
     return (
       <Card
         key={stage.id}
-        className={`p-5 space-y-4 transition-all duration-150 ${
+        className={`p-4 sm:p-5 space-y-4 transition-all duration-150 rounded-2xl ${
           isNext
             ? 'border-2 border-zinc-950 bg-white shadow-md'
             : stage.isCompleted
@@ -60,21 +60,25 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
         }`}
       >
         {/* Stage Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-lg select-none">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-zinc-100 pb-3">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-lg select-none border border-zinc-200/60">
               {stage.icon}
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-zinc-950 truncate">{stage.title}</h3>
+                <h3 className="text-sm font-bold text-zinc-950 leading-snug break-words">
+                  {stage.title}
+                </h3>
                 {isNext && (
                   <Badge variant="neutral" className="bg-zinc-950 text-white text-[10px] uppercase tracking-wider">
                     Recommended Next Step
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-zinc-500 line-clamp-1">{stage.description}</p>
+              <p className="text-xs text-zinc-500 leading-relaxed sm:line-clamp-2">
+                {stage.description}
+              </p>
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-2 self-start sm:self-center">
@@ -83,7 +87,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
         </div>
 
         {/* Completion Detail Text */}
-        <div className="text-xs">
+        <div className="text-xs leading-relaxed bg-zinc-50/60 p-2.5 rounded-xl border border-zinc-200/50">
           <span className="font-semibold text-zinc-700">Current Status: </span>
           <span className={stage.isCompleted ? 'text-emerald-700 font-medium' : 'text-zinc-600'}>
             {stage.completionDetail}
@@ -101,7 +105,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
                 <Link
                   key={sub.id}
                   href={sub.href}
-                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white border border-zinc-200/60 hover:border-zinc-300 hover:bg-zinc-50 transition-colors text-xs touch-manipulation"
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white border border-zinc-200/60 hover:border-zinc-300 hover:bg-zinc-50 transition-colors text-xs touch-manipulation min-h-[40px]"
                 >
                   <div className="flex items-center gap-2 min-w-0 truncate">
                     <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
@@ -120,16 +124,16 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
           </div>
         )}
 
-        {/* Action Button Footer */}
-        <div className="flex items-center justify-between pt-1">
+        {/* Action Button Footer: Full-width on mobile */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
           <span className="text-[11px] text-zinc-400">
             {stage.scope === 'BRANCH' ? `📍 Scoped to ${report.branchName}` : '🏢 Organization-wide setting'}
           </span>
-          <Link href={stage.nextActionHref} className="shrink-0">
+          <Link href={stage.nextActionHref} className="w-full sm:w-auto shrink-0">
             <Button
               variant={isNext ? 'primary' : stage.isCompleted ? 'outline' : 'primary'}
               size="sm"
-              className="min-h-[40px] px-4 font-bold text-xs"
+              className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center"
             >
               {stage.nextActionLabel} →
             </Button>
@@ -143,7 +147,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       {/* ── Page Header ────────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="neutral" className="text-xs font-semibold">
             🏢 {report.businessName}
           </Badge>
@@ -152,22 +156,22 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
             📍 {report.branchName}
           </Badge>
         </div>
-        <h1 className="text-2xl font-black text-zinc-950 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight">
           Guided Business Setup & Onboarding
         </h1>
-        <p className="text-sm text-zinc-600">
+        <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
           Follow this structured journey to configure your venue, build your menu, set up dining QR codes, and prepare for live operations.
         </p>
       </div>
 
       {/* ── Overall Progress Hero Card ─────────────────────────── */}
-      <Card className="p-6 border-zinc-950/10 bg-gradient-to-br from-zinc-900 to-zinc-950 text-white space-y-6 shadow-xl">
+      <Card className="p-4 sm:p-6 border-zinc-950/10 bg-gradient-to-br from-zinc-900 to-zinc-950 text-white space-y-5 shadow-xl rounded-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-xs uppercase font-extrabold tracking-wider text-zinc-400">
               Core Setup Journey
             </span>
-            <h2 className="text-xl font-extrabold">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white">
               {report.isCoreSetupComplete
                 ? '🎉 Core Venue Setup Complete'
                 : `${report.completedRequired} of ${report.totalRequired} Core Setup Steps Complete`}
@@ -180,10 +184,10 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
           </div>
 
           {report.nextStage && (
-            <Link href={report.nextStage.nextActionHref} className="shrink-0">
+            <Link href={report.nextStage.nextActionHref} className="w-full sm:w-auto shrink-0">
               <button
                 type="button"
-                className="flex min-h-[44px] items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-zinc-950 font-black text-xs uppercase tracking-wider hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-lg touch-manipulation"
+                className="w-full sm:w-auto flex min-h-[44px] items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-zinc-950 font-black text-xs uppercase tracking-wider hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-lg touch-manipulation"
               >
                 Continue Setup →
               </button>
@@ -206,7 +210,7 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
         </div>
 
         {/* Stage Pills Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-2 border-t border-zinc-800/80">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2 border-t border-zinc-800/80">
           {requiredStages.map((s) => (
             <div
               key={s.id}

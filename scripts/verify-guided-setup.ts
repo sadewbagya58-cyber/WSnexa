@@ -842,19 +842,74 @@ async function runVerification() {
   assert(Boolean(settingsSection), 'Settings section exists in navigation');
 
   const guidedSetupItem = settingsSection?.children?.find((c) => c.id === 'guided_setup');
-  assert(Boolean(guidedSetupItem), 'Guided Setup (guided_setup) is registered in Settings navigation children');
+  assert(Boolean(guidedSetupItem), 'Business Setup (guided_setup) is registered in Settings navigation children');
+  assert(guidedSetupItem?.label === 'Business Setup', `Label is 'Business Setup' (got '${guidedSetupItem?.label}')`);
   assert(guidedSetupItem?.href === '/dashboard/setup', 'Guided Setup href is /dashboard/setup');
   assert(
     Boolean(
-      guidedSetupItem?.aliases?.includes('setup wizard') &&
-      guidedSetupItem?.aliases?.includes('onboarding progress') &&
-      guidedSetupItem?.aliases?.includes('checklist')
+      guidedSetupItem?.aliases?.includes('setup') &&
+      guidedSetupItem?.aliases?.includes('business setup') &&
+      guidedSetupItem?.aliases?.includes('guided setup') &&
+      guidedSetupItem?.aliases?.includes('onboarding') &&
+      guidedSetupItem?.aliases?.includes('checklist') &&
+      guidedSetupItem?.aliases?.includes('readiness')
     ),
-    'Guided Setup includes search aliases for quick Ctrl+K discovery'
+    'Business Setup includes comprehensive search aliases for quick Ctrl+K discovery'
   );
 
   const parentForSetup = getParentNavPath('/dashboard/setup');
   assert(parentForSetup === '/dashboard/settings', `getParentNavPath('/dashboard/setup') returns '/dashboard/settings' (got '${parentForSetup}')`);
+
+  // ── 5. Adaptive Setup Assistant Lifecycle & UX Polish ────────
+  console.log('\n--- 5. Adaptive Setup Assistant Lifecycle & UX Polish ---');
+
+  const dashboardPageCode = fs.readFileSync(path.resolve(__dirname, '../src/app/(dashboard)/dashboard/page.tsx'), 'utf-8');
+  const setupCardCode = fs.readFileSync(path.resolve(__dirname, '../src/components/dashboard/dashboard-setup-progress.tsx'), 'utf-8');
+  const setupViewCode = fs.readFileSync(path.resolve(__dirname, '../src/components/setup/setup-journey-view.tsx'), 'utf-8');
+
+  // Top placement check
+  const setupCardIndex = dashboardPageCode.indexOf('<DashboardSetupProgress');
+  const todayMetricsIndex = dashboardPageCode.indexOf('<DashboardTodayMetrics');
+  assert(setupCardIndex !== -1 && todayMetricsIndex !== -1 && setupCardIndex < todayMetricsIndex, 'DashboardSetupProgress is placed near the TOP of dashboard (before TodayMetrics)');
+
+  // Contrast & buttons
+  assert(!setupCardCode.includes('All Stages'), 'Dashboard card replaced ambiguous "All Stages" with "View Setup"');
+  assert(setupCardCode.includes('View Setup'), 'Dashboard card contains high-contrast "View Setup" secondary action');
+  assert(setupCardCode.includes('Hide for now'), 'Dashboard card contains non-aggressive "Hide for now" dismissal trigger');
+  assert(setupCardCode.includes('wsnexa_setup_card_hidden'), 'Dashboard card persists dismissal with scoped storage key');
+
+  // Mobile layout without harsh single-line truncation
+  assert(!setupCardCode.includes('Next: {nextStage.title}\n              </span>\n              <span className="text-[11px] text-zinc-400 truncate block">'), 'Dashboard card next-action uses stacked mobile layout without harsh truncation');
+  assert(setupViewCode.includes('w-full sm:w-auto min-h-[44px] sm:min-h-[40px]'), 'Setup journey cards use full-width 44px touch targets on mobile');
+
+  // Small business / café simulation test
+  const smallCafeReport = simulateSetupReport('br_cafe', 'City Cafe', {
+    businessName: 'Artisan Cafe',
+    defaultCurrency: 'USD',
+    timezone: 'Asia/Colombo',
+    branchName: 'City Cafe',
+    isBranchActive: true,
+    requireTablePin: false,
+    serviceAreasCount: 1,
+    tablesCount: 6,
+    tablesWithPinCount: 0,
+    hasActiveQr: true,
+    categoriesCount: 3,
+    usableMenuItemsCount: 12,
+    hasOrderSecurity: true,
+    hasUsablePaymentMethod: true,
+    staffMembershipsCount: 0, // 0 extra staff (Recommended - unused)
+    validPendingInvitationsCount: 0,
+    hasVenueProfile: false, // unconfigured (Recommended - unused)
+    inventoryCount: 0, // 0 inventory (Optional - unused)
+    allOrdersCount: 1,
+    validOrdersCount: 1,
+  });
+
+  assert(smallCafeReport.isCoreSetupComplete === true, 'Small Café: Core setup is marked complete');
+  assert(smallCafeReport.completedRequired === 6, 'Small Café: All 6 required stages completed');
+  assert(smallCafeReport.completedRecommended === 0, 'Small Café: 0 recommended stages completed does not block launch');
+  assert(smallCafeReport.completedOptional === 0, 'Small Café: 0 optional stages completed does not block launch');
 
   // ── Summary ──────────────────────────────────────────────────
   console.log('\n============================================================');

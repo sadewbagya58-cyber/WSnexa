@@ -139,7 +139,20 @@ export default async function DashboardOverviewPage() {
         isBusinessOwner={model.isBusinessOwner}
       />
 
-      {/* 3. Fallback Mode for Restricted / Non-Operational Roles */}
+      {/* 3. Setup Assistant (Prominently placed at top for new/incomplete venues; disappears on completion/dismissal) */}
+      {(model.showSetupChecklist || model.isBusinessOwner) && (
+        <DashboardSetupProgress
+          businessName={business.name}
+          report={setupReport}
+          categoriesCount={todayData.categoriesCount}
+          menuItemsCount={todayData.menuItemsCount}
+          serviceAreasCount={todayData.serviceAreasCount}
+          tablesCount={todayData.tablesCount}
+          setupComplete={todayData.setupComplete}
+        />
+      )}
+
+      {/* 4. Fallback Mode for Restricted / Non-Operational Roles */}
       {model.isFallbackMode ? (
         <DashboardFallbackWorkspace
           businessName={business.name}
@@ -148,31 +161,18 @@ export default async function DashboardOverviewPage() {
         />
       ) : (
         <>
-          {/* 4. Needs Attention Section (Conditional — disappears when nothing needs action) */}
+          {/* 5. Needs Attention Section (Conditional — disappears when nothing needs action) */}
           <DashboardNeedsAttention items={todayData.attentionItems} />
 
-          {/* 5. Today's Key Metrics Overview (Permission-Gated) */}
+          {/* 6. Today's Key Metrics Overview (Permission-Gated) */}
           <DashboardTodayMetrics data={todayData} model={model} />
 
-          {/* 6. Live Operational Terminals (Compact chip row — not oversized hero cards) */}
+          {/* 7. Live Operational Terminals (Compact chip row — not oversized hero cards) */}
           <DashboardOperationsShortcuts model={model} />
 
-          {/* 7. Quick Actions (High-frequency, permission-filtered) */}
+          {/* 8. Quick Actions (High-frequency, permission-filtered) */}
           {model.quickActions.length > 0 && (
             <DashboardQuickActions actions={model.quickActions} />
-          )}
-
-          {/* 8. Setup Progress (Progressive onboarding journey card) */}
-          {(model.showSetupChecklist || model.isBusinessOwner) && (
-            <DashboardSetupProgress
-              businessName={business.name}
-              report={setupReport}
-              categoriesCount={todayData.categoriesCount}
-              menuItemsCount={todayData.menuItemsCount}
-              serviceAreasCount={todayData.serviceAreasCount}
-              tablesCount={todayData.tablesCount}
-              setupComplete={todayData.setupComplete}
-            />
           )}
         </>
       )}

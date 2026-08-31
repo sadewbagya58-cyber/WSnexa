@@ -397,8 +397,50 @@ export const TableGrid: React.FC<TableGridProps> = ({
         })}
 
         {filteredTables.length === 0 && (
-          <Card className="col-span-full p-8 text-center text-xs text-zinc-500">
-            No dining tables found matching your filters.
+          <Card className="col-span-full p-8 text-center space-y-4 border-dashed border-2 border-zinc-200">
+            {tables.length === 0 ? (
+              areas.length === 0 ? (
+                <div className="max-w-md mx-auto space-y-3">
+                  <span className="text-3xl select-none block">📍</span>
+                  <h3 className="text-sm font-bold text-zinc-950">Step 1: Create a Service Area First</h3>
+                  <p className="text-xs text-zinc-500">
+                    Service Areas (e.g. Main Dining, Terrace, Rooftop, Bar) define where your dining tables are located. Create your first area before adding tables.
+                  </p>
+                  <Link href="/dashboard/areas" className="inline-block pt-1">
+                    <Button variant="primary" size="sm" className="font-bold text-xs min-h-[40px] px-4">
+                      + Create Service Area →
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="max-w-md mx-auto space-y-3">
+                  <span className="text-3xl select-none block">🪑</span>
+                  <h3 className="text-sm font-bold text-zinc-950">Service Areas Ready — Add Your First Table</h3>
+                  <p className="text-xs text-zinc-500">
+                    You have {areas.length} active service area(s). Add dining tables to start seating guests and generating QR codes.
+                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-1 flex-wrap">
+                    <Link href="/dashboard/tables/new">
+                      <Button variant="primary" size="sm" className="font-bold text-xs min-h-[40px] px-4">
+                        + Add Single Table
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/tables/bulk">
+                      <Button variant="outline" size="sm" className="font-bold text-xs min-h-[40px] px-4">
+                        ⚡ Bulk Generate Tables
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-500">No dining tables found matching your active filters.</p>
+                <Button variant="outline" size="sm" onClick={handleClearFilters} className="text-xs">
+                  Clear Filters
+                </Button>
+              </div>
+            )}
           </Card>
         )}
       </div>

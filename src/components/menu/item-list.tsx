@@ -420,8 +420,53 @@ export const ItemList: React.FC<ItemListProps> = ({
         })}
 
         {filteredItems.length === 0 && (
-          <Card className="col-span-full p-8 text-center text-xs text-zinc-500">
-            No menu items found. Click &quot;+ Add Menu Item&quot; above to add your first item.
+          <Card className="col-span-full p-8 text-center space-y-4 border-dashed border-2 border-zinc-200">
+            {items.length === 0 ? (
+              categories.length === 0 ? (
+                <div className="max-w-md mx-auto space-y-3">
+                  <span className="text-3xl select-none block">📁</span>
+                  <h3 className="text-sm font-bold text-zinc-950">Step 1: Create a Menu Category First</h3>
+                  <p className="text-xs text-zinc-500">
+                    Menu items belong to categories (e.g. Starters, Main Courses, Desserts, Beverages). Create your first category to structure your menu.
+                  </p>
+                  <Link href="/dashboard/menu/categories" className="inline-block pt-1">
+                    <Button variant="primary" size="sm" className="font-bold text-xs min-h-[40px] px-4">
+                      + Create Menu Category →
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="max-w-md mx-auto space-y-3">
+                  <span className="text-3xl select-none block">🍽️</span>
+                  <h3 className="text-sm font-bold text-zinc-950">Categories Ready — Add Your First Menu Item</h3>
+                  <p className="text-xs text-zinc-500">
+                    You have {categories.length} active menu category(s). Add your food and beverage items with prices, photos, and descriptions.
+                  </p>
+                  {canEditPrice && (
+                    <Link href="/dashboard/menu/items/new" className="inline-block pt-1">
+                      <Button variant="primary" size="sm" className="font-bold text-xs min-h-[40px] px-4">
+                        + Add Menu Item →
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-500">No menu items found matching your filters.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('all');
+                  }}
+                  className="text-xs"
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            )}
           </Card>
         )}
       </div>

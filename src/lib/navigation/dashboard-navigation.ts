@@ -738,6 +738,15 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
             requiredPermission: ['business.view', 'business.settings.manage', 'branches.view'],
           },
           {
+            id: 'guided_setup',
+            label: 'Guided Setup',
+            href: '/dashboard/setup',
+            icon: '🚀',
+            context: 'MIXED',
+            aliases: ['setup wizard', 'onboarding progress', 'getting started', 'readiness checklist', 'checklist'],
+            requiredPermission: ['business.view', 'business.settings.manage', 'branches.view'],
+          },
+          {
             id: 'business_profile',
             label: 'Business Profile',
             href: '/dashboard/business',
@@ -896,6 +905,7 @@ export const DETAIL_ROUTE_PARENT_MAP: Record<string, string> = {
 
   // Settings Subroutes
   '/dashboard/settings': '/dashboard/settings',
+  '/dashboard/setup': '/dashboard/settings',
   '/dashboard/business': '/dashboard/settings',
   '/dashboard/venue-profile': '/dashboard/settings',
   '/dashboard/branches': '/dashboard/settings',
@@ -931,6 +941,7 @@ export function getParentNavPath(pathname: string): string {
   if (pathname.startsWith('/dashboard/reviews') || pathname.startsWith('/dashboard/reputation')) return '/dashboard/customers';
   if (pathname.startsWith('/dashboard/dining') || pathname.startsWith('/dashboard/tables') || pathname.startsWith('/dashboard/areas')) return '/dashboard/dining';
   if (pathname.startsWith('/dashboard/help')) return '/dashboard/settings';
+  if (pathname.startsWith('/dashboard/setup')) return '/dashboard/settings';
   if (pathname.startsWith('/dashboard/business') || pathname.startsWith('/dashboard/branches') || pathname.startsWith('/dashboard/venue-profile')) return '/dashboard/settings';
 
   return pathname;

@@ -16,6 +16,7 @@ import { DashboardOperationsShortcuts } from '@/components/dashboard/dashboard-o
 import { DashboardQuickActions } from '@/components/dashboard/dashboard-quick-actions';
 import { DashboardSetupProgress } from '@/components/dashboard/dashboard-setup-progress';
 import { DashboardFallbackWorkspace } from '@/components/dashboard/dashboard-fallback-workspace';
+import { SetupJourneyService } from '@/server/setup/setup-journey.service';
 
 export default async function DashboardOverviewPage() {
   const { allowed, context } = await requireRoutePermission('/dashboard');
@@ -47,12 +48,17 @@ export default async function DashboardOverviewPage() {
   const navSections = resolveDashboardNavigation(authContext);
 
   // 2. Fetch Today Operational Metrics & Attention Signals in Single Server Pass
-  const todayData = await fetchDashboardTodayData(
-    business.id,
-    activeBranch,
-    model,
-    business.defaultCurrency || 'USD'
-  );
+  const [todayData, setupReport] = await Promise.all([
+    fetchDashboardTodayData(
+      business.id,
+      activeBranch,
+      model,
+      business.defaultCurrency || 'USD'
+    ),
+    (model.showSetupChecklist || model.isBusinessOwner)
+      ? SetupJourneyService.resolveSetupJourney(business.id, activeBranch, authContext)
+      : Promise.resolve(undefined),
+  ]);
 
   // 3. Capability-Gated Header Actions
   let primaryAction: React.ReactNode = null;
@@ -156,10 +162,11 @@ export default async function DashboardOverviewPage() {
             <DashboardQuickActions actions={model.quickActions} />
           )}
 
-          {/* 8. Setup Progress (Conditional — collapses/disappears when setup is complete) */}
-          {model.showSetupChecklist && (
+          {/* 8. Setup Progress (Progressive onboarding journey card) */}
+          {(model.showSetupChecklist || model.isBusinessOwner) && (
             <DashboardSetupProgress
               businessName={business.name}
+              report={setupReport}
               categoriesCount={todayData.categoriesCount}
               menuItemsCount={todayData.menuItemsCount}
               serviceAreasCount={todayData.serviceAreasCount}

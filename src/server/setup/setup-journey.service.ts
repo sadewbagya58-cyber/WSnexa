@@ -48,6 +48,7 @@ export class SetupJourneyService {
       serviceAreasRes,
       diningTablesRes,
       branchQrRes,
+      areaQrRes,
       menuCategoriesRes,
       menuItemsRes,
       securitySettingsRes,
@@ -59,6 +60,8 @@ export class SetupJourneyService {
       inventoryItemsRes,
       ordersRes,
     ] = await Promise.all([
+
+
       // Business basics
       admin
         .from('businesses')
@@ -101,6 +104,16 @@ export class SetupJourneyService {
       targetBranchId
         ? admin
             .from('branch_qr_codes')
+            .select('id', { count: 'exact', head: true })
+            .eq('branch_id', targetBranchId)
+            .eq('is_active', true)
+            .is('revoked_at', null)
+        : Promise.resolve({ count: 0, data: null, error: null }),
+
+      // Active Area QR codes (active branch)
+      targetBranchId
+        ? admin
+            .from('area_qr_codes')
             .select('id', { count: 'exact', head: true })
             .eq('branch_id', targetBranchId)
             .eq('is_active', true)
@@ -195,7 +208,7 @@ export class SetupJourneyService {
     const tablesCount = tables.length;
     const tablesWithPinCount = tables.filter((t) => Boolean(t.table_pin_hash)).length;
     const requireTablePin = Boolean((branchData as unknown as { require_table_pin?: boolean })?.require_table_pin);
-    const hasActiveQr = (branchQrRes.count || 0) > 0;
+    const hasActiveAreaQr = (areaQrRes.count || 0) > 0;
 
     const categoriesCount = menuCategoriesRes.count || 0;
     const rawMenuItems = menuItemsRes.data || [];
@@ -288,7 +301,7 @@ export class SetupJourneyService {
           const hasTables = tablesCount > 0;
           const pinSatisfied = !requireTablePin || (tablesCount > 0 && tablesWithPinCount === tablesCount);
 
-          isCompleted = hasAreas && hasTables && pinSatisfied && hasActiveQr;
+          isCompleted = hasAreas && hasTables && pinSatisfied && hasActiveAreaQr;
           status = isCompleted ? 'completed' : hasAreas ? 'in_progress' : 'not_started';
 
           if (!hasAreas) {
@@ -303,12 +316,12 @@ export class SetupJourneyService {
             completionDetail = `${tablesWithPinCount}/${tablesCount} tables have security PINs. PIN protection is enabled.`;
             nextActionHref = '/dashboard/tables/qr';
             nextActionLabel = 'Set Table PINs';
-          } else if (!hasActiveQr) {
-            completionDetail = `${tablesCount} table(s) ready. Generate active Branch QR code to enable customer menu ordering.`;
+          } else if (!hasActiveAreaQr) {
+            completionDetail = `${tablesCount} table(s) ready. Generate an Area QR code for your dining area to enable customer ordering.`;
             nextActionHref = '/dashboard/tables/qr';
-            nextActionLabel = 'Generate Branch QR';
+            nextActionLabel = 'Generate Area QR';
           } else {
-            completionDetail = `${tablesCount} table(s) configured with active QR code across ${serviceAreasCount} area(s).`;
+            completionDetail = `${tablesCount} table(s) configured with active Area QR code across ${serviceAreasCount} area(s).`;
             nextActionHref = '/dashboard/tables/qr';
             nextActionLabel = 'Manage QR Codes';
           }
@@ -318,12 +331,13 @@ export class SetupJourneyService {
             { id: 'd_table', label: `Dining Tables (${tablesCount})`, isCompleted: hasTables, href: '/dashboard/tables' },
             {
               id: 'd_qr',
-              label: hasActiveQr ? 'Branch QR Code Active' : 'Generate Branch QR Code',
-              isCompleted: hasActiveQr,
+              label: hasActiveAreaQr ? 'Area QR Code Active' : 'Generate Area QR Code',
+              isCompleted: hasActiveAreaQr,
               href: '/dashboard/tables/qr',
             },
           ];
           break;
+
         }
 
         // 4. Menu Catalog

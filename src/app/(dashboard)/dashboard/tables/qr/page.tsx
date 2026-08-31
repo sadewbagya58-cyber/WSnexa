@@ -15,6 +15,9 @@ export default async function BranchQrPage() {
   // Fetch active Branch QR record for the active branch
   const activeQr = await QrService.getActiveBranchQr();
 
+  // Fetch Area QR codes for all active service areas in this branch
+  const areaQrs = await QrService.listBranchAreaQrs();
+
   // Fetch dining tables summary (total, with PIN, missing PIN) for the active branch
   const { data: tables } = await supabase
     .from('dining_tables')
@@ -31,11 +34,11 @@ export default async function BranchQrPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Branch QR Code & Ordering Settings"
-        description={`Manage venue QR code and guest table PIN settings for ${tenantContext.activeBranch.name}.`}
+        title="QR Codes & Ordering Settings"
+        description={`Manage Area QR codes, Venue entry QR code, and guest table PIN settings for ${tenantContext.activeBranch.name}.`}
         breadcrumbs={[
           { label: 'Tables', href: '/dashboard/tables' },
-          { label: 'Branch QR & PIN' },
+          { label: 'QR Codes & Settings' },
         ]}
         backHref="/dashboard/tables"
         helpSlug="generate-qr-codes"
@@ -50,6 +53,7 @@ export default async function BranchQrPage() {
         tablePinLength={tenantContext.activeBranch.table_pin_length ?? 4}
         tablesSummary={{ total, withPin, missingPin }}
         initialQr={activeQr}
+        areaQrs={areaQrs}
       />
     </div>
   );

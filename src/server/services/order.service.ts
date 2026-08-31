@@ -184,7 +184,7 @@ export class OrderService {
         } = await supabase.auth.getUser();
         activeUserId = user?.id || null;
       } catch {
-        // Called outside Next.js request context (e.g. CLI test script)
+        activeUserId = null;
       }
     }
 
@@ -199,21 +199,73 @@ export class OrderService {
     let sessionTokenToUse = extendedInput.qrVisitSessionToken || extendedInput.qrSessionToken || null;
     let targetBranchId: string | null = null;
     let targetBusinessId: string | null = null;
+    let authoritativeAreaId: string | null = null;
 
     const { OrderSecurityService } = await import('./order-security.service');
+    const { verifyAreaQrToken } = await import('@/lib/qr/area-qr-token');
 
-    // 1. Try resolving target branch from active QR visit session token
+    // 1. Check if rawQrToken is a cryptographically signed Area QR token
+    const areaVerification = verifyAreaQrToken(rawQrToken);
+    if (areaVerification.valid && areaVerification.payload) {
+      // Validate against persistent DB state
+      const { data: dbAreaQr } = await admin
+        .from('area_qr_codes')
+        .select('id, business_id, branch_id, service_area_id, version, is_active, revoked_at, expires_at')
+        .eq('token_hash', tokenHash)
+        .maybeSingle();
+
+      if (dbAreaQr && (!dbAreaQr.is_active || dbAreaQr.revoked_at !== null)) {
+        return {
+          success: false,
+          message: 'This Area QR code has been revoked or regenerated. Please scan the latest QR code on your table tent.',
+          errorType: 'QR_REVOKED',
+        };
+      }
+
+      targetBranchId = areaVerification.payload.branchId;
+      targetBusinessId = areaVerification.payload.businessId;
+      authoritativeAreaId = areaVerification.payload.areaId;
+    }
+
+    // 2. Try resolving target branch and area from active QR visit session token
     if (sessionTokenToUse) {
       const sessionVal = await OrderSecurityService.validateQrVisitSession(sessionTokenToUse);
       if (sessionVal.valid && sessionVal.session) {
-        targetBranchId = sessionVal.session.branch_id;
-        targetBusinessId = sessionVal.session.business_id;
+        targetBranchId = targetBranchId || sessionVal.session.branch_id;
+        targetBusinessId = targetBusinessId || sessionVal.session.business_id;
+        authoritativeAreaId = authoritativeAreaId || sessionVal.session.service_area_id || null;
       }
     }
 
-    // 2. If branch not found via visit session, resolve static rawQrToken against all QR tables
+    // 2b. Re-verify table access proof against authoritative area if proof was provided
+    if (tableId && signedTableAccessProof && targetBranchId) {
+      const reVerify = verifySignedTableAccessProof(
+        signedTableAccessProof,
+        targetBranchId,
+        tableId,
+        authoritativeAreaId,
+        sessionTokenToUse
+      );
+      if (!reVerify.valid && reVerify.error === 'AREA_MISMATCH') {
+        return {
+          success: false,
+          message: 'Table verification does not match the active dining area.',
+          errorType: 'CROSS_AREA_ORDER_ATTEMPT_BLOCKED',
+        };
+      }
+      if (!reVerify.valid && reVerify.error === 'SESSION_MISMATCH') {
+        return {
+          success: false,
+          message: 'Table verification does not match the active QR visit session.',
+          errorType: 'SESSION_MISMATCH',
+        };
+      }
+    }
+
+
+    // 3. If branch not found via Area QR or visit session, resolve static rawQrToken against all QR tables
     if (!targetBranchId) {
-      // 2a. Table QR Codes
+      // 3a. Table QR Codes
       const { data: tQr } = await admin
         .from('table_qr_codes')
         .select('branch_id, business_id')
@@ -224,7 +276,7 @@ export class OrderService {
         targetBranchId = tQr.branch_id;
         targetBusinessId = tQr.business_id;
       } else {
-        // 2b. Branch QR Codes
+        // 3b. Branch QR Codes
         const { data: bQr } = await admin
           .from('branch_qr_codes')
           .select('branch_id, business_id')
@@ -235,21 +287,22 @@ export class OrderService {
           targetBranchId = bQr.branch_id;
           targetBusinessId = bQr.business_id;
         } else {
-          // 2c. QR Visit Sessions directly
+          // 3c. QR Visit Sessions directly
           const { data: qSession } = await admin
             .from('qr_visit_sessions')
-            .select('branch_id, business_id')
+            .select('branch_id, business_id, service_area_id')
             .eq('session_token_hash', tokenHash)
             .maybeSingle();
 
           if (qSession && qSession.branch_id) {
             targetBranchId = qSession.branch_id;
             targetBusinessId = qSession.business_id;
+            authoritativeAreaId = authoritativeAreaId || qSession.service_area_id || null;
           } else if (tableId) {
-            // 2d. Table Context fallback
+            // 3d. Table Context fallback
             const { data: tableData } = await admin
               .from('dining_tables')
-              .select('branch_id, business_id')
+              .select('branch_id, business_id, service_area_id')
               .eq('id', tableId)
               .maybeSingle();
 
@@ -261,6 +314,32 @@ export class OrderService {
         }
       }
     }
+
+    // 4. Enforce strict server-side Cross-Area and Cross-Branch Protection
+    if (tableId && targetBranchId) {
+      const { data: tableCheck } = await admin
+        .from('dining_tables')
+        .select('id, branch_id, business_id, service_area_id, is_active, deleted_at')
+        .eq('id', tableId)
+        .maybeSingle();
+
+      if (!tableCheck || tableCheck.branch_id !== targetBranchId) {
+        return {
+          success: false,
+          message: 'Selected table does not belong to this venue branch.',
+          errorType: 'CROSS_BRANCH_ORDER_ATTEMPT_BLOCKED',
+        };
+      }
+
+      if (authoritativeAreaId && tableCheck.service_area_id !== authoritativeAreaId) {
+        return {
+          success: false,
+          message: 'Selected table does not belong to the verified dining area.',
+          errorType: 'CROSS_AREA_ORDER_ATTEMPT_BLOCKED',
+        };
+      }
+    }
+
 
     if (targetBusinessId) {
       try {

@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { FormattedServiceArea } from '@/server/services/service-area.service';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { AreaQrModal } from '@/components/qr/area-qr-modal';
 import {
   createServiceAreaAction,
   updateServiceAreaAction,
@@ -12,14 +13,18 @@ import {
 
 interface AreaManagementProps {
   initialAreas: FormattedServiceArea[];
+  businessName?: string;
   activeBranchName: string;
+  branchCode?: string;
   initialOrderingMode?: 'qr_only' | 'waiter_only' | 'qr_and_waiter';
   canManage?: boolean;
 }
 
 export function AreaManagement({
   initialAreas,
+  businessName = 'WSNexa Venue',
   activeBranchName,
+  branchCode = 'MAIN',
   initialOrderingMode = 'qr_and_waiter',
   canManage = true,
 }: AreaManagementProps) {
@@ -27,6 +32,8 @@ export function AreaManagement({
   const [orderingMode, setOrderingMode] = useState(initialOrderingMode);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<FormattedServiceArea | null>(null);
+  const [qrModalArea, setQrModalArea] = useState<FormattedServiceArea | null>(null);
+
 
   const [createName, setCreateName] = useState('');
   const [createDesc, setCreateDesc] = useState('');
@@ -320,7 +327,15 @@ export function AreaManagement({
                 </div>
 
                 {canManage && (
-                  <div className="flex items-center gap-2 mt-5 pt-3 border-t border-zinc-100">
+                  <div className="grid grid-cols-3 gap-1.5 mt-5 pt-3 border-t border-zinc-100">
+                    <button
+                      onClick={() => setQrModalArea(area)}
+                      className="min-h-[44px] rounded-xl text-xs font-bold bg-zinc-900 text-white hover:bg-zinc-800 text-center touch-manipulation transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                      title="Manage and print Area QR code"
+                    >
+                      <span>📱</span>
+                      <span>QR Code</span>
+                    </button>
                     <button
                       onClick={() => {
                         setEditingArea(area);
@@ -328,16 +343,16 @@ export function AreaManagement({
                         setEditDesc(area.description || '');
                         setEditActive(area.isActive);
                       }}
-                      className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center touch-manipulation transition-colors"
+                      className="min-h-[44px] rounded-xl text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 border border-zinc-200 text-center touch-manipulation transition-colors cursor-pointer"
                     >
-                      Edit Area
+                      Edit
                     </button>
                     <button
                       onClick={() => {
                         setDeletingArea(area);
                         setBlockedTableCount(null);
                       }}
-                      className="flex-1 min-h-[44px] rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-center touch-manipulation transition-colors"
+                      className="min-h-[44px] rounded-xl text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-center touch-manipulation transition-colors cursor-pointer"
                     >
                       Delete
                     </button>
@@ -346,6 +361,7 @@ export function AreaManagement({
               </div>
             ))}
           </div>
+
         )}
       </div>
 
@@ -517,6 +533,24 @@ export function AreaManagement({
                 }
               : undefined
           }
+        />
+      )}
+
+      {/* Area QR Code Management Modal */}
+      {qrModalArea && (
+        <AreaQrModal
+          isOpen={Boolean(qrModalArea)}
+          onClose={() => setQrModalArea(null)}
+          area={{
+            id: qrModalArea.id,
+            name: qrModalArea.name,
+            code: qrModalArea.code,
+            tableCount: qrModalArea.tableCount,
+          }}
+          businessName={businessName}
+          branchName={activeBranchName}
+          branchCode={branchCode}
+          canManage={canManage}
         />
       )}
     </div>

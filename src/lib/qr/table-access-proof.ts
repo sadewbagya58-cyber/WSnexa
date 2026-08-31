@@ -11,6 +11,8 @@ function getProofSecret(): string {
 export interface TableAccessProofPayload {
   branchId: string;
   tableId: string;
+  serviceAreaId?: string | null;
+  sessionTokenHash?: string | null;
   verifiedAt: number; // Unix timestamp ms
   expiresAt: number;  // Unix timestamp ms
   nonce: string;      // Random hex string
@@ -18,29 +20,53 @@ export interface TableAccessProofPayload {
 
 export interface TableAccessProofResult {
   valid: boolean;
-  error?: 'EXPIRED' | 'SIGNATURE_MISMATCH' | 'BRANCH_MISMATCH' | 'TABLE_MISMATCH' | 'INVALID_FORMAT';
+  error?:
+    | 'EXPIRED'
+    | 'SIGNATURE_MISMATCH'
+    | 'BRANCH_MISMATCH'
+    | 'TABLE_MISMATCH'
+    | 'AREA_MISMATCH'
+    | 'SESSION_MISMATCH'
+    | 'INVALID_FORMAT';
   payload?: TableAccessProofPayload;
 }
 
 /**
- * Creates a tamper-proof HMAC-signed table access token.
+ * Creates a tamper-proof HMAC-signed table access token bound to branch, table, area, and visit session.
  */
 export function createSignedTableAccessProof(
   branchId: string,
   tableId: string,
-  ttlHours: number = 4
+  serviceAreaIdOrTtl?: string | number | null,
+  sessionToken?: string | null,
+  ttlHoursInput: number = 4
 ): { proof: string; verifiedAt: string; expiresAt: string } {
+  let serviceAreaId: string | null = null;
+  let ttlHours = ttlHoursInput;
+
+  if (typeof serviceAreaIdOrTtl === 'number') {
+    ttlHours = serviceAreaIdOrTtl;
+  } else if (typeof serviceAreaIdOrTtl === 'string') {
+    serviceAreaId = serviceAreaIdOrTtl;
+  }
+
   const now = Date.now();
   const expiresAtMs = now + ttlHours * 60 * 60 * 1000;
   const nonce = crypto.randomBytes(12).toString('hex');
+  const sessionTokenHash = sessionToken
+    ? crypto.createHash('sha256').update(sessionToken).digest('hex')
+    : null;
 
   const payload: TableAccessProofPayload = {
     branchId,
     tableId,
+    serviceAreaId: serviceAreaId || null,
+    sessionTokenHash,
     verifiedAt: now,
     expiresAt: expiresAtMs,
     nonce,
   };
+
 
   const payloadString = JSON.stringify(payload);
   const payloadBase64 = Buffer.from(payloadString, 'utf8').toString('base64url');
@@ -60,12 +86,14 @@ export function createSignedTableAccessProof(
 }
 
 /**
- * Verifies a signed table access token against expected branchId and tableId.
+ * Verifies a signed table access token against expected branchId, tableId, areaId, and sessionToken.
  */
 export function verifySignedTableAccessProof(
   proof: string,
   expectedBranchId: string,
-  expectedTableId: string
+  expectedTableId: string,
+  expectedServiceAreaId?: string | null,
+  expectedSessionToken?: string | null
 ): TableAccessProofResult {
   if (!proof || typeof proof !== 'string' || !proof.includes('.')) {
     return { valid: false, error: 'INVALID_FORMAT' };
@@ -112,6 +140,19 @@ export function verifySignedTableAccessProof(
   // Verify table match
   if (payload.tableId !== expectedTableId) {
     return { valid: false, error: 'TABLE_MISMATCH' };
+  }
+
+  // Verify service area match if bound in proof or expected
+  if (expectedServiceAreaId && payload.serviceAreaId && payload.serviceAreaId !== expectedServiceAreaId) {
+    return { valid: false, error: 'AREA_MISMATCH' };
+  }
+
+  // Verify session match if bound in proof and session token provided
+  if (expectedSessionToken && payload.sessionTokenHash) {
+    const expectedHash = crypto.createHash('sha256').update(expectedSessionToken).digest('hex');
+    if (payload.sessionTokenHash !== expectedHash) {
+      return { valid: false, error: 'SESSION_MISMATCH' };
+    }
   }
 
   // Verify expiration

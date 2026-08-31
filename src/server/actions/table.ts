@@ -717,18 +717,33 @@ export async function verifyTableAccessAction(
 > {
   const supabase = await createClient();
 
+  // Resolve expected service area either explicitly or via qrVisitSessionToken
+  let authoritativeAreaId = expectedServiceAreaId || null;
+  if (!authoritativeAreaId && qrVisitSessionToken) {
+    try {
+      const { OrderSecurityService } = await import('@/server/services/order-security.service');
+      const sessionVal = await OrderSecurityService.validateQrVisitSession(qrVisitSessionToken);
+      if (sessionVal.valid && sessionVal.session?.service_area_id) {
+        authoritativeAreaId = sessionVal.session.service_area_id;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // If area scope is constrained, verify table belongs to expected service area
-  if (expectedServiceAreaId) {
+  if (authoritativeAreaId) {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
     const { data: tableArea } = await admin
       .from('dining_tables')
-      .select('id, service_area_id')
+      .select('id, service_area_id, branch_id, is_active, deleted_at')
       .eq('id', tableId)
       .eq('branch_id', branchId)
+      .is('deleted_at', null)
       .maybeSingle();
 
-    if (!tableArea || tableArea.service_area_id !== expectedServiceAreaId) {
+    if (!tableArea || tableArea.service_area_id !== authoritativeAreaId) {
       return {
         success: false,
         message: 'Selected table does not belong to the active service area.',
@@ -737,6 +752,7 @@ export async function verifyTableAccessAction(
   }
 
   const pinHash = inputPin ? hashTablePin(inputPin.trim()) : null;
+
 
   const { data, error } = await supabase.rpc('verify_table_checkout_access', {
     p_branch_id: branchId,
@@ -776,10 +792,11 @@ export async function verifyTableAccessAction(
     }
   }
 
-  // Generate signed table access proof for secure order submission without persisting raw PIN
+  // Generate signed table access proof bound to branch, table, area, and visit session
   const proofData = payload.table
-    ? createSignedTableAccessProof(branchId, payload.table.id)
+    ? createSignedTableAccessProof(branchId, payload.table.id, authoritativeAreaId, qrVisitSessionToken)
     : undefined;
+
 
   console.log('[verifyTableAccessAction] Generated Proof:', {
     tableId: payload.table?.id,

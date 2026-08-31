@@ -65,7 +65,9 @@ export default async function ServiceAreasPage() {
   return (
     <AreaManagement
       initialAreas={areas}
+      businessName={tenantContext.business.name}
       activeBranchName={tenantContext.activeBranch.name}
+      branchCode={tenantContext.activeBranch.code}
       initialOrderingMode={orderingMode}
       canManage={canManage}
     />

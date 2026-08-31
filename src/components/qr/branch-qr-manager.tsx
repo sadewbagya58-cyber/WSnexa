@@ -12,7 +12,23 @@ import {
 } from '@/server/actions/qr';
 import { bulkGenerateBranchTablePinsAction } from '@/server/actions/table';
 import { generateQrSvgString, generateQrPngDataUrl } from '@/lib/qr/qr-generator';
+import { AreaQrModal } from './area-qr-modal';
 import Link from 'next/link';
+
+export interface AreaQrSummary {
+  areaId: string;
+  areaName: string;
+  areaCode: string;
+  description?: string | null;
+  isActive?: boolean;
+  tableCount: number;
+  tablesWithPinCount: number;
+  version: number;
+  tokenPrefix: string;
+  rawToken: string;
+  qrUrl: string;
+  generatedAt: string;
+}
 
 interface BranchQrManagerProps {
   businessName: string;
@@ -34,6 +50,7 @@ interface BranchQrManagerProps {
     is_active: boolean;
     generated_at: string;
   } | null;
+  areaQrs?: AreaQrSummary[];
   canManage?: boolean;
 }
 
@@ -46,13 +63,16 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
   tablePinLength: initialLength,
   tablesSummary: initialSummary,
   initialQr,
+  areaQrs = [],
   canManage = true,
 }) => {
   const [qr, setQr] = useState(initialQr);
   const [rawToken, setRawToken] = useState<string | null>(initialQr?.rawToken || null);
+  const [selectedAreaForQr, setSelectedAreaForQr] = useState<AreaQrSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [svgHtml, setSvgHtml] = useState<string>('');
+
 
   // Settings State
   const [requireTableSelection, setRequireTableSelection] = useState<boolean>(initialSelection);
@@ -339,7 +359,94 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
         </Card>
       </div>
 
-      {/* Main Branch QR Actions & Card Display Grid */}
+      {/* Area-Level QR Codes (Recommended for Table & Dine-in Ordering) */}
+      <div className="space-y-4 print:hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200 pb-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-zinc-950">Dining Area QR Codes</h2>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                ⭐ Preferred for Dine-In
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Area QR codes automatically lock guest floor context to a specific section (Main Dining Hall, Garden, etc.), preventing accidental cross-area table orders.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/areas"
+            className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 rounded-xl border border-zinc-200 transition-colors"
+          >
+            Manage Areas →
+          </Link>
+        </div>
+
+        {areaQrs.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center space-y-2">
+            <div className="text-2xl">📍</div>
+            <div className="text-sm font-bold text-zinc-900">No Service Areas Found</div>
+            <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+              Create physical service areas (e.g. Restaurant, Patio, Rooftop) to generate area-specific dining QR codes.
+            </p>
+            <Link
+              href="/dashboard/areas"
+              className="inline-flex items-center px-4 py-2 mt-2 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800"
+            >
+              + Create Service Area
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {areaQrs.map((area) => (
+              <Card key={area.areaId} className="p-5 flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-colors">
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-sm text-zinc-950 flex items-center gap-1.5">
+                        <span>📍</span>
+                        <span>{area.areaName}</span>
+                      </h3>
+                      <span className="text-[11px] font-mono text-zinc-400">{area.areaCode}</span>
+                    </div>
+                    <Badge variant="success">Active (v{area.version})</Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-zinc-600 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
+                    <span className="font-extrabold text-zinc-950">{area.tableCount}</span>
+                    <span>tables configured</span>
+                    <span>•</span>
+                    <span className="text-emerald-700 font-semibold">{area.tablesWithPinCount} with PIN</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs font-bold cursor-pointer"
+                    onClick={() => setSelectedAreaForQr(area)}
+                  >
+                    📱 View &amp; Print QR
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Main Branch QR Actions & Card Display Grid (General Venue / Reception Browsing) */}
+      <div className="space-y-2 pt-4 border-t border-zinc-200">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-bold text-zinc-950">Branch Entry QR Code</h2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+            Venue / Reception
+          </span>
+        </div>
+        <p className="text-xs text-zinc-500">
+          General QR code for venue entrance, lobby, reception desk, or general menu browsing. Allows guests to browse full menu and select any active dining table.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Management Actions */}
         <Card className="p-6 space-y-6 lg:col-span-1 print:hidden">
@@ -473,6 +580,26 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Area QR Modal */}
+      {selectedAreaForQr && (
+        <AreaQrModal
+          isOpen={true}
+          onClose={() => setSelectedAreaForQr(null)}
+          area={{
+            id: selectedAreaForQr.areaId,
+            name: selectedAreaForQr.areaName,
+            code: selectedAreaForQr.areaCode,
+            tableCount: selectedAreaForQr.tableCount,
+          }}
+          businessName={businessName}
+          branchName={branchName}
+          branchCode={branchCode}
+          initialRawToken={selectedAreaForQr.rawToken}
+          initialVersion={selectedAreaForQr.version}
+          canManage={canManage}
+        />
+      )}
     </div>
   );
 };

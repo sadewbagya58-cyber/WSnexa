@@ -275,8 +275,11 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     const res = await verifyTableAccessAction(
       branch.id,
       selectedTableId,
-      pinInput
+      pinInput,
+      undefined,
+      serviceAreaId || undefined
     );
+
 
     setVerifying(false);
 
@@ -576,36 +579,60 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
             )}
 
             <div className="space-y-4">
-              {/* Select grouped by Service Area */}
+              {/* Area Scope Indicator if Area-Level QR */}
+              {serviceAreaId && (
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-900">
+                    <span>📍</span>
+                    <span>
+                      {availableAreas.find((a) => a.id === serviceAreaId)?.name || 'Assigned Area'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ✓ Area Verified
+                  </span>
+                </div>
+              )}
+
+              {/* Select grouped or filtered by Service Area */}
               <div>
                 <label className="block text-xs font-bold text-zinc-700 mb-1.5">
                   Dining Table Number *
                 </label>
-                <select
-                  value={selectedTableId}
-                  onChange={(e) => setSelectedTableId(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-zinc-950 focus:border-zinc-950 focus:outline-none"
-                >
-                  <option value="">-- Choose Table Number --</option>
-                  {availableAreas.map((area) => {
-                    const areaTables = availableTables.filter((t) => t.service_area_id === area.id);
-                    if (areaTables.length === 0) return null;
-                    return (
-                      <optgroup key={area.id} label={`${area.name} (${area.code})`}>
-                        {areaTables.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.code})
-                          </option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
+                {availableTables.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 space-y-1">
+                    <p className="font-bold">No Dining Tables in this Area</p>
+                    <p className="text-[11px] text-amber-800">
+                      No tables are currently configured for this dining area. Please ask a staff member for assistance.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedTableId}
+                    onChange={(e) => setSelectedTableId(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-zinc-950 focus:border-zinc-950 focus:outline-none"
+                  >
+                    <option value="">-- Choose Table Number --</option>
+                    {availableAreas.map((area) => {
+                      const areaTables = availableTables.filter((t) => t.service_area_id === area.id);
+                      if (areaTables.length === 0) return null;
+                      return (
+                        <optgroup key={area.id} label={`${area.name} (${area.code})`}>
+                          {areaTables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.code})
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                )}
               </div>
 
               {/* PIN Input field if require_table_pin is ON */}
-              {branch.require_table_pin && (
+              {branch.require_table_pin && availableTables.length > 0 && (
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1.5">
                     Table Security PIN ({branch.table_pin_length || 4} Digits) *
@@ -621,6 +648,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                 </div>
               )}
             </div>
+
 
             <div className="flex gap-2">
               <Button

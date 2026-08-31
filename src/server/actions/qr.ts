@@ -21,3 +21,24 @@ export async function updateBranchOrderingSettingsAction(settings: {
 }) {
   return await QrService.updateBranchOrderingSettings(settings);
 }
+
+export async function generateAreaQrAction(areaId: string) {
+  return await QrService.generateAreaQr(areaId);
+}
+
+export async function regenerateAreaQrAction(areaId: string, currentVersion: number = 1) {
+  return await QrService.regenerateAreaQr(areaId, currentVersion);
+}
+
+export async function disableAreaQrAction(areaId: string) {
+  return await QrService.disableAreaQr(areaId);
+}
+
+export async function getActiveAreaQrAction(areaId: string) {
+  return await QrService.getActiveAreaQr(areaId);
+}
+
+
+export async function listBranchAreaQrsAction() {
+  return await QrService.listBranchAreaQrs();
+}

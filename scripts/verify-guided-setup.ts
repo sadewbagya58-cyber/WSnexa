@@ -131,8 +131,8 @@ function simulateSetupReport(branchId: string, branchName: string, state: Simula
           completionDetail = 'PIN protection is enabled. Set table PINs.';
         } else if (!hasQr) {
           nextActionHref = '/dashboard/tables/qr';
-          nextActionLabel = 'Generate Branch QR';
-          completionDetail = `${state.tablesCount} table(s) ready. Generate active Branch QR code.`;
+          nextActionLabel = 'Generate Area QR';
+          completionDetail = `${state.tablesCount} table(s) ready. Generate an Area QR code for your dining area to enable customer ordering.`;
         } else {
           nextActionHref = '/dashboard/tables/qr';
           nextActionLabel = 'Manage QR Codes';
@@ -140,6 +140,7 @@ function simulateSetupReport(branchId: string, branchName: string, state: Simula
         }
         break;
       }
+
 
       case 'menu': {
         const hasCats = state.categoriesCount > 0;
@@ -329,7 +330,7 @@ async function runVerification() {
   assert(!serviceCode.includes('|| true'), 'Source does NOT contain any unconditional "|| true" completion bypass');
   assert(!serviceCode.includes("o.status === 'pending'"), 'Source does NOT treat plain "pending" order as completed progression');
   assert(serviceCode.includes("eq('status', 'pending')") && serviceCode.includes("gt('expires_at'"), 'Staff invitations query explicitly validates pending status and expiration');
-  assert(serviceCode.includes("from('branch_qr_codes')"), 'Dining & QR check explicitly queries branch_qr_codes for active QR tokens');
+  assert(serviceCode.includes("from('area_qr_codes')") || serviceCode.includes("from('branch_qr_codes')"), 'Dining & QR check explicitly queries QR tables for active QR tokens');
 
   // ── 3. Targeted Scenario Validations (A through R) ────────────
   console.log('\n--- 3. Targeted Completion Semantics (Scenarios A through R) ---');
@@ -812,7 +813,8 @@ async function runVerification() {
   const diningStageQ = reportQ.stages.find((s) => s.id === 'dining_qr');
   assert(diningStageQ?.isCompleted === false, 'Scenario Q: Tables exist but active QR missing -> dining_qr is NOT complete');
   assert(diningStageQ?.nextActionHref === '/dashboard/tables/qr', 'Scenario Q: Points to /dashboard/tables/qr to generate QR code');
-  assert(diningStageQ?.nextActionLabel === 'Generate Branch QR', 'Scenario Q: Next action label prompts "Generate Branch QR"');
+  assert(diningStageQ?.nextActionLabel === 'Generate Area QR', 'Scenario Q: Next action label prompts "Generate Area QR"');
+
 
   // Scenario R: Valid QR entry point (hasActiveQr = true -> dining_qr complete)
   const reportR = simulateSetupReport('br_1', 'Main Wing', {

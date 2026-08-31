@@ -55,6 +55,7 @@ export default async function MenuItemsPage() {
           { label: 'Menu Overview', href: '/dashboard/menu' },
           { label: 'Menu Items' },
         ]}
+        helpSlug="add-menu-items"
         primaryAction={
           canEditPrice ? (
             <Link

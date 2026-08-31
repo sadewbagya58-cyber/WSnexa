@@ -1,6 +1,9 @@
+﻿'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { HelpCategory } from '@/content/help/types';
+import { useHelpLanguage } from './help-language-context';
 
 interface HelpCategoryCardProps {
   category: HelpCategory;
@@ -11,6 +14,11 @@ export const HelpCategoryCard: React.FC<HelpCategoryCardProps> = ({
   category,
   articleCount,
 }) => {
+  const { t } = useHelpLanguage();
+
+  const title = t(category.title, category.titleSiEn);
+  const description = t(category.description, category.descriptionSiEn);
+
   return (
     <Link
       href={`/dashboard/help/category/${category.id}`}
@@ -18,18 +26,18 @@ export const HelpCategoryCard: React.FC<HelpCategoryCardProps> = ({
     >
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-2xl">{category.icon}</span>
+          <span className="text-2xl select-none">{category.icon}</span>
           <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider bg-zinc-100 px-2 py-0.5 rounded-lg group-hover:bg-zinc-950 group-hover:text-white transition-colors">
             {articleCount} Guide{articleCount === 1 ? '' : 's'}
           </span>
         </div>
 
         <div className="space-y-1">
-          <h3 className="text-sm font-black text-zinc-950 group-hover:text-amber-600 transition-colors">
-            {category.title}
+          <h3 className="text-sm font-black text-zinc-950 group-hover:text-amber-600 transition-colors leading-snug break-words">
+            {title}
           </h3>
-          <p className="text-[11px] font-medium text-zinc-500 line-clamp-2 leading-relaxed">
-            {category.description}
+          <p className="text-[11px] font-medium text-zinc-500 line-clamp-2 leading-relaxed break-words">
+            {description}
           </p>
         </div>
       </div>

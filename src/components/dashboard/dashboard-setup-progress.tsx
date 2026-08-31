@@ -92,14 +92,23 @@ export const DashboardSetupProgress: React.FC<DashboardSetupProgressProps> = ({
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={handleDismiss}
-          className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition-colors underline-offset-2 hover:underline shrink-0 touch-manipulation px-1 py-0.5"
-          title="Hide setup assistant on dashboard (accessible anytime in Settings)"
-        >
-          Hide for now
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/help"
+            className="text-xs font-semibold text-amber-300/90 hover:text-amber-200 transition-colors flex items-center gap-1"
+          >
+            <span>💡</span>
+            <span>Guides</span>
+          </Link>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition-colors underline-offset-2 hover:underline shrink-0 touch-manipulation px-1 py-0.5"
+            title="Hide setup assistant on dashboard (accessible anytime in Settings)"
+          >
+            Hide for now
+          </button>
+        </div>
       </div>
 
       {/* Title & Progress Bar */}

@@ -3,7 +3,9 @@ import { PermissionKey } from '@/lib/validation/permission';
 export interface HelpCategory {
   id: string;
   title: string;
+  titleSiEn?: string;
   description: string;
+  descriptionSiEn?: string;
   icon: string;
   order: number;
 }
@@ -11,14 +13,26 @@ export interface HelpCategory {
 export interface HelpArticleStep {
   number: number;
   title: string;
+  titleSiEn?: string;
   instruction: string;
+  instructionSiEn?: string;
   tip?: string;
+  tipSiEn?: string;
+}
+
+export interface TroubleshootingCheck {
+  check: string;
+  checkSiEn?: string;
+  action: string;
+  actionSiEn?: string;
 }
 
 export interface HelpArticle {
   slug: string;
   title: string;
+  titleSiEn?: string;
   description: string;
+  descriptionSiEn?: string;
   category: string;
   keywords: string[];
   allowedRoles?: string[]; // e.g. ['business_owner', 'branch_manager', 'waiter']
@@ -31,9 +45,12 @@ export interface HelpArticle {
   estimatedReadMinutes?: number;
   steps: HelpArticleStep[];
   notes?: string[];
+  notesSiEn?: string[];
+  troubleshootingChecks?: TroubleshootingCheck[];
   relatedArticles?: string[]; // List of article slugs
   directAction?: {
     label: string;
+    labelSiEn?: string;
     href: string;
   };
 }
@@ -54,3 +71,4 @@ export interface QuickStartProgress {
   percentage: number;
   steps: QuickStartStep[];
 }
+

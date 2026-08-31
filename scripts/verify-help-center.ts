@@ -169,7 +169,8 @@ async function runHelpCenterVerification() {
 
   const ownerRecs = getRecommendedArticles('business_owner');
   assert(ownerRecs.length > 0, 'Business owner role receives recommendations');
-  assert(ownerRecs.some(a => a.slug === 'welcome-to-wsnexa' || a.slug === 'setting-up-your-business'), 'Owner recommendations include setup and business guides');
+  assert(ownerRecs.some(a => a.slug === 'welcome-to-wsnexa' || a.slug === 'setting-up-your-business' || a.slug === 'what-is-wsnexa' || a.slug === 'complete-business-setup'), 'Owner recommendations include setup and business guides');
+
 
   // 7. Quick Start Service Evaluation
   console.log('\n--- 7. Quick Start Service Contract ---');

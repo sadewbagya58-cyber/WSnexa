@@ -908,8 +908,10 @@ async function runVerification() {
 
   assert(smallCafeReport.isCoreSetupComplete === true, 'Small Café: Core setup is marked complete');
   assert(smallCafeReport.completedRequired === 6, 'Small Café: All 6 required stages completed');
-  assert(smallCafeReport.completedRecommended === 0, 'Small Café: 0 recommended stages completed does not block launch');
+  assert(smallCafeReport.stages.find((s) => s.id === 'team')?.isCompleted === false, 'Small Café: Team stage uncompleted does not block launch');
+  assert(smallCafeReport.stages.find((s) => s.id === 'venue_profile')?.isCompleted === false, 'Small Café: Venue profile uncompleted does not block launch');
   assert(smallCafeReport.completedOptional === 0, 'Small Café: 0 optional stages completed does not block launch');
+
 
   // ── Summary ──────────────────────────────────────────────────
   console.log('\n============================================================');

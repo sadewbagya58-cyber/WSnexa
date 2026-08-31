@@ -3,6 +3,7 @@
 import React from 'react';
 import { BreadcrumbItem } from '@/lib/navigation/dashboard-page-metadata';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
 
 export interface PageHeaderProps {
   title: string;
@@ -29,6 +30,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   secondaryActions,
   badge,
   contextBadge,
+  helpSlug,
   className = '',
 }) => {
   return (
@@ -56,8 +58,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         </div>
 
         {/* Action Slots */}
-        {(primaryAction || secondaryActions) && (
+        {(primaryAction || secondaryActions || helpSlug) && (
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 pt-1 sm:pt-0">
+            {helpSlug && <ContextualHelpButton explicitSlug={helpSlug} />}
             {secondaryActions}
             {primaryAction}
           </div>
@@ -66,3 +69,4 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     </div>
   );
 };
+

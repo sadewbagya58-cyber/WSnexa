@@ -20,6 +20,8 @@ import { BranchInfo, TenantSubscriptionInfo } from '@/types';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SubscriptionRealtimeListener } from '@/components/subscription/subscription-realtime-listener';
 import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
+import { HelpLanguageProvider } from '@/components/help/help-language-context';
+
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -323,7 +325,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   // ── JSX ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
+    <HelpLanguageProvider>
+      <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
+
       <RoutePrefetcher />
       {businessId && (
         <SubscriptionRealtimeListener
@@ -650,6 +654,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           setMobileOpen(false);
         }}
       />
-    </div>
+      </div>
+    </HelpLanguageProvider>
   );
 };
+

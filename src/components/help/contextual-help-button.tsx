@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { getArticlesForRoute, getArticleBySlug } from '@/content/help/registry';
 import { HelpArticle } from '@/content/help/types';
 import { Button } from '@/components/ui/button';
+import { useHelpLanguage } from './help-language-context';
+import { HelpLanguageToggle } from './help-language-toggle';
 
 interface ContextualHelpButtonProps {
   explicitSlug?: string;
@@ -22,6 +24,7 @@ export const ContextualHelpButton: React.FC<ContextualHelpButtonProps> = ({
 }) => {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useHelpLanguage();
 
   const targetRoute = explicitRoute || pathname;
   let matchingArticles: HelpArticle[] = [];
@@ -46,6 +49,8 @@ export const ContextualHelpButton: React.FC<ContextualHelpButtonProps> = ({
   }
 
   const primaryArticle = matchingArticles[0];
+  const articleTitle = t(primaryArticle.title, primaryArticle.titleSiEn);
+  const articleDesc = t(primaryArticle.description, primaryArticle.descriptionSiEn);
 
   return (
     <>
@@ -62,106 +67,108 @@ export const ContextualHelpButton: React.FC<ContextualHelpButtonProps> = ({
 
       {/* Slide-out Contextual Help Drawer Modal */}
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-end p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-end p-0 sm:p-4 animate-in fade-in-50 duration-150">
           <div
             className="w-full sm:max-w-md h-full sm:h-auto sm:max-h-[90vh] bg-white sm:rounded-3xl border border-zinc-200 shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200"
             role="dialog"
             aria-modal="true"
           >
             {/* Header */}
-            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">📖</span>
-                <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
-                    Page Guide
+            <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/80">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-xl shrink-0 select-none">📖</span>
+                <div className="min-w-0">
+                  <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                    Contextual Guide
                   </h3>
-                  <h4 className="text-sm font-extrabold text-zinc-950 truncate max-w-[280px]">
-                    {primaryArticle.title}
+                  <h4 className="text-xs sm:text-sm font-extrabold text-zinc-950 truncate max-w-[220px] sm:max-w-[260px]">
+                    {articleTitle}
                   </h4>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-xs font-bold text-zinc-400 hover:text-zinc-700 p-1.5 rounded-lg hover:bg-zinc-200 transition-all cursor-pointer"
+                className="text-xs font-bold text-zinc-400 hover:text-zinc-700 p-1.5 rounded-lg hover:bg-zinc-200 transition-all cursor-pointer touch-manipulation"
               >
                 ✕ Close
               </button>
             </div>
 
+            {/* Language Switcher inside Drawer */}
+            <div className="px-4 py-2 bg-zinc-100/60 border-b border-zinc-200/60 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-zinc-500">Language:</span>
+              <HelpLanguageToggle showLabel={false} />
+            </div>
+
             {/* Body */}
-            <div className="p-5 overflow-y-auto space-y-5 flex-1 text-xs">
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-xs">
               <p className="text-zinc-600 font-medium leading-relaxed">
-                {primaryArticle.description}
+                {articleDesc}
               </p>
 
               {/* Quick Steps */}
-              <div className="space-y-3">
-                <h5 className="font-black text-zinc-950 uppercase tracking-wider text-[10px]">
+              <div className="space-y-2.5">
+                <h5 className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wider text-zinc-400">
                   Step-by-Step Instructions
                 </h5>
-                <div className="space-y-2.5">
-                  {primaryArticle.steps.map((step) => (
-                    <div key={step.number} className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 space-y-1">
-                      <div className="font-extrabold text-zinc-900 flex items-center gap-2">
-                        <span className="w-4 h-4 rounded-full bg-zinc-950 text-white text-[9px] flex items-center justify-center font-black">
-                          {step.number}
-                        </span>
-                        <span>{step.title}</span>
-                      </div>
-                      <p className="text-zinc-500 font-medium pl-6 text-[11px] leading-relaxed">
-                        {step.instruction}
-                      </p>
-                      {step.tip && (
-                        <p className="text-amber-800 bg-amber-50/80 p-2 rounded-xl text-[10px] font-semibold mt-1 border border-amber-200/50">
-                          💡 Tip: {step.tip}
+                <div className="space-y-2">
+                  {primaryArticle.steps.map((step) => {
+                    const stepTitle = t(step.title, step.titleSiEn);
+                    const stepInstruction = t(step.instruction, step.instructionSiEn);
+                    const stepTip = step.tip ? t(step.tip, step.tipSiEn) : undefined;
+
+                    return (
+                      <div
+                        key={step.number}
+                        className="p-3 rounded-xl bg-zinc-50 border border-zinc-200/70 space-y-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white font-bold text-[10px]">
+                            {step.number}
+                          </span>
+                          <h6 className="font-bold text-zinc-900 leading-snug">
+                            {stepTitle}
+                          </h6>
+                        </div>
+                        <p className="text-zinc-600 text-[11px] leading-relaxed pl-7">
+                          {stepInstruction}
                         </p>
-                      )}
-                    </div>
-                  ))}
+                        {stepTip && (
+                          <div className="ml-7 mt-1.5 p-2 rounded-lg bg-amber-50/80 border border-amber-200/60 text-amber-950 text-[10px] font-medium leading-relaxed">
+                            💡 {stepTip}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Other Related Guides for this Route */}
-              {matchingArticles.length > 1 && (
-                <div className="space-y-2 pt-2 border-t border-zinc-100">
-                  <h5 className="font-black text-zinc-950 uppercase tracking-wider text-[10px]">
-                    More Guides for this Section
-                  </h5>
-                  <div className="space-y-1">
-                    {matchingArticles.slice(1).map((art) => (
-                      <Link
-                        key={art.slug}
-                        href={`/dashboard/help/${art.slug}`}
-                        onClick={() => setIsOpen(false)}
-                        className="block p-2 rounded-xl hover:bg-zinc-100 text-zinc-800 font-bold hover:text-zinc-950 transition-colors"
-                      >
-                        → {art.title}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Related Full Guide Link */}
+              <div className="pt-2">
+                <Link
+                  href={`/dashboard/help/${primaryArticle.slug}`}
+                  onClick={() => setIsOpen(false)}
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900 underline block text-center py-1"
+                >
+                  View Full Guide & Related Articles →
+                </Link>
+              </div>
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex items-center justify-between gap-3">
-              <Link
-                href={`/dashboard/help/${primaryArticle.slug}`}
-                onClick={() => setIsOpen(false)}
-                className="text-[11px] font-bold text-zinc-700 hover:text-zinc-950 underline"
-              >
-                Open Full Article ↗
-              </Link>
-              <Link
-                href="/dashboard/help"
-                onClick={() => setIsOpen(false)}
-                className="rounded-xl bg-zinc-950 px-3 py-1.5 text-xs font-bold text-white hover:bg-zinc-800 transition-all"
-              >
-                Help Center Home →
-              </Link>
-            </div>
+            {primaryArticle.directAction && (
+              <div className="p-3 sm:p-4 border-t border-zinc-100 bg-zinc-50">
+                <Link
+                  href={primaryArticle.directAction.href}
+                  onClick={() => setIsOpen(false)}
+                  className="w-full flex min-h-[44px] items-center justify-center rounded-xl bg-zinc-950 px-4 py-2 text-xs font-extrabold text-white hover:bg-zinc-800 transition-all shadow-md touch-manipulation"
+                >
+                  {t(primaryArticle.directAction.label, primaryArticle.directAction.labelSiEn)} →
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

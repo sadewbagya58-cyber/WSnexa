@@ -32,6 +32,7 @@ export default async function MenuCategoriesPage() {
           { label: 'Menu Overview', href: '/dashboard/menu' },
           { label: 'Categories' },
         ]}
+        helpSlug="create-categories"
       />
 
       <CategoryManager initialCategories={categories || []} />

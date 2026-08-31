@@ -38,6 +38,7 @@ export default async function BranchQrPage() {
           { label: 'Branch QR & PIN' },
         ]}
         backHref="/dashboard/tables"
+        helpSlug="generate-qr-codes"
       />
 
       <BranchQrManager

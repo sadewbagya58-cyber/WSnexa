@@ -6,6 +6,8 @@ import { SetupJourneyReport, SetupStageState } from '@/lib/setup/setup-journey';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextualHelpButton } from '@/components/help/contextual-help-button';
+
 
 interface SetupJourneyViewProps {
   report: SetupJourneyReport;
@@ -45,8 +47,22 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
     );
   };
 
+  const stageGuideMap: Record<string, string> = {
+    'business-basics': 'complete-business-setup',
+    'primary-branch': 'add-manage-branches',
+    'dining-qr': 'create-service-areas',
+    'menu-catalog': 'create-categories',
+    'order-security-payments': 'order-security-overview',
+    'operational-test-order': 'how-customer-orders-flow',
+    'team-invitations': 'invite-staff-members',
+    'venue-profile': 'publishing-your-venue-profile',
+    'table-reservations': 'table-reservations-basics',
+    'inventory-basics': 'inventory-basics-stock-items',
+  };
+
   const renderStageCard = (stage: SetupStageState) => {
     const isNext = report.nextStage?.id === stage.id;
+
 
     return (
       <Card
@@ -129,40 +145,57 @@ export const SetupJourneyView: React.FC<SetupJourneyViewProps> = ({ report }) =>
           <span className="text-[11px] text-zinc-400">
             {stage.scope === 'BRANCH' ? `📍 Scoped to ${report.branchName}` : '🏢 Organization-wide setting'}
           </span>
-          <Link href={stage.nextActionHref} className="w-full sm:w-auto shrink-0">
-            <Button
-              variant={isNext ? 'primary' : stage.isCompleted ? 'outline' : 'primary'}
-              size="sm"
-              className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center"
-            >
-              {stage.nextActionLabel} →
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+            {stageGuideMap[stage.id] && (
+              <ContextualHelpButton
+                explicitSlug={stageGuideMap[stage.id]}
+                label="Guide"
+                className="w-full sm:w-auto shrink-0 justify-center"
+              />
+            )}
+            <Link href={stage.nextActionHref} className="w-full sm:w-auto shrink-0">
+              <Button
+                variant={isNext ? 'primary' : stage.isCompleted ? 'outline' : 'primary'}
+                size="sm"
+                className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] px-4 font-bold text-xs justify-center"
+              >
+                {stage.nextActionLabel} →
+              </Button>
+            </Link>
+          </div>
         </div>
       </Card>
     );
   };
 
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
       {/* ── Page Header ────────────────────────────────────────── */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="neutral" className="text-xs font-semibold">
-            🏢 {report.businessName}
-          </Badge>
-          <span className="text-zinc-300 select-none">|</span>
-          <Badge variant="neutral" className="text-xs font-semibold">
-            📍 {report.branchName}
-          </Badge>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="neutral" className="text-xs font-semibold">
+              🏢 {report.businessName}
+            </Badge>
+            <span className="text-zinc-300 select-none">|</span>
+            <Badge variant="neutral" className="text-xs font-semibold">
+              📍 {report.branchName}
+            </Badge>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight">
+            Guided Business Setup & Onboarding
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            Follow this structured journey to configure your venue, build your menu, set up dining QR codes, and prepare for live operations.
+          </p>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 tracking-tight">
-          Guided Business Setup & Onboarding
-        </h1>
-        <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
-          Follow this structured journey to configure your venue, build your menu, set up dining QR codes, and prepare for live operations.
-        </p>
+
+        <div className="shrink-0 self-start sm:self-center">
+          <ContextualHelpButton explicitSlug="complete-business-setup" label="Setup Guide" />
+        </div>
       </div>
+
 
       {/* ── Overall Progress Hero Card ─────────────────────────── */}
       <Card className="p-4 sm:p-6 border-zinc-950/10 bg-gradient-to-br from-zinc-900 to-zinc-950 text-white space-y-5 shadow-xl rounded-2xl">

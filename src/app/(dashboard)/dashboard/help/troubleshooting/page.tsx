@@ -1,8 +1,9 @@
-import React from 'react';
+﻿import React from 'react';
 import Link from 'next/link';
 import { getTroubleshootingArticles } from '@/content/help/registry';
 import { HelpArticleCard } from '@/components/help/help-article-card';
 import { HelpSearchBar } from '@/components/help/help-search-bar';
+import { HelpLanguageToggle } from '@/components/help/help-language-toggle';
 import { SupportFallbackCard } from '@/components/help/support-fallback-card';
 
 export default function TroubleshootingDirectoryPage() {
@@ -10,18 +11,21 @@ export default function TroubleshootingDirectoryPage() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-12">
-      {/* Breadcrumbs */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs font-bold text-zinc-500">
-        <Link href="/dashboard/help" className="hover:text-zinc-950 transition-colors">
-          Help Center
-        </Link>
-        <span>/</span>
-        <span className="text-zinc-900">Troubleshooting</span>
-      </nav>
+      {/* Breadcrumbs & Language Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+          <Link href="/dashboard/help" className="hover:text-zinc-950 transition-colors">
+            Help Center
+          </Link>
+          <span>/</span>
+          <span className="text-zinc-900">Troubleshooting</span>
+        </nav>
+        <HelpLanguageToggle showLabel={false} />
+      </div>
 
       {/* Header */}
       <div className="space-y-4 text-center border-b border-zinc-200 pb-8">
-        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-3xl mx-auto shadow-2xs">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-3xl mx-auto shadow-2xs select-none">
           🔧
         </div>
         <div className="space-y-1 max-w-lg mx-auto">

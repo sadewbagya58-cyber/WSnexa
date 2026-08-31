@@ -1,10 +1,12 @@
-import { HelpArticle } from '../types';
+﻿import { HelpArticle } from '../types';
 
 export const ACCOUNT_SETTINGS_ARTICLES: HelpArticle[] = [
   {
     slug: 'managing-your-user-profile',
     title: 'Managing Your Profile, Name & Credentials',
+    titleSiEn: 'User Profile, නම සහ Password කළමනාකරණය',
     description: 'Update your display name, contact email, avatar, and password security credentials in WSNexa.',
+    descriptionSiEn: 'ඔබගේ Display Name, Contact Email, Avatar සහ Password security විස්තර යාවත්කාලීන කිරීම.',
     category: 'account-settings',
     keywords: ['profile', 'account', 'name', 'password', 'change password', 'email', 'avatar'],
     contextRoutes: ['/customer/profile'],
@@ -13,37 +15,51 @@ export const ACCOUNT_SETTINGS_ARTICLES: HelpArticle[] = [
       {
         number: 1,
         title: 'Open Profile Settings',
+        titleSiEn: 'Profile Settings වෙත යන්න',
         instruction: 'Click your user avatar in the upper right corner of the dashboard or go to your account profile.',
+        instructionSiEn: 'Dashboard එකෙහි ඉහළ දකුණු කෙලවරේ ඇති User Avatar එක click කර Profile වෙත යන්න.',
       },
       {
         number: 2,
         title: 'Update Display Name',
+        titleSiEn: 'Display Name එක වෙනස් කරන්න',
         instruction: 'Edit your First Name and Last Name. These appear on waiter order tickets and cashier receipts when you perform actions.',
+        instructionSiEn: 'First Name සහ Last Name ඇතුළත් කරන්න. Waiter tickets සහ Cashier receipts වල මෙම නම සටහන් වේ.',
       },
       {
         number: 3,
         title: 'Update Password & Security',
+        titleSiEn: 'Password එක යාවත්කාලීන කරන්න',
         instruction: 'To change your password, enter your current password followed by your new secure password (minimum 8 characters with numbers and symbols).',
+        instructionSiEn: 'වත්මන් password එක සහ නව secure password එකක් (අවම වශයෙන් අකුරු/ඉලක්කම් 8ක්) ඇතුළත් කරන්න.',
       },
       {
         number: 4,
         title: 'Save Profile',
+        titleSiEn: 'Profile එක Save කරන්න',
         instruction: 'Click "Update Profile" to commit your changes.',
+        instructionSiEn: 'Update Profile click කර ඔබගේ තොරතුරු save කරන්න.',
       },
     ],
     notes: [
       'If you forget your password, you can trigger a secure reset email from the login screen.',
     ],
-    relatedArticles: ['welcome-to-wsnexa', 'understanding-your-dashboard'],
+    notesSiEn: [
+      'Password අමතක වුවහොත් Login screen එකෙන් Reset Password link එකක් ලබාගත හැක.',
+    ],
+    relatedArticles: ['what-is-wsnexa', 'complete-business-setup'],
     directAction: {
       label: 'Open Dashboard',
+      labelSiEn: 'Dashboard වෙත යන්න',
       href: '/dashboard',
     },
   },
   {
     slug: 'reports-and-analytics-guide',
     title: 'Generating Sales Reports & Exporting Business Analytics',
+    titleSiEn: 'Sales Reports ලබාගැනීම සහ Business Analytics Export කිරීම',
     description: 'Track daily gross revenue, average order value, top-selling dishes, and export clean CSV/PDF reports.',
+    descriptionSiEn: 'දෛනික ආදායම, Gross Revenue, වැඩිපුරම අලෙවි වන කෑම වර්ග සහ CSV/PDF reports ලබාගන්නා ආකාරය.',
     category: 'account-settings',
     keywords: ['reports', 'analytics', 'revenue', 'export csv', 'sales report', 'top items', 'order volume'],
     allowedRoles: ['business_owner', 'branch_manager'],
@@ -55,35 +71,49 @@ export const ACCOUNT_SETTINGS_ARTICLES: HelpArticle[] = [
       {
         number: 1,
         title: 'Navigate to Reports & Analytics',
+        titleSiEn: 'Reports & Analytics වෙත යන්න',
         instruction: 'In the sidebar under "OVERVIEW", click "Reports & Analytics" (/dashboard/reports).',
+        instructionSiEn: 'Dashboard sidebar එකෙහි OVERVIEW යටතේ ඇති Reports & Analytics (/dashboard/reports) වෙත යන්න.',
       },
       {
         number: 2,
         title: 'Select Date Range',
+        titleSiEn: 'Date Range එක තෝරන්න',
         instruction: 'Choose your desired analysis timeframe: "Today", "Last 7 Days", "Last 30 Days", or a custom calendar range.',
+        instructionSiEn: '"Today", "Last 7 Days", "Last 30 Days" හෝ ඔබ කැමති Date Range එකක් තෝරාගන්න.',
       },
       {
         number: 3,
         title: 'Inspect Revenue & Volume Trends',
+        titleSiEn: 'Revenue සහ Orders Volume නිරීක්ෂණය කරන්න',
         instruction: 'Review Gross Sales, Net Revenue, Tax Collected, Service Charge Collected, and Total Orders completed.',
+        instructionSiEn: 'Gross Sales, Net Revenue, Taxes, Service Charges සහ මුළු completed orders ගණන නිරීක්ෂණය කරන්න.',
       },
       {
         number: 4,
         title: 'Review Top-Selling Menu Items',
+        titleSiEn: 'වැඩිපුරම අලෙවි වන Items බලන්න',
         instruction: 'Inspect the item performance chart to identify your most popular and highest-margin dishes.',
+        instructionSiEn: 'Item performance chart එක මඟින් වැඩිම ඉල්ලුමක් ඇති කෑම වර්ග හඳුනාගන්න.',
       },
       {
         number: 5,
         title: 'Export Financial Data',
+        titleSiEn: 'Financial Data Export කරගන්න',
         instruction: 'Click "Export CSV" to download an accounting-ready spreadsheet of all transactions for your bookkeeper.',
+        instructionSiEn: 'Export CSV click කර ගිණුම් කටයුතු සඳහා spreadsheet එකක් download කරගන්න.',
       },
     ],
     notes: [
       'Reports update in realtime as cashiers settle completed orders.',
     ],
-    relatedArticles: ['cashier-pos-dashboard-overview', 'setting-up-your-business'],
+    notesSiEn: [
+      'Cashiers orders settle කරන විට reports ක්ෂණිකව realtime update වේ.',
+    ],
+    relatedArticles: ['cashier-pos-overview', 'complete-business-setup'],
     directAction: {
       label: 'View Reports',
+      labelSiEn: 'Reports බලන්න',
       href: '/dashboard/reports',
     },
   },

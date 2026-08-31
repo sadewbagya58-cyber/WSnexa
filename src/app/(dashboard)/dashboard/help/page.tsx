@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import Link from 'next/link';
 import { resolveActiveBusinessContext } from '@/server/tenant/resolver';
 import { QuickStartService } from '@/server/services/quick-start.service';
@@ -8,13 +8,13 @@ import {
   getPopularArticles,
   getRecommendedArticles,
   getTroubleshootingArticles,
-  getComingSoonArticles,
 } from '@/content/help/registry';
 import { HelpSearchBar } from '@/components/help/help-search-bar';
 import { QuickStartChecklist } from '@/components/help/quick-start-checklist';
 import { HelpCategoryCard } from '@/components/help/help-category-card';
 import { HelpArticleCard } from '@/components/help/help-article-card';
 import { SupportFallbackCard } from '@/components/help/support-fallback-card';
+import { HelpLanguageToggle } from '@/components/help/help-language-toggle';
 import { Badge } from '@/components/ui/badge';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +35,6 @@ export default async function HelpCenterPage() {
   const recommendedGuides = getRecommendedArticles(userRole);
   const popularGuides = getPopularArticles();
   const troubleshootingGuides = getTroubleshootingArticles();
-  const comingSoonGuides = getComingSoonArticles();
 
   function formatRoleLabel(role: string): string {
     switch (role) {
@@ -50,18 +49,26 @@ export default async function HelpCenterPage() {
 
   return (
     <div className="space-y-10 max-w-6xl mx-auto pb-12">
-      {/* Hero Header & Search */}
+      {/* Hero Header, Language Selector & Search */}
       <div className="text-center space-y-6 pt-2 sm:pt-4">
-        <div className="space-y-2">
-          <Badge variant="neutral" className="font-extrabold text-[10px] uppercase tracking-wider px-3 py-1">
-            WSNexa Knowledge Base & User Guides
-          </Badge>
+        <div className="space-y-3">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <Badge variant="neutral" className="font-extrabold text-[10px] uppercase tracking-wider px-3 py-1">
+              WSNexa Knowledge Base & User Guides
+            </Badge>
+          </div>
+
           <h1 className="text-3xl sm:text-4xl font-black text-zinc-950 tracking-tight">
-            Help Center
+            Help Center & Guides
           </h1>
           <p className="text-xs sm:text-sm font-semibold text-zinc-500 max-w-lg mx-auto">
-            Learn how to use WSNexa, configure dining areas, take orders, and manage your business.
+            Learn how to configure dining areas, manage menus, process live orders, and troubleshoot your venue.
           </p>
+
+          {/* Bilingual Language Switcher (English vs Sinhala + English Mix) */}
+          <div className="pt-2 flex justify-center">
+            <HelpLanguageToggle />
+          </div>
         </div>
 
         {/* Prominent Search Bar */}
@@ -77,7 +84,7 @@ export default async function HelpCenterPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-lg">⭐</span>
+            <span className="text-lg select-none">⭐</span>
             <div>
               <h2 className="text-base font-extrabold text-zinc-950">
                 Recommended for You ({formatRoleLabel(userRole)})
@@ -100,13 +107,13 @@ export default async function HelpCenterPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-lg">🔥</span>
+            <span className="text-lg select-none">🔥</span>
             <div>
               <h2 className="text-base font-extrabold text-zinc-950">
                 Popular Guides & Core Workflows
               </h2>
               <p className="text-[11px] text-zinc-500 font-medium">
-                Common tasks and setup workflows across the platform.
+                Essential setup steps and operational guides across the platform.
               </p>
             </div>
           </div>
@@ -123,13 +130,13 @@ export default async function HelpCenterPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-lg">📚</span>
+            <span className="text-lg select-none">📚</span>
             <div>
               <h2 className="text-base font-extrabold text-zinc-950">
                 Browse by Category
               </h2>
               <p className="text-[11px] text-zinc-500 font-medium">
-                Explore all 14 structured knowledge domains.
+                Explore all {categories.length} structured knowledge sections.
               </p>
             </div>
           </div>
@@ -150,13 +157,13 @@ export default async function HelpCenterPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-lg">🔧</span>
+            <span className="text-lg select-none">🔧</span>
             <div>
               <h2 className="text-base font-extrabold text-zinc-950">
                 Troubleshooting Center
               </h2>
               <p className="text-[11px] text-zinc-500 font-medium">
-                Step-by-step diagnostic solutions for operational and network challenges.
+                Step-by-step diagnostic solutions for operational, QR, and network challenges.
               </p>
             </div>
           </div>
@@ -174,31 +181,6 @@ export default async function HelpCenterPage() {
           ))}
         </div>
       </div>
-
-      {/* Coming Soon & Roadmap */}
-      {comingSoonGuides.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">✨</span>
-              <div>
-                <h2 className="text-base font-extrabold text-zinc-950">
-                  Coming Soon & Future Updates
-                </h2>
-                <p className="text-[11px] text-zinc-500 font-medium">
-                  Features and capabilities planned for upcoming releases.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {comingSoonGuides.map((article) => (
-              <HelpArticleCard key={article.slug} article={article} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Support Fallback Footer */}
       <SupportFallbackCard />

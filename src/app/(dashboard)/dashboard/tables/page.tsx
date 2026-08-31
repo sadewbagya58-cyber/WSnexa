@@ -38,6 +38,7 @@ export default async function TablesDashboardPage() {
         title="Dining Tables & Floor Layout"
         description={`Manage service areas, floor sections, and table statuses for ${context.activeBranch.name}.`}
         breadcrumbs={[{ label: 'Tables' }]}
+        helpSlug="add-dining-tables"
         primaryAction={{
           label: '+ Add Table',
           href: '/dashboard/tables/new',

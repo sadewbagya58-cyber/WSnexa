@@ -12,6 +12,7 @@ import {
   toggleMenuItemFeaturedAction,
   archiveMenuItemAction,
 } from '@/server/actions/menu';
+import { createClient } from '@/lib/supabase/client';
 
 interface MenuItem {
   id: string;
@@ -33,12 +34,16 @@ interface ItemListProps {
   initialItems: MenuItem[];
   categories: { id: string; name: string }[];
   canEditPrice?: boolean;
+  businessId?: string;
+  branchId?: string;
 }
 
 export const ItemList: React.FC<ItemListProps> = ({
   initialItems,
   categories,
   canEditPrice = true,
+  businessId,
+  branchId,
 }) => {
   const [items, setItems] = useState<MenuItem[]>(initialItems);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -53,6 +58,10 @@ export const ItemList: React.FC<ItemListProps> = ({
   const [editDesc, setEditDesc] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editImageUrl, setEditImageUrl] = useState('');
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreviewUrl, setEditImagePreviewUrl] = useState<string | null>(null);
+  const [isUploadingEditImage, setIsUploadingEditImage] = useState(false);
+  const [showAdvancedUrl, setShowAdvancedUrl] = useState(false);
   const [editAvailability, setEditAvailability] = useState<'available' | 'out_of_stock' | 'hidden'>('available');
   const [editFeatured, setEditFeatured] = useState(false);
   const [editOrder, setEditOrder] = useState<number>(0);
@@ -70,10 +79,40 @@ export const ItemList: React.FC<ItemListProps> = ({
     setEditDesc(item.description || '');
     setEditPrice((item.price_cents / 100).toFixed(2));
     setEditImageUrl(item.primary_image_url || '');
+    setEditImagePreviewUrl(item.primary_image_url || null);
+    setEditImageFile(null);
+    setShowAdvancedUrl(false);
     setEditAvailability(item.availability_status);
     setEditFeatured(item.is_featured);
     setEditOrder(item.display_order || 0);
     setEditModalError(null);
+  };
+
+  const handleEditImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      setEditModalError('Invalid image format. PNG, JPG, and WEBP supported.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setEditModalError('Image size exceeds 5MB limit.');
+      return;
+    }
+
+    setEditModalError(null);
+    setEditImageFile(file);
+    const localPreview = URL.createObjectURL(file);
+    setEditImagePreviewUrl(localPreview);
+  };
+
+  const handleRemoveEditImage = () => {
+    setEditImageFile(null);
+    setEditImagePreviewUrl(null);
+    setEditImageUrl('');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -90,13 +129,50 @@ export const ItemList: React.FC<ItemListProps> = ({
       return;
     }
 
+    let finalImageUrl = editImageUrl.trim() || null;
+
+    if (editImageFile && businessId && branchId) {
+      setIsUploadingEditImage(true);
+      try {
+        const supabase = createClient();
+        const fileExt = editImageFile.name.split('.').pop();
+        const filePath = `menu-items/${businessId}/${branchId}/items/item-${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('business-assets')
+          .upload(filePath, editImageFile, { upsert: true });
+
+        if (uploadError) {
+          setEditModalError(`Image upload failed: ${uploadError.message}`);
+          setIsUploadingEditImage(false);
+          setIsSavingEdit(false);
+          return;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('business-assets').getPublicUrl(filePath);
+
+        finalImageUrl = publicUrl;
+      } catch {
+        setEditModalError('Error uploading image.');
+        setIsUploadingEditImage(false);
+        setIsSavingEdit(false);
+        return;
+      } finally {
+        setIsUploadingEditImage(false);
+      }
+    } else if (!editImagePreviewUrl) {
+      finalImageUrl = null;
+    }
+
     const payload = {
       id: editingItem.id,
       name: editName.trim(),
       categoryId: editCategoryId,
       description: editDesc.trim() || undefined,
       ...(canEditPrice ? { price: priceNum } : {}),
-      primaryImageUrl: editImageUrl.trim() || undefined,
+      primaryImageUrl: finalImageUrl || undefined,
       availabilityStatus: editAvailability,
       isFeatured: editFeatured,
       displayOrder: editOrder,
@@ -120,7 +196,7 @@ export const ItemList: React.FC<ItemListProps> = ({
                 category_id: editCategoryId,
                 description: editDesc.trim() || null,
                 price_cents: updatedPriceCents,
-                primary_image_url: editImageUrl.trim() || null,
+                primary_image_url: finalImageUrl,
                 availability_status: editAvailability,
                 is_featured: editFeatured,
                 display_order: editOrder,
@@ -575,17 +651,76 @@ export const ItemList: React.FC<ItemListProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase text-zinc-700 mb-1">
-                  Primary Image URL
+              {/* Primary Image Upload & Preview Section */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-zinc-700">
+                  Primary Image
                 </label>
-                <input
-                  type="url"
-                  value={editImageUrl}
-                  onChange={(e) => setEditImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-hidden focus:border-zinc-950"
-                />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 overflow-hidden">
+                    {editImagePreviewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={editImagePreviewUrl} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[10px] text-zinc-400 font-medium">No Image</span>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="cursor-pointer">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-xs font-bold text-zinc-800 hover:bg-zinc-50 shadow-xs">
+                          📷 {editImagePreviewUrl ? 'Replace Photo' : 'Choose Photo'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg, image/webp"
+                          onChange={handleEditImageFileSelect}
+                          disabled={isSavingEdit || isUploadingEditImage}
+                          className="hidden"
+                        />
+                      </label>
+                      {editImagePreviewUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveEditImage}
+                          className="px-2.5 py-1.5 text-xs text-red-600 hover:text-red-800 font-semibold"
+                        >
+                          Remove Photo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedUrl((prev) => !prev)}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-800 font-medium underline"
+                      >
+                        {showAdvancedUrl ? 'Hide Image URL' : 'Use Image URL'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-zinc-400">
+                      PNG, JPG, or WEBP up to 5MB.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Optional Image URL Input (for external URLs / backwards compatibility) */}
+                {showAdvancedUrl && (
+                  <div className="pt-2 animate-in fade-in">
+                    <label className="block text-[11px] font-semibold text-zinc-500 mb-1">
+                      Image URL (External)
+                    </label>
+                    <input
+                      type="url"
+                      value={editImageUrl}
+                      onChange={(e) => {
+                        setEditImageUrl(e.target.value);
+                        setEditImagePreviewUrl(e.target.value.trim() || null);
+                        setEditImageFile(null);
+                      }}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full min-h-[40px] px-3 py-2 rounded-lg border border-zinc-300 text-xs focus:outline-hidden focus:border-zinc-950"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">

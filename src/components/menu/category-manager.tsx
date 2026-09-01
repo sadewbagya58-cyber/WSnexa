@@ -58,10 +58,18 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ initialCategor
     if (!res.success) {
       setErrorMsg(res.message || 'Failed to create category.');
     } else {
+      const createdCategory: CategoryItem = {
+        id: res.data?.categoryId || `cat_${Date.now()}`,
+        name: name.trim(),
+        slug: res.data?.slug || name.trim().toLowerCase().replace(/\s+/g, '-'),
+        description: description.trim() || null,
+        display_order: categories.length,
+        is_active: true,
+      };
+      setCategories((prev) => [...prev, createdCategory]);
       setSuccessMsg(`Category "${name.trim()}" created successfully.`);
       setName('');
       setDescription('');
-      window.location.reload();
     }
     setLoading(false);
   };

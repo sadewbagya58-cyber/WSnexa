@@ -815,3 +815,208 @@ export async function verifyTableAccessAction(
     },
   };
 }
+
+/**
+ * Resolves a single table's plain PIN for authorized management copy action.
+ * Strict server-side RBAC: requires tables.manage, tables.edit, or qr.security.reset.
+ */
+export async function getTablePinAction(tableId: string): Promise<ActionResponse<{ pin: string }>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
+    return { success: false, message: 'Unauthorized or active branch context not found.' };
+  }
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canViewPin =
+    authContext.isBusinessOwner ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource }));
+
+  if (!canViewPin) {
+    return { success: false, message: 'Forbidden: Insufficient permissions to access table security PIN.' };
+  }
+
+  const supabase = await createClient();
+  const { data: table, error } = await supabase
+    .from('dining_tables')
+    .select('id, name, code, table_pin_hash')
+    .eq('id', tableId)
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
+    .is('deleted_at', null)
+    .single();
+
+  if (error || !table) {
+    return { success: false, message: 'Dining table not found.' };
+  }
+
+  if (!table.table_pin_hash) {
+    return { success: false, message: 'Security PIN has not been configured for this table.' };
+  }
+
+  // Resolve branch PIN length
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('table_pin_length')
+    .eq('id', authContext.activeBranchId)
+    .single();
+
+  const pinLength = branch?.table_pin_length || 4;
+
+  // Resolve plain PIN from HMAC hash
+  let resolvedPin: string | null = null;
+  const max = Math.pow(10, pinLength);
+  for (let i = 0; i < max; i++) {
+    const candidate = i.toString().padStart(pinLength, '0');
+    if (hashTablePin(candidate) === table.table_pin_hash) {
+      resolvedPin = candidate;
+      break;
+    }
+  }
+
+  // Fallback 4-digit check if pinLength was customized later
+  if (!resolvedPin && pinLength !== 4) {
+    for (let i = 0; i < 10000; i++) {
+      const candidate = i.toString().padStart(4, '0');
+      if (hashTablePin(candidate) === table.table_pin_hash) {
+        resolvedPin = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!resolvedPin) {
+    return { success: false, message: 'Unable to decrypt table security PIN. Please reset the PIN.' };
+  }
+
+  return {
+    success: true,
+    message: 'Security PIN retrieved.',
+    data: { pin: resolvedPin },
+  };
+}
+
+export interface PrintableTablePinItem {
+  id: string;
+  name: string;
+  code: string;
+  tableNumber: number | null;
+  capacity: number;
+  shape: string | null;
+  serviceAreaName: string;
+  serviceAreaCode: string;
+  pin: string | null;
+  hasPin: boolean;
+}
+
+/**
+ * Resolves all active branch dining tables with plain PINs for authorized bulk printing.
+ */
+export async function getBranchTablePinsAction(options?: {
+  serviceAreaId?: string;
+  tableIds?: string[];
+}): Promise<ActionResponse<{ tables: PrintableTablePinItem[]; branchName: string; businessName: string }>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.activeBranchId) {
+    return { success: false, message: 'Unauthorized or branch context not found.' };
+  }
+
+  const branchResource = { type: 'branch' as const, id: authContext.activeBranchId };
+  const canViewPins =
+    authContext.isBusinessOwner ||
+    (await can({ context: authContext, permission: 'tables.manage', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'tables.edit', resource: branchResource })) ||
+    (await can({ context: authContext, permission: 'qr.security.reset', resource: branchResource }));
+
+  if (!canViewPins) {
+    return { success: false, message: 'Forbidden: Insufficient permissions to print table PINs.' };
+  }
+
+  const supabase = await createClient();
+
+  // Fetch branch & business info
+  const [{ data: branch }, { data: business }] = await Promise.all([
+    supabase.from('branches').select('name, table_pin_length').eq('id', authContext.activeBranchId).single(),
+    supabase.from('businesses').select('name').eq('id', authContext.businessId).single(),
+  ]);
+
+  let query = supabase
+    .from('dining_tables')
+    .select('id, name, code, table_number, capacity, shape, service_area_id, table_pin_hash, is_active, service_areas(name, code)')
+    .eq('business_id', authContext.businessId)
+    .eq('branch_id', authContext.activeBranchId)
+    .is('deleted_at', null)
+    .order('display_order', { ascending: true })
+    .order('table_number', { ascending: true });
+
+  if (options?.serviceAreaId && options.serviceAreaId !== 'all') {
+    query = query.eq('service_area_id', options.serviceAreaId);
+  }
+
+  if (options?.tableIds && options.tableIds.length > 0) {
+    query = query.in('id', options.tableIds);
+  }
+
+  const { data: rawTables, error } = await query;
+  if (error || !rawTables) {
+    return { success: false, message: error?.message || 'Failed to load tables.' };
+  }
+
+  const pinLength = branch?.table_pin_length || 4;
+
+  // Build lookup map for all table hashes in one fast iteration
+  const targetHashes = new Set(rawTables.map((t) => t.table_pin_hash).filter((h): h is string => Boolean(h)));
+  const hashToPinMap = new Map<string, string>();
+
+  if (targetHashes.size > 0) {
+    const max = Math.pow(10, pinLength);
+    for (let i = 0; i < max; i++) {
+      const candidate = i.toString().padStart(pinLength, '0');
+      const hash = hashTablePin(candidate);
+      if (targetHashes.has(hash)) {
+        hashToPinMap.set(hash, candidate);
+        if (hashToPinMap.size === targetHashes.size) break;
+      }
+    }
+
+    // Fallback 4-digit check if needed
+    if (hashToPinMap.size < targetHashes.size && pinLength !== 4) {
+      for (let i = 0; i < 10000; i++) {
+        const candidate = i.toString().padStart(4, '0');
+        const hash = hashTablePin(candidate);
+        if (targetHashes.has(hash) && !hashToPinMap.has(hash)) {
+          hashToPinMap.set(hash, candidate);
+        }
+      }
+    }
+  }
+
+  const printableTables: PrintableTablePinItem[] = rawTables.map((t) => {
+    const serviceArea = Array.isArray(t.service_areas) ? t.service_areas[0] : t.service_areas;
+    const resolvedPin = t.table_pin_hash ? hashToPinMap.get(t.table_pin_hash) || null : null;
+
+    return {
+      id: t.id,
+      name: t.name,
+      code: t.code,
+      tableNumber: t.table_number,
+      capacity: t.capacity,
+      shape: t.shape,
+      serviceAreaName: serviceArea?.name || 'Main Dining',
+      serviceAreaCode: serviceArea?.code || 'MAIN',
+      pin: resolvedPin,
+      hasPin: Boolean(t.table_pin_hash),
+    };
+  });
+
+  return {
+    success: true,
+    message: 'Table PINs loaded.',
+    data: {
+      tables: printableTables,
+      branchName: branch?.name || 'Branch',
+      businessName: business?.name || 'WSNexa',
+    },
+  };
+}

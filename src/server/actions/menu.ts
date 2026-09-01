@@ -107,6 +107,7 @@ export async function createMenuCategoryAction(
   });
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/categories');
   return {
     success: true,
     message: 'Menu category created successfully!',
@@ -162,6 +163,7 @@ export async function updateMenuCategoryAction(
   }
 
   revalidatePath('/dashboard/menu');
+  revalidatePath('/dashboard/menu/categories');
   return { success: true, message: 'Menu category updated.' };
 }
 

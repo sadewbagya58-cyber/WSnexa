@@ -73,6 +73,8 @@ export default async function MenuItemsPage() {
         initialItems={(items as unknown as Parameters<typeof ItemList>[0]['initialItems']) || []}
         categories={categories || []}
         canEditPrice={canEditPrice}
+        businessId={tenantContext.business.id}
+        branchId={activeBranch.id}
       />
     </div>
   );

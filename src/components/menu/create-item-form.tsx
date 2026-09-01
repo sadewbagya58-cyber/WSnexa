@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { createMenuItemAction } from '@/server/actions/menu';
+import { createMenuItemAction, createMenuCategoryAction } from '@/server/actions/menu';
 import { createClient } from '@/lib/supabase/client';
 
 interface CreateItemFormProps {
@@ -13,18 +13,26 @@ interface CreateItemFormProps {
   branchId: string;
 }
 
-export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, currency, businessId, branchId }) => {
+export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: initialCategories, currency, businessId, branchId }) => {
   const router = useRouter();
+  const [categoriesList, setCategoriesList] = useState(initialCategories);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const isSubmittingRef = useRef(false);
+
+  // Quick Add Category Modal State
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
-    categoryId: categories[0]?.id || '',
+    categoryId: initialCategories[0]?.id || '',
     description: '',
     price: '',
     preparationTimeMinutes: '',
@@ -78,7 +86,38 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
     }
   };
 
+  const handleQuickCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    setIsCreatingCategory(true);
+    setErrorMsg(null);
+
+    const res = await createMenuCategoryAction({
+      name: newCatName.trim(),
+      description: newCatDesc.trim() || undefined,
+      displayOrder: categoriesList.length,
+      isActive: true,
+    });
+
+    setIsCreatingCategory(false);
+
+    if (res.success && res.data) {
+      const newCat = { id: res.data.categoryId, name: newCatName.trim() };
+      setCategoriesList((prev) => [...prev, newCat]);
+      setFormData((prev) => ({ ...prev, categoryId: newCat.id }));
+      setSuccessMsg(`Category "${newCatName.trim()}" created and selected.`);
+      setNewCatName('');
+      setNewCatDesc('');
+      setIsAddCategoryOpen(false);
+    } else {
+      setErrorMsg(res.message || 'Failed to create category.');
+    }
+  };
+
   const handleSaveItem = async (addAnother: boolean) => {
+    if (isSubmittingRef.current) return;
+
     setErrorMsg(null);
     setSuccessMsg(null);
 
@@ -98,10 +137,12 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
+    const savedName = formData.name.trim();
     const res = await createMenuItemAction({
-      name: formData.name.trim(),
+      name: savedName,
       categoryId: formData.categoryId,
       description: formData.description.trim() || undefined,
       price: numericPrice,
@@ -115,28 +156,29 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
       primaryImageUrl: imageUrl,
     });
 
-    setLoading(false);
-
     if (!res.success) {
+      isSubmittingRef.current = false;
+      setLoading(false);
       setErrorMsg(res.message || 'Failed to create menu item.');
+      return;
+    }
+
+    if (addAnother) {
+      isSubmittingRef.current = false;
+      setLoading(false);
+      setSuccessMsg(`✓ "${savedName}" added to menu! You can create another item below.`);
+      setFormData((prev) => ({
+        ...prev,
+        name: '',
+        description: '',
+        price: '',
+        preparationTimeMinutes: '',
+        isFeatured: false,
+      }));
+      setImageUrl(null);
     } else {
-      if (addAnother) {
-        const savedName = formData.name.trim();
-        setSuccessMsg(`✓ "${savedName}" added to menu! You can create another item below.`);
-        setFormData((prev) => ({
-          ...prev,
-          name: '',
-          description: '',
-          price: '',
-          preparationTimeMinutes: '',
-          isFeatured: false,
-        }));
-        setImageUrl(null);
-        router.refresh();
-      } else {
-        router.push('/dashboard/menu/items');
-        router.refresh();
-      }
+      setSuccessMsg(`✓ "${savedName}" added to menu! Returning to menu items catalog...`);
+      router.push('/dashboard/menu/items');
     }
   };
 
@@ -174,11 +216,20 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label htmlFor="categoryId" className="block text-xs font-medium text-zinc-700">
-            Category <span className="text-red-500">*</span>
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="categoryId" className="block text-xs font-medium text-zinc-700">
+              Category <span className="text-red-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsAddCategoryOpen(true)}
+              className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950"
+            >
+              + New Category
+            </button>
+          </div>
           <select
             id="categoryId"
             required
@@ -186,7 +237,7 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
             onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
             className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
           >
-            {categories.map((c) => (
+            {categoriesList.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -329,6 +380,73 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories, curr
           {loading ? 'Saving…' : 'Add Menu Item'}
         </Button>
       </div>
+
+      {/* Quick Add Category Modal */}
+      {isAddCategoryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-zinc-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+              <h3 className="text-sm font-bold text-zinc-950">Add New Menu Category</h3>
+              <button
+                type="button"
+                onClick={() => setIsAddCategoryOpen(false)}
+                className="text-zinc-400 hover:text-zinc-700 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rice & Curry, Mocktails"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700">
+                  Description (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Brief description..."
+                  value={newCatDesc}
+                  onChange={(e) => setNewCatDesc(e.target.value)}
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-zinc-950 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 text-xs"
+                onClick={() => setIsAddCategoryOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                className="flex-1 text-xs bg-zinc-950 text-white hover:bg-zinc-800"
+                disabled={!newCatName.trim() || isCreatingCategory}
+                onClick={handleQuickCreateCategory}
+              >
+                {isCreatingCategory ? 'Creating…' : 'Create Category'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 };

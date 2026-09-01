@@ -10,7 +10,9 @@ import {
   archiveDiningTableAction,
   generateTablePinAction,
   updateTablePinAction,
+  getTablePinAction,
 } from '@/server/actions/table';
+import { BulkPrintPinModal } from './bulk-print-pin-modal';
 import { TableStatus } from '@/types/database.types';
 
 interface DiningTableItem {
@@ -65,8 +67,13 @@ export const TableGrid: React.FC<TableGridProps> = ({
     inputPin: string;
   } | null>(null);
 
+  // Bulk Print PINs Modal State
+  const [isBulkPrintOpen, setIsBulkPrintOpen] = useState<boolean>(false);
+
   const [pinLoading, setPinLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const handleStatusChange = async (tableId: string, nextStatus: TableStatus) => {
     const currentTable = tables.find((t) => t.id === tableId);
@@ -162,6 +169,28 @@ export const TableGrid: React.FC<TableGridProps> = ({
       });
     } else {
       alert(res.message || 'Failed to set custom PIN');
+    }
+  };
+
+  const handleCopyTablePin = async (table: DiningTableItem) => {
+    setPinLoading(true);
+    const res = await getTablePinAction(table.id);
+    setPinLoading(false);
+
+    if (res.success && res.data?.pin) {
+      try {
+        await navigator.clipboard.writeText(res.data.pin);
+        setCopiedTableId(table.id);
+        setCopyFeedback(`Security PIN copied for ${table.name} (${table.code})`);
+        setTimeout(() => {
+          setCopiedTableId(null);
+          setCopyFeedback(null);
+        }, 2500);
+      } catch {
+        alert(`Table PIN: ${res.data.pin}`);
+      }
+    } else {
+      alert(res.message || 'Failed to copy table PIN.');
     }
   };
 
@@ -291,6 +320,15 @@ export const TableGrid: React.FC<TableGridProps> = ({
 
           {canManage && (
             <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsBulkPrintOpen(true)}
+                className="font-bold text-xs"
+              >
+                🖨️ Print PINs
+              </Button>
               <Link href="/dashboard/tables/bulk">
                 <Button variant="outline" size="sm">
                   ⚡ Bulk Generator
@@ -305,6 +343,20 @@ export const TableGrid: React.FC<TableGridProps> = ({
           )}
         </div>
       </div>
+
+      {/* Copy Feedback Notice */}
+      {copyFeedback && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-sm animate-in fade-in flex items-center justify-between">
+          <span>✓ {copyFeedback}</span>
+          <button
+            type="button"
+            onClick={() => setCopyFeedback(null)}
+            className="text-emerald-700 hover:text-emerald-950 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Tables Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 print:hidden">
@@ -348,11 +400,22 @@ export const TableGrid: React.FC<TableGridProps> = ({
 
                   {canManage && (
                     <div className="flex items-center gap-1">
+                      {hasPin && (
+                        <button
+                          type="button"
+                          disabled={pinLoading}
+                          onClick={() => handleCopyTablePin(table)}
+                          className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100 transition-colors flex items-center gap-1"
+                          title="Copy Security PIN to clipboard"
+                        >
+                          {copiedTableId === table.id ? '✓ Copied' : '📋 Copy'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={pinLoading}
                         onClick={() => handleGeneratePin(table)}
-                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
+                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100 transition-colors"
                       >
                         {hasPin ? '🔄 Reset' : '✨ Set'}
                       </button>
@@ -360,7 +423,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
                         type="button"
                         disabled={pinLoading}
                         onClick={() => setCustomPinModal({ tableId: table.id, tableName: table.name, inputPin: '' })}
-                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100"
+                        className="rounded bg-white px-2 py-1 text-[11px] font-bold text-zinc-800 border border-zinc-200 hover:bg-zinc-100 transition-colors"
                       >
                         ✏️ Edit
                       </button>
@@ -528,6 +591,16 @@ export const TableGrid: React.FC<TableGridProps> = ({
           </div>
         </div>
       )}
+
+      {/* Bulk Print PINs Modal */}
+      <BulkPrintPinModal
+        isOpen={isBulkPrintOpen}
+        onClose={() => setIsBulkPrintOpen(false)}
+        businessName={businessName}
+        branchName={branchName}
+        areas={areas}
+        initialAreaId={selectedArea}
+      />
     </div>
   );
 };

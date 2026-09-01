@@ -455,9 +455,27 @@ export class OrderService {
       }
     }
 
-    // 3. Execute atomic private service-role create_guest_order RPC
+    // 3. Resolve RPC token hash
+    // The private atomic create_guest_order RPC verifies the branch/table QR token hash to anchor business and branch.
+    // When the order is placed via an Area QR or Visit Session, resolve the branch's active QR token hash so the RPC succeeds cleanly.
+    let rpcTokenHash = tokenHash;
+    if (targetBranchId && (areaVerification.valid || sessionTokenToUse)) {
+      const { data: bQr } = await admin
+        .from('branch_qr_codes')
+        .select('token_hash')
+        .eq('branch_id', targetBranchId)
+        .eq('is_active', true)
+        .is('revoked_at', null)
+        .maybeSingle();
+
+      if (bQr?.token_hash) {
+        rpcTokenHash = bQr.token_hash;
+      }
+    }
+
+    // 4. Execute atomic private service-role create_guest_order RPC
     const { data, error } = await admin.rpc('create_guest_order', {
-      p_token_hash: tokenHash,
+      p_token_hash: rpcTokenHash,
       p_table_id: tableId || null,
       p_table_access_verified: isTableAccessVerified,
       p_guest_name: guestName || null,
@@ -473,24 +491,27 @@ export class OrderService {
     const rpcPayload = data as { success?: boolean; error?: string; order_id?: string } | null;
     const rpcErrorStr = error?.message || (rpcPayload && !rpcPayload.success ? rpcPayload.error : null) || null;
 
-    if (rpcPayload?.success && rpcPayload.order_id && secEvalResult) {
+    if (rpcPayload?.success && rpcPayload.order_id) {
       const updateData: Record<string, unknown> = {};
-      if (secEvalResult.requiresWaiterApproval) {
+      if (authoritativeAreaId) {
+        updateData.service_area_id = authoritativeAreaId;
+      }
+      if (secEvalResult?.requiresWaiterApproval) {
         updateData.approval_status = 'pending_waiter_approval';
         updateData.status = 'pending';
-      } else {
+      } else if (secEvalResult) {
         updateData.approval_status = 'approved';
       }
-      if (secEvalResult.qrVisitSessionId) {
+      if (secEvalResult?.qrVisitSessionId) {
         updateData.qr_visit_session_id = secEvalResult.qrVisitSessionId;
       }
-      if (secEvalResult.tableSessionId) {
+      if (secEvalResult?.tableSessionId) {
         updateData.table_session_id = secEvalResult.tableSessionId;
       }
-      if (secEvalResult.checks?.location === 'passed') {
+      if (secEvalResult?.checks?.location === 'passed') {
         updateData.location_verified = true;
       }
-      if (secEvalResult.checks?.paymentBypass === 'applied') {
+      if (secEvalResult?.checks?.paymentBypass === 'applied') {
         updateData.payment_verified_online = true;
       }
 

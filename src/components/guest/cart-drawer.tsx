@@ -54,6 +54,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const [isNavigating, setIsNavigating] = React.useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsNavigating(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const isTableConfirmed = !!state.confirmedTable;
@@ -61,8 +69,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     state.lines.length > 0 && (!requireTableSelection || isTableConfirmed);
 
   const handleCheckoutClick = () => {
-    if (!canProceedToCheckout) return;
-    onClose();
+    if (!canProceedToCheckout || isNavigating) return;
+    setIsNavigating(true);
     router.push(`/m/${token}/checkout`);
   };
 
@@ -243,10 +251,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               <Button
                 className="flex-1 text-sm font-bold py-3 cursor-pointer"
-                disabled={!canProceedToCheckout}
+                disabled={!canProceedToCheckout || isNavigating}
                 onClick={handleCheckoutClick}
               >
-                {!isTableConfirmed && requireTableSelection
+                {isNavigating
+                  ? 'Opening Checkout...'
+                  : !isTableConfirmed && requireTableSelection
                   ? 'Confirm Table to Proceed'
                   : 'Continue to Checkout →'}
               </Button>

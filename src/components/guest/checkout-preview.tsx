@@ -350,19 +350,27 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         {/* Guest Details Form */}
         <form onSubmit={handleOrderSubmission} className="space-y-6">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
-            <h2 className="text-xs font-extrabold uppercase tracking-wider text-zinc-500 border-b border-zinc-100 pb-3">
-              Guest Contact Details (Optional)
-            </h2>
+            <div className="border-b border-zinc-100 pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-extrabold text-zinc-950">Guest Details</h2>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                  Optional
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Optional — you can skip this section and place your order directly.
+              </p>
+            </div>
 
             <div className="space-y-3">
               <div>
                 <label htmlFor={guestNameId} className="block text-xs font-bold text-zinc-700 mb-1">
-                  Your Name
+                  Your Name <span className="text-[11px] font-normal text-zinc-400">(Optional)</span>
                 </label>
                 <input
                   id={guestNameId}
                   type="text"
-                  placeholder="e.g. John Doe"
+                  placeholder="e.g. John Doe (Optional)"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   className="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-xs text-zinc-950 placeholder:text-zinc-400 focus:border-zinc-950 focus:outline-none"
@@ -372,12 +380,12 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
 
               <div>
                 <label htmlFor={guestPhoneId} className="block text-xs font-bold text-zinc-700 mb-1">
-                  Phone Number
+                  Phone Number <span className="text-[11px] font-normal text-zinc-400">(Optional)</span>
                 </label>
                 <input
                   id={guestPhoneId}
                   type="tel"
-                  placeholder="e.g. +94 77 123 4567"
+                  placeholder="e.g. +94 77 123 4567 (Optional)"
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
                   className="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-xs text-zinc-950 placeholder:text-zinc-400 focus:border-zinc-950 focus:outline-none"
@@ -387,11 +395,11 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
 
               <div>
                 <label htmlFor={guestNotesId} className="block text-xs font-bold text-zinc-700 mb-1">
-                  Order / Preparation Notes
+                  Order / Preparation Notes <span className="text-[11px] font-normal text-zinc-400">(Optional)</span>
                 </label>
                 <textarea
                   id={guestNotesId}
-                  placeholder="e.g. Please make it extra spicy, cutlery needed..."
+                  placeholder="e.g. Extra spicy, no cutlery needed... (Optional)"
                   value={guestNotes}
                   onChange={(e) => setGuestNotes(e.target.value)}
                   className="w-full rounded-xl border border-zinc-300 px-3.5 py-2 text-xs text-zinc-950 placeholder:text-zinc-400 focus:border-zinc-950 focus:outline-none h-20 resize-none"

@@ -94,23 +94,23 @@ export function OrderSecuritySettings({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-5 sm:space-y-6 min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4 min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-extrabold text-zinc-950">Order Security Engine</h1>
-          <p className="text-xs text-zinc-500 mt-1">
+          <p className="text-xs text-zinc-500 mt-1 break-words">
             Configure anti-fake-order controls for <strong className="text-zinc-800">{branchName}</strong>. Protect your venue from remote spam orders and fake checkouts.
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 self-start sm:self-auto">
           <ContextualHelpButton explicitSlug="understanding-order-security-levels" />
         </div>
       </div>
 
       {feedbackMsg && (
         <div
-          className={`p-4 rounded-xl text-xs font-bold border ${
+          className={`p-3.5 sm:p-4 rounded-xl text-xs font-bold border break-words ${
             feedbackMsg.type === 'success'
               ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
               : 'bg-rose-50 text-rose-900 border-rose-200'
@@ -121,26 +121,26 @@ export function OrderSecuritySettings({
         </div>
       )}
 
-      {/* Preset Level Selector */}
-      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-3">
-        <div className="flex items-center justify-between">
+      {/* Preset Level Selector - Compact 2x2 on mobile, 4 columns on desktop */}
+      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-3.5 sm:p-5 space-y-3 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 min-w-0">
           <h3 className="font-extrabold text-sm text-zinc-950">Security Presets</h3>
-          <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Quick Preset Configuration</span>
+          <span className="text-[10px] sm:text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Quick Preset Configuration</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
           <button
             type="button"
             onClick={() => handleApplyPreset('low')}
             disabled={isSaving}
-            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between w-full min-w-0 ${
               activePreset === 'low'
-                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs ring-1 ring-zinc-950'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
-            <div className="font-extrabold text-xs">🟢 Low Security</div>
-            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'low' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <div className="font-extrabold text-[11px] sm:text-xs break-words">🟢 Low Security</div>
+            <p className={`text-[10px] mt-1 break-words leading-tight ${activePreset === 'low' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               QR session required. Immediate customer ordering.
             </p>
           </button>
@@ -149,14 +149,14 @@ export function OrderSecuritySettings({
             type="button"
             onClick={() => handleApplyPreset('balanced')}
             disabled={isSaving}
-            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between w-full min-w-0 ${
               activePreset === 'balanced'
-                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs ring-1 ring-zinc-950'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
-            <div className="font-extrabold text-xs">🟡 Balanced</div>
-            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'balanced' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <div className="font-extrabold text-[11px] sm:text-xs break-words">🟡 Balanced</div>
+            <p className={`text-[10px] mt-1 break-words leading-tight ${activePreset === 'balanced' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               Account login + waiter approval for QR orders.
             </p>
           </button>
@@ -165,14 +165,14 @@ export function OrderSecuritySettings({
             type="button"
             onClick={() => handleApplyPreset('high')}
             disabled={isSaving}
-            className={`p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all active:scale-[0.98] min-h-[44px] touch-manipulation flex flex-col justify-between w-full min-w-0 ${
               activePreset === 'high'
-                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs ring-1 ring-zinc-950'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
-            <div className="font-extrabold text-xs">🔴 High Security</div>
-            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'high' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <div className="font-extrabold text-[11px] sm:text-xs break-words">🔴 High Security</div>
+            <p className={`text-[10px] mt-1 break-words leading-tight ${activePreset === 'high' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               QR session + account + location + waiter approval.
             </p>
           </button>
@@ -180,14 +180,14 @@ export function OrderSecuritySettings({
           <button
             type="button"
             onClick={() => setActivePreset('custom')}
-            className={`p-3.5 rounded-xl border text-left transition-all min-h-[44px] touch-manipulation flex flex-col justify-between ${
+            className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all min-h-[44px] touch-manipulation flex flex-col justify-between w-full min-w-0 ${
               activePreset === 'custom'
-                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs ring-1 ring-zinc-950'
                 : 'border-zinc-200 bg-white hover:bg-zinc-100 text-zinc-900'
             }`}
           >
-            <div className="font-extrabold text-xs">⚙️ Custom</div>
-            <p className={`text-[10px] mt-1.5 break-words ${activePreset === 'custom' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+            <div className="font-extrabold text-[11px] sm:text-xs break-words">⚙️ Custom</div>
+            <p className={`text-[10px] mt-1 break-words leading-tight ${activePreset === 'custom' ? 'text-zinc-300' : 'text-zinc-500'}`}>
               Configure individual controls below.
             </p>
           </button>
@@ -195,29 +195,29 @@ export function OrderSecuritySettings({
       </div>
 
       {/* Security Control Toggles */}
-      <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl p-3.5 sm:p-5 shadow-2xs space-y-3.5 sm:space-y-4 min-w-0">
         <h3 className="font-extrabold text-sm text-zinc-950 border-b border-zinc-100 pb-2">
           Granular Security Controls
         </h3>
 
-        <div className="space-y-3">
+        <div className="space-y-2.5 sm:space-y-3 min-w-0">
           {/* Active QR Session */}
           <div
             onClick={() => handleToggle('require_active_qr_session')}
-            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
               settings.require_active_qr_session
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div className="min-w-0">
-              <h4 className="font-extrabold text-xs text-zinc-950">Require Active QR Visit Session</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5 break-words">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Require Active QR Visit Session</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
                 Ensures ordering is only allowed from recent valid QR scans. Prevents saved URLs from creating remote orders.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black self-start sm:self-auto shrink-0 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
                 settings.require_active_qr_session ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >
@@ -228,20 +228,20 @@ export function OrderSecuritySettings({
           {/* Customer Account Requirement */}
           <div
             onClick={() => handleToggle('require_customer_account')}
-            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
               settings.require_customer_account
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div>
-              <h4 className="font-extrabold text-xs text-zinc-950">Require Customer Account Login</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Require Customer Account Login</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
                 Guests may browse the menu freely, but must authenticate before submitting order checkout.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ml-3 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
                 settings.require_customer_account ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >
@@ -252,20 +252,20 @@ export function OrderSecuritySettings({
           {/* Geolocation Verification */}
           <div
             onClick={() => handleToggle('require_location_verification')}
-            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
               settings.require_location_verification
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div>
-              <h4 className="font-extrabold text-xs text-zinc-950">Require Geolocation Verification</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Require Geolocation Verification</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
                 Verifies customer device GPS location is within the venue radius before accepting order.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ml-3 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
                 settings.require_location_verification ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >
@@ -276,20 +276,20 @@ export function OrderSecuritySettings({
           {/* Waiter Approval Workflow */}
           <div
             onClick={() => handleToggle('require_waiter_approval')}
-            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
               settings.require_waiter_approval
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div>
-              <h4 className="font-extrabold text-xs text-zinc-950">Require Waiter Approval Before Kitchen</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Require Waiter Approval Before Kitchen</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
                 Submitted QR orders are routed to assigned Service Area waiters for review before reaching the kitchen.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ml-3 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
                 settings.require_waiter_approval ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >
@@ -300,20 +300,20 @@ export function OrderSecuritySettings({
           {/* Verified Online Payment Bypass */}
           <div
             onClick={() => handleToggle('allow_verified_online_payment_bypass')}
-            className={`flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation ${
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
               settings.allow_verified_online_payment_bypass
                 ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
                 : 'bg-white border-zinc-200 hover:bg-zinc-50'
             }`}
           >
-            <div>
-              <h4 className="font-extrabold text-xs text-zinc-950">Allow Verified Online Payment Bypass</h4>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Allow Verified Online Payment Bypass</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
                 Orders with server-verified online payment bypass waiter approval and location gates.
               </p>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ml-3 ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
                 settings.allow_verified_online_payment_bypass ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
               }`}
             >
@@ -323,8 +323,8 @@ export function OrderSecuritySettings({
         </div>
 
         {/* Radius & Duration Parameters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-zinc-100">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-3 border-t border-zinc-100 min-w-0">
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-zinc-700 mb-1">
               Geolocation Max Radius (Meters)
             </label>
@@ -341,7 +341,7 @@ export function OrderSecuritySettings({
             />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-bold text-zinc-700 mb-1">
               QR Session Expiry Duration (Minutes)
             </label>
@@ -361,13 +361,13 @@ export function OrderSecuritySettings({
 
         {/* Submit */}
         {canManage && (
-          <div className="pt-4 flex justify-end">
+          <div className="pt-3 sm:pt-4 flex flex-col sm:flex-row justify-end">
             <Button
               type="button"
               variant="primary"
               onClick={handleSaveCustom}
               disabled={isSaving}
-              className="bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-6 min-h-[44px]"
+              className="w-full sm:w-auto bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold px-6 min-h-[44px] justify-center"
             >
               {isSaving ? 'Saving...' : '💾 Save Security Settings'}
             </Button>

@@ -52,7 +52,7 @@ export default async function OrderSecurityPage() {
   const initialSettings = await OrderSecurityService.getBranchSecuritySettings(branchId);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto w-full min-w-0">
       <SettingsSubNav {...navPermissions} />
       <OrderSecuritySettings
         branchId={branchId}

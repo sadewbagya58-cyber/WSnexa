@@ -11,6 +11,7 @@ interface InventoryItemsTableProps {
   items: FormattedInventoryItem[];
   categories: FormattedInventoryCategory[];
   locations: FormattedStorageLocation[];
+  currency?: string;
   hasCostPermission?: boolean;
   canManageItems?: boolean;
   canAdjust?: boolean;
@@ -21,6 +22,7 @@ export function InventoryItemsTable({
   items,
   categories,
   locations,
+  currency = 'USD',
   hasCostPermission = false,
   canManageItems = true,
   canAdjust = true,
@@ -47,17 +49,18 @@ export function InventoryItemsTable({
     return true;
   });
 
-  const formatCurrency = (cents: number | null, currency: string) => {
+  const formatCurrency = (cents: number | null, itemCurrency?: string) => {
     if (cents === null) return '—';
+    const effectiveCurrency = itemCurrency || currency || 'USD';
     try {
       return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: currency || 'USD',
+        currency: effectiveCurrency,
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }).format(cents / 100);
     } catch {
-      return `${currency} ${(cents / 100).toFixed(2)}`;
+      return `${effectiveCurrency} ${(cents / 100).toFixed(2)}`;
     }
   };
 

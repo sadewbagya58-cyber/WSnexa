@@ -12,6 +12,7 @@ interface ItemForecastCardProps {
 
 export function ItemForecastCard({
   forecast,
+  currency = 'USD',
   hasCostPermission = false,
 }: ItemForecastCardProps) {
   if (!forecast) {
@@ -28,17 +29,18 @@ export function ItemForecastCard({
     );
   }
 
-  const formatCurrency = (cents: number | null, curr: string) => {
+  const formatCurrency = (cents: number | null, curr?: string) => {
     if (cents === null || cents === undefined) return '—';
+    const effectiveCurrency = curr || currency || 'USD';
     try {
       return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: curr || 'USD',
+        currency: effectiveCurrency,
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }).format(cents / 100);
     } catch {
-      return `${curr} ${(cents / 100).toFixed(2)}`;
+      return `${effectiveCurrency} ${(cents / 100).toFixed(2)}`;
     }
   };
 

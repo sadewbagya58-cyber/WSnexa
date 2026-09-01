@@ -289,6 +289,13 @@ export class ReportService {
     );
     const branchName = activeBranchAssignment?.branchName || 'Branch';
 
+    const { data: biz } = await admin
+      .from('businesses')
+      .select('default_currency')
+      .eq('id', authContext.businessId)
+      .maybeSingle();
+    const businessCurrency = biz?.default_currency || 'USD';
+
     return {
       success: true,
       data: {
@@ -306,7 +313,7 @@ export class ReportService {
         },
         tables: (tableData as { tables?: TablePerformance[] })?.tables || [],
         branchComparison: branchComparisonData,
-        currency: 'USD',
+        currency: businessCurrency,
         branchName,
 
         businessName: authContext.businessName,

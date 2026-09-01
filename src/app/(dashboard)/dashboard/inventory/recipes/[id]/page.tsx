@@ -39,7 +39,12 @@ export default async function RecipeDetailPage({ params }: RecipeDetailPageProps
         ]}
         badge={<Badge variant="neutral">{recipe.recipeType === 'prep_recipe' ? 'Prep Formula' : 'Menu Item'}</Badge>}
         primaryAction={
-          <RecipeDetailActions recipeId={recipe.id} isActive={recipe.isActive} />
+          <RecipeDetailActions
+            recipeId={recipe.id}
+            recipeName={recipe.name}
+            menuItemName={recipe.menuItemName}
+            isActive={recipe.isActive}
+          />
         }
         secondaryActions={
           <Link

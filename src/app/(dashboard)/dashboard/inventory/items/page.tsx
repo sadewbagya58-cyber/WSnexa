@@ -135,6 +135,7 @@ export default async function InventoryItemsPage() {
         items={items}
         categories={categories}
         locations={locations}
+        currency={context.business.defaultCurrency || 'USD'}
         hasCostPermission={hasCostPermission}
         canManageItems={canManageItems}
         canAdjust={canAdjust}

@@ -76,6 +76,21 @@ export async function archiveRecipeAction(recipeId: string) {
   return res;
 }
 
+export async function activateRecipeAction(recipeId: string) {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized session.' };
+  }
+
+  const res = await RecipeService.activateRecipe(recipeId);
+  if (res.success) {
+    revalidatePath('/dashboard/inventory/recipes');
+    revalidatePath(`/dashboard/inventory/recipes/${recipeId}`);
+    revalidatePath('/dashboard/inventory');
+  }
+  return res;
+}
+
 export async function producePrepBatchAction(input: ProducePrepBatchInput) {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.businessId) {

@@ -1077,17 +1077,26 @@ export class PurchasingService {
       return { success: false, message: 'Receiving storage location not found for this branch.' };
     }
 
-    // Verify supplier belongs to business
-    const { data: supplier } = await admin
-      .from('inventory_suppliers')
-      .select('id, name')
-      .eq('id', input.supplierId)
-      .eq('business_id', businessId)
-      .maybeSingle();
+    // Verify supplier belongs to business and fetch business default currency
+    const [{ data: supplier }, { data: biz }] = await Promise.all([
+      admin
+        .from('inventory_suppliers')
+        .select('id, name, currency')
+        .eq('id', input.supplierId)
+        .eq('business_id', businessId)
+        .maybeSingle(),
+      admin
+        .from('businesses')
+        .select('default_currency')
+        .eq('id', businessId)
+        .maybeSingle(),
+    ]);
 
     if (!supplier) {
       return { success: false, message: 'Supplier not found or unauthorized.' };
     }
+
+    const businessCurrency = biz?.default_currency || supplier?.currency || 'USD';
 
     // Fetch items for unit conversion & business ownership
     const itemIds = input.items.map((i) => i.itemId);
@@ -1258,7 +1267,7 @@ export class PurchasingService {
           conversion_to_base: conv,
           pack_price_cents: item.unitCostCents,
           normalized_price_per_base_cents: normalizedCents,
-          currency: 'USD',
+          currency: businessCurrency,
           reference_number: input.grnNumber.trim(),
           notes: 'Goods Receipt item',
           recorded_by: userId || null,
@@ -1286,15 +1295,23 @@ export class PurchasingService {
     const hasCostPermission = options?.hasCostPermission ?? false;
     const admin = createAdminClient();
 
-    // 1. Verify item belongs to business
-    const { data: itemRow } = await admin
-      .from('inventory_items')
-      .select('id, name, base_unit, cost_per_unit_cents, currency')
-      .eq('id', itemId)
-      .eq('business_id', businessId)
-      .maybeSingle();
+    // 1. Verify item belongs to business and fetch business default currency
+    const [{ data: itemRow }, { data: biz }] = await Promise.all([
+      admin
+        .from('inventory_items')
+        .select('id, name, base_unit, cost_per_unit_cents, currency')
+        .eq('id', itemId)
+        .eq('business_id', businessId)
+        .maybeSingle(),
+      admin
+        .from('businesses')
+        .select('default_currency')
+        .eq('id', businessId)
+        .maybeSingle(),
+    ]);
 
     if (!itemRow) return null;
+    const businessCurrency = biz?.default_currency || itemRow.currency || 'USD';
 
     // 2. Query supplier items
     const { data: rows, error } = await admin
@@ -1330,7 +1347,7 @@ export class PurchasingService {
         itemName: itemRow.name,
         baseUnit: itemRow.base_unit,
         currentCostPerUnitCents: hasCostPermission ? itemRow.cost_per_unit_cents : null,
-        currency: itemRow.currency || 'USD',
+        currency: businessCurrency,
         totalSuppliersCount: 0,
         groups: [],
         allSuppliers: [],
@@ -1507,7 +1524,7 @@ export class PurchasingService {
       itemName: itemRow.name,
       baseUnit: itemRow.base_unit,
       currentCostPerUnitCents: hasCostPermission ? itemRow.cost_per_unit_cents : null,
-      currency: itemRow.currency || 'USD',
+      currency: businessCurrency,
       totalSuppliersCount: mappedSuppliers.length,
       groups,
       allSuppliers: enrichedAllSuppliers,

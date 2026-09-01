@@ -67,17 +67,19 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     notFound();
   }
 
-  const formatCurrency = (cents: number | null, currency: string) => {
+  const currency = context.business.defaultCurrency || 'USD';
+
+  const formatCurrency = (cents: number | null, currCode = currency) => {
     if (cents === null) return '—';
     try {
       return new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: currency || 'USD',
+        currency: currCode || 'USD',
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }).format(cents / 100);
     } catch {
-      return `${currency} ${(cents / 100).toFixed(2)}`;
+      return `${currCode} ${(cents / 100).toFixed(2)}`;
     }
   };
 
@@ -154,7 +156,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
               <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 min-w-[120px]">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Unit Cost</span>
                 <div className="text-sm font-black text-zinc-900 mt-0.5">
-                  {formatCurrency(item.costPerUnitCents, item.currency)}
+                  {formatCurrency(item.costPerUnitCents, currency)}
                 </div>
               </div>
             )}
@@ -163,7 +165,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
               <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-100 min-w-[120px]">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Total Stock Value</span>
                 <div className="text-sm font-black text-zinc-950 mt-0.5">
-                  {formatCurrency(item.totalStockValueCents || 0, item.currency)}
+                  {formatCurrency(item.totalStockValueCents || 0, currency)}
                 </div>
               </div>
             )}
@@ -209,7 +211,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
       {/* Demand Forecasting & Smart Reorder */}
       <ItemForecastCard
         forecast={forecast}
-        currency={item.currency || context.business.defaultCurrency || 'USD'}
+        currency={currency}
         hasCostPermission={hasCostPermission}
       />
 
@@ -217,7 +219,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
       <ItemBatchesCard
         batches={batches}
         baseUnit={item.baseUnit}
-        currency={item.currency || context.business.defaultCurrency || 'USD'}
+        currency={currency}
         hasCostPermission={hasCostPermission}
       />
 

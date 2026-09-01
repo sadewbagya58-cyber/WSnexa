@@ -565,8 +565,8 @@ export class InventoryService {
 
     itemsQuery = itemsQuery.order('name', { ascending: true });
 
-    // Fetch items and branch balances in parallel
-    const [{ data: items, error: itemsErr }, { data: balances }] = await Promise.all([
+    // Fetch items, branch balances, and business default currency in parallel
+    const [{ data: items, error: itemsErr }, { data: balances }, { data: biz }] = await Promise.all([
       itemsQuery,
       admin
         .from('inventory_balances')
@@ -575,9 +575,15 @@ export class InventoryService {
           location:inventory_storage_locations(id, name)
         `)
         .eq('branch_id', branchId),
+      admin
+        .from('businesses')
+        .select('default_currency')
+        .eq('id', businessId)
+        .maybeSingle(),
     ]);
 
     if (itemsErr || !items) return [];
+    const businessCurrency = biz?.default_currency || 'USD';
 
     const balanceMap = new Map<string, { total: number; locations: Array<{ locationId: string; locationName: string; quantity: number }> }>();
     (balances || []).forEach((b) => {
@@ -616,7 +622,7 @@ export class InventoryService {
         itemType: item.item_type,
         baseUnit: item.base_unit,
         costPerUnitCents: hasCostPermission ? item.cost_per_unit_cents : null,
-        currency: item.currency,
+        currency: businessCurrency,
         minStockLevel: Number(item.min_stock_level),
         targetStockLevel: Number(item.target_stock_level),
         trackBatches: item.track_batches,
@@ -648,7 +654,7 @@ export class InventoryService {
   ): Promise<FormattedInventoryItem | null> {
     const admin = createAdminClient();
 
-    const [{ data: item }, { data: balances }] = await Promise.all([
+    const [{ data: item }, { data: balances }, { data: biz }] = await Promise.all([
       admin
         .from('inventory_items')
         .select(`
@@ -666,9 +672,15 @@ export class InventoryService {
         `)
         .eq('branch_id', branchId)
         .eq('item_id', itemId),
+      admin
+        .from('businesses')
+        .select('default_currency')
+        .eq('id', businessId)
+        .maybeSingle(),
     ]);
 
     if (!item) return null;
+    const businessCurrency = biz?.default_currency || 'USD';
 
     let totalQty = 0;
     const locBals = (balances || []).map((b) => {
@@ -700,7 +712,7 @@ export class InventoryService {
       itemType: item.item_type,
       baseUnit: item.base_unit,
       costPerUnitCents: hasCostPermission ? item.cost_per_unit_cents : null,
-      currency: item.currency,
+      currency: businessCurrency,
       minStockLevel: Number(item.min_stock_level),
       targetStockLevel: Number(item.target_stock_level),
       trackBatches: item.track_batches,

@@ -701,7 +701,7 @@ export class RecipeService {
   }
 
   /**
-   * Safely archives/deactivates a recipe.
+   * Safely archives/deactivates a recipe while preserving full historical records.
    */
   static async archiveRecipe(recipeId: string) {
     const { can, resolveAuthorizationContext } = await import('@/server/auth');
@@ -734,7 +734,8 @@ export class RecipeService {
 
     const canManage =
       (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
-      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource }));
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource })) ||
+      authContext.isBusinessOwner;
 
     if (!canManage) {
       return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
@@ -751,6 +752,87 @@ export class RecipeService {
     }
 
     return { success: true, message: 'Recipe archived successfully.' };
+  }
+
+  /**
+   * Atomically activates a recipe as the single active BOM for its linked menu item.
+   * Any previously active BOM for the same menu item is automatically transitioned to Archived.
+   */
+  static async activateRecipe(recipeId: string) {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized.' };
+    }
+
+    const admin = createAdminClient();
+    const { data: targetRecipe } = await admin
+      .from('inventory_recipes')
+      .select('id, business_id, menu_item_id, branch_id, is_active, name')
+      .eq('id', recipeId)
+      .eq('business_id', authContext.businessId)
+      .maybeSingle();
+
+    if (!targetRecipe) {
+      return { success: false, message: 'Recipe not found.' };
+    }
+
+    const branchResource = targetRecipe.branch_id
+      ? { type: 'branch' as const, id: targetRecipe.branch_id }
+      : (authContext.activeBranchId ? { type: 'branch' as const, id: authContext.activeBranchId } : undefined);
+
+    const canManage =
+      (await can({ context: authContext, permission: 'recipes.manage', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'inventory.manage', resource: branchResource })) ||
+      authContext.isBusinessOwner;
+
+    if (!canManage) {
+      return { success: false, message: 'Forbidden: Missing recipes.manage permission.' };
+    }
+
+    if (targetRecipe.is_active) {
+      return { success: true, message: 'Recipe is already active.' };
+    }
+
+    // 1. If linked to a menu item, deactivate any existing active recipe for that menu item first
+    if (targetRecipe.menu_item_id) {
+      let deactQuery = admin
+        .from('inventory_recipes')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('business_id', authContext.businessId)
+        .eq('menu_item_id', targetRecipe.menu_item_id)
+        .eq('is_active', true);
+
+      if (targetRecipe.branch_id) {
+        deactQuery = deactQuery.eq('branch_id', targetRecipe.branch_id);
+      } else {
+        deactQuery = deactQuery.is('branch_id', null);
+      }
+
+      const { error: deactErr } = await deactQuery;
+      if (deactErr) {
+        return { success: false, message: `Failed to archive previous active recipe: ${deactErr.message}` };
+      }
+    }
+
+    // 2. Activate target recipe
+    const { error: actErr } = await admin
+      .from('inventory_recipes')
+      .update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('id', targetRecipe.id)
+      .eq('business_id', authContext.businessId);
+
+    if (actErr) {
+      return { success: false, message: `Failed to activate recipe: ${actErr.message}` };
+    }
+
+    return { success: true, message: `Recipe "${targetRecipe.name}" is now active.` };
   }
 
   /**

@@ -63,6 +63,7 @@ export function RecipeBuilderForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState(initialRecipe?.name || '');
@@ -155,6 +156,7 @@ export function RecipeBuilderForm({
     }
 
     setErrorMsg(null);
+    setSuccessMsg(null);
     startTransition(async () => {
       const payload = {
         name: name.trim(),
@@ -182,7 +184,8 @@ export function RecipeBuilderForm({
       }
 
       if (res.success) {
-        router.push(initialRecipe?.id ? `/dashboard/inventory/recipes/${initialRecipe.id}` : '/dashboard/inventory/recipes');
+        setSuccessMsg(res.message || 'Recipe saved successfully! Redirecting...');
+        router.push('/dashboard/inventory/recipes');
         router.refresh();
       } else {
         setErrorMsg(res.message || 'Failed to save recipe.');
@@ -193,8 +196,16 @@ export function RecipeBuilderForm({
   return (
     <form onSubmit={handleSave} className="space-y-6">
       {errorMsg && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl">
-          ⚠️ {errorMsg}
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center justify-between">
+          <span>⚠️ {errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg(null)} className="text-rose-500 hover:text-rose-800">✕</button>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+          <span>✓</span>
+          <span>{successMsg}</span>
         </div>
       )}
 

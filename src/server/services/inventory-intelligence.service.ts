@@ -281,6 +281,14 @@ export class InventoryIntelligenceService {
     const admin = createAdminClient();
     const branchId = authContext.activeBranchId;
 
+    // Fetch business default currency
+    const { data: biz } = await admin
+      .from('businesses')
+      .select('default_currency')
+      .eq('id', authContext.businessId)
+      .maybeSingle();
+    const businessCurrency = biz?.default_currency || 'USD';
+
     // 1. Query Sales Orders
     let ordersQuery = admin
       .from('orders')
@@ -351,7 +359,7 @@ export class InventoryIntelligenceService {
       grossMarginPercentage,
       totalWasteCostCents,
       unexplainedVarianceCostCents: 0,
-      currency: 'USD',
+      currency: businessCurrency,
     };
   }
 }

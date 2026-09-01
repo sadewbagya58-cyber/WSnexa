@@ -1046,24 +1046,36 @@ export class InventoryService {
   ) {
     const admin = createAdminClient();
 
-    // 1. Generate count number
+    // 1. Normalize category scope: 'all' / empty / null / undefined means Full Audit (All Categories)
+    const normalizedCategoryId =
+      input.categoryId &&
+      typeof input.categoryId === 'string' &&
+      input.categoryId.trim() !== '' &&
+      input.categoryId.trim().toLowerCase() !== 'all' &&
+      input.categoryId.trim().toLowerCase() !== 'null' &&
+      input.categoryId.trim().toLowerCase() !== 'undefined'
+        ? input.categoryId.trim()
+        : null;
+
+    // 2. Generate count number
     const countNumber = `CNT-${Date.now().toString(36).toUpperCase()}`;
 
+    const effectiveBranchId = input.branchId || branchId;
     const { data: count, error } = await admin
       .from('inventory_stock_counts')
       .insert({
         business_id: businessId,
-        branch_id: input.branchId,
+        branch_id: effectiveBranchId,
         location_id: input.locationId,
         count_number: countNumber,
         title: input.title,
         status: 'counting',
         is_blind_count: input.isBlindCount,
-        category_id: input.categoryId || null,
+        category_id: normalizedCategoryId,
         started_at: new Date().toISOString(),
         created_by: actorId,
         counted_by: actorId,
-        currency: currency,
+        currency: currency || 'USD',
         notes: input.notes || null,
       })
       .select('*')
@@ -1073,16 +1085,19 @@ export class InventoryService {
       return { success: false, message: error?.message || 'Failed to create stock count.' };
     }
 
-    // 2. Populate count items from current balances
+    // 3. Populate count items from active inventory items
     let itemsQuery = admin
       .from('inventory_items')
-      .select('id, name, base_unit, cost_per_unit_cents')
+      .select('id, name, base_unit, cost_per_unit_cents, category_id, is_active')
       .eq('business_id', businessId)
       .is('archived_at', null);
 
-    if (input.categoryId && input.categoryId !== 'all') {
-      itemsQuery = itemsQuery.eq('category_id', input.categoryId);
+    // If a specific category is selected, filter strictly to that category
+    if (normalizedCategoryId) {
+      itemsQuery = itemsQuery.eq('category_id', normalizedCategoryId);
     }
+
+    itemsQuery = itemsQuery.order('name', { ascending: true });
 
     const { data: eligibleItems, error: itemsErr } = await itemsQuery;
     if (itemsErr) {
@@ -1090,11 +1105,11 @@ export class InventoryService {
       return { success: false, message: `Failed to query inventory items: ${itemsErr.message}` };
     }
 
-    // Fetch current balances for location
+    // 4. Fetch current stock balances for the selected storage location
     const { data: balances } = await admin
       .from('inventory_balances')
       .select('item_id, current_quantity')
-      .eq('branch_id', input.branchId)
+      .eq('branch_id', effectiveBranchId)
       .eq('location_id', input.locationId);
 
     const balMap = new Map<string, number>();

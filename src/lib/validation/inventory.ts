@@ -163,7 +163,20 @@ export const createStockCountSchema = z.object({
   branchId: z.string().uuid('Invalid branch ID'),
   locationId: z.string().uuid('Invalid location ID'),
   title: z.string().trim().min(2, 'Title must be at least 2 characters').max(100, 'Title too long'),
-  categoryId: z.string().uuid('Invalid category ID').optional().nullable(),
+  categoryId: z.preprocess((val) => {
+    if (
+      val === null ||
+      val === undefined ||
+      val === '' ||
+      (typeof val === 'string' &&
+        (val.trim().toLowerCase() === 'all' ||
+          val.trim().toLowerCase() === 'null' ||
+          val.trim().toLowerCase() === 'undefined'))
+    ) {
+      return null;
+    }
+    return typeof val === 'string' ? val.trim() : val;
+  }, z.string().uuid('Invalid category ID').nullable().optional()),
   isBlindCount: z.boolean().default(false),
   notes: z.string().trim().max(500, 'Notes too long').optional().nullable(),
 });

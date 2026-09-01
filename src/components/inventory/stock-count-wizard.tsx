@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { FormattedInventoryCategory, FormattedStorageLocation } from '@/server/services/inventory.service';
@@ -28,6 +29,25 @@ export function StockCountWizard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  if (locations.length === 0) {
+    return (
+      <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-8 text-center space-y-4 shadow-xs">
+        <span className="text-3xl">📍</span>
+        <h3 className="text-sm font-bold text-zinc-900">No Storage Locations Found</h3>
+        <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+          You need at least one storage location (e.g. Main Stock, Kitchen Prep, Bar Storage) to perform a physical stock count.
+        </p>
+        <div>
+          <Link href="/dashboard/inventory/locations">
+            <Button size="sm" className="font-bold text-xs bg-zinc-950 text-white min-h-[40px]">
+              + Create Storage Location
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -35,14 +55,22 @@ export function StockCountWizard({
       return;
     }
 
+    const selectedLocId = locationId || locations[0]?.id;
+    if (!selectedLocId) {
+      setErrorMsg('Storage location is required.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    const normalizedCat = categoryId === 'all' || !categoryId.trim() ? null : categoryId.trim();
+
     const res = await createStockCountAction({
       branchId,
-      locationId: locationId || locations[0]?.id,
+      locationId: selectedLocId,
       title: title.trim(),
-      categoryId: categoryId !== 'all' ? categoryId : null,
+      categoryId: normalizedCat,
       isBlindCount,
       notes: notes.trim() || null,
     });
@@ -147,7 +175,7 @@ export function StockCountWizard({
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6"
+          className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6 cursor-pointer"
         >
           {isSubmitting ? 'Starting...' : 'Start Counting →'}
         </Button>

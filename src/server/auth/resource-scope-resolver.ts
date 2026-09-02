@@ -134,7 +134,7 @@ export async function resolveResourceScope(
     case 'inventory_transaction': {
       const { data, error } = await admin
         .from('inventory_stock_transfers')
-        .select('id, business_id, source_branch_id, destination_branch_id, created_by')
+        .select('id, business_id, source_branch_id, destination_branch_id, sent_by')
         .eq('id', resourceId)
         .maybeSingle();
 
@@ -150,7 +150,7 @@ export async function resolveResourceScope(
         departmentId: null,
         organizationUnitId: null,
         serviceAreaId: null,
-        ownerUserId: data.created_by || null,
+        ownerUserId: data.sent_by || null,
       };
       break;
     }

@@ -355,6 +355,12 @@ export async function createStockTransferAction(rawInput: unknown) {
 
   if (res.success) {
     revalidatePath('/dashboard/inventory/transfers');
+    return {
+      success: true,
+      transferId: res.transferId,
+      transferNumber: res.transferNumber,
+      message: `Transfer ${res.transferNumber ? res.transferNumber + ' ' : ''}created successfully.`,
+    };
   }
   return res;
 }

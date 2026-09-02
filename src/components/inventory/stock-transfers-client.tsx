@@ -12,6 +12,7 @@ interface StockTransfersClientProps {
   activeBranchId: string;
   branchName: string;
   canManageTransfers: boolean;
+  createdTransferNumber?: string;
 }
 
 export function StockTransfersClient({
@@ -19,11 +20,20 @@ export function StockTransfersClient({
   activeBranchId,
   branchName,
   canManageTransfers,
+  createdTransferNumber,
 }: StockTransfersClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loadingTransferId, setLoadingTransferId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(() => {
+    if (createdTransferNumber) {
+      return {
+        type: 'success',
+        message: `Transfer ${createdTransferNumber} created successfully.`,
+      };
+    }
+    return null;
+  });
 
   const handleDispatch = async (transferId: string) => {
     setLoadingTransferId(transferId);
@@ -67,14 +77,23 @@ export function StockTransfersClient({
     <div className="space-y-6">
       {feedback && (
         <div
-          className={`p-4 rounded-xl text-xs font-bold border ${
+          className={`p-4 rounded-xl text-xs font-bold border flex items-center justify-between ${
             feedback.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
               : 'bg-rose-50 text-rose-800 border-rose-200'
           }`}
         >
-          {feedback.type === 'success' ? '✓ ' : '⚠️ '}
-          {feedback.message}
+          <div className="flex items-center gap-1.5">
+            <span>{feedback.type === 'success' ? '✓' : '⚠️'}</span>
+            <span>{feedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-zinc-400 hover:text-zinc-700 font-bold ml-2 cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
       )}
 

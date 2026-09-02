@@ -15,7 +15,11 @@ export const metadata: Metadata = {
   description: 'Manage internal and cross-branch inventory transfers and receipts',
 };
 
-export default async function StockTransfersPage() {
+interface StockTransfersPageProps {
+  searchParams?: Promise<{ created?: string }>;
+}
+
+export default async function StockTransfersPage({ searchParams }: StockTransfersPageProps) {
   const { allowed, context } = await requireRoutePermission('/dashboard/inventory/transfers');
   if (!allowed) {
     return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
@@ -24,6 +28,9 @@ export default async function StockTransfersPage() {
   if (!context || !context.user || !context.activeBranch) {
     redirect('/login');
   }
+
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const createdTransferNumber = resolvedSearchParams?.created;
 
   let canManageTransfers = false;
   let navPermissions: Awaited<ReturnType<typeof resolveInventorySubNavPermissions>> = {
@@ -123,6 +130,7 @@ export default async function StockTransfersPage() {
         activeBranchId={activeBranchId}
         branchName={branchName}
         canManageTransfers={canManageTransfers}
+        createdTransferNumber={createdTransferNumber}
       />
     </div>
   );

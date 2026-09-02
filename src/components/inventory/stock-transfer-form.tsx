@@ -33,7 +33,9 @@ export function StockTransferForm({
   ]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleAddItem = () => {
     if (items.length > 0) {
@@ -70,6 +72,8 @@ export function StockTransferForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isNavigating) return;
+
     if (transferItems.length === 0) {
       setErrorMsg('Please add at least one item to transfer.');
       return;
@@ -82,6 +86,7 @@ export function StockTransferForm({
 
     setIsSubmitting(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     const res = await createStockTransferAction({
       sourceBranchId,
@@ -96,12 +101,20 @@ export function StockTransferForm({
       notes: notes.trim() || null,
     });
 
-    setIsSubmitting(false);
-
     if (res.success) {
-      router.push('/dashboard/inventory/transfers');
+      setIsNavigating(true);
+      const transferNum = (res as { transferNumber?: string }).transferNumber;
+      const successText = transferNum
+        ? `Transfer ${transferNum} created successfully.`
+        : 'Transfer created successfully.';
+      setSuccessMsg(successText);
+      const redirectUrl = transferNum
+        ? `/dashboard/inventory/transfers?created=${encodeURIComponent(transferNum)}`
+        : '/dashboard/inventory/transfers';
+      router.push(redirectUrl);
       router.refresh();
     } else {
+      setIsSubmitting(false);
       setErrorMsg(res.message || 'Failed to create transfer.');
     }
   };
@@ -109,8 +122,16 @@ export function StockTransferForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl bg-white border border-zinc-200 rounded-2xl p-5 sm:p-7 shadow-xs">
       {errorMsg && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
-          {errorMsg}
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700 flex items-center justify-between">
+          <span>⚠️ {errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg(null)} className="text-rose-500 hover:text-rose-800 font-bold ml-2">✕</button>
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-2">
+          <span>✓</span>
+          <span>{successMsg}</span>
         </div>
       )}
 
@@ -194,43 +215,51 @@ export function StockTransferForm({
 
         <div className="space-y-2">
           {transferItems.map((ti, idx) => (
-            <div key={idx} className="flex items-center gap-2 bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
-              <select
-                value={ti.itemId}
-                onChange={(e) => handleItemChange(idx, 'itemId', e.target.value)}
-                className="flex-1 text-xs bg-white border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 font-bold min-h-[40px]"
-              >
-                {items.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name} ({it.currentStockQuantity || 0} {it.baseUnit} available)
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                step="any"
-                min="0.0001"
-                required
-                placeholder="Qty"
-                value={ti.quantitySent || ''}
-                onChange={(e) => handleItemChange(idx, 'quantitySent', parseFloat(e.target.value) || 0)}
-                className="w-24 text-xs bg-white border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 font-bold min-h-[40px]"
-              />
-
-              <span className="text-xs font-bold text-zinc-500 w-12 text-center">
-                {ti.unitSent}
-              </span>
-
-              {transferItems.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveItem(idx)}
-                  className="text-zinc-400 hover:text-rose-600 text-sm font-bold px-2 py-1 cursor-pointer"
+            <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-zinc-50 p-2.5 sm:p-3 rounded-xl border border-zinc-100 min-w-0">
+              {/* Item Dropdown */}
+              <div className="flex-1 min-w-0">
+                <select
+                  value={ti.itemId}
+                  onChange={(e) => handleItemChange(idx, 'itemId', e.target.value)}
+                  className="w-full text-xs bg-white border border-zinc-200 rounded-xl px-3 py-2 text-zinc-900 font-bold min-h-[44px]"
                 >
-                  ✕
-                </button>
-              )}
+                  {items.map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name} ({it.currentStockQuantity || 0} {it.baseUnit} available)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quantity + Unit Suffix Group */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="relative flex items-center bg-white border border-zinc-200 rounded-xl focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10 min-h-[44px] px-3 min-w-0 flex-1 sm:w-36">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="any"
+                    min="0.0001"
+                    required
+                    placeholder="Qty"
+                    value={ti.quantitySent || ''}
+                    onChange={(e) => handleItemChange(idx, 'quantitySent', parseFloat(e.target.value) || 0)}
+                    className="w-full min-w-0 flex-1 text-xs font-bold bg-transparent text-zinc-900 focus:outline-none py-2 pr-1"
+                  />
+                  <span className="shrink-0 text-xs font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md max-w-[50px] truncate select-none">
+                    {ti.unitSent}
+                  </span>
+                </div>
+
+                {transferItems.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(idx)}
+                    className="shrink-0 text-zinc-400 hover:text-rose-600 text-sm font-bold p-2 min-h-[44px] min-w-[36px] flex items-center justify-center cursor-pointer rounded-lg hover:bg-zinc-100"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -253,6 +282,7 @@ export function StockTransferForm({
         <Button
           type="button"
           variant="outline"
+          disabled={isSubmitting || isNavigating}
           onClick={() => router.back()}
           className="text-xs font-bold min-h-[44px]"
         >
@@ -260,10 +290,10 @@ export function StockTransferForm({
         </Button>
         <Button
           type="submit"
-          disabled={isSubmitting}
-          className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6"
+          disabled={isSubmitting || isNavigating}
+          className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6 cursor-pointer"
         >
-          {isSubmitting ? 'Creating...' : 'Create Draft Transfer'}
+          {isNavigating ? 'Redirecting...' : isSubmitting ? 'Creating...' : 'Create Draft Transfer'}
         </Button>
       </div>
     </form>

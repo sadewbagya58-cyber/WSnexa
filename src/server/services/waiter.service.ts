@@ -351,6 +351,14 @@ export class WaiterService {
       console.warn('[WaiterService] Kitchen notification after approval warning:', notifErr);
     }
 
+    // Automated Inventory Consumption Trigger for confirmed order (Phase 28)
+    try {
+      const { ConsumptionService } = await import('./consumption.service');
+      await ConsumptionService.processOrderStageConsumption(updatedOrder.id, 'confirmed', waiterUserId);
+    } catch (consErr) {
+      console.error('[WaiterService.approveGuestOrder] Automated consumption trigger error:', consErr);
+    }
+
     return { success: true, message: 'Order approved successfully and sent to kitchen.' };
   }
 

@@ -518,6 +518,17 @@ export class OrderService {
       if (Object.keys(updateData).length > 0) {
         await admin.from('orders').update(updateData).eq('id', rpcPayload.order_id);
       }
+
+      // Automated Inventory Consumption Trigger for confirmed orders (Phase 28)
+      const isPendingApproval = Boolean(secEvalResult?.requiresWaiterApproval);
+      if (!isPendingApproval) {
+        try {
+          const { ConsumptionService } = await import('@/server/services/consumption.service');
+          await ConsumptionService.processOrderStageConsumption(rpcPayload.order_id, 'confirmed', activeUserId || undefined);
+        } catch (consErr) {
+          console.error('[OrderService.createGuestOrder] Automated consumption trigger error:', consErr);
+        }
+      }
     }
 
     const safeLogFormat = {

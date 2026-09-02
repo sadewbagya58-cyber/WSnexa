@@ -20,15 +20,16 @@ export class ConsumptionService {
 
     if (!order) return { success: false, message: 'Order not found.' };
 
-    // 2. Fetch inventory settings for branch/business
-    const { data: settings } = await admin
+    // 2. Fetch inventory settings for branch/business (prioritize branch override over business default)
+    const { data: settingsRows } = await admin
       .from('inventory_settings')
-      .select('deduction_timing, auto_sold_out_mode')
+      .select('deduction_timing, auto_sold_out_mode, branch_id')
       .eq('business_id', order.business_id)
-      .or(`branch_id.eq.${order.branch_id},branch_id.is.null`)
-      .order('branch_id', { ascending: false, nullsFirst: false })
-      .limit(1)
-      .maybeSingle();
+      .or(`branch_id.eq.${order.branch_id},branch_id.is.null`);
+
+    const branchSettings = settingsRows?.find((s) => s.branch_id === order.branch_id);
+    const businessSettings = settingsRows?.find((s) => s.branch_id === null);
+    const settings = branchSettings || businessSettings || settingsRows?.[0];
 
     const configuredTiming = settings?.deduction_timing || 'preparing';
 

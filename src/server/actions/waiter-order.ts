@@ -315,6 +315,14 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       }
     }
 
+    // Automated Inventory Consumption Trigger for confirmed orders (Phase 28)
+    try {
+      const { ConsumptionService } = await import('@/server/services/consumption.service');
+      await ConsumptionService.processOrderStageConsumption(newOrder.id, 'confirmed', authContext.userId);
+    } catch (consErr) {
+      console.error('[createWaiterOrderAction] Automated consumption trigger error:', consErr);
+    }
+
     revalidatePath('/dashboard/waiter');
     revalidatePath('/dashboard/kitchen');
     revalidatePath('/dashboard/cashier');

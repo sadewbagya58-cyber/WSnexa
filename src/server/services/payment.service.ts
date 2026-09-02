@@ -207,6 +207,14 @@ export class PaymentService {
       } catch (err) {
         console.error('[PaymentService.recordPayment] Loyalty earning error:', err);
       }
+
+      // Automated Inventory Consumption Trigger for completed / paid stage (Phase 28)
+      try {
+        const { ConsumptionService } = await import('@/server/services/consumption.service');
+        await ConsumptionService.processOrderStageConsumption(orderId, 'completed', authContext.userId);
+      } catch (consErr) {
+        console.error('[PaymentService.recordPayment] Automated consumption trigger error:', consErr);
+      }
     }
 
     return {

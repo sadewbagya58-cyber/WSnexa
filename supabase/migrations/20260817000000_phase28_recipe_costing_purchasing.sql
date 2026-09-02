@@ -421,9 +421,11 @@ DECLARE
   v_item_elem JSONB;
   v_item_id UUID;
   v_po_item_id UUID;
+  v_qty_rec NUMERIC(15, 4);
   v_qty_rec_base NUMERIC(15, 4);
   v_unit_cost INT;
   v_tot_cost INT;
+  v_unit_cost_base INT;
   v_batch_code TEXT;
   v_expiry DATE;
   v_discrepancy TEXT;
@@ -431,6 +433,8 @@ DECLARE
   v_balance RECORD;
   v_current_qty NUMERIC(15, 4);
   v_new_qty NUMERIC(15, 4);
+  v_total_existing_qty NUMERIC(15, 4);
+  v_costing_method public.inventory_costing_method := 'weighted_average';
   v_item_row RECORD;
   v_new_weighted_cost INT;
   v_all_po_received BOOLEAN := TRUE;
@@ -446,6 +450,18 @@ BEGIN
     IF v_grn_id IS NOT NULL THEN
       RETURN jsonb_build_object('success', true, 'grn_id', v_grn_id, 'idempotent_replay', true);
     END IF;
+  END IF;
+
+  -- Fetch Costing Method from Settings
+  SELECT costing_method INTO v_costing_method
+  FROM public.inventory_settings
+  WHERE business_id = p_business_id
+    AND (branch_id = p_branch_id OR branch_id IS NULL)
+  ORDER BY branch_id NULLS LAST
+  LIMIT 1;
+
+  IF v_costing_method IS NULL THEN
+    v_costing_method := 'weighted_average';
   END IF;
 
   -- 1. Create Goods Receipt Header
@@ -478,9 +494,18 @@ BEGIN
   LOOP
     v_item_id := (v_item_elem->>'item_id')::uuid;
     v_po_item_id := (v_item_elem->>'po_item_id')::uuid;
+    v_qty_rec := (v_item_elem->>'quantity_received')::numeric;
     v_qty_rec_base := (v_item_elem->>'quantity_received_base')::numeric;
     v_unit_cost := (v_item_elem->>'unit_cost_cents')::int;
-    v_tot_cost := ROUND(v_qty_rec_base * v_unit_cost);
+
+    IF v_qty_rec IS NOT NULL AND v_qty_rec > 0 AND v_qty_rec_base IS NOT NULL AND v_qty_rec_base > 0 THEN
+      v_tot_cost := ROUND(v_qty_rec * v_unit_cost);
+      v_unit_cost_base := ROUND((v_tot_cost::numeric) / v_qty_rec_base);
+    ELSE
+      v_tot_cost := ROUND(v_qty_rec_base * v_unit_cost);
+      v_unit_cost_base := v_unit_cost;
+    END IF;
+
     v_batch_code := v_item_elem->>'batch_code';
     v_discrepancy := v_item_elem->>'discrepancy_reason';
     IF (v_item_elem->>'expiry_date') IS NOT NULL AND (v_item_elem->>'expiry_date') <> '' THEN
@@ -516,7 +541,7 @@ BEGIN
         v_batch_code,
         v_qty_rec_base,
         v_qty_rec_base,
-        v_unit_cost,
+        v_unit_cost_base,
         v_item_row.currency,
         CURRENT_DATE,
         v_expiry,
@@ -542,7 +567,7 @@ BEGIN
       v_grn_id,
       v_po_item_id,
       v_item_id,
-      (v_item_elem->>'quantity_received')::numeric,
+      COALESCE(v_qty_rec, v_qty_rec_base),
       v_item_elem->>'unit_received',
       v_qty_rec_base,
       v_unit_cost,
@@ -553,7 +578,13 @@ BEGIN
       v_discrepancy
     );
 
-    -- Upsert Inventory Balance
+    -- Query total on-hand quantity for this item across all storage locations in the business prior to this receipt
+    SELECT COALESCE(SUM(current_quantity), 0.0)
+    INTO v_total_existing_qty
+    FROM public.inventory_balances
+    WHERE business_id = p_business_id AND item_id = v_item_id;
+
+    -- Upsert Inventory Balance for receiving location
     SELECT * INTO v_balance
     FROM public.inventory_balances
     WHERE branch_id = p_branch_id AND location_id = p_location_id AND item_id = v_item_id
@@ -593,11 +624,18 @@ BEGIN
       );
     END IF;
 
-    -- Calculate Locked Weighted Average Cost
-    IF v_current_qty <= 0 THEN
-      v_new_weighted_cost := v_unit_cost;
+    -- Calculate Locked Cost according to configured costing method
+    IF v_costing_method = 'latest_cost' THEN
+      v_new_weighted_cost := v_unit_cost_base;
     ELSE
-      v_new_weighted_cost := ROUND(((v_current_qty * v_item_row.cost_per_unit_cents) + (v_qty_rec_base * v_unit_cost)) / (v_current_qty + v_qty_rec_base));
+      -- Weighted Average Cost:
+      -- If existing total stock is zero or negative, the new unit cost is the incoming purchase unit cost.
+      -- If existing stock is positive, accurately weight existing stock value + new incoming cost over total stock.
+      IF v_total_existing_qty <= 0 THEN
+        v_new_weighted_cost := v_unit_cost_base;
+      ELSE
+        v_new_weighted_cost := ROUND(((v_total_existing_qty * v_item_row.cost_per_unit_cents) + v_tot_cost) / (v_total_existing_qty + v_qty_rec_base));
+      END IF;
     END IF;
 
     UPDATE public.inventory_items
@@ -639,12 +677,12 @@ BEGIN
       v_batch_id,
       'purchase_receipt',
       'in',
-      v_qty_rec_base,
-      v_item_row.base_unit,
+      COALESCE(v_qty_rec, v_qty_rec_base),
+      COALESCE(v_item_elem->>'unit_received', v_item_row.base_unit),
       v_qty_rec_base,
       v_current_qty,
       v_new_qty,
-      v_unit_cost,
+      v_unit_cost_base,
       v_tot_cost,
       v_item_row.currency,
       'Goods Receipt #' || p_grn_number,

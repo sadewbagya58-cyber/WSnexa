@@ -49,6 +49,174 @@ export class WaiterService {
     const { rawQrToken, tableId, requestType, orderId, notes } = parsed.data;
     const tokenHash = hashQrToken(rawQrToken);
 
+    // 1. Authoritative Area QR Resolution & Security Verification
+    const { verifyAreaQrToken } = await import('@/lib/qr/area-qr-token');
+    const isAreaTokenPrefix = rawQrToken.startsWith('WSN-AQ.');
+    const areaVerification = verifyAreaQrToken(rawQrToken);
+
+    if (isAreaTokenPrefix || (areaVerification.valid && areaVerification.payload)) {
+      if (!areaVerification.valid || !areaVerification.payload) {
+        return {
+          success: false,
+          message: 'Invalid or tampered Area QR code token.',
+          error: 'INVALID_OR_REVOKED_QR',
+        };
+      }
+
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      const admin = createAdminClient();
+
+      // Check persistent DB state in area_qr_codes
+      const { data: dbAreaQr } = await admin
+        .from('area_qr_codes')
+        .select('id, business_id, branch_id, service_area_id, version, is_active, revoked_at, expires_at')
+        .eq('token_hash', tokenHash)
+        .maybeSingle();
+
+      if (!dbAreaQr || !dbAreaQr.is_active || dbAreaQr.revoked_at !== null) {
+        return {
+          success: false,
+          message: 'This Area QR code has been revoked or regenerated.',
+          error: 'INVALID_OR_REVOKED_QR',
+        };
+      }
+
+      if (dbAreaQr.expires_at && new Date(dbAreaQr.expires_at) < new Date()) {
+        return {
+          success: false,
+          message: 'This Area QR code has expired.',
+          error: 'INVALID_OR_REVOKED_QR',
+        };
+      }
+
+      // Validate Branch
+      const { data: branchData } = await admin
+        .from('branches')
+        .select('id, business_id, status, deleted_at')
+        .eq('id', dbAreaQr.branch_id)
+        .maybeSingle();
+
+      if (!branchData || branchData.status !== 'active' || branchData.deleted_at !== null) {
+        return {
+          success: false,
+          message: 'Venue branch is currently unavailable.',
+          error: 'BRANCH_UNAVAILABLE',
+        };
+      }
+
+      // Validate Table
+      if (!tableId) {
+        return {
+          success: false,
+          message: 'Dining table is required for waiter assistance.',
+          error: 'TABLE_REQUIRED',
+        };
+      }
+
+      const { data: tableData } = await admin
+        .from('dining_tables')
+        .select('id, name, code, is_active, status, deleted_at, branch_id, business_id, service_area_id')
+        .eq('id', tableId)
+        .maybeSingle();
+
+      if (!tableData || !tableData.is_active || tableData.deleted_at !== null || tableData.status === 'unavailable') {
+        return {
+          success: false,
+          message: 'Selected dining table was not found or is unavailable.',
+          error: 'TABLE_NOT_FOUND',
+        };
+      }
+
+      if (tableData.branch_id !== dbAreaQr.branch_id) {
+        return {
+          success: false,
+          message: 'Selected table does not belong to this venue branch.',
+          error: 'CROSS_BRANCH_ATTEMPT_BLOCKED',
+        };
+      }
+
+      if (tableData.service_area_id !== dbAreaQr.service_area_id) {
+        return {
+          success: false,
+          message: 'Selected table does not belong to this verified dining area.',
+          error: 'CROSS_AREA_ATTEMPT_BLOCKED',
+        };
+      }
+
+      // Optional Order Reference Validation
+      if (orderId) {
+        const { data: orderData } = await admin
+          .from('orders')
+          .select('id, branch_id')
+          .eq('id', orderId)
+          .maybeSingle();
+
+        if (!orderData || orderData.branch_id !== dbAreaQr.branch_id) {
+          return {
+            success: false,
+            message: 'Invalid order reference.',
+            error: 'INVALID_ORDER',
+          };
+        }
+      }
+
+      // Insert Waiter Assistance Request
+      const { data: newReq, error: reqErr } = await admin
+        .from('waiter_requests')
+        .insert({
+          business_id: dbAreaQr.business_id,
+          branch_id: dbAreaQr.branch_id,
+          table_id: tableData.id,
+          order_id: orderId || null,
+          request_type: requestType,
+          status: 'pending',
+          notes: notes || null,
+        })
+        .select('id')
+        .single();
+
+      if (reqErr || !newReq) {
+        return {
+          success: false,
+          message: reqErr?.message || 'Failed to create waiter assistance request.',
+        };
+      }
+
+      // Realtime Notification Scoped to Service Area
+      const { NotificationService } = await import('./notification.service');
+      const isBillReq = requestType === 'need_bill';
+      const notificationType = isBillReq ? 'BILL_REQUESTED' : 'WAITER_REQUEST_CREATED';
+      const capability = isBillReq ? 'cashier.access' : 'waiter.requests.view';
+      const title = isBillReq ? 'Bill Requested' : 'Waiter Assistance Requested';
+      const tableName = tableData.name || 'Table';
+      const message = `${tableName}: ${notes || (isBillReq ? 'Guest requested bill' : 'Guest requested assistance')}`;
+      const actionUrl = isBillReq ? '/dashboard/cashier' : '/dashboard/waiter';
+
+      NotificationService.createNotificationsForCapability({
+        businessId: tableData.business_id,
+        branchId: tableData.branch_id,
+        capability,
+        notificationType,
+        priority: isBillReq ? 'urgent' : 'high',
+        title,
+        message,
+        entityType: 'waiter_request',
+        entityId: newReq.id,
+        actionUrl,
+        areaId: tableData.service_area_id || null,
+      }).catch((err) => console.warn('[WaiterService] Notification dispatch failed:', err));
+
+      return {
+        success: true,
+        data: {
+          requestId: newReq.id,
+          tableName: tableData.name,
+          requestType,
+        },
+      };
+    }
+
+    // 2. Standard Branch QR Assistance Submission (via RPC)
     const supabase = await createClient();
 
     const { data, error } = await supabase.rpc('submit_customer_assistance', {

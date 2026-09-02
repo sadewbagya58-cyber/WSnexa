@@ -1016,23 +1016,26 @@ export class QrService {
       const tablesWithPin = areaTables.filter((t) => t.table_pin_hash !== null).length;
       const activeQrRecord = qrs.find((q) => q.service_area_id === area.id);
 
-      let rawToken: string;
-      let tokenPrefix: string;
-      let version = 1;
-      let generatedAt = new Date().toISOString();
-
       if (activeQrRecord) {
-        rawToken =
+        const rawToken =
           (activeQrRecord.encrypted_token ? decryptRawToken(activeQrRecord.encrypted_token) : null) ||
           createSignedAreaQrToken(businessId, branchId, area.id, activeQrRecord.version).rawToken;
-        tokenPrefix = activeQrRecord.token_prefix;
-        version = activeQrRecord.version;
-        generatedAt = activeQrRecord.generated_at;
-      } else {
-        const generated = createSignedAreaQrToken(businessId, branchId, area.id, 1);
-        rawToken = generated.rawToken;
-        tokenPrefix = generated.tokenPrefix;
-        generatedAt = generated.issuedAt;
+
+        return {
+          areaId: area.id,
+          areaName: area.name,
+          areaCode: area.code,
+          description: area.description,
+          isActive: area.is_active,
+          hasActiveQr: true,
+          tableCount: areaTables.length,
+          tablesWithPinCount: tablesWithPin,
+          version: activeQrRecord.version,
+          tokenPrefix: activeQrRecord.token_prefix,
+          rawToken,
+          qrUrl: `${baseUrl}/m/${rawToken}`,
+          generatedAt: activeQrRecord.generated_at,
+        };
       }
 
       return {
@@ -1041,13 +1044,14 @@ export class QrService {
         areaCode: area.code,
         description: area.description,
         isActive: area.is_active,
+        hasActiveQr: false,
         tableCount: areaTables.length,
         tablesWithPinCount: tablesWithPin,
-        version,
-        tokenPrefix,
-        rawToken,
-        qrUrl: `${baseUrl}/m/${rawToken}`,
-        generatedAt,
+        version: 1,
+        tokenPrefix: null,
+        rawToken: null,
+        qrUrl: null,
+        generatedAt: null,
       };
     });
   }

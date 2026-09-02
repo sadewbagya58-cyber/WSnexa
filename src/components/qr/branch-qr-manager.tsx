@@ -21,13 +21,14 @@ export interface AreaQrSummary {
   areaCode: string;
   description?: string | null;
   isActive?: boolean;
+  hasActiveQr?: boolean;
   tableCount: number;
   tablesWithPinCount: number;
   version: number;
-  tokenPrefix: string;
-  rawToken: string;
-  qrUrl: string;
-  generatedAt: string;
+  tokenPrefix: string | null;
+  rawToken: string | null;
+  qrUrl: string | null;
+  generatedAt: string | null;
 }
 
 interface BranchQrManagerProps {
@@ -408,7 +409,11 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
                       </h3>
                       <span className="text-[11px] font-mono text-zinc-400">{area.areaCode}</span>
                     </div>
-                    <Badge variant="success">Active (v{area.version})</Badge>
+                    {area.hasActiveQr ? (
+                      <Badge variant="success">Active (v{area.version})</Badge>
+                    ) : (
+                      <Badge variant="neutral">Not Generated</Badge>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-zinc-600 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100">
@@ -422,10 +427,11 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
                 <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
                   <Button
                     size="sm"
+                    variant={area.hasActiveQr ? 'primary' : 'outline'}
                     className="flex-1 text-xs font-bold cursor-pointer"
                     onClick={() => setSelectedAreaForQr(area)}
                   >
-                    📱 View &amp; Print QR
+                    {area.hasActiveQr ? '📱 View & Print QR' : '⚡ Generate Area QR'}
                   </Button>
                 </div>
               </Card>

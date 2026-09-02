@@ -76,7 +76,7 @@ export default async function StockCountsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full">
       <PageHeader
         title="Physical Stock Counts"
         description={`Audit count sheets and variance reconciliations for ${context.activeBranch.name}`}
@@ -118,38 +118,40 @@ export default async function StockCountsPage() {
           )}
         </div>
       ) : (
-        <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="py-3 px-4">Count Sheet</th>
-                  <th className="py-3 px-4">Location</th>
-                  <th className="py-3 px-4">Category Scope</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Items Counted</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {counts.map((c) => (
-                  <tr key={c.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3.5 px-4">
+        <div className="space-y-3">
+          {/* Mobile Stock Count Cards View (< 768px) */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {counts.map((c) => {
+              const formattedDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '';
+              return (
+                <div
+                  key={c.id}
+                  className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-xs space-y-3"
+                >
+                  {/* Header: Title & Status Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
                       <Link
                         href={`/dashboard/inventory/counts/${c.id}`}
-                        className="font-bold text-zinc-950 hover:underline block"
+                        className="font-bold text-zinc-950 hover:underline text-sm block break-words"
                       >
                         {c.title}
                       </Link>
-                      <span className="text-[11px] font-mono text-zinc-400">{c.countNumber}</span>
-                    </td>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="text-[11px] font-mono font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+                          {c.countNumber}
+                        </span>
+                        {formattedDate && (
+                          <span className="text-[11px] text-zinc-400 font-medium">
+                            • {formattedDate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                    <td className="py-3.5 px-4 text-zinc-700 font-medium">{c.locationName}</td>
-                    <td className="py-3.5 px-4 text-zinc-500">{c.categoryName}</td>
-
-                    <td className="py-3.5 px-4">
+                    <div className="shrink-0">
                       <span
-                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase whitespace-nowrap ${
                           c.status === 'approved'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : c.status === 'submitted'
@@ -159,21 +161,104 @@ export default async function StockCountsPage() {
                       >
                         {c.status}
                       </span>
-                    </td>
+                    </div>
+                  </div>
 
-                    <td className="py-3.5 px-4 font-bold text-zinc-800">{c.totalItemsCounted} items</td>
+                  {/* Details Card */}
+                  <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100 space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-zinc-500 font-medium">Storage Location:</span>
+                      <span className="font-bold text-zinc-900 truncate max-w-[60%] text-right">📍 {c.locationName}</span>
+                    </div>
 
-                    <td className="py-3.5 px-4 text-right">
-                      <Link href={`/dashboard/inventory/counts/${c.id}`}>
-                        <Button size="sm" variant="outline" className="text-xs font-bold h-7">
-                          {c.status === 'counting' ? 'Continue Count →' : 'View Audit →'}
-                        </Button>
-                      </Link>
-                    </td>
+                    <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500 font-medium">Category Scope:</span>
+                      <span className="font-semibold text-zinc-700 truncate max-w-[60%] text-right">{c.categoryName}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-[11px] border-t border-zinc-200/50 pt-1.5">
+                      <span className="text-zinc-500 font-medium">Items Counted:</span>
+                      <span className="font-bold text-zinc-900">{c.totalItemsCounted} items</span>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="pt-1">
+                    <Link href={`/dashboard/inventory/counts/${c.id}`} className="block">
+                      <Button
+                        size="sm"
+                        variant={c.status === 'counting' ? 'primary' : 'outline'}
+                        className={`w-full text-xs font-bold min-h-[44px] cursor-pointer ${
+                          c.status === 'counting' ? 'bg-zinc-950 text-white hover:bg-zinc-800' : 'hover:bg-zinc-50'
+                        }`}
+                      >
+                        {c.status === 'counting' ? 'Continue Count →' : 'View Audit Details →'}
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View (>= 768px) */}
+          <div className="hidden md:block bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase tracking-wider font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Count Sheet</th>
+                    <th className="py-3 px-4">Location</th>
+                    <th className="py-3 px-4">Category Scope</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Items Counted</th>
+                    <th className="py-3 px-4 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 font-medium">
+                  {counts.map((c) => (
+                    <tr key={c.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <Link
+                          href={`/dashboard/inventory/counts/${c.id}`}
+                          className="font-bold text-zinc-950 hover:underline block"
+                        >
+                          {c.title}
+                        </Link>
+                        <span className="text-[11px] font-mono text-zinc-400">{c.countNumber}</span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-zinc-700 font-medium">{c.locationName}</td>
+                      <td className="py-3.5 px-4 text-zinc-500">{c.categoryName}</td>
+
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                            c.status === 'approved'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : c.status === 'submitted'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}
+                        >
+                          {c.status}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-bold text-zinc-800">{c.totalItemsCounted} items</td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <Link href={`/dashboard/inventory/counts/${c.id}`}>
+                          <Button size="sm" variant="outline" className="text-xs font-bold h-7 cursor-pointer">
+                            {c.status === 'counting' ? 'Continue Count →' : 'View Audit →'}
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

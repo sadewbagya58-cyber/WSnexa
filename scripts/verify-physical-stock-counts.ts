@@ -8,10 +8,10 @@
  *    - All Categories scope includes all active inventory items across categories.
  *    - Specific Category scope includes only items belonging to that category.
  *    - Count sheet stores null for All Categories and resolves to 'All Categories'.
- * 2. ISSUE #2 — Physical Count "Count Sheet Items" Responsive Mobile UI:
- *    - Desktop table layout (hidden md:block) preserves table columns.
- *    - Mobile card layout (block md:hidden) renders responsive cards with full item name,
- *      expected quantity, counted value/input, variance, and variance cost.
+ * 2. ISSUE #2 — Mobile Responsive UI Fixes:
+ *    - Stepper numeric input integrated with unit suffix (no protrusion, min-w-0).
+ *    - Stock Counts list page dual layout (desktop table md:block, mobile cards md:hidden).
+ *    - HubSubNavigation full-width horizontal scroll without body overflow.
  *    - Zero-item empty state ("Nothing to count") with helpful navigation.
  *    - Touch targets >= 44px and accessible form controls.
  * 3. ROOT CAUSE FIX — Stock Count Item Retrieval (created_at column fix):
@@ -77,6 +77,8 @@ async function runVerification() {
   const inventoryServiceSrc = fs.readFileSync(path.join(rootDir, 'src/server/services/inventory.service.ts'), 'utf-8');
   const wizardSrc = fs.readFileSync(path.join(rootDir, 'src/components/inventory/stock-count-wizard.tsx'), 'utf-8');
   const mobileSheetSrc = fs.readFileSync(path.join(rootDir, 'src/components/inventory/stock-count-mobile-sheet.tsx'), 'utf-8');
+  const countsListSrc = fs.readFileSync(path.join(rootDir, 'src/app/(dashboard)/dashboard/inventory/counts/page.tsx'), 'utf-8');
+  const subnavSrc = fs.readFileSync(path.join(rootDir, 'src/components/layout/hub-sub-navigation.tsx'), 'utf-8');
 
   // ── 1. Issue #1: Schema & Scope Normalization ──────────────────────────────
   console.log('--- 1. Issue #1: Category Scope & Schema Normalization ---');
@@ -164,16 +166,28 @@ async function runVerification() {
     }
   }
 
-  // ── 4. Issue #2: Mobile vs Desktop Responsive UI ───────────────────────────
-  console.log('\n--- 4. Issue #2: Responsive Mobile Count Sheet & Empty State ---');
+  // ── 4. Mobile Responsive UI Fixes (Bug 1 & Bug 2) ──────────────────────────
+  console.log('\n--- 4. Mobile Responsive UI Fixes ---');
 
+  // Bug 1: Stepper input with integrated unit suffix
+  assert(mobileSheetSrc.includes('focus-within:border-zinc-950') && mobileSheetSrc.includes('min-w-0'), 'Stepper numeric input is integrated with unit suffix container using min-w-0 to prevent protrusion/overflow');
+  assert(mobileSheetSrc.includes('inputMode="decimal"'), 'Numeric input supports decimal keypad on mobile devices');
+  assert(mobileSheetSrc.includes('min-h-[44px]') || mobileSheetSrc.includes('min-h-[58px]'), 'Mobile interactive elements meet >= 44px touch target guidelines');
+
+  // Bug 2: Stock Counts List page responsive card view
+  assert(countsListSrc.includes('md:hidden') && countsListSrc.includes('grid-cols-1'), 'Stock Counts list page provides responsive mobile cards (< 768px)');
+  assert(countsListSrc.includes('hidden md:block'), 'Stock Counts list page preserves full desktop table layout (>= 768px)');
+  assert(countsListSrc.includes('c.locationName') && countsListSrc.includes('c.categoryName') && countsListSrc.includes('c.status'), 'Mobile cards display Location, Category Scope, and unclipped Status badge');
+
+  // Navigation: HubSubNavigation no body overflow
+  assert(subnavSrc.includes('max-w-full') && subnavSrc.includes('overflow-x-auto'), 'HubSubNavigation uses max-w-full overflow-x-auto to prevent body-level horizontal overflow');
+
+  // Mobile Count Sheet item cards
   assert(mobileSheetSrc.includes('hidden md:block'), 'StockCountMobileSheet provides desktop table layout for >= 768px viewports');
   assert(mobileSheetSrc.includes('block md:hidden'), 'StockCountMobileSheet provides mobile card/list layout for < 768px viewports');
   assert(mobileSheetSrc.includes('Nothing to count'), 'StockCountMobileSheet renders dedicated empty state when 0 items exist');
-  assert(mobileSheetSrc.includes('grid grid-cols-2 gap-2.5'), 'Mobile card layout provides 2x2 responsive metrics grid');
+  assert(mobileSheetSrc.includes('grid grid-cols-2 gap-2'), 'Mobile card layout provides 2x2 responsive metrics grid');
   assert(mobileSheetSrc.includes('Expected') && mobileSheetSrc.includes('Counted') && mobileSheetSrc.includes('Variance') && mobileSheetSrc.includes('Variance Cost'), 'Mobile card layout includes all 4 critical metrics (Expected, Counted, Variance, Variance Cost)');
-  assert(mobileSheetSrc.includes('inputMode="decimal"'), 'Numeric input supports decimal keypad on mobile devices');
-  assert(mobileSheetSrc.includes('min-h-[44px]') || mobileSheetSrc.includes('min-h-[58px]'), 'Mobile interactive elements meet >= 44px touch target guidelines');
 
   // ── 5. Variance & Calculation Invariants ───────────────────────────────────
   console.log('\n--- 5. Variance & Calculation Invariants ---');

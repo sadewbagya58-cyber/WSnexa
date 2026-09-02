@@ -28,7 +28,7 @@ export function HubSubNavigation({ items, className = '' }: HubSubNavigationProp
   return (
     <nav
       aria-label="Sub-workspace navigation"
-      className={`flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 text-xs scrollbar-none touch-manipulation ${className}`}
+      className={`w-full max-w-full flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none touch-manipulation [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className}`}
     >
       {items.map((item) => {
         const isActive = item.exact

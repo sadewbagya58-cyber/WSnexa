@@ -121,10 +121,10 @@ export function StockCountMobileSheet({
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl w-full">
       {/* Header Info Card */}
       <div className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
+        <div className="space-y-1 min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-mono font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
               {count.countNumber}
@@ -146,14 +146,14 @@ export function StockCountMobileSheet({
               </span>
             )}
           </div>
-          <h1 className="text-lg sm:text-xl font-black text-zinc-950">{count.title}</h1>
-          <p className="text-xs text-zinc-500">
+          <h1 className="text-lg sm:text-xl font-black text-zinc-950 break-words">{count.title}</h1>
+          <p className="text-xs text-zinc-500 leading-relaxed">
             Storage Location: <strong className="text-zinc-800 font-bold">{count.locationName}</strong> • Category: <strong className="text-zinc-800 font-bold">{count.categoryName}</strong>
           </p>
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 pt-2 sm:pt-0">
+        <div className="flex items-center gap-2 pt-2 sm:pt-0 shrink-0">
           {count.status === 'counting' && (
             <Button
               onClick={handleSubmitCount}
@@ -190,7 +190,7 @@ export function StockCountMobileSheet({
 
       {/* Counting Stepper (Active Item Card) */}
       {count.status === 'counting' && activeItem && (
-        <div className="bg-white border-2 border-zinc-900 rounded-3xl p-5 sm:p-7 shadow-md space-y-4">
+        <div className="bg-white border-2 border-zinc-900 rounded-3xl p-4 sm:p-7 shadow-md space-y-4 max-w-full overflow-hidden">
           <div className="flex items-center justify-between text-xs text-zinc-400 font-bold">
             <span>ITEM {currentIndex + 1} OF {items.length}</span>
             <span>{Math.round((countedCount / items.length) * 100)}% Complete</span>
@@ -209,19 +209,19 @@ export function StockCountMobileSheet({
             <p className="text-xs text-zinc-500 font-medium mt-1">
               Unit of Measure: <strong className="text-zinc-900">{activeItem.baseUnit}</strong>
               {!count.isBlindCount && activeItem.expectedQuantityBase !== null && (
-                <span className="ml-3 text-zinc-500">
+                <span className="ml-2 sm:ml-3 text-zinc-500 inline-block">
                   (Expected on record: <strong className="text-zinc-800">{activeItem.expectedQuantityBase} {activeItem.baseUnit}</strong>)
                 </span>
               )}
             </p>
           </div>
 
-          {/* Big Tactile Numeric Input */}
+          {/* Big Tactile Numeric Input with Integrated Unit Suffix */}
           <div className="pt-2">
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
               Enter Physical Count
             </label>
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-full relative flex items-center bg-zinc-50 border-2 border-zinc-200 rounded-2xl focus-within:border-zinc-950 focus-within:bg-white focus-within:ring-2 focus-within:ring-zinc-950/10 transition-all min-h-[58px] px-3.5 sm:px-4">
               <input
                 type="number"
                 inputMode="decimal"
@@ -231,11 +231,11 @@ export function StockCountMobileSheet({
                 placeholder="0.00"
                 value={countsMap[activeItem.itemId]?.raw || ''}
                 onChange={(e) => handleInputChange(activeItem.itemId, 'raw', e.target.value)}
-                className="flex-1 text-2xl sm:text-3xl font-black bg-zinc-50 border-2 border-zinc-200 rounded-2xl px-4 py-3 text-zinc-950 focus:bg-white focus:border-zinc-950 focus:outline-none min-h-[58px]"
+                className="w-full min-w-0 flex-1 text-2xl sm:text-3xl font-black bg-transparent text-zinc-950 focus:outline-none py-3 pr-2"
               />
-              <span className="text-sm sm:text-base font-black text-zinc-600 bg-zinc-100 px-4 py-3 rounded-2xl min-h-[58px] flex items-center justify-center min-w-16">
+              <div className="shrink-0 flex items-center justify-center font-black text-xs sm:text-sm text-zinc-700 bg-zinc-200/80 px-3 py-2 rounded-xl select-none max-w-[100px] truncate">
                 {activeItem.baseUnit}
-              </span>
+              </div>
             </div>
           </div>
 
@@ -258,7 +258,7 @@ export function StockCountMobileSheet({
               size="sm"
               disabled={currentIndex === 0}
               onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-              className="text-xs font-bold min-h-[44px] px-4"
+              className="text-xs font-bold min-h-[44px] px-4 cursor-pointer"
             >
               ← Previous
             </Button>
@@ -426,7 +426,7 @@ export function StockCountMobileSheet({
                   >
                     {/* Item Header */}
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
+                      <div className="min-w-0 flex-1">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                           Item #{idx + 1}
                         </span>
@@ -446,13 +446,13 @@ export function StockCountMobileSheet({
                     </div>
 
                     {/* 2x2 Responsive Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
                       {/* Expected */}
-                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100 min-w-0 overflow-hidden">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                           Expected
                         </span>
-                        <div className="font-bold text-zinc-800 mt-0.5">
+                        <div className="font-bold text-zinc-800 mt-0.5 truncate">
                           {!count.isBlindCount && it.expectedQuantityBase !== null
                             ? `${it.expectedQuantityBase} ${it.baseUnit}`
                             : '— (Blind)'}
@@ -460,11 +460,11 @@ export function StockCountMobileSheet({
                       </div>
 
                       {/* Counted */}
-                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100 min-w-0 overflow-hidden">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                           Counted
                         </span>
-                        <div className="font-bold text-zinc-950 mt-0.5">
+                        <div className="font-bold text-zinc-950 mt-0.5 truncate">
                           {numEntered !== null && numEntered !== undefined ? (
                             `${numEntered} ${it.baseUnit}`
                           ) : (
@@ -474,11 +474,11 @@ export function StockCountMobileSheet({
                       </div>
 
                       {/* Variance */}
-                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                      <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100 min-w-0 overflow-hidden">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                           Variance
                         </span>
-                        <div className="mt-0.5">
+                        <div className="mt-0.5 truncate">
                           {variance === null ? (
                             <span className="text-zinc-400">—</span>
                           ) : variance === 0 ? (
@@ -493,7 +493,7 @@ export function StockCountMobileSheet({
 
                       {/* Variance Cost */}
                       {hasCostPermission && (
-                        <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100">
+                        <div className="bg-zinc-50 p-2.5 rounded-xl border border-zinc-100 min-w-0 overflow-hidden">
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                             Variance Cost
                           </span>
@@ -519,7 +519,7 @@ export function StockCountMobileSheet({
                             setCurrentIndex(idx);
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
-                          className="text-xs font-bold text-zinc-800 hover:text-zinc-950 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-2xs cursor-pointer"
+                          className="text-xs font-bold text-zinc-800 hover:text-zinc-950 bg-white border border-zinc-200 px-3 py-1.5 rounded-lg shadow-2xs cursor-pointer min-h-[38px] flex items-center"
                         >
                           {isCurrent ? '● Active in Stepper' : 'Count this Item →'}
                         </button>

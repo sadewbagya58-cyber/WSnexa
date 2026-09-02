@@ -70,7 +70,11 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
       )}
 
       {/* Pending Guest Order Approvals Section */}
-      <PendingOrderApprovalsSection branchId={branchId} canManageRequests={canManageRequests} />
+      <PendingOrderApprovalsSection
+        branchId={branchId}
+        canManageRequests={canManageRequests}
+        assignedAreaIds={assignedAreaIds}
+      />
 
       {/* Header controls & Realtime status */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
@@ -241,9 +245,11 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 function PendingOrderApprovalsSection({
   branchId,
   canManageRequests = true,
+  assignedAreaIds = null,
 }: {
   branchId: string;
   canManageRequests?: boolean;
+  assignedAreaIds?: string[] | null;
 }) {
   const [approvals, setApprovals] = React.useState<OrderRecord[]>([]);
   const [loading, setLoading] = React.useState(true);

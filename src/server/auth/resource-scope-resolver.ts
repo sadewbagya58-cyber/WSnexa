@@ -28,7 +28,7 @@ export async function resolveResourceScope(
     case 'order': {
       const { data, error } = await admin
         .from('orders')
-        .select('id, business_id, branch_id, table_id, customer_user_id')
+        .select('id, business_id, branch_id, table_id, service_area_id, customer_user_id')
         .eq('id', resourceId)
         .maybeSingle();
 
@@ -36,8 +36,8 @@ export async function resolveResourceScope(
         throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Order not found: ${resourceId}`);
       }
 
-      let serviceAreaId: string | null = null;
-      if (data.table_id) {
+      let serviceAreaId: string | null = data.service_area_id || null;
+      if (!serviceAreaId && data.table_id) {
         const { data: tableData } = await admin
           .from('dining_tables')
           .select('service_area_id')
@@ -469,6 +469,40 @@ export async function resolveResourceScope(
         organizationUnitId: null,
         serviceAreaId: null,
         ownerUserId: data.received_by || null,
+      };
+      break;
+    }
+
+    case 'waiter_request': {
+      const { data, error } = await admin
+        .from('waiter_requests')
+        .select('id, business_id, branch_id, table_id, accepted_by')
+        .eq('id', resourceId)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw new AuthorizationContextError('RESOURCE_NOT_FOUND', `Waiter request not found: ${resourceId}`);
+      }
+
+      let serviceAreaId: string | null = null;
+      if (data.table_id) {
+        const { data: tableData } = await admin
+          .from('dining_tables')
+          .select('service_area_id')
+          .eq('id', data.table_id)
+          .maybeSingle();
+        serviceAreaId = tableData?.service_area_id || null;
+      }
+
+      scope = {
+        resourceType: 'waiter_request',
+        resourceId: data.id,
+        businessId: data.business_id,
+        branchId: data.branch_id || null,
+        departmentId: null,
+        organizationUnitId: null,
+        serviceAreaId,
+        ownerUserId: data.accepted_by || null,
       };
       break;
     }

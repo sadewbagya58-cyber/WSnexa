@@ -169,7 +169,8 @@ export type SupportedResourceType =
   | 'department'
   | 'organization_unit'
   | 'supplier'
-  | 'payment';
+  | 'payment'
+  | 'waiter_request';
 
 export interface ResourceScope {
   resourceType: SupportedResourceType;

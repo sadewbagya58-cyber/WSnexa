@@ -172,9 +172,14 @@ export class WaiterService {
       memberRole = tenantContext.membership.role;
     }
 
-    // Check if user is waiter role and set explicit area boundaries
+    // Check if user is waiter role or non-property/org role and set explicit area boundaries
     let allowedAreaIds: string[] | null = null;
-    if (memberRole === 'waiter' && membershipId) {
+    const isPropertyLevel =
+      memberRole === 'business_owner' ||
+      memberRole === 'branch_manager' ||
+      memberRole === 'admin';
+
+    if (!isPropertyLevel && membershipId) {
       const { data: areaAssigns } = await supabase
         .from('staff_area_assignments')
         .select('service_area_id')
@@ -182,7 +187,7 @@ export class WaiterService {
 
       allowedAreaIds = (areaAssigns || []).map((a: { service_area_id: string }) => a.service_area_id);
 
-      // If Waiter is assigned zero service areas, return empty request queue immediately
+      // If Staff is assigned zero service areas, return empty request queue immediately
       if (allowedAreaIds.length === 0) {
         return [];
       }
@@ -247,15 +252,30 @@ export class WaiterService {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = customClient || createAdminClient();
 
-    // Check membership & role for waiterUserId
+    // Resolve branch & business for tenancy safety
+    const { data: bRow } = await admin
+      .from('branches')
+      .select('business_id')
+      .eq('id', branchId)
+      .maybeSingle();
+
+    if (!bRow?.business_id) return [];
+
+    // Check membership & role for waiterUserId within this business
     const { data: mem } = await admin
       .from('business_memberships')
       .select('id, role')
+      .eq('business_id', bRow.business_id)
       .eq('user_id', waiterUserId)
       .maybeSingle();
 
     let allowedAreaIds: string[] | null = null;
-    if (mem && mem.role !== 'business_owner' && mem.role !== 'branch_manager') {
+    const isPropertyLevel =
+      mem?.role === 'business_owner' ||
+      mem?.role === 'branch_manager' ||
+      mem?.role === 'admin';
+
+    if (mem && !isPropertyLevel) {
       const { data: assigns } = await admin
         .from('staff_area_assignments')
         .select('service_area_id')
@@ -298,6 +318,53 @@ export class WaiterService {
   static async approveGuestOrder(orderId: string, waiterUserId: string) {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
+
+    // 1. Fetch order details with table service area to verify tenancy & scope
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, branch_id, table_id, service_area_id, approval_status, table:dining_tables(service_area_id)')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order) {
+      return { success: false, message: 'Order not found.' };
+    }
+
+    if (order.approval_status !== 'pending_waiter_approval') {
+      return { success: false, message: 'Order is no longer pending approval.' };
+    }
+
+    // Resolve membership & scope in order's business
+    const { data: mem } = await admin
+      .from('business_memberships')
+      .select('id, role')
+      .eq('business_id', order.business_id)
+      .eq('user_id', waiterUserId)
+      .maybeSingle();
+
+    if (!mem) {
+      return { success: false, message: 'Unauthorized staff member.' };
+    }
+
+    const isPropertyLevel =
+      mem.role === 'business_owner' ||
+      mem.role === 'branch_manager' ||
+      mem.role === 'admin';
+
+    const orderAreaId = order.service_area_id || (order.table as { service_area_id?: string } | null)?.service_area_id;
+
+    if (!isPropertyLevel && orderAreaId) {
+      const { data: assigns } = await admin
+        .from('staff_area_assignments')
+        .select('service_area_id')
+        .eq('business_membership_id', mem.id)
+        .eq('branch_id', order.branch_id);
+
+      const assignedAreaIds = (assigns || []).map((a) => a.service_area_id);
+      if (!assignedAreaIds.includes(orderAreaId)) {
+        return { success: false, message: 'Forbidden: Order is outside your assigned service area.' };
+      }
+    }
 
     const { data: updatedRows, error } = await admin
       .from('orders')
@@ -369,6 +436,53 @@ export class WaiterService {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
 
+    // 1. Fetch order details with table service area to verify tenancy & scope
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, branch_id, table_id, service_area_id, approval_status, table:dining_tables(service_area_id)')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order) {
+      return { success: false, message: 'Order not found.' };
+    }
+
+    if (order.approval_status !== 'pending_waiter_approval') {
+      return { success: false, message: 'Order is no longer pending approval.' };
+    }
+
+    // Resolve membership & scope in order's business
+    const { data: mem } = await admin
+      .from('business_memberships')
+      .select('id, role')
+      .eq('business_id', order.business_id)
+      .eq('user_id', waiterUserId)
+      .maybeSingle();
+
+    if (!mem) {
+      return { success: false, message: 'Unauthorized staff member.' };
+    }
+
+    const isPropertyLevel =
+      mem.role === 'business_owner' ||
+      mem.role === 'branch_manager' ||
+      mem.role === 'admin';
+
+    const orderAreaId = order.service_area_id || (order.table as { service_area_id?: string } | null)?.service_area_id;
+
+    if (!isPropertyLevel && orderAreaId) {
+      const { data: assigns } = await admin
+        .from('staff_area_assignments')
+        .select('service_area_id')
+        .eq('business_membership_id', mem.id)
+        .eq('branch_id', order.branch_id);
+
+      const assignedAreaIds = (assigns || []).map((a) => a.service_area_id);
+      if (!assignedAreaIds.includes(orderAreaId)) {
+        return { success: false, message: 'Forbidden: Order is outside your assigned service area.' };
+      }
+    }
+
     const { data: updatedRows, error } = await admin
       .from('orders')
       .update({
@@ -419,16 +533,35 @@ export class WaiterService {
     const { createAdminClient } = await import('@/lib/supabase/server');
     const admin = createAdminClient();
 
-    // 1. Fetch current request state
+    // 1. Fetch current request state with table service area
     const { data: currentReq } = await admin
       .from('waiter_requests')
-      .select('id, business_id, branch_id, status, accepted_by, accepted_at')
+      .select('id, business_id, branch_id, table_id, status, accepted_by, accepted_at, table:dining_tables(service_area_id)')
       .eq('id', requestId)
       .eq('business_id', tenantContext.business.id)
       .maybeSingle();
 
     if (!currentReq) {
       return { success: false, message: 'Waiter request not found.' };
+    }
+
+    const isPropertyLevel =
+      tenantContext.membership?.role === 'business_owner' ||
+      tenantContext.membership?.role === 'branch_manager' ||
+      tenantContext.membership?.role === 'admin';
+
+    const reqAreaId = (currentReq.table as { service_area_id?: string } | null)?.service_area_id;
+
+    if (!isPropertyLevel && reqAreaId && tenantContext.membership) {
+      const { data: areaAssigns } = await admin
+        .from('staff_area_assignments')
+        .select('service_area_id')
+        .eq('business_membership_id', tenantContext.membership.id);
+
+      const assignedAreaIds = (areaAssigns || []).map((a) => a.service_area_id);
+      if (!assignedAreaIds.includes(reqAreaId)) {
+        return { success: false, message: 'Forbidden: Request is outside your assigned service area.' };
+      }
     }
 
     // 2. Idempotent check: already at target status

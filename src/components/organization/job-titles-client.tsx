@@ -157,78 +157,171 @@ export function JobTitlesClient({
             <div className="text-xs text-zinc-500">No titles match the selected rank or search terms.</div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-zinc-700">
-              <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-                <tr>
-                  <th className="py-3 px-4">Job Title & Code</th>
-                  <th className="py-3 px-4">Seniority Level</th>
-                  <th className="py-3 px-4">Department Scope</th>
-                  <th className="py-3 px-4">Classification</th>
-                  <th className="py-3 px-4">Status</th>
-                  {canManage && <th className="py-3 px-4 text-right">Actions</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {filteredTitles.map((jt) => {
-                  const lvl = jt.hierarchy_level || hierarchyLevels.find((l) => l.id === jt.hierarchy_level_id);
-                  return (
-                    <tr key={jt.id} className="hover:bg-zinc-50/70 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-zinc-900">{jt.name}</div>
-                        {jt.code && <div className="text-[10px] font-mono text-zinc-400 mt-0.5">[{jt.code}]</div>}
-                        {jt.description && (
-                          <div className="text-[11px] text-zinc-500 mt-1 max-w-md line-clamp-1">{jt.description}</div>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 border border-zinc-200 text-zinc-800">
-                          Rank {lvl?.rank ?? '?'}: {lvl?.name || 'Unassigned'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 capitalize text-zinc-600 whitespace-nowrap">
-                        {jt.department_type || 'Operations'}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {jt.is_management ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 border border-zinc-300 text-zinc-900">
-                            Management Tier
+          <>
+            {/* Desktop Table Layout (md+) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-zinc-700">
+                <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Job Title & Code</th>
+                    <th className="py-3 px-4">Seniority Level</th>
+                    <th className="py-3 px-4">Department Scope</th>
+                    <th className="py-3 px-4">Classification</th>
+                    <th className="py-3 px-4">Status</th>
+                    {canManage && <th className="py-3 px-4 text-right">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {filteredTitles.map((jt) => {
+                    const lvl = jt.hierarchy_level || hierarchyLevels.find((l) => l.id === jt.hierarchy_level_id);
+                    return (
+                      <tr key={jt.id} className="hover:bg-zinc-50/70 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-zinc-900">{jt.name}</div>
+                          {jt.code && <div className="text-[10px] font-mono text-zinc-400 mt-0.5">[{jt.code}]</div>}
+                          {jt.description && (
+                            <div className="text-[11px] text-zinc-500 mt-1 max-w-md line-clamp-1">{jt.description}</div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 border border-zinc-200 text-zinc-800">
+                            Rank {lvl?.rank ?? '?'}: {lvl?.name || 'Unassigned'}
                           </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
-                            Operational
-                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 capitalize text-zinc-600 whitespace-nowrap">
+                          {jt.department_type || 'Operations'}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {jt.is_management ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 border border-zinc-300 text-zinc-900">
+                              Management Tier
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
+                              Operational
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {jt.is_active ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-800">
+                              Active
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 text-zinc-400">
+                              Archived
+                            </span>
+                          )}
+                        </td>
+                        {canManage && (
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenEdit(jt)}
+                              className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
+                            >
+                              Edit
+                            </Button>
+                          </td>
                         )}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Responsive Stacked Card List (< md) */}
+            <div className="block md:hidden divide-y divide-zinc-200">
+              {filteredTitles.map((jt) => {
+                const lvl = jt.hierarchy_level || hierarchyLevels.find((l) => l.id === jt.hierarchy_level_id);
+                return (
+                  <div key={jt.id} className="p-4 space-y-3 bg-white">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-sm text-zinc-900 leading-snug break-words">
+                          {jt.name}
+                        </div>
+                        {jt.code && (
+                          <div className="text-[11px] font-mono text-zinc-500 mt-0.5">
+                            [{jt.code}]
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {jt.is_active ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-800">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 border border-emerald-200 text-emerald-800">
                             Active
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 text-zinc-400">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 border border-zinc-200 text-zinc-500">
                             Archived
                           </span>
                         )}
-                      </td>
-                      {canManage && (
-                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenEdit(jt)}
-                            className="text-xs h-7 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-medium"
-                          >
-                            Edit
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+
+                    {jt.description && (
+                      <p className="text-xs text-zinc-600 line-clamp-2 leading-relaxed">
+                        {jt.description}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+                          Seniority Level
+                        </span>
+                        <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-100 border border-zinc-200 text-zinc-800">
+                          Rank {lvl?.rank ?? '?'}: {lvl?.name || 'Unassigned'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+                          Department Scope
+                        </span>
+                        <span className="capitalize font-medium text-zinc-700 mt-1 block">
+                          {jt.department_type || 'Operations'}
+                        </span>
+                      </div>
+
+                      <div className="col-span-2">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+                          Classification
+                        </span>
+                        <span className="mt-1 inline-block">
+                          {jt.is_management ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 border border-zinc-300 text-zinc-900">
+                              Management Tier
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-50 border border-zinc-200 text-zinc-600">
+                              Operational
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {canManage && (
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEdit(jt)}
+                          className="text-xs h-9 min-h-[36px] px-4 bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-900 font-semibold w-full"
+                        >
+                          Edit Job Title
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

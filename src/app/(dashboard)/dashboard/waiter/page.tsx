@@ -49,7 +49,12 @@ export default async function WaiterPage() {
   const initialRequests = await WaiterService.getBranchWaiterRequests();
 
   let assignedAreaIds: string[] | null = null;
-  if (tenantContext.membership.role === 'waiter') {
+  const isPropertyLevel =
+    tenantContext.membership.role === 'business_owner' ||
+    tenantContext.membership.role === 'branch_manager' ||
+    tenantContext.membership.role === 'admin';
+
+  if (!isPropertyLevel) {
     const { ServiceAreaService } = await import('@/server/services/service-area.service');
     assignedAreaIds = await ServiceAreaService.getStaffAssignedAreaIds(tenantContext.membership.id);
   }

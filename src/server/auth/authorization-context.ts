@@ -580,8 +580,14 @@ async function _resolveAuthorizationContext(
       );
     }
   } else {
-    const rolePermissionsRows = (rolePermissionsRes.data || []) as Array<{ permission_key: string }>;
-    rolePermissions = Array.from(new Set(rolePermissionsRows.map((rp) => rp.permission_key)));
+    const { ROLE_PRESETS } = await import('@/lib/validation/permission-presets');
+    const preset = ROLE_PRESETS.find((p) => p.key === activeMembership.role);
+    if (preset) {
+      rolePermissions = [...preset.permissions];
+    } else {
+      const rolePermissionsRows = (rolePermissionsRes.data || []) as Array<{ permission_key: string }>;
+      rolePermissions = Array.from(new Set(rolePermissionsRows.map((rp) => rp.permission_key)));
+    }
   }
 
   // 9. Member Permission Overrides Resolution (Task 6)

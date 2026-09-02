@@ -987,16 +987,25 @@ export class InventoryService {
 
     if (!count) return null;
 
-    const { data: items } = await admin
+    const { data: items, error: itemsErr } = await admin
       .from('inventory_stock_count_items')
       .select(`
         *,
         item:inventory_items(id, name, base_unit)
       `)
-      .eq('count_id', countId)
-      .order('created_at', { ascending: true });
+      .eq('count_id', countId);
+
+    if (itemsErr) {
+      console.error('[InventoryService.getStockCountById] Error querying count items:', itemsErr);
+    }
 
     const isCountingBlind = count.is_blind_count && count.status !== 'approved';
+
+    const sortedItems = (items || []).slice().sort((a, b) => {
+      const nameA = a.item?.name || '';
+      const nameB = b.item?.name || '';
+      return nameA.localeCompare(nameB);
+    });
 
     return {
       id: count.id,
@@ -1017,7 +1026,7 @@ export class InventoryService {
       submittedAt: count.submitted_at,
       approvedAt: count.approved_at,
       createdAt: count.created_at,
-      items: (items || []).map((ci) => ({
+      items: sortedItems.map((ci) => ({
         id: ci.id,
         itemId: ci.item_id,
         itemName: ci.item?.name || 'Item',

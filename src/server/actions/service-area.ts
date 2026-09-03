@@ -148,6 +148,7 @@ export async function assignStaffToAreasAction(membershipId: string, areaIds: st
     );
 
     if (res.success) {
+      revalidatePath('/dashboard/people');
       revalidatePath('/dashboard/team');
       revalidatePath('/dashboard/areas');
     }
@@ -155,6 +156,20 @@ export async function assignStaffToAreasAction(membershipId: string, areaIds: st
     return res;
   } catch (err: unknown) {
     return { success: false, message: (err as Error).message || 'Failed to update staff area assignments.' };
+  }
+}
+
+export async function getStaffAssignedAreaIdsAction(membershipId: string) {
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext) {
+      return { success: false, data: [] as string[], message: 'Unauthorized.' };
+    }
+
+    const areaIds = await ServiceAreaService.getStaffAssignedAreaIds(membershipId);
+    return { success: true, data: areaIds };
+  } catch (err: unknown) {
+    return { success: false, data: [] as string[], message: (err as Error).message || 'Failed to load area assignments.' };
   }
 }
 

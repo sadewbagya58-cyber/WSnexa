@@ -190,6 +190,82 @@ async function runSuite() {
     'VisualOrgChartClient uses responsive card widths (w-56 on mobile, sm:w-64 on desktop)'
   );
 
+  // -------------------------------------------------------------
+  // Test 6: Mobile People & Workforce Directory Layout
+  // -------------------------------------------------------------
+  console.log('\nTest Group 6: People Directory Mobile Cards & Responsive Viewports');
+  assert(
+    peopleDirectoryContent.includes('block md:hidden') && peopleDirectoryContent.includes('hidden md:block'),
+    'PeopleDirectoryClient separates mobile card rendering (md:hidden) from desktop table (hidden md:block)'
+  );
+  assert(
+    peopleDirectoryContent.includes('min-h-[44px]') || peopleDirectoryContent.includes('min-h-[40px]'),
+    'PeopleDirectoryClient mobile controls implement touch-friendly target sizing (>=40-44px)'
+  );
+  assert(
+    peopleDirectoryContent.includes('Property') &&
+      peopleDirectoryContent.includes('Department') &&
+      peopleDirectoryContent.includes('Position Slot') &&
+      peopleDirectoryContent.includes('Supervisor'),
+    'People Directory mobile cards expose complete workforce metadata (Property, Department, Position Slot, Supervisor)'
+  );
+
+  // -------------------------------------------------------------
+  // Test 7: Staff Management Action Parity in People Directory
+  // -------------------------------------------------------------
+  console.log('\nTest Group 7: Staff Management Action Parity');
+  assert(
+    peopleDirectoryContent.includes('handleOpenEditRole') && peopleDirectoryContent.includes('updateMemberRoleAction'),
+    'People Directory provides Edit Staff role modal calling updateMemberRoleAction'
+  );
+  assert(
+    peopleDirectoryContent.includes('handleOpenManageAreas') && peopleDirectoryContent.includes('assignStaffToAreasAction'),
+    'People Directory provides Service Areas modal calling assignStaffToAreasAction'
+  );
+  assert(
+    peopleDirectoryContent.includes('handleToggleStatus') && peopleDirectoryContent.includes('setMembershipStatusAction'),
+    'People Directory provides Suspend/Reactivate action calling setMembershipStatusAction'
+  );
+  assert(
+    peopleDirectoryContent.includes('/dashboard/access/members/'),
+    'People Directory provides direct Access Profile hub navigation'
+  );
+  assert(
+    peopleDirectoryContent.includes('canAssignRoles') &&
+      peopleDirectoryContent.includes('canSuspend') &&
+      peopleDirectoryContent.includes('canAssignAreas'),
+    'People Directory honors server-side capability permissions (canAssignRoles, canSuspend, canAssignAreas)'
+  );
+
+  // -------------------------------------------------------------
+  // Test 8: Positions & Headcount Mobile UI
+  // -------------------------------------------------------------
+  console.log('\nTest Group 8: Positions & Headcount Mobile UI');
+  const positionsClientContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/organization/positions-client.tsx'),
+    'utf8'
+  );
+  assert(
+    positionsClientContent.includes('block md:hidden') && positionsClientContent.includes('hidden md:block'),
+    'PositionsClient renders dedicated responsive mobile cards (md:hidden) and preserves desktop table (hidden md:block)'
+  );
+  assert(
+    positionsClientContent.includes('Headcount Capacity') &&
+      positionsClientContent.includes('Substantive Occupant(s)') &&
+      positionsClientContent.includes('Property') &&
+      positionsClientContent.includes('Department'),
+    'Positions mobile cards render complete establishment metadata (Headcount, Occupants, Property, Department)'
+  );
+  assert(
+    positionsClientContent.includes('/dashboard/access/invites?positionId=') &&
+      positionsClientContent.includes('/dashboard/people?assignPositionId='),
+    'Positions mobile cards provide direct + Invite and Assign actions'
+  );
+  assert(
+    positionsClientContent.includes('min-h-[44px]'),
+    'Positions mobile actions use touch-friendly >=44px tap targets'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

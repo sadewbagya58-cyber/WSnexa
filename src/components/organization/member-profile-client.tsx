@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CreateAssignmentModal } from './modals/create-assignment-modal';
 import { PrimaryTransitionModal } from './modals/primary-transition-modal';
@@ -152,12 +152,13 @@ export function MemberProfileClient({
   canManage,
 }: MemberProfileProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
 
   // Modals visibility
-  const [isCreateAssignOpen, setIsCreateAssignOpen] = useState(false);
+  const [isCreateAssignOpen, setIsCreateAssignOpen] = useState(searchParams.get('action') === 'assign');
   const [isTransitionOpen, setIsTransitionOpen] = useState(false);
   const [isChangeMgrOpen, setIsChangeMgrOpen] = useState(false);
   const [isActingOpen, setIsActingOpen] = useState(false);
@@ -373,6 +374,38 @@ export function MemberProfileClient({
       {/* Tab 1: Overview */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Unassigned Placement Status Notice */}
+          {!pAssign && (
+            <div className="rounded-xl bg-amber-50/70 border border-amber-200/90 p-5 space-y-3 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl select-none">📌</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-zinc-950">
+                        Operational Role Active • Unassigned Position
+                      </h3>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        Awaiting Placement
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-600 leading-relaxed max-w-2xl">
+                      This staff member holds an active <strong>{member.role.replace(/_/g, ' ')}</strong> membership and can operate authorized modules normally. However, they have not yet been placed into a <strong>Job Title</strong>, <strong>Department</strong>, or <strong>Position Slot</strong> in the Organization Chart.
+                    </p>
+                  </div>
+                </div>
+                {canManage && (
+                  <Button
+                    onClick={() => setIsCreateAssignOpen(true)}
+                    className="shrink-0 bg-zinc-950 hover:bg-zinc-800 text-white font-bold text-xs shadow-sm px-4 py-2"
+                  >
+                    + Assign Position & Department
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Substantive vs Effective Callout */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="rounded-xl bg-white border border-zinc-200 p-5 space-y-2 shadow-xs">

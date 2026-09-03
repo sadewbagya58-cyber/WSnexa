@@ -49,7 +49,7 @@ export default async function AccessDiagnosticsPage() {
         description="Interactive Policy Engine evaluation tracer, provenance breakdown, and permission simulation."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Team', href: '/dashboard/team' },
+          { label: 'Team', href: '/dashboard/people' },
           { label: 'Diagnostics' },
         ]}
       />

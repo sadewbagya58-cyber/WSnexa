@@ -50,7 +50,7 @@ export default async function AccessHubPage() {
         description="Manage staff roles, custom permission bundles, and location access."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Team', href: '/dashboard/team' },
+          { label: 'Team', href: '/dashboard/people' },
           { label: 'Access Control Hub' },
         ]}
       />

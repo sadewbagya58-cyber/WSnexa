@@ -46,7 +46,7 @@ export default async function OrganizationOverviewPage() {
         description="Multi-branch organizational architecture, department hierarchy, and headcount hub."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Team', href: '/dashboard/team' },
+          { label: 'Team', href: '/dashboard/people' },
           { label: 'Organization Hub' },
         ]}
       />

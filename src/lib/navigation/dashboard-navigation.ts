@@ -561,12 +561,12 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
           {
             id: 'staff_directory',
             label: 'Staff Directory',
-            href: '/dashboard/team',
+            href: '/dashboard/people',
             icon: '👥',
             exact: true,
             context: 'ORGANIZATION',
-            aliases: ['employees', 'team members', 'active staff'],
-            requiredPermission: ['staff.view', 'staff.manage'],
+            aliases: ['employees', 'team members', 'active staff', 'all personnel', 'member profiles', 'people directory'],
+            requiredPermission: ['staff.view', 'staff.manage', 'people.view', 'people.manage'],
           },
           {
             id: 'staff_invitations',
@@ -650,16 +650,6 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
             context: 'ORGANIZATION',
             aliases: ['designations', 'title catalog'],
             requiredPermission: ['organization.view', 'organization.manage'],
-          },
-          {
-            id: 'people_directory',
-            label: 'People Directory',
-            href: '/dashboard/people',
-            icon: '📇',
-            exact: true,
-            context: 'ORGANIZATION',
-            aliases: ['all personnel', 'member profiles'],
-            requiredPermission: ['people.view', 'people.manage'],
           },
           {
             id: 'acting_roles',

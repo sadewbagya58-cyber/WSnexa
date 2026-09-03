@@ -25,7 +25,7 @@ export function TeamSubNav({
   const items: HubNavItem[] = [];
 
   if (canViewStaff) {
-    items.push({ id: 'staff', label: 'Staff Directory', href: '/dashboard/team', icon: '👥', exact: true });
+    items.push({ id: 'staff', label: 'Staff Directory', href: '/dashboard/people', icon: '👥', exact: true });
   }
   if (canInviteStaff) {
     items.push({ id: 'invites', label: 'Staff Invitations', href: '/dashboard/team/invites', icon: '🔑' });

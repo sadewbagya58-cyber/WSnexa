@@ -322,10 +322,10 @@ export function PeopleDirectoryClient({
                           </div>
                         ) : (
                           <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                              ⚠️ Assignment Required
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                              ⚡ Role Active • Unassigned
                             </span>
-                            <div className="text-[10px] text-zinc-400">No primary position</div>
+                            <div className="text-[10px] text-zinc-500 font-medium">No position slot in Org Chart</div>
                           </div>
                         )}
                       </td>
@@ -349,16 +349,16 @@ export function PeopleDirectoryClient({
                           </>
                         ) : (
                           <div>
-                            <div className="text-amber-800 text-xs font-semibold">Unassigned Staff</div>
+                            <div className="text-zinc-900 text-xs font-semibold">Unassigned Position</div>
                             {canManage ? (
                               <Link
-                                href={`/dashboard/people/${s.membershipId}`}
-                                className="text-[11px] text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5 mt-0.5"
+                                href={`/dashboard/people/${s.membershipId}?action=assign`}
+                                className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-zinc-900 text-white hover:bg-zinc-800 transition-colors shadow-2xs"
                               >
-                                Assign Position Slot →
+                                + Assign Position Slot &rarr;
                               </Link>
                             ) : (
-                              <div className="text-[11px] text-zinc-400 italic">No position slot assigned</div>
+                              <div className="text-[11px] text-zinc-400 italic">Awaiting position placement</div>
                             )}
                           </div>
                         )}

@@ -56,6 +56,7 @@
     "verify:rbac-v2-temporary-authority": "tsx scripts/verify-rbac-v2-temporary-authority.ts",
     "verify:rbac-v2-legacy-cleanup": "tsx scripts/verify-rbac-v2-legacy-cleanup.ts",
     "verify:rbac-v2-management-ui": "tsx scripts/verify-rbac-v2-management-ui.ts",
+    "verify:team-audit-fixes": "tsx scripts/verify-team-audit-fixes.ts",
     "verify:phase31-navigation-ia": "tsx scripts/verify-phase31-navigation-ia.ts",
     "verify:phase31-role-aware-navigation": "tsx scripts/verify-phase31-role-aware-navigation.ts",
     "verify:phase31-dashboard-shell": "tsx scripts/verify-phase31-dashboard-shell.ts",

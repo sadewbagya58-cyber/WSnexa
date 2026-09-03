@@ -48,7 +48,7 @@ export default async function RolesManagementPage() {
         description="Manage built-in role templates and custom capability permission bundles."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Team', href: '/dashboard/team' },
+          { label: 'Team', href: '/dashboard/people' },
           { label: 'Roles & Templates' },
         ]}
       />

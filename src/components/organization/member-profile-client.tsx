@@ -481,43 +481,161 @@ export function MemberProfileClient({
 
       {/* Tab 2: Assignments History */}
       {activeTab === 'assignments' && (
-        <div className="rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left text-xs text-zinc-700">
-            <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Role & Nature</th>
-                <th className="py-3 px-4">Property & Dept</th>
-                <th className="py-3 px-4">Timeline</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Reason</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {profile.assignments.map((a) => (
-                <tr key={a.id} className="hover:bg-zinc-50/70 transition-colors">
-                  <td className="py-3.5 px-4">
-                    <div className="font-semibold text-zinc-900">{a.job_title?.name || 'Position Holder'}</div>
-                    <div className="text-[10px] text-zinc-500 capitalize">{a.assignment_type} {a.is_primary ? '• Primary' : ''}</div>
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="text-zinc-900 font-medium">{a.branch?.name || 'Corporate'}</div>
-                    <div className="text-[11px] text-zinc-500">{a.department?.name || 'None'}</div>
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-zinc-600">
-                    {a.starts_at?.split('T')[0]} → {a.ends_at?.split('T')[0] || 'Present'}
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      a.status === 'active' ? 'bg-zinc-100 text-zinc-800' : 'bg-zinc-50 text-zinc-400 border border-zinc-200'
-                    }`}>
-                      {a.status}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 text-zinc-500">{a.reason || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {profile.assignments.length === 0 ? (
+            <div className="rounded-xl bg-white border border-zinc-200 p-8 text-center text-xs text-zinc-500 shadow-xs">
+              No historical assignments found on record.
+            </div>
+          ) : (
+            <>
+              {/* Mobile View: Responsive Assignment Cards (md:hidden) */}
+              <div className="block md:hidden space-y-3">
+                {profile.assignments.map((a) => {
+                  const isPrimary = Boolean(a.is_primary);
+                  const isSecondment = a.assignment_type === 'secondment';
+                  const isActing = a.assignment_type === 'acting';
+                  const isTemporary = a.assignment_type === 'temporary';
+
+                  const natureBadge = isPrimary
+                    ? { label: 'Primary', style: 'bg-emerald-50 text-emerald-900 border-emerald-200' }
+                    : isSecondment
+                    ? { label: 'Secondment', style: 'bg-blue-50 text-blue-900 border-blue-200' }
+                    : isActing
+                    ? { label: 'Acting', style: 'bg-purple-50 text-purple-900 border-purple-200' }
+                    : isTemporary
+                    ? { label: 'Temporary', style: 'bg-amber-50 text-amber-900 border-amber-200' }
+                    : { label: a.assignment_type || 'Additional', style: 'bg-zinc-100 text-zinc-800 border-zinc-200' };
+
+                  return (
+                    <div
+                      key={a.id}
+                      className="rounded-2xl bg-white border border-zinc-200 p-4 space-y-3 shadow-2xs hover:border-zinc-300 transition-all overflow-hidden"
+                    >
+                      {/* Header: Role & Status */}
+                      <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-2.5">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-bold text-zinc-950 break-words">
+                            {a.job_title?.name || 'Position Holder'}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${natureBadge.style}`}
+                            >
+                              Nature: {natureBadge.label}
+                            </span>
+                            {isPrimary && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-zinc-900 text-white">
+                                Substantive
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            a.status === 'active'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-zinc-100 text-zinc-600 border-zinc-200'
+                          }`}
+                        >
+                          {a.status === 'active' ? '● Active' : a.status}
+                        </span>
+                      </div>
+
+                      {/* Details Box */}
+                      <div className="bg-zinc-50/70 rounded-xl p-3 space-y-2 text-xs border border-zinc-100">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          <div>
+                            <span className="text-zinc-400 block text-[10px] font-semibold uppercase tracking-wider">
+                              Property
+                            </span>
+                            <span className="font-semibold text-zinc-900 break-words">
+                              📍 {a.branch?.name || 'Corporate / Head Office'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-zinc-400 block text-[10px] font-semibold uppercase tracking-wider">
+                              Department
+                            </span>
+                            <span className="font-semibold text-zinc-900 break-words">
+                              🏢 {a.department?.name || <span className="text-zinc-400 italic">None</span>}
+                              {a.unit?.name ? ` • 🏷️ ${a.unit.name}` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-zinc-200/60">
+                          <span className="text-zinc-400 block text-[10px] font-semibold uppercase tracking-wider">
+                            Timeline
+                          </span>
+                          <span className="font-mono text-xs font-bold text-zinc-800 break-words">
+                            📅 {a.starts_at?.split('T')[0]} → {a.ends_at?.split('T')[0] || 'Present'}
+                          </span>
+                        </div>
+
+                        {a.reason && (
+                          <div className="pt-2 border-t border-zinc-200/60 text-[11px]">
+                            <span className="text-zinc-400 block text-[10px] font-semibold uppercase tracking-wider">
+                              Reason / Note
+                            </span>
+                            <span className="text-zinc-700 italic break-words">{a.reason}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop View: Data Table (hidden md:block) */}
+              <div className="hidden md:block rounded-xl bg-white border border-zinc-200 overflow-hidden shadow-sm">
+                <table className="w-full text-left text-xs text-zinc-700">
+                  <thead className="bg-zinc-50 border-b border-zinc-200 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Role & Nature</th>
+                      <th className="py-3 px-4">Property & Dept</th>
+                      <th className="py-3 px-4">Timeline</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {profile.assignments.map((a) => (
+                      <tr key={a.id} className="hover:bg-zinc-50/70 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-zinc-900">{a.job_title?.name || 'Position Holder'}</div>
+                          <div className="text-[10px] text-zinc-500 capitalize">
+                            {a.assignment_type} {a.is_primary ? '• Primary' : ''}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <div className="text-zinc-900 font-medium">{a.branch?.name || 'Corporate'}</div>
+                          <div className="text-[11px] text-zinc-500">
+                            {a.department?.name || 'None'} {a.unit?.name ? `• ${a.unit.name}` : ''}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap font-mono text-[11px] text-zinc-600">
+                          {a.starts_at?.split('T')[0]} → {a.ends_at?.split('T')[0] || 'Present'}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              a.status === 'active'
+                                ? 'bg-zinc-100 text-zinc-800'
+                                : 'bg-zinc-50 text-zinc-400 border border-zinc-200'
+                            }`}
+                          >
+                            {a.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-500">{a.reason || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 

@@ -744,6 +744,7 @@ export class OrderService {
     } else if (nextStatus === 'completed') {
       isAuthorized =
         (await can({ context: authContext, permission: 'orders.update_status', resource })) ||
+        (await can({ context: authContext, permission: 'kitchen.update', resource })) ||
         (await can({ context: authContext, permission: 'cashier.access', resource })) ||
         (await can({ context: authContext, permission: 'payments.record', resource }));
     } else {

@@ -29,7 +29,7 @@ function assert(condition: boolean, message: string, detail?: string) {
 
 async function runSuite() {
   console.log('================================================================');
-  console.log('  WSNexa Team / Workforce Audit Fixes — Regression Suite       ');
+  console.log('  WSNexa QA Fixes & Team Regression Suite                      ');
   console.log('================================================================\n');
 
   // -------------------------------------------------------------
@@ -264,6 +264,79 @@ async function runSuite() {
   assert(
     positionsClientContent.includes('min-h-[44px]'),
     'Positions mobile actions use touch-friendly >=44px tap targets'
+  );
+
+  // -------------------------------------------------------------
+  // Test 9: Position Headcount & Secondment Occupancy Separation
+  // -------------------------------------------------------------
+  console.log('\nTest Group 9: Position Headcount & Secondment Occupancy Separation');
+  const orgServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/organization.service.ts'),
+    'utf8'
+  );
+  assert(
+    orgServiceContent.includes("eq('is_primary', true)") &&
+      orgServiceContent.includes("eq('status', 'active')"),
+    'OrganizationService.getPositionOccupancy counts only active is_primary assignments'
+  );
+  assert(
+    orgServiceContent.includes('secondmentAssignments') &&
+      orgServiceContent.includes('temporaryAssignments'),
+    'OrganizationService.getPositionCoverage returns secondments and temporary assignments separately'
+  );
+  assert(
+    positionsClientContent.includes('secondmentAssignments') &&
+      positionsClientContent.includes('Seconded:'),
+    'PositionsClient displays secondment assignments separately without inflating substantive headcount'
+  );
+
+  // -------------------------------------------------------------
+  // Test 10: Kitchen Staff Order Completion Authorization
+  // -------------------------------------------------------------
+  console.log('\nTest Group 10: Kitchen Staff Order Completion Authorization');
+  const orderServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/order.service.ts'),
+    'utf8'
+  );
+  assert(
+    orderServiceContent.includes("permission: 'kitchen.update', resource") &&
+      orderServiceContent.includes("nextStatus === 'completed'"),
+    'OrderService.updateOrderStatus authorizes kitchen.update for nextStatus === completed'
+  );
+
+  // -------------------------------------------------------------
+  // Test 11: Kitchen Orders Mobile Responsive UI
+  // -------------------------------------------------------------
+  console.log('\nTest Group 11: Kitchen Orders Mobile Responsive UI');
+  const kitchenQueueContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/kitchen/kitchen-order-queue.tsx'),
+    'utf8'
+  );
+  assert(
+    kitchenQueueContent.includes('break-words') &&
+      kitchenQueueContent.includes('min-h-[44px]'),
+    'KitchenOrderQueue ensures break-words wrapping and >=44px touch targets'
+  );
+  assert(
+    kitchenQueueContent.includes('flex flex-col sm:flex-row'),
+    'KitchenOrderQueue header controls stack responsively on mobile'
+  );
+
+  // -------------------------------------------------------------
+  // Test 12: Assignments Tab Mobile Responsive UI in Member Profile
+  // -------------------------------------------------------------
+  console.log('\nTest Group 12: Assignments Tab Mobile Responsive UI');
+  assert(
+    memberProfileContent.includes('block md:hidden') &&
+      memberProfileContent.includes('hidden md:block') &&
+      memberProfileContent.includes('Nature:'),
+    'MemberProfileClient Assignments tab separates mobile cards (block md:hidden) from desktop table (hidden md:block)'
+  );
+  assert(
+    memberProfileContent.includes('Timeline') &&
+      memberProfileContent.includes('Property') &&
+      memberProfileContent.includes('Department'),
+    'MemberProfileClient Assignment cards display Role, Nature, Property, Department, and Timeline'
   );
 
   console.log('\n================================================================');

@@ -43,6 +43,20 @@ export interface PositionRow {
       user_profiles?: { first_name?: string; last_name?: string } | Array<{ first_name?: string; last_name?: string }>;
     };
   }>;
+  secondmentAssignments?: Array<{
+    id: string;
+    membership?: {
+      id: string;
+      user_profiles?: { first_name?: string; last_name?: string } | Array<{ first_name?: string; last_name?: string }>;
+    };
+  }>;
+  temporaryAssignments?: Array<{
+    id: string;
+    membership?: {
+      id: string;
+      user_profiles?: { first_name?: string; last_name?: string } | Array<{ first_name?: string; last_name?: string }>;
+    };
+  }>;
 }
 
 interface PositionsClientProps {
@@ -202,6 +216,7 @@ export function PositionsClient({
               {filteredPositions.map((pos) => {
                 const occupants = pos.substantiveOccupants || [];
                 const actingCovers = pos.actingCoverage || [];
+                const secondments = pos.secondmentAssignments || [];
 
                 return (
                   <div key={pos.id} className="pt-3.5 first:pt-0 space-y-3">
@@ -300,6 +315,16 @@ export function PositionsClient({
                               })}
                             </div>
                           )}
+                          {secondments.length > 0 && (
+                            <div className="mt-1 pt-1 border-t border-zinc-200/60 text-[10px] text-blue-800 font-medium space-y-0.5">
+                              {secondments.map((sec, i) => {
+                                const prof = sec.membership?.user_profiles;
+                                const p = Array.isArray(prof) ? prof[0] : prof;
+                                const name = `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Member';
+                                return <div key={i}>✈️ Seconded: {name}</div>;
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -358,6 +383,7 @@ export function PositionsClient({
                   {filteredPositions.map((pos) => {
                     const occupants = pos.substantiveOccupants || [];
                     const actingCovers = pos.actingCoverage || [];
+                    const secondments = pos.secondmentAssignments || [];
 
                     return (
                       <tr key={pos.id} className="hover:bg-zinc-50/70 transition-colors">
@@ -408,6 +434,16 @@ export function PositionsClient({
                                     {name}
                                   </div>
                                 );
+                              })}
+                            </div>
+                          )}
+                          {secondments.length > 0 && (
+                            <div className="mt-1 pt-1 border-t border-zinc-100 text-[10px] text-blue-800 font-medium space-y-0.5">
+                              {secondments.map((sec, i) => {
+                                const prof = sec.membership?.user_profiles;
+                                const p = Array.isArray(prof) ? prof[0] : prof;
+                                const name = `${p?.first_name || ''} ${p?.last_name || ''}`.trim() || 'Member';
+                                return <div key={i}>✈️ Seconded: {name}</div>;
                               })}
                             </div>
                           )}

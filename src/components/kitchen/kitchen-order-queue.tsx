@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { OrderRecord } from '@/server/services/order.service';
 import { updateOrderStatusAction } from '@/server/actions/order';
 import { OrderStatus } from '@/lib/validation/order';
-import { formatCurrency } from '@/features/cart/cart-calculations';
 import { useRealtimeKitchen } from '@/hooks/use-realtime-kitchen';
 import { kitchenSoundEngine } from '@/lib/sound/kitchen-sound-engine';
 
@@ -68,28 +67,28 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {actionError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-900">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-900 break-words">
           ⚠️ {actionError}
         </div>
       )}
 
       {/* Header controls & Realtime status */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
-            Active Kitchen Orders ({orders.length})
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-zinc-200 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="text-xs font-black uppercase tracking-wider text-zinc-900">
+            Active Orders ({orders.length})
           </div>
           {connectionStatus === 'connected' && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Realtime Active ({branchName})
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live ({branchName})
             </span>
           )}
           {connectionStatus === 'reconnecting' && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-800 border border-amber-200">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
               Reconnecting...
             </span>
           )}
@@ -98,27 +97,27 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            className="text-xs font-bold flex items-center gap-1.5 min-h-[40px]"
+            className="flex-1 sm:flex-none text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] touch-manipulation"
             onClick={handleSoundToggle}
           >
             <span>{isMuted ? '🔇' : '🔊'}</span>
-            <span>{isMuted ? 'Sound Muted' : 'New Order Chime On'}</span>
+            <span>{isMuted ? 'Muted' : 'Chime On'}</span>
           </Button>
 
           <Button
             variant="outline"
-            className="text-xs font-bold min-h-[40px]"
+            className="flex-1 sm:flex-none text-xs font-bold min-h-[44px] touch-manipulation flex items-center justify-center gap-1"
             onClick={() => router.refresh()}
             disabled={processingOrderId !== null}
           >
-            🔄 Refresh Queue
+            🔄 Refresh
           </Button>
         </div>
       </div>
 
       {orders.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-12 text-center space-y-3 shadow-2xs">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-8 sm:p-12 text-center space-y-3 shadow-2xs">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl select-none">
             👨‍🍳
           </div>
           <h3 className="text-lg font-bold text-zinc-950">Kitchen Queue is Clear</h3>
@@ -127,7 +126,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {[...orders]
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime() || b.id.localeCompare(a.id))
             .map((order) => {
@@ -153,21 +152,21 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
               return (
                 <div
                   key={order.id}
-                  className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-all"
+                  className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-xs flex flex-col justify-between space-y-3 sm:space-y-4 hover:border-zinc-300 transition-all overflow-hidden"
                 >
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4 min-w-0">
                     {/* Header */}
-                    <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
-                      <div>
-                        <div className="text-lg font-black text-zinc-950 tracking-tight flex items-center gap-2">
+                    <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-lg font-black text-zinc-950 tracking-tight flex items-center gap-1.5">
                           <span>#{order.order_number_formatted || order.order_number}</span>
                         </div>
-                        <div className="text-xs font-extrabold text-emerald-800 flex items-center gap-1.5 mt-1">
+                        <div className="text-xs font-extrabold text-emerald-800 flex flex-wrap items-center gap-1.5 mt-1 break-words">
                           {tableName ? (
                             <>
                               <span>📍 {tableName}</span>
                               {serviceAreaName && (
-                                <span className="text-[11px] font-semibold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded">
+                                <span className="text-[10px] font-semibold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200/60">
                                   {serviceAreaName}
                                 </span>
                               )}
@@ -177,12 +176,12 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                           )}
                         </div>
                         {order.guest_name && (
-                          <div className="text-[11px] font-medium text-zinc-500 mt-0.5">
+                          <div className="text-[11px] font-medium text-zinc-500 mt-0.5 break-words">
                             Guest: <strong className="text-zinc-800">{order.guest_name}</strong>
                           </div>
                         )}
                       </div>
-                      <Badge variant={statusInfo.badge}>
+                      <Badge variant={statusInfo.badge} className="shrink-0 text-[11px]">
                         {statusInfo.icon} {statusInfo.title}
                       </Badge>
                     </div>
@@ -196,36 +195,39 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                           minute: '2-digit',
                         })}
                       </span>
-                      <span>
+                      <span className="font-semibold text-zinc-700">
                         {Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000)}m ago
                       </span>
                     </div>
 
                     {/* Items List */}
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                         Order Items ({items.reduce((sum, item) => sum + item.quantity, 0)})
                       </div>
-                      <div className="divide-y divide-zinc-100 border rounded-xl border-zinc-100 overflow-hidden">
+                      <div className="divide-y divide-zinc-100 border rounded-xl border-zinc-100 overflow-hidden bg-zinc-50/40">
                         {items.map((item) => {
                           const modifiersList = (item.order_item_modifiers || (item as unknown as { modifiers?: Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }> }).modifiers || []) as Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }>;
 
                           return (
-                            <div key={item.id} className="p-2.5 bg-zinc-50/50 space-y-1">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="font-extrabold text-zinc-900">
-                                  {item.quantity}x {item.item_name_snapshot}
-                                </span>
+                            <div key={item.id} className="p-2.5 space-y-1">
+                              <div className="flex items-start justify-between gap-2 text-xs">
+                                <div className="font-bold text-zinc-900 break-words hyphens-auto min-w-0 leading-snug">
+                                  <span className="inline-block bg-zinc-900 text-white text-[10px] font-mono px-1.5 py-0.2 rounded mr-1.5 font-bold shrink-0">
+                                    {item.quantity}x
+                                  </span>
+                                  {item.item_name_snapshot}
+                                </div>
                               </div>
 
                               {/* Item Modifiers */}
                               {modifiersList.length > 0 && (
-                                <div className="pl-4 text-[10px] text-zinc-500 font-medium space-y-0.5">
+                                <div className="pl-3 sm:pl-4 text-[11px] text-zinc-600 font-medium space-y-0.5 break-words">
                                   {modifiersList.map((mod) => (
-                                    <div key={mod.id} className="flex items-center gap-1">
-                                      <span>•</span>
+                                    <div key={mod.id} className="flex flex-wrap items-baseline gap-1">
+                                      <span className="text-zinc-400">•</span>
                                       <span>{mod.modifier_name_snapshot || mod.group_name_snapshot}</span>
-                                      <span className="text-zinc-400">({mod.option_name_snapshot})</span>
+                                      <span className="text-zinc-500 font-semibold">({mod.option_name_snapshot})</span>
                                     </div>
                                   ))}
                                 </div>
@@ -233,7 +235,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                               {/* Item Special Instructions */}
                               {item.special_instructions && (
-                                <div className="text-[11px] text-amber-900 bg-amber-50 p-1.5 rounded font-medium italic border border-amber-200/60">
+                                <div className="text-[11px] text-amber-900 bg-amber-50 p-2 rounded-lg font-medium italic border border-amber-200/60 break-words">
                                   Note: &quot;{item.special_instructions}&quot;
                                 </div>
                               )}
@@ -245,7 +247,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                     {/* Order Notes */}
                     {order.guest_notes && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 italic font-medium">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 italic font-medium break-words">
                         📝 Order Note: &quot;{order.guest_notes}&quot;
                       </div>
                     )}
@@ -259,14 +261,14 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                           <div className="grid grid-cols-2 gap-2">
                             <Button
                               variant="outline"
-                              className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px]"
+                              className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation"
                               onClick={() => handleStatusChange(order.id, 'cancelled')}
                               disabled={isProcessing}
                             >
                               {isProcessing ? '...' : 'Cancel'}
                             </Button>
                             <Button
-                              className="text-xs font-extrabold min-h-[44px]"
+                              className="text-xs font-extrabold min-h-[44px] touch-manipulation bg-zinc-900 hover:bg-zinc-800 text-white"
                               onClick={() => handleStatusChange(order.id, 'confirmed')}
                               disabled={isProcessing}
                             >
@@ -277,7 +279,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                         {order.status === 'confirmed' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px]"
+                            className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
                             onClick={() => handleStatusChange(order.id, 'preparing')}
                             disabled={isProcessing}
                           >
@@ -287,7 +289,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                         {order.status === 'preparing' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+                            className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
                             onClick={() => handleStatusChange(order.id, 'ready')}
                             disabled={isProcessing}
                           >
@@ -297,7 +299,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                         {order.status === 'ready' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white min-h-[44px]"
+                            className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
                             onClick={() => handleStatusChange(order.id, 'completed')}
                             disabled={isProcessing}
                           >
@@ -306,7 +308,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                         )}
                       </>
                     ) : (
-                      <div className="text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
+                      <div className="text-[11px] text-zinc-400 font-bold text-center italic py-2 border border-dashed border-zinc-200 rounded-xl">
                         🔒 Read-Only Kitchen View
                       </div>
                     )}

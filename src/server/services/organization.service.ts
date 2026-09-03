@@ -770,12 +770,12 @@ export class OrganizationService {
     if (!pos) throw new Error(`Position ${positionId} not found`);
 
     const refIso = referenceDate.toISOString();
-    // Substantive occupancy excludes acting assignments (acting assignments do not consume headcount)
+    // Substantive occupancy includes ONLY active primary assignments (excludes acting, secondment, and temporary coverage)
     const { data: occupants, error: occErr } = await admin
       .from('staff_assignments')
       .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id')
       .eq('position_id', positionId)
-      .neq('assignment_type', 'acting')
+      .eq('is_primary', true)
       .eq('status', 'active')
       .lte('starts_at', refIso)
       .or(`ends_at.is.null,ends_at.gt.${refIso}`)
@@ -813,7 +813,7 @@ export class OrganizationService {
 
     const refIso = referenceDate.toISOString();
 
-    // 1. Substantive occupants (non-acting)
+    // 1. Substantive occupants (primary / substantive only)
     const { data: substantiveOccupants } = await admin
       .from('staff_assignments')
       .select(`
@@ -821,7 +821,7 @@ export class OrganizationService {
         membership:business_memberships(id, user_id, role)
       `)
       .eq('position_id', positionId)
-      .neq('assignment_type', 'acting')
+      .eq('is_primary', true)
       .eq('status', 'active')
       .lte('starts_at', refIso)
       .or(`ends_at.is.null,ends_at.gt.${refIso}`)
@@ -836,6 +836,34 @@ export class OrganizationService {
       `)
       .eq('position_id', positionId)
       .eq('assignment_type', 'acting')
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    // 3. Active secondment assignments on this position
+    const { data: secondmentAssignments } = await admin
+      .from('staff_assignments')
+      .select(`
+        id, assignment_type, starts_at, ends_at, business_membership_id,
+        membership:business_memberships(id, user_id, role)
+      `)
+      .eq('position_id', positionId)
+      .eq('assignment_type', 'secondment')
+      .eq('status', 'active')
+      .lte('starts_at', refIso)
+      .or(`ends_at.is.null,ends_at.gt.${refIso}`)
+      .is('archived_at', null);
+
+    // 4. Active temporary coverage assignments on this position
+    const { data: temporaryAssignments } = await admin
+      .from('staff_assignments')
+      .select(`
+        id, assignment_type, starts_at, ends_at, business_membership_id,
+        membership:business_memberships(id, user_id, role)
+      `)
+      .eq('position_id', positionId)
+      .eq('assignment_type', 'temporary')
       .eq('status', 'active')
       .lte('starts_at', refIso)
       .or(`ends_at.is.null,ends_at.gt.${refIso}`)
@@ -872,6 +900,8 @@ export class OrganizationService {
       isFull,
       substantiveOccupants: substantiveOccupants || [],
       actingCoverage: actingCoverage || [],
+      secondmentAssignments: secondmentAssignments || [],
+      temporaryAssignments: temporaryAssignments || [],
       coverageState,
     };
   }
@@ -1041,13 +1071,13 @@ export class OrganizationService {
       throw new Error(`Failed to create staff assignment: ${createErr?.message || rpcErr?.message}`);
     }
 
-    // Optimistic concurrency safety check for positions
-    if (parsed.positionId && parsed.assignmentType !== 'acting') {
+    // Optimistic concurrency safety check for positions (primary/substantive assignments only)
+    if (parsed.positionId && parsed.isPrimary) {
       const { data: currentOccupants } = await admin
         .from('staff_assignments')
         .select('id, created_at')
         .eq('position_id', parsed.positionId)
-        .neq('assignment_type', 'acting')
+        .eq('is_primary', true)
         .eq('status', 'active')
         .order('created_at', { ascending: true })
         .order('id', { ascending: true });
@@ -2824,7 +2854,7 @@ export class OrganizationService {
 
     const posOccupantCount = new Map<string, number>();
     for (const assign of assignments || []) {
-      if (assign.position_id && assign.assignment_type !== 'acting') {
+      if (assign.position_id && assign.is_primary) {
         posOccupantCount.set(assign.position_id, (posOccupantCount.get(assign.position_id) || 0) + 1);
       }
     }
@@ -2881,7 +2911,7 @@ export class OrganizationService {
     const posOccupantMap = new Map<string, number>();
 
     for (const a of activeAssignments) {
-      if (a.position_id && a.assignment_type !== 'acting') {
+      if (a.position_id && a.is_primary) {
         posOccupantMap.set(a.position_id, (posOccupantMap.get(a.position_id) || 0) + 1);
       }
     }
@@ -3301,13 +3331,21 @@ export class OrganizationService {
     type PositionAssignment = NonNullable<typeof assignments>[number];
     const posSubstantiveMap = new Map<string, PositionAssignment[]>();
     const posActingMap = new Map<string, PositionAssignment[]>();
+    const posSecondmentMap = new Map<string, PositionAssignment[]>();
+    const posTemporaryMap = new Map<string, PositionAssignment[]>();
 
     for (const a of assignments || []) {
       if (a.position_id) {
         if (a.assignment_type === 'acting') {
           if (!posActingMap.has(a.position_id)) posActingMap.set(a.position_id, []);
           posActingMap.get(a.position_id)!.push(a);
-        } else {
+        } else if (a.assignment_type === 'secondment') {
+          if (!posSecondmentMap.has(a.position_id)) posSecondmentMap.set(a.position_id, []);
+          posSecondmentMap.get(a.position_id)!.push(a);
+        } else if (a.assignment_type === 'temporary') {
+          if (!posTemporaryMap.has(a.position_id)) posTemporaryMap.set(a.position_id, []);
+          posTemporaryMap.get(a.position_id)!.push(a);
+        } else if (a.is_primary) {
           if (!posSubstantiveMap.has(a.position_id)) posSubstantiveMap.set(a.position_id, []);
           posSubstantiveMap.get(a.position_id)!.push(a);
         }
@@ -3317,6 +3355,8 @@ export class OrganizationService {
     return (positions || []).map((p) => {
       const substantiveOccupants = posSubstantiveMap.get(p.id) || [];
       const actingCoverage = posActingMap.get(p.id) || [];
+      const secondmentAssignments = posSecondmentMap.get(p.id) || [];
+      const temporaryAssignments = posTemporaryMap.get(p.id) || [];
       const occupiedCount = substantiveOccupants.length;
       const limit = p.headcount_limit || 1;
       const availableSlots = Math.max(0, limit - occupiedCount);
@@ -3333,6 +3373,8 @@ export class OrganizationService {
         ...p,
         substantiveOccupants,
         actingCoverage,
+        secondmentAssignments,
+        temporaryAssignments,
         occupiedCount,
         availableSlots,
         isFull,

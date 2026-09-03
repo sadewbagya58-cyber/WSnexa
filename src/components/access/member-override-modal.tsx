@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { FormattedPermission, ScopeType } from '@/types/authorization.types';
 import { IconShieldAlert, IconAlertTriangle } from './access-icons';
 import { setScopedMemberOverrideAction } from '@/server/actions/permission';
+import { PermissionPicker } from './permission-picker';
 
 interface MemberOverrideModalProps {
   membershipId: string;
@@ -83,21 +84,13 @@ export const MemberOverrideModal: React.FC<MemberOverrideModalProps> = ({
           </div>
         )}
 
-        {/* Permission / Capability */}
-        <div>
-          <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
-          <select
-            value={permissionKey}
-            onChange={(e) => setPermissionKey(e.target.value)}
-            className="w-full px-3 py-2 text-xs font-mono border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-          >
-            {catalog.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.key} ({p.name})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Permission / Capability (Categorized & Searchable) */}
+        <PermissionPicker
+          catalog={catalog}
+          value={permissionKey}
+          onChange={setPermissionKey}
+          label="Permission / Capability"
+        />
 
         {/* Effect & Scope Type */}
         <div className="grid grid-cols-2 gap-2">

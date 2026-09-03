@@ -1,4 +1,8 @@
-// Bypass server-only guard for tsx execution
+// Bypass server-only guard and provide mock env for tsx execution
+process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key';
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'mock-service-role-key';
+
 try {
   /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
   // @ts-ignore
@@ -337,6 +341,155 @@ async function runSuite() {
       memberProfileContent.includes('Property') &&
       memberProfileContent.includes('Department'),
     'MemberProfileClient Assignment cards display Role, Nature, Property, Department, and Timeline'
+  );
+
+  // -------------------------------------------------------------
+  // Test 13: Active Secondment Reflection in Access Profile & Lifecycle Invariants
+  // -------------------------------------------------------------
+  console.log('\nTest Group 13: Active Secondment Reflection in Access Profile');
+  const scopeGrantServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/scope-grant.service.ts'),
+    'utf8'
+  );
+  assert(
+    scopeGrantServiceContent.includes('OrganizationService.getMemberAssignmentHistory') &&
+      scopeGrantServiceContent.includes('OrganizationService.isAssignmentEffective'),
+    'ScopeGrantService.previewMemberEffectiveAccess queries canonical assignment history and checks effective dates'
+  );
+  assert(
+    scopeGrantServiceContent.includes('secondmentAssignments: activeSecondments') &&
+      scopeGrantServiceContent.includes('actingAssignments: activeActing'),
+    'ScopeGrantService.previewMemberEffectiveAccess populates temporaryAuthority with active secondments and acting assignments'
+  );
+
+  const { OrganizationService } = await import('../src/server/services/organization.service');
+  const testNow = new Date('2026-09-03T12:00:00Z');
+
+  // Test Active Secondment
+  const activeSec = {
+    status: 'active',
+    starts_at: '2026-09-03T00:00:00Z',
+    ends_at: '2026-09-04T00:00:00Z',
+  };
+  assert(
+    OrganizationService.isAssignmentEffective(activeSec, testNow) === true,
+    'Active secondment on effective date is marked effective (true)'
+  );
+
+  // Test Future Secondment
+  const futureSec = {
+    status: 'active',
+    starts_at: '2026-09-10T00:00:00Z',
+    ends_at: '2026-09-20T00:00:00Z',
+  };
+  assert(
+    OrganizationService.isAssignmentEffective(futureSec, testNow) === false,
+    'Future secondment before start date is NOT effective (false)'
+  );
+
+  // Test Ended Secondment
+  const endedSec = {
+    status: 'active',
+    starts_at: '2026-08-01T00:00:00Z',
+    ends_at: '2026-08-30T00:00:00Z',
+  };
+  assert(
+    OrganizationService.isAssignmentEffective(endedSec, testNow) === false,
+    'Ended secondment after end date is NOT effective (false)'
+  );
+
+  const memberAccessDetailContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/member-access-detail-client.tsx'),
+    'utf8'
+  );
+  assert(
+    memberAccessDetailContent.includes('✈️ Secondment:') &&
+      memberAccessDetailContent.includes('Host Branch'),
+    'MemberAccessDetailClient Section 3 renders active secondments with Host Branch and role details'
+  );
+
+  // -------------------------------------------------------------
+  // Test 14: Permission Catalog UX — Categorization & Search
+  // -------------------------------------------------------------
+  console.log('\nTest Group 14: Permission Catalog UX & Categorized Picker');
+  const {
+    PERMISSION_CATEGORIES,
+    resolvePermissionCategory,
+    groupPermissionsByCategory,
+  } = await import('../src/lib/permissions/permission-categories');
+
+  assert(
+    PERMISSION_CATEGORIES.length >= 17,
+    `PERMISSION_CATEGORIES defines all ${PERMISSION_CATEGORIES.length} functional modules`
+  );
+
+  // Verify categorization mappings
+  assert(resolvePermissionCategory({ key: 'organization.view' }) === 'Organization', 'organization.view -> Organization');
+  assert(resolvePermissionCategory({ key: 'positions.manage' }) === 'Organization', 'positions.manage -> Organization');
+  assert(resolvePermissionCategory({ key: 'staff.view' }) === 'Staff & People', 'staff.view -> Staff & People');
+  assert(resolvePermissionCategory({ key: 'roles.manage' }) === 'Staff & People', 'roles.manage -> Staff & People');
+  assert(resolvePermissionCategory({ key: 'branches.manage' }) === 'Branches', 'branches.manage -> Branches');
+  assert(resolvePermissionCategory({ key: 'inventory.view' }) === 'Inventory', 'inventory.view -> Inventory');
+  assert(resolvePermissionCategory({ key: 'recipes.manage' }) === 'Inventory', 'recipes.manage -> Inventory');
+  assert(resolvePermissionCategory({ key: 'menu.items.manage' }) === 'Menu', 'menu.items.manage -> Menu');
+  assert(resolvePermissionCategory({ key: 'orders.update_status' }) === 'Orders', 'orders.update_status -> Orders');
+  assert(resolvePermissionCategory({ key: 'kitchen.update' }) === 'Kitchen', 'kitchen.update -> Kitchen');
+  assert(resolvePermissionCategory({ key: 'purchasing.create' }) === 'Purchasing', 'purchasing.create -> Purchasing');
+  assert(resolvePermissionCategory({ key: 'suppliers.manage' }) === 'Suppliers', 'suppliers.manage -> Suppliers');
+  assert(resolvePermissionCategory({ key: 'reservations.manage' }) === 'Reservations', 'reservations.manage -> Reservations');
+  assert(resolvePermissionCategory({ key: 'customers.view' }) === 'Customers', 'customers.view -> Customers');
+  assert(resolvePermissionCategory({ key: 'loyalty.rewards.manage' }) === 'Loyalty', 'loyalty.rewards.manage -> Loyalty');
+  assert(resolvePermissionCategory({ key: 'tables.manage' }) === 'QR / Tables', 'tables.manage -> QR / Tables');
+  assert(resolvePermissionCategory({ key: 'waiter.order.create' }) === 'Waiter', 'waiter.order.create -> Waiter');
+  assert(resolvePermissionCategory({ key: 'reports.view' }) === 'Reports', 'reports.view -> Reports');
+  assert(resolvePermissionCategory({ key: 'reviews.manage' }) === 'Reviews / Reputation', 'reviews.manage -> Reviews / Reputation');
+  assert(resolvePermissionCategory({ key: 'business.settings.manage' }) === 'Business / Venue', 'business.settings.manage -> Business / Venue');
+
+  const testCatalog = [
+    { key: 'kitchen.update', name: 'Kitchen Order Update', description: 'Update status of kitchen orders' },
+    { key: 'orders.create', name: 'Create Orders', description: 'Place guest orders' },
+    { key: 'staff.view', name: 'View Staff', description: 'List workforce members' },
+  ];
+  const grouped = groupPermissionsByCategory(testCatalog as never);
+  assert(Boolean(grouped['Kitchen']) && grouped['Kitchen'].length === 1, 'groupPermissionsByCategory groups kitchen.update into Kitchen');
+  assert(Boolean(grouped['Orders']) && grouped['Orders'].length === 1, 'groupPermissionsByCategory groups orders.create into Orders');
+  assert(Boolean(grouped['Staff & People']) && grouped['Staff & People'].length === 1, 'groupPermissionsByCategory groups staff.view into Staff & People');
+
+  // Verify PermissionPicker is integrated across access control modals
+  const overrideModalContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/member-override-modal.tsx'),
+    'utf8'
+  );
+  assert(
+    overrideModalContent.includes('PermissionPicker'),
+    'MemberOverrideModal uses categorized PermissionPicker'
+  );
+
+  const scopeGrantManagerContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/scope-grant-manager.tsx'),
+    'utf8'
+  );
+  assert(
+    scopeGrantManagerContent.includes('PermissionPicker'),
+    'ScopeGrantManager uses categorized PermissionPicker'
+  );
+
+  const accessDiagnosticsContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/access-diagnostics-client.tsx'),
+    'utf8'
+  );
+  assert(
+    accessDiagnosticsContent.includes('PermissionPicker'),
+    'AccessDiagnosticsClient uses categorized PermissionPicker'
+  );
+
+  const permissionMatrixContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/permission-matrix.tsx'),
+    'utf8'
+  );
+  assert(
+    permissionMatrixContent.includes('groupPermissionsByCategory'),
+    'PermissionMatrix uses canonical groupPermissionsByCategory'
   );
 
   console.log('\n================================================================');

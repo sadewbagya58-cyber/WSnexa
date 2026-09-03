@@ -226,29 +226,61 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
               </p>
             ) : (
               <>
-                {actingAssignments.map((a: Record<string, unknown>) => (
-                  <div key={String(a.id)} className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
-                    <div className="flex justify-between font-bold text-amber-900">
-                      <span>Acting Position Coverage</span>
-                      <span className="font-mono text-[10px] bg-amber-200 px-1.5 py-0.5 rounded">Active</span>
+                {actingAssignments.map((a: Record<string, unknown>) => {
+                  const jobTitle = (a.job_title as { name?: string } | undefined)?.name || 'Position Coverage';
+                  const branchName = (a.branch as { name?: string } | undefined)?.name;
+                  const deptName = (a.department as { name?: string } | undefined)?.name;
+                  const dates = `${String(a.starts_at || '').split('T')[0]} → ${String(a.ends_at || '').split('T')[0] || 'Present'}`;
+                  return (
+                    <div key={String(a.id)} className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1.5">
+                      <div className="flex justify-between items-start font-bold text-amber-950 gap-2">
+                        <div className="min-w-0">
+                          <span className="break-words">🎭 Acting: {jobTitle}</span>
+                          <div className="text-[11px] font-medium text-amber-800 flex flex-wrap items-center gap-1.5 mt-0.5">
+                            {branchName && <span>📍 {branchName}</span>}
+                            {deptName && <span>• 🏢 {deptName}</span>}
+                          </div>
+                        </div>
+                        <span className="font-mono text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded shrink-0 font-bold">Active</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-amber-700 font-mono pt-1 border-t border-amber-200/60">
+                        <span>📅 {dates}</span>
+                        <span>WHERE Expansion</span>
+                      </div>
+                      <p className="text-amber-800 text-[11px] leading-snug">
+                        Expands reach to department/unit position. Temporary authority does NOT inherit position owner permissions.
+                      </p>
                     </div>
-                    <p className="text-amber-800 text-[11px]">
-                      Expands reach to department/unit position. Temporary authority does NOT inherit position owner permissions.
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
 
-                {secondments.map((s: Record<string, unknown>) => (
-                  <div key={String(s.id)} className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1">
-                    <div className="flex justify-between font-bold text-indigo-900">
-                      <span>Property Secondment</span>
-                      <span className="font-mono text-[10px] bg-indigo-200 px-1.5 py-0.5 rounded">Host Branch</span>
+                {secondments.map((s: Record<string, unknown>) => {
+                  const jobTitle = (s.job_title as { name?: string } | undefined)?.name || 'Secondment Role';
+                  const branchName = (s.branch as { name?: string } | undefined)?.name || 'Host Property';
+                  const deptName = (s.department as { name?: string } | undefined)?.name;
+                  const dates = `${String(s.starts_at || '').split('T')[0]} → ${String(s.ends_at || '').split('T')[0] || 'Present'}`;
+                  return (
+                    <div key={String(s.id)} className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1.5">
+                      <div className="flex justify-between items-start font-bold text-indigo-950 gap-2">
+                        <div className="min-w-0">
+                          <span className="break-words">✈️ Secondment: {jobTitle}</span>
+                          <div className="text-[11px] font-medium text-indigo-800 flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span>📍 Host: {branchName}</span>
+                            {deptName && <span>• 🏢 {deptName}</span>}
+                          </div>
+                        </div>
+                        <span className="font-mono text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.5 rounded shrink-0 font-bold">Host Branch</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-indigo-700 font-mono pt-1 border-t border-indigo-200/60">
+                        <span>📅 {dates}</span>
+                        <span>Cross-Property Reach</span>
+                      </div>
+                      <p className="text-indigo-800 text-[11px] leading-snug">
+                        Expands access to host branch without altering base role permissions.
+                      </p>
                     </div>
-                    <p className="text-indigo-800 text-[11px]">
-                      Expands access to host branch without altering base role permissions.
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

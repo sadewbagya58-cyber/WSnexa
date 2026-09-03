@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { FormattedPermission } from '@/types/authorization.types';
 import { IconShieldAlert, IconCircleCheck, IconCircleX } from './access-icons';
+import { groupPermissionsByCategory } from '@/lib/permissions/permission-categories';
 
 interface PermissionMatrixProps {
   catalog: FormattedPermission[];
@@ -26,13 +27,7 @@ export const PermissionMatrix: React.FC<PermissionMatrixProps> = ({
 
   // Group catalog permissions by category/domain
   const groupedCatalog = useMemo(() => {
-    const groups: Record<string, FormattedPermission[]> = {};
-    for (const p of catalog) {
-      const cat = p.category || 'General';
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(p);
-    }
-    return groups;
+    return groupPermissionsByCategory(catalog);
   }, [catalog]);
 
   // Filter catalog based on search

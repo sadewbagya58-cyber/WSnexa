@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { FormattedMemberDetail, FormattedPermission } from '@/types/authorization.types';
 import { DiagnosticResultData, diagnoseAccessAction } from '@/server/actions/permission';
+import { PermissionPicker } from '@/components/access/permission-picker';
 import {
   IconShieldCheck,
   IconShieldAlert,
@@ -115,21 +116,13 @@ export const AccessDiagnosticsClient: React.FC<AccessDiagnosticsClientProps> = (
               </select>
             </div>
 
-            {/* Target Permission */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
-              <select
-                value={selectedPermission}
-                onChange={(e) => setSelectedPermission(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                {catalog.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.key} ({p.name})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Target Permission (Categorized & Searchable) */}
+            <PermissionPicker
+              catalog={catalog}
+              value={selectedPermission}
+              onChange={setSelectedPermission}
+              label="Permission / Capability"
+            />
 
             {/* Target Resource */}
             <div>

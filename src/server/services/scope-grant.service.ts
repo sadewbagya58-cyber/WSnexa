@@ -21,6 +21,7 @@ import {
 } from '@/server/auth/scope-target-validator';
 import { AuthorizationContextError } from '@/server/auth/errors';
 import { PermissionService } from './permission.service';
+import { OrganizationService } from './organization.service';
 
 export class ScopeGrantService {
   /**
@@ -889,6 +890,26 @@ export class ScopeGrantService {
       });
     }
 
+    // 4. Resolve Temporary Authority & Canonical Position Context
+    const allAssignments = await OrganizationService.getMemberAssignmentHistory(membershipId);
+    const now = new Date();
+    const effectiveAssignments = allAssignments.filter((a) =>
+      OrganizationService.isAssignmentEffective(a as { status: string; starts_at: string; ends_at?: string | null }, now)
+    );
+
+    const activeActing = effectiveAssignments.filter((a) => a.assignment_type === 'acting');
+    const activeSecondments = effectiveAssignments.filter((a) => a.assignment_type === 'secondment');
+    const primaryAssign =
+      allAssignments.find((a) => a.is_primary && a.status === 'active') ||
+      allAssignments.find((a) => a.is_primary) ||
+      null;
+
+    const positionName =
+      primaryAssign?.position?.name_override ||
+      primaryAssign?.position?.position_code ||
+      primaryAssign?.job_title?.name ||
+      null;
+
     const effectiveSummary = Array.from(effectiveMap.entries()).map(([permissionKey, val]) => ({
       permissionKey,
       effect: val.effect,
@@ -902,6 +923,9 @@ export class ScopeGrantService {
       userId: membership.user_id,
       memberName: identity?.displayName || 'Staff Member',
       userEmail: identity?.email || '',
+      position: positionName,
+      primaryBranchId: primaryAssign?.branch_id || null,
+      departmentId: primaryAssign?.department_id || null,
       businessId,
       role: membership.role,
       customRoleId: membership.custom_role_id,
@@ -919,8 +943,9 @@ export class ScopeGrantService {
       scopedOverrides,
       effectiveSummary,
       temporaryAuthority: {
-        actingAssignments: [],
-        secondmentAssignments: [],
+        actingAssignments: activeActing,
+        secondmentAssignments: activeSecondments,
+        secondments: activeSecondments,
       },
     };
   }

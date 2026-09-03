@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ScopeGrantDetail, ScopeType, BuiltInRoleTemplate, CustomRoleDetail, FormattedPermission } from '@/types/authorization.types';
 import { ScopePresetSelector } from '@/components/access/scope-preset-selector';
+import { PermissionPicker } from '@/components/access/permission-picker';
 import {
   IconShieldAlert,
   IconPlus,
@@ -323,21 +324,13 @@ export const ScopeGrantManager: React.FC<ScopeGrantManagerProps> = ({
               </div>
             </div>
 
-            {/* Permission Key */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-1">Permission / Capability</label>
-              <select
-                value={permissionKey}
-                onChange={(e) => setPermissionKey(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                {catalog.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.key} ({p.name})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Permission / Capability (Categorized & Searchable) */}
+            <PermissionPicker
+              catalog={catalog}
+              value={permissionKey}
+              onChange={setPermissionKey}
+              label="Permission / Capability"
+            />
 
             {/* Effect & Scope Type */}
             <div className="grid grid-cols-2 gap-2">

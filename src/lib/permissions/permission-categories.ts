@@ -31,7 +31,7 @@ export const PERMISSION_CATEGORIES: PermissionCategoryMeta[] = [
 export function resolvePermissionCategory(perm: { key: string; category?: string }): string {
   const key = perm.key.toLowerCase();
 
-  if (key.startsWith('organization.') || key.startsWith('positions.')) return 'Organization';
+  if (key.startsWith('organization.') || key.startsWith('positions.') || key.startsWith('audit.')) return 'Organization';
   if (
     key.startsWith('staff.') ||
     key.startsWith('people.') ||

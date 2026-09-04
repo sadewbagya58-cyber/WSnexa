@@ -148,12 +148,13 @@ export const permissionKeyEnum = z.enum([
   'inventory.settings.manage',
   'inventory.production.manage',
 
-  // Organization Structure & People (Phase 29)
+  // Organization Structure, People & Audit (Phase 29 & Audit)
   'organization.view',
   'organization.manage',
   'people.view',
   'people.manage',
   'positions.manage',
+  'audit.view',
 
   // Reservations (Phase 35)
   'reservations.view',

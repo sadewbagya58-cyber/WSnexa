@@ -10,6 +10,7 @@ interface TeamSubNavProps {
   canViewAccess?: boolean;
   canViewDiagnostics?: boolean;
   canViewOrganization?: boolean;
+  canViewAudit?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export function TeamSubNav({
   canViewAccess = true,
   canViewDiagnostics = true,
   canViewOrganization = true,
+  canViewAudit = true,
   className = '',
 }: TeamSubNavProps) {
   const items: HubNavItem[] = [];
@@ -41,6 +43,9 @@ export function TeamSubNav({
   }
   if (canViewOrganization) {
     items.push({ id: 'organization', label: 'Organization Structure', href: '/dashboard/organization', icon: '🏢' });
+  }
+  if (canViewAudit) {
+    items.push({ id: 'audit', label: 'Audit History', href: '/dashboard/access/audit', icon: '📜' });
   }
 
   return <HubSubNavigation items={items} className={className} />;

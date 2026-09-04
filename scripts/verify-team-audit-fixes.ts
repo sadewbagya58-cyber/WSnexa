@@ -637,6 +637,178 @@ async function runSuite() {
     'OrganizationService.isAssignmentEffective returns false for future acting appointment'
   );
 
+  // -------------------------------------------------------------
+  // Test 19: Central Audit History & Immutable Event Logging
+  // -------------------------------------------------------------
+  console.log('\nTest Group 19: Central Audit History & Immutable Event Logging');
+
+  const migrationPath = path.join(
+    process.cwd(),
+    'supabase/migrations/20260904120000_central_audit_history_and_operational_activity.sql'
+  );
+  assert(fs.existsSync(migrationPath), 'Audit migration file exists');
+  const migrationContent = fs.readFileSync(migrationPath, 'utf8');
+  assert(
+    migrationContent.includes('ALTER TABLE public.audit_logs') &&
+      migrationContent.includes('ADD COLUMN IF NOT EXISTS actor_name_snapshot') &&
+      migrationContent.includes('ADD COLUMN IF NOT EXISTS actor_role_snapshot') &&
+      migrationContent.includes('ADD COLUMN IF NOT EXISTS entity_type') &&
+      migrationContent.includes('ADD COLUMN IF NOT EXISTS service_area_id'),
+    'Audit migration adds nullable actor snapshot and entity columns safely with IF NOT EXISTS'
+  );
+  assert(
+    migrationContent.includes('idx_audit_logs_entity') &&
+      migrationContent.includes('idx_audit_logs_branch_created'),
+    'Audit migration defines compound indexes for business, entity, and branch lookups'
+  );
+
+  const { permissionKeyEnum } = await import('../src/lib/validation/permission');
+  assert(
+    permissionKeyEnum.options.includes('audit.view'),
+    "permissionKeyEnum includes 'audit.view'"
+  );
+
+  const permCategoriesModule = await import('../src/lib/permissions/permission-categories');
+  assert(
+    permCategoriesModule.resolvePermissionCategory({ key: 'audit.view' }) === 'Organization',
+    "resolvePermissionCategory maps 'audit.view' under 'Organization' permission category"
+  );
+
+  const auditServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/audit.service.ts'),
+    'utf8'
+  );
+  assert(
+    auditServiceContent.includes('logAuditEvent') &&
+      auditServiceContent.includes('getAuditLogs') &&
+      auditServiceContent.includes('getEntityTimeline'),
+    'AuditService provides logAuditEvent, getAuditLogs, and getEntityTimeline'
+  );
+
+  // Verify instrumentations
+  const waiterServiceAuditContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/waiter.service.ts'),
+    'utf8'
+  );
+  assert(
+    waiterServiceAuditContent.includes('waiter.order.approved') &&
+      waiterServiceAuditContent.includes('waiter.order.rejected') &&
+      waiterServiceAuditContent.includes('waiter_request.accepted') &&
+      waiterServiceAuditContent.includes('waiter_request.completed'),
+    'WaiterService is instrumented with audit logging for orders and assistance requests'
+  );
+
+  const orderServiceAuditContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/order.service.ts'),
+    'utf8'
+  );
+  assert(
+    orderServiceAuditContent.includes('order.status_changed') || orderServiceAuditContent.includes('order.created'),
+    'OrderService is instrumented with audit logging'
+  );
+
+  const paymentServiceAuditContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/payment.service.ts'),
+    'utf8'
+  );
+  assert(
+    paymentServiceAuditContent.includes('payment.recorded') && paymentServiceAuditContent.includes('payment.voided'),
+    'PaymentService is instrumented with audit logging for payments and voids'
+  );
+
+  const inventoryServiceAuditContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/inventory.service.ts'),
+    'utf8'
+  );
+  assert(
+    inventoryServiceAuditContent.includes('inventory.stock_adjusted') &&
+      inventoryServiceAuditContent.includes('inventory.waste_recorded') &&
+      inventoryServiceAuditContent.includes('inventory.transfer_sent'),
+    'InventoryService is instrumented with audit logging for stock adjustments, waste, and transfers'
+  );
+
+  const purchasingServiceAuditContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/purchasing.service.ts'),
+    'utf8'
+  );
+  assert(
+    purchasingServiceAuditContent.includes('purchasing.po_created') &&
+      purchasingServiceAuditContent.includes('purchasing.goods_received') &&
+      purchasingServiceAuditContent.includes('purchasing.supplier_return_created'),
+    'PurchasingService is instrumented with audit logging for POs, GRNs, and returns'
+  );
+
+  const auditPageContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/(dashboard)/dashboard/access/audit/page.tsx'),
+    'utf8'
+  );
+  assert(
+    auditPageContent.includes("requireRoutePermission('/dashboard/access')") &&
+      auditPageContent.includes('AuditHistoryClient'),
+    'Audit History server page exists with RBAC guard and AuditHistoryClient'
+  );
+
+  const auditClientContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/audit/audit-history-client.tsx'),
+    'utf8'
+  );
+  assert(
+    auditClientContent.includes('block md:hidden') && auditClientContent.includes('hidden md:block'),
+    'AuditHistoryClient provides responsive mobile cards and desktop table'
+  );
+
+  // -------------------------------------------------------------
+  // Test 20: Waiter Operational Activity & Turnaround Timelines
+  // -------------------------------------------------------------
+  console.log('\nTest Group 20: Waiter Operational Activity & Turnaround Timelines');
+
+  const waiterActivityServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/waiter-activity.service.ts'),
+    'utf8'
+  );
+  assert(
+    waiterActivityServiceContent.includes('get48HourOperationalActivity') &&
+      waiterActivityServiceContent.includes('getRequestTimeline'),
+    'WaiterActivityService provides get48HourOperationalActivity and getRequestTimeline'
+  );
+  assert(
+    waiterActivityServiceContent.includes('isOverdue') &&
+      waiterActivityServiceContent.includes('elapsedMinutes') &&
+      waiterActivityServiceContent.includes('acceptedByName'),
+    'WaiterActivityService computes actor attributions, duration metrics, and overdue detection'
+  );
+
+  const waiterActivityComponentContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/waiter/waiter-operational-activity.tsx'),
+    'utf8'
+  );
+  assert(
+    waiterActivityComponentContent.includes('48-Hour Operational Activity') &&
+      waiterActivityComponentContent.includes('EntityTimelineDialog'),
+    'WaiterOperationalActivity component renders 48h activity and integrates EntityTimelineDialog'
+  );
+
+  const waiterRequestCenterContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/waiter/waiter-request-center.tsx'),
+    'utf8'
+  );
+  assert(
+    waiterRequestCenterContent.includes('WaiterOperationalActivity') &&
+      waiterRequestCenterContent.includes('48-Hour Operational History'),
+    'WaiterRequestCenter embeds 48-Hour Operational History tab'
+  );
+
+  const timelineDialogContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/audit/entity-timeline-dialog.tsx'),
+    'utf8'
+  );
+  assert(
+    timelineDialogContent.includes('getEntityTimelineAction') &&
+      timelineDialogContent.includes('Prior State (Old)') &&
+      timelineDialogContent.includes('Updated State (New)'),
+    'EntityTimelineDialog modal renders chronological revisions with old/new snapshot diffs'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

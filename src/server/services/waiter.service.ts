@@ -566,6 +566,24 @@ export class WaiterService {
       eventType: 'WAITER_APPROVED_ORDER',
     });
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: updatedOrder.business_id,
+        branchId: updatedOrder.branch_id,
+        serviceAreaId: orderAreaId || null,
+        actorUserId: waiterUserId,
+        action: 'waiter.order.approved',
+        entityType: 'order',
+        entityId: updatedOrder.id,
+        oldValues: { approval_status: 'pending_waiter_approval' },
+        newValues: { approval_status: 'approved', status: 'confirmed' },
+        metadata: { order_number: updatedOrder.order_number_formatted },
+      });
+    } catch (auditErr) {
+      console.warn('[WaiterService.approveGuestOrder] Audit log warning:', auditErr);
+    }
+
     // Notify Kitchen of newly approved order
     try {
       const { NotificationService } = await import('./notification.service');
@@ -686,6 +704,24 @@ export class WaiterService {
       safeMetadata: { reason },
     });
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: updatedOrder.business_id,
+        branchId: updatedOrder.branch_id,
+        serviceAreaId: orderAreaId || null,
+        actorUserId: waiterUserId,
+        action: 'waiter.order.rejected',
+        entityType: 'order',
+        entityId: updatedOrder.id,
+        oldValues: { approval_status: 'pending_waiter_approval' },
+        newValues: { approval_status: 'rejected', status: 'cancelled' },
+        reason: reason || 'Rejected by staff',
+      });
+    } catch (auditErr) {
+      console.warn('[WaiterService.rejectGuestOrder] Audit log warning:', auditErr);
+    }
+
     return { success: true, message: 'Order rejected.' };
   }
 
@@ -774,6 +810,23 @@ export class WaiterService {
         };
       }
 
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: currentReq.business_id,
+          branchId: currentReq.branch_id,
+          serviceAreaId: reqAreaId || null,
+          actorUserId: tenantContext.user.id,
+          action: 'waiter_request.accepted',
+          entityType: 'waiter_request',
+          entityId: requestId,
+          oldValues: { status: currentReq.status },
+          newValues: { status: 'accepted', accepted_by: tenantContext.user.id, accepted_at: nowIso },
+        });
+      } catch (auditErr) {
+        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
+      }
+
       return { success: true, message: 'Request accepted successfully.' };
     }
 
@@ -824,6 +877,23 @@ export class WaiterService {
         };
       }
 
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: currentReq.business_id,
+          branchId: currentReq.branch_id,
+          serviceAreaId: reqAreaId || null,
+          actorUserId: tenantContext.user.id,
+          action: 'waiter_request.completed',
+          entityType: 'waiter_request',
+          entityId: requestId,
+          oldValues: { status: currentReq.status },
+          newValues: { status: 'completed', resolved_by: tenantContext.user.id, resolved_at: nowIso },
+        });
+      } catch (auditErr) {
+        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
+      }
+
       return { success: true, message: 'Request marked as completed.' };
     }
 
@@ -850,6 +920,23 @@ export class WaiterService {
           success: false,
           message: 'This request has already been handled.',
         };
+      }
+
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: currentReq.business_id,
+          branchId: currentReq.branch_id,
+          serviceAreaId: reqAreaId || null,
+          actorUserId: tenantContext.user.id,
+          action: 'waiter_request.dismissed',
+          entityType: 'waiter_request',
+          entityId: requestId,
+          oldValues: { status: currentReq.status },
+          newValues: { status: 'dismissed', resolved_by: tenantContext.user.id, resolved_at: nowIso },
+        });
+      } catch (auditErr) {
+        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
       }
 
       return { success: true, message: 'Request dismissed.' };

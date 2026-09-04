@@ -861,6 +861,30 @@ export class InventoryService {
       return { success: false, message: payload.message || payload.error || 'Adjustment failed.' };
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        branchId: input.branchId,
+        actorUserId: actorId,
+        action: 'inventory.stock_adjusted',
+        entityType: 'inventory_item',
+        entityId: input.itemId,
+        newValues: {
+          direction: input.direction,
+          quantity: input.quantity,
+          unit: input.unit,
+          quantity_base: normalizedBaseQty,
+          reason: input.reason,
+          new_quantity: payload.new_quantity,
+        },
+        reason: input.reason,
+        metadata: { location_id: input.locationId, notes: input.notes },
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.recordStockAdjustment] Audit warning:', auditErr);
+    }
+
     return { success: true, data: payload };
   }
 
@@ -915,6 +939,29 @@ export class InventoryService {
     const payload = data as { success: boolean; error?: string; message?: string; waste_id?: string };
     if (!payload.success) {
       return { success: false, message: payload.message || payload.error || 'Waste recording failed.' };
+    }
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        branchId: input.branchId,
+        actorUserId: actorId,
+        action: 'inventory.waste_recorded',
+        entityType: 'inventory_item',
+        entityId: input.itemId,
+        newValues: {
+          waste_id: payload.waste_id,
+          quantity: input.quantity,
+          unit: input.unit,
+          quantity_base: normalizedBaseQty,
+          reason: input.reason,
+        },
+        reason: input.reason,
+        metadata: { location_id: input.locationId, batch_id: input.batchId, notes: input.notes },
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.recordWaste] Audit warning:', auditErr);
     }
 
     return { success: true, data: payload };
@@ -1239,6 +1286,21 @@ export class InventoryService {
       return { success: false, message: payload.message || payload.error || 'Approval failed.' };
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        branchId,
+        actorUserId: actorId,
+        action: 'inventory.count_approved',
+        entityType: 'stock_count',
+        entityId: countId,
+        newValues: { status: 'approved' },
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.approveStockCount] Audit warning:', auditErr);
+    }
+
     return { success: true };
   }
 
@@ -1374,6 +1436,28 @@ export class InventoryService {
       await admin.from('inventory_stock_transfer_items').insert(itemsToInsert);
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        branchId: input.sourceBranchId,
+        actorUserId: actorId,
+        action: 'inventory.transfer_created',
+        entityType: 'stock_transfer',
+        entityId: transfer.id,
+        newValues: {
+          transfer_number: transferNumber,
+          source_branch_id: input.sourceBranchId,
+          destination_branch_id: input.destinationBranchId,
+          items_count: itemsToInsert.length,
+          status: 'draft',
+        },
+        metadata: { notes: input.notes },
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.createStockTransfer] Audit warning:', auditErr);
+    }
+
     return { success: true, transferId: transfer.id, transferNumber };
   }
 
@@ -1395,6 +1479,20 @@ export class InventoryService {
     const payload = data as { success: boolean; error?: string; message?: string };
     if (!payload.success) {
       return { success: false, message: payload.message || payload.error || 'Dispatch failed.' };
+    }
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        actorUserId: actorId,
+        action: 'inventory.transfer_sent',
+        entityType: 'stock_transfer',
+        entityId: transferId,
+        newValues: { status: 'in_transit' },
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.sendStockTransfer] Audit warning:', auditErr);
     }
 
     return { success: true };
@@ -1424,6 +1522,21 @@ export class InventoryService {
     const payload = data as { success: boolean; error?: string; message?: string };
     if (!payload.success) {
       return { success: false, message: payload.message || payload.error || 'Receipt failed.' };
+    }
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId,
+        actorUserId: actorId,
+        action: 'inventory.transfer_received',
+        entityType: 'stock_transfer',
+        entityId: input.transferId,
+        newValues: { status: 'completed', discrepancy_reason: input.discrepancyReason },
+        reason: input.discrepancyReason || null,
+      });
+    } catch (auditErr) {
+      console.warn('[InventoryService.receiveStockTransfer] Audit warning:', auditErr);
     }
 
     return { success: true };

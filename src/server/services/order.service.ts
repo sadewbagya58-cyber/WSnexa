@@ -779,6 +779,23 @@ export class OrderService {
       notes: notes || `Status updated to ${nextStatus}`,
     });
 
+    try {
+      const { AuditService } = await import('@/server/services/audit.service');
+      await AuditService.logAuditEvent({
+        businessId: order.business_id,
+        branchId: order.branch_id,
+        actorUserId: authContext.userId,
+        action: 'order.status_changed',
+        entityType: 'order',
+        entityId: orderId,
+        oldValues: { status: previousStatus },
+        newValues: { status: nextStatus },
+        reason: notes || `Status updated to ${nextStatus}`,
+      });
+    } catch (auditErr) {
+      console.warn('[OrderService.updateOrderStatus] Audit warning:', auditErr);
+    }
+
     // Automated Inventory Consumption Trigger (Phase 28)
     try {
       const { ConsumptionService } = await import('@/server/services/consumption.service');

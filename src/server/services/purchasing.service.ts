@@ -935,6 +935,28 @@ export class PurchasingService {
       });
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: context.business.id,
+        branchId: context.activeBranch.id,
+        actorUserId: context.user.id,
+        action: 'purchasing.po_created',
+        entityType: 'purchase_order',
+        entityId: po.id,
+        newValues: {
+          po_number: poNumber,
+          supplier_id: input.supplierId,
+          total_cost_cents: subtotalCents,
+          items_count: input.items.length,
+          status: 'draft',
+        },
+        metadata: { notes: input.notes },
+      });
+    } catch (auditErr) {
+      console.warn('[PurchasingService.createPurchaseOrder] Audit warning:', auditErr);
+    }
+
     return { success: true, poId: po.id, message: 'Purchase Order created.' };
   }
 
@@ -955,7 +977,7 @@ export class PurchasingService {
     const admin = createAdminClient();
     let query = admin
       .from('inventory_purchase_orders')
-      .select('id, status, branch_id')
+      .select('id, status, branch_id, business_id, po_number')
       .eq('id', poId);
 
     if (branchId) {
@@ -985,6 +1007,23 @@ export class PurchasingService {
 
     if (error) {
       return { success: false, message: error.message };
+    }
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: po.business_id || context?.business?.id || options?.businessId || '',
+        branchId: po.branch_id || branchId,
+        actorUserId: userId || null,
+        action: 'purchasing.po_approved',
+        entityType: 'purchase_order',
+        entityId: poId,
+        oldValues: { status: 'draft' },
+        newValues: { status: 'approved' },
+        metadata: { po_number: po.po_number },
+      });
+    } catch (auditErr) {
+      console.warn('[PurchasingService.approvePurchaseOrder] Audit warning:', auditErr);
     }
 
     return { success: true, message: 'Purchase Order approved.' };
@@ -1273,6 +1312,30 @@ export class PurchasingService {
           recorded_by: userId || null,
           recorded_at: new Date().toISOString(),
         });
+      }
+    }
+
+    if (res.grn_id && !res.idempotent_replay) {
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId,
+          branchId,
+          actorUserId: userId || undefined,
+          action: 'purchasing.goods_received',
+          entityType: 'goods_receipt',
+          entityId: res.grn_id,
+          newValues: {
+            grn_number: input.grnNumber.trim(),
+            supplier_id: input.supplierId,
+            location_id: input.locationId,
+            po_id: input.poId || null,
+            items_count: input.items.length,
+          },
+          metadata: { notes: input.notes },
+        });
+      } catch (err) {
+        console.error('[PurchasingService] Failed to log audit event for goods receipt:', err);
       }
     }
 
@@ -1895,6 +1958,33 @@ export class PurchasingService {
 
     if (!res.success) {
       return { success: false, message: res.message || res.error || 'Supplier return failed.' };
+    }
+
+    if (res.return_id && !res.idempotent_replay) {
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: context.business.id,
+          branchId: context.activeBranch.id,
+          actorUserId: context.user.id,
+          action: 'purchasing.supplier_return_created',
+          entityType: 'supplier_return',
+          entityId: res.return_id,
+          reason: input.reason,
+          newValues: {
+            return_number: res.return_number,
+            supplier_id: input.supplierId,
+            location_id: input.locationId,
+            item_id: input.itemId,
+            quantity: input.quantity,
+            unit: input.unit,
+            grn_id: input.grnId || null,
+          },
+          metadata: { notes: input.notes },
+        });
+      } catch (err) {
+        console.error('[PurchasingService] Failed to log audit event for supplier return:', err);
+      }
     }
 
     return {

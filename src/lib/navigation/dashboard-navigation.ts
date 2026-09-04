@@ -556,6 +556,7 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
           'people.view',
           'people.manage',
           'positions.manage',
+          'audit.view',
         ],
         children: [
           {
@@ -613,6 +614,15 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
             context: 'ORGANIZATION',
             aliases: ['branch scope', 'department scope', 'area overrides'],
             requiredPermission: ['roles.view', 'roles.manage', 'permissions.override.manage'],
+          },
+          {
+            id: 'audit_history',
+            label: 'Audit History',
+            href: '/dashboard/access/audit',
+            icon: '📜',
+            context: 'ORGANIZATION',
+            aliases: ['audit logs', 'change log', 'activity history', 'audit trail'],
+            requiredPermission: ['audit.view', 'roles.view', 'roles.manage'],
           },
           {
             id: 'org_chart',
@@ -885,6 +895,7 @@ export const DETAIL_ROUTE_PARENT_MAP: Record<string, string> = {
   '/dashboard/organization/job-titles': '/dashboard/team',
   '/dashboard/organization/positions': '/dashboard/team',
   '/dashboard/access': '/dashboard/team',
+  '/dashboard/access/audit': '/dashboard/team',
   '/dashboard/access/roles': '/dashboard/team',
   '/dashboard/access/scope-grants': '/dashboard/team',
   '/dashboard/access/diagnostics': '/dashboard/team',

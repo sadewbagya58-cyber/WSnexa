@@ -10,6 +10,9 @@ import { updateWaiterRequestStatusAction } from '@/server/actions/waiter';
 import { WaiterRequestStatus } from '@/lib/validation/waiter';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useRealtimeWaiterRequests } from '@/hooks/use-realtime-waiter-requests';
+import { WaiterOperationalActivity } from './waiter-operational-activity';
+import { EntityTimelineDialog } from '@/components/audit/entity-timeline-dialog';
+import { IconHistory } from '@/components/audit/audit-icons';
 
 interface WaiterRequestCenterProps {
   initialRequests: WaiterRequestRecord[];
@@ -30,6 +33,9 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'queue' | 'activity'>('queue');
+  const [timelineRequestId, setTimelineRequestId] = useState<string | null>(null);
 
   const handleStatusChange = async (requestId: string, nextStatus: WaiterRequestStatus) => {
     setActionError(null);
@@ -69,175 +75,230 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
         </div>
       )}
 
-      {/* Pending Guest Order Approvals Section */}
-      <PendingOrderApprovalsSection
-        branchId={branchId}
-        canManageRequests={canManageRequests}
-        assignedAreaIds={assignedAreaIds}
-      />
-
-      {/* Header controls & Realtime status */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
-            Active Assistance Calls ({requests.length})
-          </div>
-          {connectionStatus === 'connected' && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live Connected ({branchName})
+      {/* Tab Switcher: Live Queue vs 48-Hour Activity */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('queue')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors min-h-[40px] flex items-center gap-1.5 ${
+            activeTab === 'queue'
+              ? 'bg-zinc-950 text-white shadow-xs'
+              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+          }`}
+        >
+          <span>⚡ Live Queue</span>
+          {requests.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500 text-white font-extrabold">
+              {requests.length}
             </span>
           )}
-          {connectionStatus === 'reconnecting' && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-              Reconnecting...
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[40px]"
-            onClick={() => router.push('/dashboard/waiter/menu')}
-          >
-            🍽️ Take New Order / Menu
-          </Button>
-
-          <Button
-            variant="outline"
-            className="text-xs font-bold min-h-[40px]"
-            onClick={() => router.refresh()}
-            disabled={processingRequestId !== null}
-          >
-            🔄 Refresh Queue
-          </Button>
-        </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('activity')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors min-h-[40px] flex items-center gap-1.5 ${
+            activeTab === 'activity'
+              ? 'bg-zinc-950 text-white shadow-xs'
+              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+          }`}
+        >
+          <span>📜 48-Hour Operational History</span>
+        </button>
       </div>
 
-      {requests.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-12 text-center space-y-3 shadow-2xs">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">
-            🙋‍♂️
-          </div>
-          <h3 className="text-lg font-bold text-zinc-950">No Active Assistance Calls</h3>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            There are currently no pending table requests for this branch. Customer requests will appear here automatically in realtime.
-          </p>
-        </div>
+      {activeTab === 'activity' ? (
+        <WaiterOperationalActivity branchId={branchId} assignedAreaIds={assignedAreaIds} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {requests.map((req) => {
-            const typeInfo = typeMap[req.request_type] || { label: req.request_type, icon: '🛎️' };
-            const isProcessing = processingRequestId === req.id;
+        <>
+          {/* Pending Guest Order Approvals Section */}
+          <PendingOrderApprovalsSection
+            branchId={branchId}
+            canManageRequests={canManageRequests}
+            assignedAreaIds={assignedAreaIds}
+          />
 
-            return (
-              <div
-                key={req.id}
-                className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-all"
+          {/* Header controls & Realtime status */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-zinc-200 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
+                Active Assistance Calls ({requests.length})
+              </div>
+              {connectionStatus === 'connected' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Connected ({branchName})
+                </span>
+              )}
+              {connectionStatus === 'reconnecting' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                  Reconnecting...
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[40px]"
+                onClick={() => router.push('/dashboard/waiter/menu')}
               >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
-                    <div>
-                      <div className="text-lg font-black text-zinc-950 tracking-tight flex items-center gap-2">
-                        <span>{typeInfo.icon}</span>
-                        <span>{typeInfo.label}</span>
-                      </div>
-                      <div className="text-xs font-extrabold text-emerald-800 flex items-center gap-1 mt-1">
-                        {req.table ? (
-                          <span>📍 {req.table.name}</span>
-                        ) : (
-                          <span className="text-zinc-500 font-normal">Direct Request</span>
-                        )}
-                      </div>
-                    </div>
-                    <Badge variant={statusVariantMap[req.status] || 'neutral'}>
-                      {req.status.toUpperCase()}
-                    </Badge>
-                  </div>
+                🍽️ Take New Order / Menu
+              </Button>
 
-                  <div className="text-[11px] text-zinc-500 flex items-center justify-between">
-                    <span>
-                      Received:{' '}
-                      {new Date(req.created_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
+              <Button
+                variant="outline"
+                className="text-xs font-bold min-h-[40px]"
+                onClick={() => router.refresh()}
+                disabled={processingRequestId !== null}
+              >
+                🔄 Refresh Queue
+              </Button>
+            </div>
+          </div>
 
-                  {req.status === 'accepted' && (
-                    <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1 flex items-center justify-between">
-                      <span>✓ Accepted by {req.accepted_staff_name || 'Staff'}</span>
-                      {req.accepted_at && (
-                        <span className="text-[10px] text-purple-500 font-mono">
-                          {new Date(req.accepted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {requests.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-12 text-center space-y-3 shadow-2xs">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl">
+                🙋‍♂️
+              </div>
+              <h3 className="text-lg font-bold text-zinc-950">No Active Assistance Calls</h3>
+              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                There are currently no pending table requests for this branch. Customer requests will appear here automatically in realtime.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {requests.map((req) => {
+                const typeInfo = typeMap[req.request_type] || { label: req.request_type, icon: '🛎️' };
+                const isProcessing = processingRequestId === req.id;
+
+                return (
+                  <div
+                    key={req.id}
+                    className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-all"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
+                        <div>
+                          <div className="text-lg font-black text-zinc-950 tracking-tight flex items-center gap-2">
+                            <span>{typeInfo.icon}</span>
+                            <span>{typeInfo.label}</span>
+                          </div>
+                          <div className="text-xs font-extrabold text-emerald-800 flex items-center gap-1 mt-1">
+                            {req.table ? (
+                              <span>📍 {req.table.name}</span>
+                            ) : (
+                              <span className="text-zinc-500 font-normal">Direct Request</span>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant={statusVariantMap[req.status] || 'neutral'}>
+                          {req.status.toUpperCase()}
+                        </Badge>
+                      </div>
+
+                      <div className="text-[11px] text-zinc-500 flex items-center justify-between">
+                        <span>
+                          Received:{' '}
+                          {new Date(req.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </span>
-                      )}
-                    </div>
-                  )}
-
-                  {req.notes && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-950 italic font-medium">
-                      📝 Note: &quot;{req.notes}&quot;
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 gap-2">
-                  {canManageRequests ? (
-                    <>
-                      {req.status === 'pending' && (
-                        <>
-                          <Button
-                            variant="outline"
-                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
-                            onClick={() => handleStatusChange(req.id, 'dismissed')}
-                            disabled={isProcessing}
-                          >
-                            {isProcessing ? '...' : 'Dismiss'}
-                          </Button>
-                          <Button
-                            className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px]"
-                            onClick={() => handleStatusChange(req.id, 'accepted')}
-                            disabled={isProcessing}
-                          >
-                            {isProcessing ? 'Accepting...' : 'Accept Request ⚡'}
-                          </Button>
-                        </>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => setTimelineRequestId(req.id)}
+                          className="text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
+                        >
+                          <IconHistory className="w-3 h-3" />
+                          <span>Timeline</span>
+                        </button>
+                      </div>
 
                       {req.status === 'accepted' && (
-                        <>
-                          <Button
-                            variant="outline"
-                            className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
-                            onClick={() => handleStatusChange(req.id, 'dismissed')}
-                            disabled={isProcessing}
-                          >
-                            {isProcessing ? '...' : 'Dismiss'}
-                          </Button>
-                          <Button
-                            className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-                            onClick={() => handleStatusChange(req.id, 'completed')}
-                            disabled={isProcessing}
-                          >
-                            {isProcessing ? 'Completing...' : 'Mark Completed ✓'}
-                          </Button>
-                        </>
+                        <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1 flex items-center justify-between">
+                          <span>✓ Accepted by {req.accepted_staff_name || 'Staff'}</span>
+                          {req.accepted_at && (
+                            <span className="text-[10px] text-purple-500 font-mono">
+                              {new Date(req.accepted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </>
-                  ) : (
-                    <div className="col-span-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
-                      🔒 Read-Only Waiter View
+
+                      {req.notes && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-950 italic font-medium">
+                          📝 Note: &quot;{req.notes}&quot;
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+
+                    <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 gap-2">
+                      {canManageRequests ? (
+                        <>
+                          {req.status === 'pending' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
+                                onClick={() => handleStatusChange(req.id, 'dismissed')}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? '...' : 'Dismiss'}
+                              </Button>
+                              <Button
+                                className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px]"
+                                onClick={() => handleStatusChange(req.id, 'accepted')}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? 'Accepting...' : 'Accept Request ⚡'}
+                              </Button>
+                            </>
+                          )}
+
+                          {req.status === 'accepted' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
+                                onClick={() => handleStatusChange(req.id, 'dismissed')}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? '...' : 'Dismiss'}
+                              </Button>
+                              <Button
+                                className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+                                onClick={() => handleStatusChange(req.id, 'completed')}
+                                disabled={isProcessing}
+                              >
+                                {isProcessing ? 'Completing...' : 'Mark Completed ✓'}
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <div className="col-span-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
+                          🔒 Read-Only Waiter View
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
+
+      {/* Entity Timeline Dialog */}
+      <EntityTimelineDialog
+        isOpen={!!timelineRequestId}
+        onClose={() => setTimelineRequestId(null)}
+        entityType="waiter_request"
+        entityId={timelineRequestId || ''}
+        entityTitle={timelineRequestId ? `Waiter Request #${timelineRequestId.slice(0, 8)}` : ''}
+        branchId={branchId}
+      />
     </div>
   );
 };

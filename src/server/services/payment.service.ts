@@ -217,6 +217,33 @@ export class PaymentService {
       }
     }
 
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: authContext.businessId,
+        branchId: authContext.activeBranchId || null,
+        actorUserId: authContext.userId,
+        action: 'cashier.payment.recorded',
+        entityType: 'payment',
+        entityId: payload.payment_id || orderId,
+        newValues: {
+          payment_id: payload.payment_id,
+          order_id: orderId,
+          amount_cents: amountCents,
+          payment_method: paymentMethod,
+          payment_status: payload.payment_status,
+          balance_due_cents: payload.balance_due_cents,
+        },
+        metadata: {
+          payment_reference: payload.payment_reference,
+          external_reference: externalReference,
+          notes,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[PaymentService.recordPayment] Audit warning:', auditErr);
+    }
+
     return {
       success: true,
       message: payload.is_duplicate ? 'Duplicate payment entry detected.' : 'Payment recorded successfully.',
@@ -561,6 +588,24 @@ export class PaymentService {
       actor_id: authContext.userId,
       metadata: { reason, voided_by: authContext.userId },
     });
+
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: authContext.businessId,
+        branchId: payment.branch_id || authContext.activeBranchId || null,
+        actorUserId: authContext.userId,
+        action: 'cashier.payment.voided',
+        entityType: 'payment',
+        entityId: paymentId,
+        oldValues: { payment_status: payment.payment_status, amount_cents: payment.amount_cents },
+        newValues: { payment_status: 'voided' },
+        reason: reason || 'Payment voided by staff',
+        metadata: { order_id: orderId },
+      });
+    } catch (auditErr) {
+      console.warn('[PaymentService.voidPayment] Audit warning:', auditErr);
+    }
 
     return { success: true, message: 'Payment voided successfully.' };
   }

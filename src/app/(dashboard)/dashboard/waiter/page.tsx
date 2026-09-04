@@ -59,6 +59,17 @@ export default async function WaiterPage() {
     assignedAreaIds = await ServiceAreaService.getStaffAssignedAreaIds(tenantContext.membership.id);
   }
 
+  const staffName =
+    [tenantContext.profile?.firstName, tenantContext.profile?.lastName].filter(Boolean).join(' ').trim() || 'Staff';
+  const staffRole = tenantContext.membership?.role
+    ? tenantContext.membership.role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+    : 'Waiter';
+  const currentStaff = {
+    id: tenantContext.user.id,
+    name: staffName,
+    role: staffRole,
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -77,6 +88,7 @@ export default async function WaiterPage() {
         branchId={tenantContext.activeBranch.id}
         assignedAreaIds={assignedAreaIds}
         canManageRequests={canManageRequests}
+        currentStaff={currentStaff}
       />
     </div>
   );

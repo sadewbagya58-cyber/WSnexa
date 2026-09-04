@@ -20,6 +20,11 @@ interface WaiterRequestCenterProps {
   branchId: string;
   assignedAreaIds?: string[] | null;
   canManageRequests?: boolean;
+  currentStaff?: {
+    id: string;
+    name: string;
+    role?: string | null;
+  };
 }
 
 export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
@@ -28,9 +33,14 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   branchId,
   assignedAreaIds,
   canManageRequests = true,
+  currentStaff,
 }) => {
   const router = useRouter();
-  const { requests, connectionStatus, refreshRequests } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
+  const { requests, setRequests, connectionStatus, refreshRequests } = useRealtimeWaiterRequests(
+    initialRequests,
+    branchId,
+    assignedAreaIds
+  );
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -40,14 +50,39 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   const handleStatusChange = async (requestId: string, nextStatus: WaiterRequestStatus) => {
     setActionError(null);
     setProcessingRequestId(requestId);
+
+    // Capture snapshot for optimistic rollback
+    const previousRequests = [...requests];
+
+    // Optimistic UI state update
+    if (nextStatus === 'accepted') {
+      const nowIso = new Date().toISOString();
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                status: 'accepted',
+                accepted_by: currentStaff?.id || r.accepted_by,
+                accepted_staff_name: currentStaff?.name || r.accepted_staff_name || 'Staff',
+                accepted_staff_role: currentStaff?.role || r.accepted_staff_role || null,
+                accepted_at: nowIso,
+              }
+            : r
+        )
+      );
+    } else if (nextStatus === 'completed' || nextStatus === 'dismissed') {
+      setRequests((prev) => prev.filter((r) => r.id !== requestId));
+    }
+
     try {
       const res = await updateWaiterRequestStatusAction(requestId, nextStatus);
       if (!res.success) {
+        setRequests(previousRequests);
         setActionError(res.message || 'Failed to update request status');
-      } else {
-        refreshRequests?.();
       }
     } catch (err: unknown) {
+      setRequests(previousRequests);
       const msg = err instanceof Error ? err.message : 'Failed to update request status';
       setActionError(msg);
     } finally {
@@ -422,14 +457,17 @@ function PendingOrderApprovalsSection({
 
   const handleApprove = async (orderId: string) => {
     setProcessingId(orderId);
+    const previousApprovals = [...approvals];
+    setApprovals((prev) => prev.filter((o) => o.id !== orderId));
     try {
       const { approveGuestOrderAction } = await import('@/server/actions/waiter-approval');
       const res = await approveGuestOrderAction(orderId);
-      if (res.success) {
-        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+      if (!res.success) {
+        setApprovals(previousApprovals);
       }
     } catch (err) {
       console.warn('Approve order error:', err);
+      setApprovals(previousApprovals);
     } finally {
       setProcessingId(null);
     }
@@ -437,14 +475,17 @@ function PendingOrderApprovalsSection({
 
   const handleReject = async (orderId: string) => {
     setProcessingId(orderId);
+    const previousApprovals = [...approvals];
+    setApprovals((prev) => prev.filter((o) => o.id !== orderId));
     try {
       const { rejectGuestOrderAction } = await import('@/server/actions/waiter-approval');
       const res = await rejectGuestOrderAction(orderId, undefined, 'Rejected by waiter');
-      if (res.success) {
-        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+      if (!res.success) {
+        setApprovals(previousApprovals);
       }
     } catch (err) {
       console.warn('Reject order error:', err);
+      setApprovals(previousApprovals);
     } finally {
       setProcessingId(null);
     }

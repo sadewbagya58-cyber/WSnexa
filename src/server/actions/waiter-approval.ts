@@ -52,7 +52,6 @@ export async function approveGuestOrderAction(orderId: string, _waiterUserId?: s
     const res = await WaiterService.approveGuestOrder(orderId, authContext.userId);
     if (res.success) {
       const { revalidatePath } = await import('next/cache');
-      revalidatePath('/dashboard/waiter');
       revalidatePath('/dashboard/kitchen');
       revalidatePath('/dashboard/cashier');
       revalidatePath('/dashboard/orders');
@@ -87,7 +86,6 @@ export async function rejectGuestOrderAction(orderId: string, _waiterUserId?: st
     const res = await WaiterService.rejectGuestOrder(orderId, authContext.userId, reason);
     if (res.success) {
       const { revalidatePath } = await import('next/cache');
-      revalidatePath('/dashboard/waiter');
       revalidatePath('/dashboard/kitchen');
       revalidatePath('/dashboard/cashier');
       revalidatePath('/dashboard/orders');

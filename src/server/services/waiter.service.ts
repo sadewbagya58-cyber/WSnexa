@@ -565,60 +565,67 @@ export class WaiterService {
 
     const updatedOrder = updatedRows[0];
 
-    const { OrderSecurityService } = await import('./order-security.service');
-    await OrderSecurityService.logSecurityEvent({
-      businessId: updatedOrder.business_id,
-      branchId: updatedOrder.branch_id,
-      orderId: updatedOrder.id,
-      actorUserId: waiterUserId,
-      eventType: 'WAITER_APPROVED_ORDER',
-    });
+    // Asynchronous non-blocking background dispatch for audit, security, notifications & consumption
+    (async () => {
+      try {
+        const { OrderSecurityService } = await import('./order-security.service');
+        await OrderSecurityService.logSecurityEvent({
+          businessId: updatedOrder.business_id,
+          branchId: updatedOrder.branch_id,
+          orderId: updatedOrder.id,
+          actorUserId: waiterUserId,
+          eventType: 'WAITER_APPROVED_ORDER',
+        });
+      } catch (secErr) {
+        console.warn('[WaiterService.approveGuestOrder] Security log warning:', secErr);
+      }
 
-    try {
-      const { AuditService } = await import('./audit.service');
-      await AuditService.logAuditEvent({
-        businessId: updatedOrder.business_id,
-        branchId: updatedOrder.branch_id,
-        serviceAreaId: orderAreaId || null,
-        actorUserId: waiterUserId,
-        action: 'waiter.order.approved',
-        entityType: 'order',
-        entityId: updatedOrder.id,
-        oldValues: { approval_status: 'pending_waiter_approval' },
-        newValues: { approval_status: 'approved', status: 'confirmed' },
-        metadata: { order_number: updatedOrder.order_number_formatted },
-      });
-    } catch (auditErr) {
-      console.warn('[WaiterService.approveGuestOrder] Audit log warning:', auditErr);
-    }
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: updatedOrder.business_id,
+          branchId: updatedOrder.branch_id,
+          serviceAreaId: orderAreaId || null,
+          actorUserId: waiterUserId,
+          action: 'waiter.order.approved',
+          entityType: 'order',
+          entityId: updatedOrder.id,
+          oldValues: { approval_status: 'pending_waiter_approval' },
+          newValues: { approval_status: 'approved', status: 'confirmed' },
+          metadata: { order_number: updatedOrder.order_number_formatted },
+        });
+      } catch (auditErr) {
+        console.warn('[WaiterService.approveGuestOrder] Audit log warning:', auditErr);
+      }
 
-    // Notify Kitchen of newly approved order
-    try {
-      const { NotificationService } = await import('./notification.service');
-      const orderNum = updatedOrder.order_number_formatted || updatedOrder.id.slice(0, 6);
-      await NotificationService.createNotificationsForCapability({
-        businessId: updatedOrder.business_id,
-        branchId: updatedOrder.branch_id,
-        capability: 'kitchen.access',
-        notificationType: 'ORDER_CREATED',
-        priority: 'high',
-        title: 'New Order (Approved by Waiter)',
-        message: `Order #${orderNum} has been approved and sent to kitchen`,
-        entityType: 'order',
-        entityId: updatedOrder.id,
-        actionUrl: '/dashboard/kitchen',
-      });
-    } catch (notifErr) {
-      console.warn('[WaiterService] Kitchen notification after approval warning:', notifErr);
-    }
+      // Notify Kitchen of newly approved order
+      try {
+        const { NotificationService } = await import('./notification.service');
+        const orderNum = updatedOrder.order_number_formatted || updatedOrder.id.slice(0, 6);
+        await NotificationService.createNotificationsForCapability({
+          businessId: updatedOrder.business_id,
+          branchId: updatedOrder.branch_id,
+          capability: 'kitchen.access',
+          notificationType: 'ORDER_CREATED',
+          priority: 'high',
+          title: 'New Order (Approved by Waiter)',
+          message: `Order #${orderNum} has been approved and sent to kitchen`,
+          entityType: 'order',
+          entityId: updatedOrder.id,
+          actionUrl: '/dashboard/kitchen',
+        });
+      } catch (notifErr) {
+        console.warn('[WaiterService] Kitchen notification after approval warning:', notifErr);
+      }
 
-    // Automated Inventory Consumption Trigger for confirmed order (Phase 28)
-    try {
-      const { ConsumptionService } = await import('./consumption.service');
-      await ConsumptionService.processOrderStageConsumption(updatedOrder.id, 'confirmed', waiterUserId);
-    } catch (consErr) {
-      console.error('[WaiterService.approveGuestOrder] Automated consumption trigger error:', consErr);
-    }
+      // Automated Inventory Consumption Trigger for confirmed order (Phase 28)
+      try {
+        const { ConsumptionService } = await import('./consumption.service');
+        await ConsumptionService.processOrderStageConsumption(updatedOrder.id, 'confirmed', waiterUserId);
+      } catch (consErr) {
+        console.error('[WaiterService.approveGuestOrder] Automated consumption trigger error:', consErr);
+      }
+    })().catch((bgErr) => console.warn('[WaiterService.approveGuestOrder] Background dispatch warning:', bgErr));
 
     return { success: true, message: 'Order approved successfully and sent to kitchen.' };
   }
@@ -702,33 +709,40 @@ export class WaiterService {
 
     const updatedOrder = updatedRows[0];
 
-    const { OrderSecurityService } = await import('./order-security.service');
-    await OrderSecurityService.logSecurityEvent({
-      businessId: updatedOrder.business_id,
-      branchId: updatedOrder.branch_id,
-      orderId: updatedOrder.id,
-      actorUserId: waiterUserId,
-      eventType: 'WAITER_REJECTED_ORDER',
-      safeMetadata: { reason },
-    });
+    // Asynchronous non-blocking background dispatch for security & audit
+    (async () => {
+      try {
+        const { OrderSecurityService } = await import('./order-security.service');
+        await OrderSecurityService.logSecurityEvent({
+          businessId: updatedOrder.business_id,
+          branchId: updatedOrder.branch_id,
+          orderId: updatedOrder.id,
+          actorUserId: waiterUserId,
+          eventType: 'WAITER_REJECTED_ORDER',
+          safeMetadata: { reason },
+        });
+      } catch (secErr) {
+        console.warn('[WaiterService.rejectGuestOrder] Security log warning:', secErr);
+      }
 
-    try {
-      const { AuditService } = await import('./audit.service');
-      await AuditService.logAuditEvent({
-        businessId: updatedOrder.business_id,
-        branchId: updatedOrder.branch_id,
-        serviceAreaId: orderAreaId || null,
-        actorUserId: waiterUserId,
-        action: 'waiter.order.rejected',
-        entityType: 'order',
-        entityId: updatedOrder.id,
-        oldValues: { approval_status: 'pending_waiter_approval' },
-        newValues: { approval_status: 'rejected', status: 'cancelled' },
-        reason: reason || 'Rejected by staff',
-      });
-    } catch (auditErr) {
-      console.warn('[WaiterService.rejectGuestOrder] Audit log warning:', auditErr);
-    }
+      try {
+        const { AuditService } = await import('./audit.service');
+        await AuditService.logAuditEvent({
+          businessId: updatedOrder.business_id,
+          branchId: updatedOrder.branch_id,
+          serviceAreaId: orderAreaId || null,
+          actorUserId: waiterUserId,
+          action: 'waiter.order.rejected',
+          entityType: 'order',
+          entityId: updatedOrder.id,
+          oldValues: { approval_status: 'pending_waiter_approval' },
+          newValues: { approval_status: 'rejected', status: 'cancelled' },
+          reason: reason || 'Rejected by staff',
+        });
+      } catch (auditErr) {
+        console.warn('[WaiterService.rejectGuestOrder] Audit log warning:', auditErr);
+      }
+    })().catch((bgErr) => console.warn('[WaiterService.rejectGuestOrder] Background dispatch warning:', bgErr));
 
     return { success: true, message: 'Order rejected.' };
   }
@@ -788,6 +802,13 @@ export class WaiterService {
 
     const nowIso = new Date().toISOString();
 
+    const actorNameSnapshot =
+      [tenantContext.profile?.firstName, tenantContext.profile?.lastName].filter(Boolean).join(' ').trim() ||
+      'Staff Member';
+    const actorRoleSnapshot = tenantContext.membership?.role
+      ? tenantContext.membership.role.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+      : 'Staff';
+
     // 4. State Machine Transition: PENDING -> ACCEPTED
     if (status === 'accepted') {
       if (currentReq.status !== 'pending') {
@@ -818,22 +839,22 @@ export class WaiterService {
         };
       }
 
-      try {
-        const { AuditService } = await import('./audit.service');
-        await AuditService.logAuditEvent({
+      // Asynchronous non-blocking audit log dispatch
+      import('./audit.service').then(({ AuditService }) => {
+        AuditService.logAuditEvent({
           businessId: currentReq.business_id,
           branchId: currentReq.branch_id,
           serviceAreaId: reqAreaId || null,
           actorUserId: tenantContext.user.id,
+          actorNameSnapshot,
+          actorRoleSnapshot,
           action: 'waiter_request.accepted',
           entityType: 'waiter_request',
           entityId: requestId,
           oldValues: { status: currentReq.status },
           newValues: { status: 'accepted', accepted_by: tenantContext.user.id, accepted_at: nowIso },
-        });
-      } catch (auditErr) {
-        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
-      }
+        }).catch((auditErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr));
+      }).catch((importErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit import warning:', importErr));
 
       return { success: true, message: 'Request accepted successfully.' };
     }
@@ -885,22 +906,22 @@ export class WaiterService {
         };
       }
 
-      try {
-        const { AuditService } = await import('./audit.service');
-        await AuditService.logAuditEvent({
+      // Asynchronous non-blocking audit log dispatch
+      import('./audit.service').then(({ AuditService }) => {
+        AuditService.logAuditEvent({
           businessId: currentReq.business_id,
           branchId: currentReq.branch_id,
           serviceAreaId: reqAreaId || null,
           actorUserId: tenantContext.user.id,
+          actorNameSnapshot,
+          actorRoleSnapshot,
           action: 'waiter_request.completed',
           entityType: 'waiter_request',
           entityId: requestId,
           oldValues: { status: currentReq.status },
           newValues: { status: 'completed', resolved_by: tenantContext.user.id, resolved_at: nowIso },
-        });
-      } catch (auditErr) {
-        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
-      }
+        }).catch((auditErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr));
+      }).catch((importErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit import warning:', importErr));
 
       return { success: true, message: 'Request marked as completed.' };
     }
@@ -930,22 +951,22 @@ export class WaiterService {
         };
       }
 
-      try {
-        const { AuditService } = await import('./audit.service');
-        await AuditService.logAuditEvent({
+      // Asynchronous non-blocking audit log dispatch
+      import('./audit.service').then(({ AuditService }) => {
+        AuditService.logAuditEvent({
           businessId: currentReq.business_id,
           branchId: currentReq.branch_id,
           serviceAreaId: reqAreaId || null,
           actorUserId: tenantContext.user.id,
+          actorNameSnapshot,
+          actorRoleSnapshot,
           action: 'waiter_request.dismissed',
           entityType: 'waiter_request',
           entityId: requestId,
           oldValues: { status: currentReq.status },
           newValues: { status: 'dismissed', resolved_by: tenantContext.user.id, resolved_at: nowIso },
-        });
-      } catch (auditErr) {
-        console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr);
-      }
+        }).catch((auditErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit warning:', auditErr));
+      }).catch((importErr) => console.warn('[WaiterService.updateWaiterRequestStatus] Audit import warning:', importErr));
 
       return { success: true, message: 'Request dismissed.' };
     }

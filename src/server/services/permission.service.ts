@@ -53,6 +53,24 @@ export interface FormattedMemberDetail {
   effectivePermissions: PermissionKey[];
 }
 
+interface CachedIdentity {
+  userId: string;
+  displayName: string;
+  email: string | null;
+  initials: string;
+  identitySource: 'profile' | 'auth' | 'invitation' | 'seed' | 'fallback';
+  expiresAt: number;
+}
+
+interface CachedActorSnapshot {
+  displayName: string;
+  roleName: string;
+  expiresAt: number;
+}
+
+const canonicalIdentityCache = new Map<string, CachedIdentity>();
+const canonicalActorSnapshotCache = new Map<string, CachedActorSnapshot>();
+
 export class PermissionService {
   /**
    * @deprecated for security-sensitive production mutations and reads.
@@ -948,16 +966,39 @@ export class PermissionService {
 
     if (uniqueUserIds.length === 0) return resultMap;
 
+    const now = Date.now();
+    const uncachedUserIds: string[] = [];
+
+    for (const id of uniqueUserIds) {
+      const cached = canonicalIdentityCache.get(id);
+      if (cached && cached.expiresAt > now) {
+        resultMap.set(id, {
+          userId: cached.userId,
+          displayName: cached.displayName,
+          email: cached.email,
+          initials: cached.initials,
+          identitySource: cached.identitySource,
+        });
+      } else {
+        uncachedUserIds.push(id);
+      }
+    }
+
+    if (uncachedUserIds.length === 0) {
+      return resultMap;
+    }
+
     const { data: profiles } = await admin
       .from('user_profiles')
       .select('id, first_name, last_name, email')
-      .in('id', uniqueUserIds);
+      .in('id', uncachedUserIds);
 
     const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
-    const missingUserIds = uniqueUserIds.filter((id) => {
+    // Only query Auth API if profile is completely missing or has zero identifiable fields
+    const missingUserIds = uncachedUserIds.filter((id) => {
       const p = profileMap.get(id);
-      return !p || (!p.first_name && !p.last_name) || !p.email;
+      return !p || (!p.first_name && !p.last_name && !p.email);
     });
 
     if (missingUserIds.length > 0) {
@@ -1006,7 +1047,7 @@ export class PermissionService {
       }
     }
 
-    for (const id of uniqueUserIds) {
+    for (const id of uncachedUserIds) {
       const p = profileMap.get(id);
       const rawName = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim();
       const email = p?.email && p.email.trim().length > 0 ? p.email.trim() : null;
@@ -1034,13 +1075,16 @@ export class PermissionService {
           ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
           : displayName.slice(0, 2).toUpperCase();
 
-      resultMap.set(id, {
+      const resolved = {
         userId: id,
         displayName,
         email,
         initials,
         identitySource,
-      });
+      };
+
+      resultMap.set(id, resolved);
+      canonicalIdentityCache.set(id, { ...resolved, expiresAt: now + 60_000 });
     }
 
     return resultMap;
@@ -1048,7 +1092,7 @@ export class PermissionService {
 
   /**
    * Canonically resolves actor display names and operational roles / position designations for an array of user IDs.
-   * Leverages canonical user identities, custom roles, positions, and memberships.
+   * Leverages canonical user identities, custom roles, positions, and memberships with fast caching.
    */
   static async resolveCanonicalActorSnapshots(
     userIds: string[],
@@ -1060,7 +1104,27 @@ export class PermissionService {
 
     if (uniqueUserIds.length === 0) return resultMap;
 
-    const identityMap = await this.resolveCanonicalMemberIdentities(uniqueUserIds);
+    const now = Date.now();
+    const uncachedUserIds: string[] = [];
+
+    for (const id of uniqueUserIds) {
+      const cacheKey = `${id}_${businessId || ''}`;
+      const cached = canonicalActorSnapshotCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        resultMap.set(id, {
+          displayName: cached.displayName,
+          roleName: cached.roleName,
+        });
+      } else {
+        uncachedUserIds.push(id);
+      }
+    }
+
+    if (uncachedUserIds.length === 0) {
+      return resultMap;
+    }
+
+    const identityMap = await this.resolveCanonicalMemberIdentities(uncachedUserIds);
 
     let memQuery = admin
       .from('business_memberships')
@@ -1071,7 +1135,7 @@ export class PermissionService {
         custom_role_id,
         custom_roles(name)
       `)
-      .in('user_id', uniqueUserIds);
+      .in('user_id', uncachedUserIds);
 
     if (businessId) {
       memQuery = memQuery.eq('business_id', businessId);
@@ -1114,7 +1178,7 @@ export class PermissionService {
       }
     }
 
-    for (const id of uniqueUserIds) {
+    for (const id of uncachedUserIds) {
       const identity = identityMap.get(id);
       const displayName = identity?.displayName || 'Staff Member';
 
@@ -1143,9 +1207,15 @@ export class PermissionService {
         }
       }
 
-      resultMap.set(id, {
+      const snap = {
         displayName,
         roleName,
+      };
+
+      resultMap.set(id, snap);
+      canonicalActorSnapshotCache.set(`${id}_${businessId || ''}`, {
+        ...snap,
+        expiresAt: now + 60_000,
       });
     }
 

@@ -892,6 +892,57 @@ async function runSuite() {
     'Waiter Live Queue renders actual staff name and role (Accepted by: [Name] ([Role])) with mobile-safe wrapping'
   );
 
+  // -------------------------------------------------------------
+  // Test 22: Performance Optimization — Waiter Operational Action Latency & Optimistic UI
+  // -------------------------------------------------------------
+  console.log('\nTest Group 22: Performance Optimization — Waiter Operational Action Latency & Optimistic UI');
+
+  const permServiceSrc = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/permission.service.ts'),
+    'utf8'
+  );
+  assert(
+    permServiceSrc.includes('canonicalIdentityCache') &&
+      permServiceSrc.includes('canonicalActorSnapshotCache'),
+    'PermissionService provides fast in-memory caching for canonical identities and actor snapshots'
+  );
+
+  assert(
+    waiterServiceContent.includes('actorNameSnapshot') &&
+      waiterServiceContent.includes('actorRoleSnapshot') &&
+      waiterServiceContent.includes("import('./audit.service').then(({ AuditService }) => {"),
+    'WaiterService.updateWaiterRequestStatus computes actor snapshots directly and dispatches audit events asynchronously'
+  );
+
+  assert(
+    !waiterActionsContent.includes("revalidatePath('/dashboard/waiter')"),
+    'updateWaiterRequestStatusAction eliminates blocking server-side page revalidation'
+  );
+
+  const waiterPageContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/app/(dashboard)/dashboard/waiter/page.tsx'),
+    'utf8'
+  );
+  assert(
+    waiterPageContent.includes('currentStaff={currentStaff}') &&
+      waiterPageContent.includes('staffName') &&
+      waiterPageContent.includes('staffRole'),
+    'Waiter Page passes currentStaff identity to WaiterRequestCenter'
+  );
+
+  assert(
+    liveQueueComponentContent.includes('previousRequests = [...requests]') &&
+      liveQueueComponentContent.includes('setRequests(previousRequests)') &&
+      liveQueueComponentContent.includes('currentStaff'),
+    'WaiterRequestCenter implements instant optimistic UI transitions (<16ms) with automatic rollback on error'
+  );
+
+  assert(
+    liveQueueComponentContent.includes('previousApprovals = [...approvals]') &&
+      liveQueueComponentContent.includes('setApprovals(previousApprovals)'),
+    'PendingOrderApprovalsSection implements optimistic order approvals and rejections with rollback'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

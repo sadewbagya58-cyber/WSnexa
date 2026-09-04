@@ -44,7 +44,6 @@ export async function updateWaiterRequestStatusAction(
     };
   }
 
-  revalidatePath('/dashboard/waiter');
   return {
     success: true,
     message: result.message || `Request updated to ${status}.`,

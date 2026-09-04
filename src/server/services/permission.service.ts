@@ -1046,6 +1046,112 @@ export class PermissionService {
     return resultMap;
   }
 
+  /**
+   * Canonically resolves actor display names and operational roles / position designations for an array of user IDs.
+   * Leverages canonical user identities, custom roles, positions, and memberships.
+   */
+  static async resolveCanonicalActorSnapshots(
+    userIds: string[],
+    businessId?: string | null
+  ): Promise<Map<string, { displayName: string; roleName: string }>> {
+    const admin = createAdminClient();
+    const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+    const resultMap = new Map<string, { displayName: string; roleName: string }>();
+
+    if (uniqueUserIds.length === 0) return resultMap;
+
+    const identityMap = await this.resolveCanonicalMemberIdentities(uniqueUserIds);
+
+    let memQuery = admin
+      .from('business_memberships')
+      .select(`
+        id,
+        user_id,
+        role,
+        custom_role_id,
+        custom_roles(name)
+      `)
+      .in('user_id', uniqueUserIds);
+
+    if (businessId) {
+      memQuery = memQuery.eq('business_id', businessId);
+    }
+
+    const { data: mems } = await memQuery;
+    const memRows = mems || [];
+
+    const userMemMap = new Map<string, (typeof memRows)[number]>();
+    const membershipIds: string[] = [];
+
+    for (const m of memRows) {
+      if (!userMemMap.has(m.user_id)) {
+        userMemMap.set(m.user_id, m);
+        membershipIds.push(m.id);
+      }
+    }
+
+    const positionMap = new Map<string, string>();
+    if (membershipIds.length > 0) {
+      try {
+        const { data: assigns } = await admin
+          .from('staff_assignments')
+          .select('business_membership_id, is_primary, status, organization_positions(title)')
+          .in('business_membership_id', membershipIds)
+          .eq('status', 'active');
+
+        for (const a of assigns || []) {
+          const posObj = Array.isArray(a.organization_positions)
+            ? a.organization_positions[0]
+            : a.organization_positions;
+          if (posObj?.title) {
+            if (!positionMap.has(a.business_membership_id) || a.is_primary) {
+              positionMap.set(a.business_membership_id, posObj.title);
+            }
+          }
+        }
+      } catch {
+        // Non-blocking position title resolution
+      }
+    }
+
+    for (const id of uniqueUserIds) {
+      const identity = identityMap.get(id);
+      const displayName = identity?.displayName || 'Staff Member';
+
+      const mem = userMemMap.get(id);
+      let roleName = 'Staff';
+
+      if (mem) {
+        const posTitle = positionMap.get(mem.id);
+        const crObj = Array.isArray(mem.custom_roles) ? mem.custom_roles[0] : mem.custom_roles;
+        const customRoleName = crObj?.name;
+
+        if (posTitle) {
+          roleName = posTitle;
+        } else if (customRoleName) {
+          roleName = customRoleName;
+        } else if (mem.role) {
+          if (mem.role === 'business_owner') roleName = 'Business Owner';
+          else if (mem.role === 'branch_manager') roleName = 'Branch Manager';
+          else if (mem.role === 'admin') roleName = 'Admin';
+          else if (mem.role === 'staff') roleName = 'Staff';
+          else {
+            roleName = mem.role
+              .replace(/_/g, ' ')
+              .replace(/\b\w/g, (char: string) => char.toUpperCase());
+          }
+        }
+      }
+
+      resultMap.set(id, {
+        displayName,
+        roleName,
+      });
+    }
+
+    return resultMap;
+  }
+
   static async listTeamMembers(businessId: string, branchId?: string | null): Promise<FormattedMemberDetail[]> {
     const t0 = performance.now();
     const admin = createAdminClient();

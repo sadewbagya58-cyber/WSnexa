@@ -74,31 +74,18 @@ export class AuditService {
       let actorName = params.actorNameSnapshot || null;
       let actorRole = params.actorRoleSnapshot || null;
 
-      // If actor snapshot details are not passed explicitly, attempt to resolve them from DB
+      // If actor snapshot details are not passed explicitly, attempt to resolve them from canonical resolver
       if (params.actorUserId && (!actorName || !actorRole)) {
         try {
-          const [profRes, memRes] = await Promise.all([
-            !actorName
-              ? admin.from('user_profiles').select('first_name, last_name, email').eq('id', params.actorUserId).maybeSingle()
-              : Promise.resolve({ data: null }),
-            !actorRole
-              ? admin
-                  .from('business_memberships')
-                  .select('role')
-                  .eq('business_id', params.businessId)
-                  .eq('user_id', params.actorUserId)
-                  .maybeSingle()
-              : Promise.resolve({ data: null }),
-          ]);
-
-          if (!actorName && profRes.data) {
-            const p = profRes.data;
-            const full = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-            actorName = full || p.email || 'Staff';
-          }
-
-          if (!actorRole && memRes.data) {
-            actorRole = memRes.data.role || 'Staff';
+          const { PermissionService } = await import('./permission.service');
+          const snapMap = await PermissionService.resolveCanonicalActorSnapshots(
+            [params.actorUserId],
+            params.businessId || null
+          );
+          const snap = snapMap.get(params.actorUserId);
+          if (snap) {
+            if (!actorName) actorName = snap.displayName;
+            if (!actorRole) actorRole = snap.roleName;
           }
         } catch {
           // Non-blocking fallback

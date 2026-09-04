@@ -386,24 +386,19 @@ export class WaiterService {
 
     const acceptedByIds = Array.from(new Set(records.map((r) => r.accepted_by).filter(Boolean))) as string[];
     if (acceptedByIds.length > 0) {
-      const { createAdminClient } = await import('@/lib/supabase/server');
-      const admin = createAdminClient();
-      const { data: profs } = await admin
-        .from('user_profiles')
-        .select('id, first_name, last_name, email')
-        .in('id', acceptedByIds);
+      try {
+        const { PermissionService } = await import('./permission.service');
+        const snapMap = await PermissionService.resolveCanonicalActorSnapshots(acceptedByIds, businessId);
 
-      const staffMap = new Map<string, string>();
-      (profs || []).forEach((p) => {
-        const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Staff';
-        staffMap.set(p.id, name);
-      });
-
-      records.forEach((r) => {
-        if (r.accepted_by) {
-          r.accepted_staff_name = staffMap.get(r.accepted_by) || 'Staff';
-        }
-      });
+        records.forEach((r) => {
+          if (r.accepted_by) {
+            const snap = snapMap.get(r.accepted_by);
+            r.accepted_staff_name = snap ? snap.displayName : 'Staff';
+          }
+        });
+      } catch {
+        // Non-blocking fallback
+      }
     }
 
     return records;

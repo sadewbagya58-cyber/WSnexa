@@ -14,9 +14,11 @@ export interface WaiterOperationalEvent {
   createdAt: string;
   acceptedByUserId?: string | null;
   acceptedByName?: string | null;
+  acceptedByRole?: string | null;
   acceptedAt?: string | null;
   resolvedByUserId?: string | null;
   resolvedByName?: string | null;
+  resolvedByRole?: string | null;
   resolvedAt?: string | null;
   orderNumber?: string | null;
   orderId?: string | null;
@@ -124,7 +126,7 @@ export class WaiterActivityService {
       console.warn('[WaiterActivityService] Failed to fetch orders:', ordErr.message);
     }
 
-    // Collect all unique user IDs to resolve names in batch
+    // Collect all unique user IDs to resolve canonical names and roles in batch
     const userIds = new Set<string>();
     for (const r of rawRequests || []) {
       if (r.accepted_by) userIds.add(r.accepted_by);
@@ -135,16 +137,16 @@ export class WaiterActivityService {
       if (o.rejected_by_user_id) userIds.add(o.rejected_by_user_id);
     }
 
-    const userNameMap = new Map<string, string>();
+    let actorSnapMap = new Map<string, { displayName: string; roleName: string }>();
     if (userIds.size > 0) {
-      const { data: profs } = await admin
-        .from('user_profiles')
-        .select('id, first_name, last_name, email')
-        .in('id', Array.from(userIds));
-
-      for (const p of profs || []) {
-        const full = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-        userNameMap.set(p.id, full || p.email || 'Staff');
+      try {
+        const { PermissionService } = await import('./permission.service');
+        actorSnapMap = await PermissionService.resolveCanonicalActorSnapshots(
+          Array.from(userIds),
+          businessId || null
+        );
+      } catch {
+        // Non-blocking fallback
       }
     }
 
@@ -174,6 +176,9 @@ export class WaiterActivityService {
       const elapsedMinutes = Math.floor((now.getTime() - createdTime) / 60000);
       const isOverdue = (r.status === 'pending' || r.status === 'accepted') && elapsedMinutes > 15;
 
+      const acceptedSnap = r.accepted_by ? actorSnapMap.get(r.accepted_by) : null;
+      const resolvedSnap = r.resolved_by ? actorSnapMap.get(r.resolved_by) : null;
+
       events.push({
         id: r.id,
         category: 'assistance_request',
@@ -185,10 +190,12 @@ export class WaiterActivityService {
         notes: r.notes,
         createdAt: r.created_at,
         acceptedByUserId: r.accepted_by,
-        acceptedByName: r.accepted_by ? userNameMap.get(r.accepted_by) || 'Staff' : null,
+        acceptedByName: acceptedSnap?.displayName || null,
+        acceptedByRole: acceptedSnap?.roleName || null,
         acceptedAt: r.accepted_at,
         resolvedByUserId: r.resolved_by,
-        resolvedByName: r.resolved_by ? userNameMap.get(r.resolved_by) || 'Staff' : null,
+        resolvedByName: resolvedSnap?.displayName || null,
+        resolvedByRole: resolvedSnap?.roleName || null,
         resolvedAt: r.resolved_at,
         orderId: r.order_id,
         isOverdue,
@@ -217,6 +224,7 @@ export class WaiterActivityService {
       }
 
       if (o.approval_status === 'approved') {
+        const approverSnap = o.approved_by_user_id ? actorSnapMap.get(o.approved_by_user_id) : null;
         events.push({
           id: `ord-app-${o.id}`,
           category: 'order_approval',
@@ -226,7 +234,8 @@ export class WaiterActivityService {
           status: 'approved',
           createdAt: o.approved_at || o.created_at,
           acceptedByUserId: o.approved_by_user_id,
-          acceptedByName: o.approved_by_user_id ? userNameMap.get(o.approved_by_user_id) || 'Waiter' : null,
+          acceptedByName: approverSnap?.displayName || null,
+          acceptedByRole: approverSnap?.roleName || null,
           acceptedAt: o.approved_at,
           orderNumber: o.order_number_formatted || `#${o.order_number}`,
           orderId: o.id,
@@ -234,6 +243,7 @@ export class WaiterActivityService {
           currency: o.currency,
         });
       } else if (o.approval_status === 'rejected') {
+        const rejectorSnap = o.rejected_by_user_id ? actorSnapMap.get(o.rejected_by_user_id) : null;
         events.push({
           id: `ord-rej-${o.id}`,
           category: 'order_rejection',
@@ -244,7 +254,8 @@ export class WaiterActivityService {
           notes: o.rejection_reason,
           createdAt: o.rejected_at || o.created_at,
           resolvedByUserId: o.rejected_by_user_id,
-          resolvedByName: o.rejected_by_user_id ? userNameMap.get(o.rejected_by_user_id) || 'Waiter' : null,
+          resolvedByName: rejectorSnap?.displayName || null,
+          resolvedByRole: rejectorSnap?.roleName || null,
           resolvedAt: o.rejected_at,
           orderNumber: o.order_number_formatted || `#${o.order_number}`,
           orderId: o.id,
@@ -271,6 +282,7 @@ export class WaiterActivityService {
       .select(
         `
         id,
+        business_id,
         request_type,
         status,
         notes,
@@ -289,17 +301,17 @@ export class WaiterActivityService {
     if (!req) return [];
 
     const userIds = [req.accepted_by, req.resolved_by].filter(Boolean) as string[];
-    const userNameMap = new Map<string, string>();
+    let actorSnapMap = new Map<string, { displayName: string; roleName: string }>();
 
     if (userIds.length > 0) {
-      const { data: profs } = await admin
-        .from('user_profiles')
-        .select('id, first_name, last_name, email')
-        .in('id', userIds);
-
-      for (const p of profs || []) {
-        const full = `${p.first_name || ''} ${p.last_name || ''}`.trim();
-        userNameMap.set(p.id, full || p.email || 'Staff');
+      try {
+        const { PermissionService } = await import('./permission.service');
+        actorSnapMap = await PermissionService.resolveCanonicalActorSnapshots(
+          userIds,
+          (req as { business_id?: string }).business_id || null
+        );
+      } catch {
+        // Non-blocking fallback
       }
     }
 
@@ -318,27 +330,33 @@ export class WaiterActivityService {
 
     // Step 2: Accepted
     if (req.accepted_at && req.accepted_by) {
+      const snap = actorSnapMap.get(req.accepted_by);
+      const actorName = snap?.displayName || 'Staff';
+      const actorRole = snap?.roleName || 'Staff';
       steps.push({
         step: 'Request Accepted',
         timestamp: req.accepted_at,
-        actorName: userNameMap.get(req.accepted_by) || 'Waiter',
-        actorRole: 'Assigned Waiter',
-        description: `Request accepted and taken by ${userNameMap.get(req.accepted_by) || 'staff'}.`,
+        actorName,
+        actorRole,
+        description: `Request accepted and taken by ${actorName}${actorRole ? ` (${actorRole})` : ''}.`,
         status: 'accepted',
       });
     }
 
     // Step 3: Completed / Dismissed
     if (req.resolved_at && req.resolved_by) {
+      const snap = actorSnapMap.get(req.resolved_by);
+      const actorName = snap?.displayName || 'Staff';
+      const actorRole = snap?.roleName || 'Staff';
       const isCompleted = req.status === 'completed';
       steps.push({
         step: isCompleted ? 'Request Completed' : 'Request Dismissed',
         timestamp: req.resolved_at,
-        actorName: userNameMap.get(req.resolved_by) || 'Staff',
-        actorRole: 'Staff Member',
+        actorName,
+        actorRole,
         description: isCompleted
-          ? `Request successfully fulfilled and marked as completed.`
-          : `Request was dismissed.`,
+          ? `Request successfully fulfilled and completed by ${actorName}.`
+          : `Request was dismissed by ${actorName}.`,
         status: req.status,
       });
     }

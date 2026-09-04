@@ -809,6 +809,57 @@ async function runSuite() {
     'EntityTimelineDialog modal renders chronological revisions with old/new snapshot diffs'
   );
 
+  // -------------------------------------------------------------
+  // Test 21: Canonical Actor Identity & Role Resolution
+  // -------------------------------------------------------------
+  console.log('\nTest Group 21: Canonical Actor Identity & Role Resolution');
+
+  const permissionServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/permission.service.ts'),
+    'utf8'
+  );
+  assert(
+    permissionServiceContent.includes('resolveCanonicalActorSnapshots') &&
+      permissionServiceContent.includes('resolveCanonicalMemberIdentities'),
+    'PermissionService provides canonical actor snapshot and identity resolution'
+  );
+
+  const auditServiceActorContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/audit.service.ts'),
+    'utf8'
+  );
+  assert(
+    auditServiceActorContent.includes('resolveCanonicalActorSnapshots') &&
+      auditServiceActorContent.includes('actor_name_snapshot') &&
+      auditServiceActorContent.includes('actor_role_snapshot'),
+    'AuditService automatically resolves and logs canonical actor display name and role snapshots'
+  );
+
+  assert(
+    waiterActivityServiceContent.includes('acceptedByRole') &&
+      waiterActivityServiceContent.includes('resolvedByRole') &&
+      waiterActivityServiceContent.includes('resolveCanonicalActorSnapshots'),
+    'WaiterActivityService includes acceptedByRole & resolvedByRole and resolves canonical actors'
+  );
+
+  const waiterServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/waiter.service.ts'),
+    'utf8'
+  );
+  assert(
+    waiterServiceContent.includes('resolveCanonicalActorSnapshots') &&
+      waiterServiceContent.includes('r.accepted_staff_name = snap ? snap.displayName :'),
+    'WaiterService resolves accepted_staff_name using canonical actor resolution'
+  );
+
+  assert(
+    waiterActivityComponentContent.includes('item.acceptedByName') &&
+      waiterActivityComponentContent.includes('item.acceptedByRole') &&
+      waiterActivityComponentContent.includes('item.resolvedByName') &&
+      waiterActivityComponentContent.includes('item.resolvedByRole'),
+    'WaiterOperationalActivity UI component renders actor names and roles with mobile-safe wrapping'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

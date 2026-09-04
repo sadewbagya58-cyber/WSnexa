@@ -80,7 +80,9 @@ export function WaiterOperationalActivity({
       const q = searchQuery.toLowerCase();
       const matchStaff =
         (item.acceptedByName && item.acceptedByName.toLowerCase().includes(q)) ||
-        (item.resolvedByName && item.resolvedByName.toLowerCase().includes(q));
+        (item.acceptedByRole && item.acceptedByRole.toLowerCase().includes(q)) ||
+        (item.resolvedByName && item.resolvedByName.toLowerCase().includes(q)) ||
+        (item.resolvedByRole && item.resolvedByRole.toLowerCase().includes(q));
       const matchTable = item.tableName && item.tableName.toLowerCase().includes(q);
       const matchArea = item.serviceAreaName && item.serviceAreaName.toLowerCase().includes(q);
       const matchNotes = item.notes && item.notes.toLowerCase().includes(q);
@@ -280,23 +282,45 @@ export function WaiterOperationalActivity({
                 {/* Attribution & Timeline Metrics */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs pt-1 border-t border-zinc-100">
                   {/* Accepted Info */}
-                  <div className="flex items-center gap-1.5 text-zinc-600">
+                  <div className="flex items-center gap-1.5 text-zinc-600 min-w-0">
                     <IconUser className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span>
+                    <span className="truncate">
                       Accepted by:{' '}
                       <strong className="text-zinc-900">
-                        {item.acceptedByName || (item.status === 'pending' ? 'Not yet accepted' : '—')}
+                        {item.acceptedByName ? (
+                          <>
+                            <span>{item.acceptedByName}</span>
+                            {item.acceptedByRole && (
+                              <span className="text-zinc-500 font-normal ml-1">({item.acceptedByRole})</span>
+                            )}
+                          </>
+                        ) : item.status === 'pending' ? (
+                          'Not yet accepted'
+                        ) : (
+                          '—'
+                        )}
                       </strong>
                     </span>
                   </div>
 
                   {/* Resolved Info */}
-                  <div className="flex items-center gap-1.5 text-zinc-600">
+                  <div className="flex items-center gap-1.5 text-zinc-600 min-w-0">
                     <IconCheckCircle className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                    <span>
+                    <span className="truncate">
                       Resolved by:{' '}
                       <strong className="text-zinc-900">
-                        {item.resolvedByName || (item.status === 'completed' ? 'Auto / Staff' : '—')}
+                        {item.resolvedByName ? (
+                          <>
+                            <span>{item.resolvedByName}</span>
+                            {item.resolvedByRole && (
+                              <span className="text-zinc-500 font-normal ml-1">({item.resolvedByRole})</span>
+                            )}
+                          </>
+                        ) : item.status === 'completed' || item.status === 'confirmed' ? (
+                          'Completed'
+                        ) : (
+                          '—'
+                        )}
                       </strong>
                     </span>
                   </div>

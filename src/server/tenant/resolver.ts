@@ -139,7 +139,7 @@ export const resolveActiveBusinessContext = cache(
     // Concurrently fetch branches, branch assignments, subscription, and custom role in 1 parallel batch
     const memberCustomRoleId: string | null = (activeMembership as unknown as { custom_role_id?: string | null }).custom_role_id || null;
 
-    const [branchesRes, assignmentsRes, subContextRes, customRoleRes] = await Promise.all([
+    const [branchesRes, assignmentsRes, staffAssignRes, subContextRes, customRoleRes] = await Promise.all([
       supabase
         .from('branches')
         .select('id, name, code, phone, email, address_line_1, city, timezone, is_default, status, require_table_selection, require_table_pin, table_pin_length')
@@ -152,6 +152,15 @@ export const resolveActiveBusinessContext = cache(
             .from('branch_assignments')
             .select('branch_id')
             .eq('business_membership_id', activeMembership.id)
+        : Promise.resolve({ data: null, error: null }),
+
+      activeMembership.role !== 'business_owner'
+        ? supabase
+            .from('staff_assignments')
+            .select('branch_id, assignment_type, status, starts_at, ends_at')
+            .eq('business_membership_id', activeMembership.id)
+            .eq('status', 'active')
+            .in('assignment_type', ['secondment', 'acting'])
         : Promise.resolve({ data: null, error: null }),
 
       (async () => {
@@ -192,8 +201,29 @@ export const resolveActiveBusinessContext = cache(
     }));
 
     let userAssignedBranchIds: string[] | null = null;
-    if (activeMembership.role !== 'business_owner' && assignmentsRes.data) {
-      userAssignedBranchIds = assignmentsRes.data.map((a) => a.branch_id);
+    if (activeMembership.role !== 'business_owner') {
+      const branchIdSet = new Set<string>();
+      if (assignmentsRes.data) {
+        for (const a of assignmentsRes.data) {
+          if (a.branch_id) branchIdSet.add(a.branch_id);
+        }
+      }
+
+      // Include effective host branch for active secondments and acting assignments (GAP-1)
+      if (staffAssignRes.data) {
+        const now = new Date();
+        for (const sa of staffAssignRes.data) {
+          if (sa.branch_id) {
+            const startOk = !sa.starts_at || new Date(sa.starts_at) <= now;
+            const endOk = !sa.ends_at || new Date(sa.ends_at) > now;
+            if (startOk && endOk) {
+              branchIdSet.add(sa.branch_id);
+            }
+          }
+        }
+      }
+
+      userAssignedBranchIds = Array.from(branchIdSet);
     }
 
     const userAccessibleBranches =

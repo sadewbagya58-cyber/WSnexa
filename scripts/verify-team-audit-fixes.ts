@@ -492,6 +492,98 @@ async function runSuite() {
     'PermissionMatrix uses canonical groupPermissionsByCategory'
   );
 
+  // -------------------------------------------------------------
+  // Test 15: GAP-1 — Tenant Resolver & Navbar Branch Switcher Inclusion
+  // -------------------------------------------------------------
+  console.log('\nTest Group 15: GAP-1 — Tenant Resolver & Navbar Branch Switcher Inclusion');
+  const resolverContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/tenant/resolver.ts'),
+    'utf8'
+  );
+  assert(
+    resolverContent.includes("in('assignment_type', ['secondment', 'acting'])") &&
+      resolverContent.includes('staffAssignRes'),
+    'Tenant resolver queries active secondment and acting assignments for non-owner staff'
+  );
+  assert(
+    resolverContent.includes('startOk') && resolverContent.includes('endOk'),
+    'Tenant resolver validates temporal start/end boundaries before including host branches'
+  );
+  assert(
+    resolverContent.includes('userAssignedBranchIds = Array.from(branchIdSet)'),
+    'Tenant resolver combines permanent branch_assignments with effective secondment/acting branches'
+  );
+
+  // -------------------------------------------------------------
+  // Test 16: GAP-2 — Member-Level Operational Branch Assignment Workflow
+  // -------------------------------------------------------------
+  console.log('\nTest Group 16: GAP-2 — Member-Level Operational Branch Assignment Workflow');
+  const permServiceContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/permission.service.ts'),
+    'utf8'
+  );
+  assert(
+    permServiceContent.includes('static async addMemberBranchAssignment') &&
+      permServiceContent.includes('static async removeMemberBranchAssignment') &&
+      permServiceContent.includes('static async getMemberBranchAssignments'),
+    'PermissionService provides addMemberBranchAssignment, removeMemberBranchAssignment, and getMemberBranchAssignments'
+  );
+  assert(
+    permServiceContent.includes('assign.is_primary') &&
+      permServiceContent.includes('Cannot remove the primary branch assignment'),
+    'removeMemberBranchAssignment strictly forbids removing the primary branch assignment'
+  );
+  assert(
+    permServiceContent.includes('is_primary: false'),
+    'addMemberBranchAssignment assigns additional operational branches as non-primary'
+  );
+
+  const permActionsContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/actions/permission.ts'),
+    'utf8'
+  );
+  assert(
+    permActionsContent.includes('export async function addMemberBranchAssignmentAction') &&
+      permActionsContent.includes('export async function removeMemberBranchAssignmentAction') &&
+      permActionsContent.includes('export async function getMemberBranchAssignmentsAction'),
+    'permission.ts exports addMemberBranchAssignmentAction, removeMemberBranchAssignmentAction, and getMemberBranchAssignmentsAction'
+  );
+
+  const memberBranchManagerContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/access/member-branch-manager.tsx'),
+    'utf8'
+  );
+  assert(
+    memberBranchManagerContent.includes('Operational Branch Access') &&
+      memberBranchManagerContent.includes('Primary Branch') &&
+      memberBranchManagerContent.includes('Permanent Operational'),
+    'MemberBranchManager renders Primary Branch and Permanent Operational branch distinctions'
+  );
+  assert(
+    memberBranchManagerContent.includes('min-h-[44px]'),
+    'MemberBranchManager actions implement touch-friendly >=44px tap targets'
+  );
+  assert(
+    memberAccessDetailContent.includes('MemberBranchManager') &&
+      memberAccessDetailContent.includes('OPERATIONAL BRANCH ACCESS'),
+    'MemberAccessDetailClient embeds MemberBranchManager in Access Profile'
+  );
+
+  // -------------------------------------------------------------
+  // Test 17: GAP-3 — Safe Staff Suspension & Headcount Release
+  // -------------------------------------------------------------
+  console.log('\nTest Group 17: GAP-3 — Safe Staff Suspension & Headcount Release');
+  assert(
+    orgServiceContent.includes("m.membership_status !== 'suspended'") ||
+      orgServiceContent.includes('membership:business_memberships(id, membership_status)'),
+    'OrganizationService queries join membership_status to exclude suspended members from substantive occupancy'
+  );
+  assert(
+    permServiceContent.includes("event_type: 'suspended'") &&
+      permServiceContent.includes('organization_assignment_history'),
+    'PermissionService.setMembershipStatus logs assignment history event when a member is suspended'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

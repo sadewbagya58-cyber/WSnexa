@@ -900,6 +900,28 @@ export class PermissionService {
       target_id: input.membershipId,
     });
 
+    if (input.status === 'suspended') {
+      const { data: activeAssigns } = await admin
+        .from('staff_assignments')
+        .select('id, status, assignment_type')
+        .eq('business_membership_id', input.membershipId)
+        .eq('status', 'active');
+
+      if (activeAssigns && activeAssigns.length > 0) {
+        const historyRows = activeAssigns.map((a) => ({
+          business_id: businessId,
+          assignment_id: a.id,
+          event_type: 'suspended',
+          previous_status: 'active',
+          new_status: 'active',
+          reason: 'Member account suspended',
+          changed_by: userId,
+          changed_at: now,
+        }));
+        await admin.from('organization_assignment_history').insert(historyRows);
+      }
+    }
+
     return { success: true };
   }
 
@@ -1177,5 +1199,223 @@ export class PermissionService {
     }
 
     return result;
+  }
+
+  /**
+   * Fetches all operational branch assignments for a specific business member (GAP-2).
+   */
+  static async getMemberBranchAssignments(
+    businessId: string,
+    membershipId: string
+  ): Promise<Array<{
+    id: string;
+    branchId: string;
+    branchName: string;
+    branchCode: string;
+    isPrimary: boolean;
+    isDefault: boolean;
+    status: string;
+    createdAt: string;
+  }>> {
+    const admin = createAdminClient();
+
+    // Verify membership belongs to business
+    const { data: mem } = await admin
+      .from('business_memberships')
+      .select('id')
+      .eq('id', membershipId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!mem) return [];
+
+    const { data, error } = await admin
+      .from('branch_assignments')
+      .select(`
+        id,
+        branch_id,
+        is_primary,
+        created_at,
+        branches!inner(id, name, code, is_default, status, business_id, deleted_at)
+      `)
+      .eq('business_membership_id', membershipId)
+      .eq('branches.business_id', businessId)
+      .is('branches.deleted_at', null)
+      .order('is_primary', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((item) => {
+      const b = Array.isArray(item.branches) ? item.branches[0] : item.branches;
+      return {
+        id: item.id,
+        branchId: item.branch_id,
+        branchName: b?.name || 'Unknown Branch',
+        branchCode: b?.code || '',
+        isPrimary: Boolean(item.is_primary),
+        isDefault: Boolean(b?.is_default),
+        status: b?.status || 'active',
+        createdAt: item.created_at,
+      };
+    });
+  }
+
+  /**
+   * Adds an additional operational branch assignment for a staff member (GAP-2).
+   * Prevents duplicates, guarantees tenant isolation, and assigns as non-primary.
+   */
+  static async addMemberBranchAssignment(
+    actorUserId: string,
+    businessId: string,
+    membershipId: string,
+    branchId: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const admin = createAdminClient();
+
+    const canManage =
+      (await this.hasPermission(actorUserId, businessId, null, 'staff.manage')) ||
+      (await this.hasPermission(actorUserId, businessId, null, 'branches.manage'));
+
+    if (!canManage) {
+      return { success: false, message: 'Unauthorized to manage staff branch assignments.' };
+    }
+
+    // 1. Verify target member belongs to business
+    const { data: targetMem } = await admin
+      .from('business_memberships')
+      .select('id, user_id, role, membership_status')
+      .eq('id', membershipId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!targetMem) {
+      return { success: false, message: 'Staff member not found in this business.' };
+    }
+
+    // 2. Verify target branch belongs to business and is active/not deleted
+    const { data: targetBranch } = await admin
+      .from('branches')
+      .select('id, name, code, business_id, status, deleted_at')
+      .eq('id', branchId)
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .single();
+
+    if (!targetBranch) {
+      return { success: false, message: 'Target branch not found in this business.' };
+    }
+
+    // 3. Check for existing duplicate assignment
+    const { data: existing } = await admin
+      .from('branch_assignments')
+      .select('id, is_primary')
+      .eq('business_membership_id', membershipId)
+      .eq('branch_id', branchId)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        success: false,
+        message: existing.is_primary
+          ? 'This branch is already the member’s primary branch.'
+          : 'Staff member already has operational access to this branch.',
+      };
+    }
+
+    // 4. Insert non-primary branch assignment
+    const { error: insertErr } = await admin.from('branch_assignments').insert({
+      business_membership_id: membershipId,
+      branch_id: branchId,
+      is_primary: false,
+    });
+
+    if (insertErr) {
+      return { success: false, message: `Failed to assign branch: ${insertErr.message}` };
+    }
+
+    // 5. Audit Log
+    await admin.from('audit_logs').insert({
+      business_id: businessId,
+      actor_id: actorUserId,
+      action: 'member.branch_assigned',
+      target_type: 'business_membership',
+      target_id: membershipId,
+    });
+
+    return { success: true, message: `Operational access to ${targetBranch.name} granted.` };
+  }
+
+  /**
+   * Removes an additional operational branch assignment for a staff member (GAP-2).
+   * Strictly guards and forbids removing the primary branch.
+   */
+  static async removeMemberBranchAssignment(
+    actorUserId: string,
+    businessId: string,
+    membershipId: string,
+    branchId: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const admin = createAdminClient();
+
+    const canManage =
+      (await this.hasPermission(actorUserId, businessId, null, 'staff.manage')) ||
+      (await this.hasPermission(actorUserId, businessId, null, 'branches.manage'));
+
+    if (!canManage) {
+      return { success: false, message: 'Unauthorized to manage staff branch assignments.' };
+    }
+
+    // 1. Verify target member belongs to business
+    const { data: targetMem } = await admin
+      .from('business_memberships')
+      .select('id, user_id, role')
+      .eq('id', membershipId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!targetMem) {
+      return { success: false, message: 'Staff member not found in this business.' };
+    }
+
+    // 2. Fetch existing assignment
+    const { data: assign, error: fetchErr } = await admin
+      .from('branch_assignments')
+      .select('id, is_primary, branch_id')
+      .eq('business_membership_id', membershipId)
+      .eq('branch_id', branchId)
+      .single();
+
+    if (fetchErr || !assign) {
+      return { success: false, message: 'Branch assignment not found for this member.' };
+    }
+
+    // 3. Guard: Do not allow removing the primary branch through additional-branch control
+    if (assign.is_primary) {
+      return {
+        success: false,
+        message: 'Cannot remove the primary branch assignment. Primary branch placement must be preserved.',
+      };
+    }
+
+    // 4. Delete non-primary branch assignment
+    const { error: deleteErr } = await admin
+      .from('branch_assignments')
+      .delete()
+      .eq('id', assign.id);
+
+    if (deleteErr) {
+      return { success: false, message: `Failed to remove branch assignment: ${deleteErr.message}` };
+    }
+
+    // 5. Audit Log
+    await admin.from('audit_logs').insert({
+      business_id: businessId,
+      actor_id: actorUserId,
+      action: 'member.branch_unassigned',
+      target_type: 'business_membership',
+      target_id: membershipId,
+    });
+
+    return { success: true, message: 'Operational branch assignment removed.' };
   }
 }

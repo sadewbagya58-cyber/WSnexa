@@ -958,4 +958,87 @@ export async function diagnoseAccessAction(
   }
 }
 
+// ==========================================
+// OPERATIONAL BRANCH ASSIGNMENTS (GAP-2)
+// ==========================================
 
+export async function getMemberBranchAssignmentsAction(
+  membershipId: string
+): Promise<ActionResponse<Array<{
+  id: string;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
+  isPrimary: boolean;
+  isDefault: boolean;
+  status: string;
+  createdAt: string;
+}>>> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const assignments = await PermissionService.getMemberBranchAssignments(
+    authContext.businessId,
+    membershipId
+  );
+
+  return { success: true, data: assignments };
+}
+
+export async function addMemberBranchAssignmentAction(input: {
+  membershipId: string;
+  branchId: string;
+}): Promise<ActionResponse> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const memberResource = { type: 'business_membership' as const, id: input.membershipId };
+  const canManage =
+    (await can({ context: authContext, permission: 'staff.manage', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'branches.manage' }));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Staff or branch management permission required.' };
+  }
+
+  const res = await PermissionService.addMemberBranchAssignment(
+    authContext.userId,
+    authContext.businessId,
+    input.membershipId,
+    input.branchId
+  );
+
+  return res;
+}
+
+export async function removeMemberBranchAssignmentAction(input: {
+  membershipId: string;
+  branchId: string;
+}): Promise<ActionResponse> {
+  const authContext = await resolveAuthorizationContext();
+  if (!authContext || !authContext.businessId) {
+    return { success: false, message: 'Unauthorized.' };
+  }
+
+  const memberResource = { type: 'business_membership' as const, id: input.membershipId };
+  const canManage =
+    (await can({ context: authContext, permission: 'staff.manage', resource: memberResource })) ||
+    (await can({ context: authContext, permission: 'branches.manage' }));
+
+  if (!canManage) {
+    return { success: false, message: 'Forbidden. Staff or branch management permission required.' };
+  }
+
+  const res = await PermissionService.removeMemberBranchAssignment(
+    authContext.userId,
+    authContext.businessId,
+    input.membershipId,
+    input.branchId
+  );
+
+  return res;
+}

@@ -918,6 +918,11 @@ export class ScopeGrantService {
       source: val.source,
     }));
 
+    const branchAssignments = await PermissionService.getMemberBranchAssignments(
+      businessId,
+      membershipId
+    );
+
     return {
       membershipId,
       userId: membership.user_id,
@@ -942,6 +947,7 @@ export class ScopeGrantService {
       scopeGrants,
       scopedOverrides,
       effectiveSummary,
+      branchAssignments,
       temporaryAuthority: {
         actingAssignments: activeActing,
         secondmentAssignments: activeSecondments,

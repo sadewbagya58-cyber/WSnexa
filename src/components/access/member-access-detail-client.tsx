@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { EffectiveAccessPreview, BuiltInRoleTemplate, CustomRoleDetail, FormattedPermission } from '@/types/authorization.types';
 import { MemberOverrideModal } from '@/components/access/member-override-modal';
+import { MemberBranchManager } from '@/components/access/member-branch-manager';
 import {
   IconUser,
   IconBuildingSkyscraper,
@@ -208,6 +209,48 @@ export const MemberAccessDetailClient: React.FC<MemberAccessDetailClientProps> =
               <span className="font-mono font-bold text-emerald-700">{preview.rolePermissions.length} keys</span>
             </div>
           </div>
+        </div>
+
+        {/* 2B. OPERATIONAL BRANCH ACCESS (GAP-2) */}
+        <div className="bg-white border border-zinc-200 rounded-2xl p-5 shadow-2xs">
+          <MemberBranchManager
+            membershipId={preview.membershipId}
+            memberName={preview.memberName || 'Staff Member'}
+            assignments={
+              preview.branchAssignments && preview.branchAssignments.length > 0
+                ? preview.branchAssignments
+                : preview.primaryBranchId
+                ? [
+                    {
+                      id: 'primary',
+                      branchId: preview.primaryBranchId,
+                      branchName: branches.find((b) => b.id === preview.primaryBranchId)?.name || 'Primary Branch',
+                      branchCode: '',
+                      isPrimary: true,
+                    },
+                  ]
+                : []
+            }
+            allBranches={branches.map((b) => ({ id: b.id, name: b.name, code: '' }))}
+            temporaryBranches={[
+              ...secondments.map((s: Record<string, unknown>) => ({
+                id: String(s.id),
+                branchId: String(s.branch_id || ''),
+                branchName: (s.branch as { name?: string } | undefined)?.name || 'Host Property',
+                type: 'secondment' as const,
+                roleName: (s.job_title as { name?: string } | undefined)?.name || 'Secondment Role',
+                dates: `${String(s.starts_at || '').split('T')[0]} → ${String(s.ends_at || '').split('T')[0] || 'Present'}`,
+              })),
+              ...actingAssignments.map((a: Record<string, unknown>) => ({
+                id: String(a.id),
+                branchId: String(a.branch_id || ''),
+                branchName: (a.branch as { name?: string } | undefined)?.name || 'Covered Branch',
+                type: 'acting' as const,
+                roleName: (a.job_title as { name?: string } | undefined)?.name || 'Acting Coverage',
+                dates: `${String(a.starts_at || '').split('T')[0]} → ${String(a.ends_at || '').split('T')[0] || 'Present'}`,
+              })),
+            ]}
+          />
         </div>
 
         {/* 3. TEMPORARY AUTHORITY */}

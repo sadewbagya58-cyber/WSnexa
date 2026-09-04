@@ -770,10 +770,10 @@ export class OrganizationService {
     if (!pos) throw new Error(`Position ${positionId} not found`);
 
     const refIso = referenceDate.toISOString();
-    // Substantive occupancy includes ONLY active primary assignments (excludes acting, secondment, and temporary coverage)
+    // Substantive occupancy includes ONLY active primary assignments of non-suspended members
     const { data: occupants, error: occErr } = await admin
       .from('staff_assignments')
-      .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id')
+      .select('id, assignment_type, is_primary, starts_at, ends_at, business_membership_id, membership:business_memberships(id, membership_status)')
       .eq('position_id', positionId)
       .eq('is_primary', true)
       .eq('status', 'active')
@@ -783,7 +783,12 @@ export class OrganizationService {
 
     if (occErr) throw new Error(`Failed to calculate position occupancy: ${occErr.message}`);
 
-    const occupiedCount = occupants?.length || 0;
+    const activeOccupants = (occupants || []).filter((o) => {
+      const m = Array.isArray(o.membership) ? o.membership[0] : o.membership;
+      return !m || m.membership_status !== 'suspended';
+    });
+
+    const occupiedCount = activeOccupants.length;
     const headcountLimit = pos.headcount_limit || 1;
     const availableSlots = Math.max(0, headcountLimit - occupiedCount);
     const isFull = occupiedCount >= headcountLimit;
@@ -797,7 +802,7 @@ export class OrganizationService {
       occupiedCount,
       availableSlots,
       isFull,
-      occupants: occupants || [],
+      occupants: activeOccupants,
     };
   }
 
@@ -813,12 +818,12 @@ export class OrganizationService {
 
     const refIso = referenceDate.toISOString();
 
-    // 1. Substantive occupants (primary / substantive only)
-    const { data: substantiveOccupants } = await admin
+    // 1. Substantive occupants (primary / substantive only of active non-suspended members)
+    const { data: rawSubstantiveOccupants } = await admin
       .from('staff_assignments')
       .select(`
         id, assignment_type, is_primary, starts_at, ends_at, business_membership_id,
-        membership:business_memberships(id, user_id, role)
+        membership:business_memberships(id, user_id, role, membership_status)
       `)
       .eq('position_id', positionId)
       .eq('is_primary', true)
@@ -826,6 +831,11 @@ export class OrganizationService {
       .lte('starts_at', refIso)
       .or(`ends_at.is.null,ends_at.gt.${refIso}`)
       .is('archived_at', null);
+
+    const substantiveOccupants = (rawSubstantiveOccupants || []).filter((o) => {
+      const m = Array.isArray(o.membership) ? o.membership[0] : o.membership;
+      return !m || m.membership_status !== 'suspended';
+    });
 
     // 2. Active acting coverage on this position
     const { data: actingCoverage } = await admin
@@ -2762,6 +2772,7 @@ export class OrganizationService {
         ends_at,
         job_title:organization_job_titles(id, name, hierarchy_level:organization_hierarchy_levels(id, name, rank)),
         position:organization_positions(id, headcount_limit, position_code),
+        membership:business_memberships(id, membership_status),
         reports_to:staff_assignments!reports_to_assignment_id(
           id,
           job_title:organization_job_titles(id, name, hierarchy_level:organization_hierarchy_levels(id, name, rank))
@@ -2845,7 +2856,7 @@ export class OrganizationService {
       }
     }
 
-    // 3. Check position occupancy (substantive occupants only)
+    // 3. Check position occupancy (substantive occupants only, non-suspended)
     const { data: positions } = await admin
       .from('organization_positions')
       .select('id, headcount_limit, position_code, name_override')
@@ -2854,7 +2865,9 @@ export class OrganizationService {
 
     const posOccupantCount = new Map<string, number>();
     for (const assign of assignments || []) {
-      if (assign.position_id && assign.is_primary) {
+      const mem = assign.membership as { membership_status?: string } | null;
+      const isSuspended = mem?.membership_status === 'suspended';
+      if (assign.position_id && assign.is_primary && !isSuspended) {
         posOccupantCount.set(assign.position_id, (posOccupantCount.get(assign.position_id) || 0) + 1);
       }
     }
@@ -3335,6 +3348,9 @@ export class OrganizationService {
     const posTemporaryMap = new Map<string, PositionAssignment[]>();
 
     for (const a of assignments || []) {
+      const mem = a.membership as { membership_status?: string } | null;
+      const isSuspended = mem?.membership_status === 'suspended';
+
       if (a.position_id) {
         if (a.assignment_type === 'acting') {
           if (!posActingMap.has(a.position_id)) posActingMap.set(a.position_id, []);
@@ -3345,7 +3361,7 @@ export class OrganizationService {
         } else if (a.assignment_type === 'temporary') {
           if (!posTemporaryMap.has(a.position_id)) posTemporaryMap.set(a.position_id, []);
           posTemporaryMap.get(a.position_id)!.push(a);
-        } else if (a.is_primary) {
+        } else if (a.is_primary && !isSuspended) {
           if (!posSubstantiveMap.has(a.position_id)) posSubstantiveMap.set(a.position_id, []);
           posSubstantiveMap.get(a.position_id)!.push(a);
         }

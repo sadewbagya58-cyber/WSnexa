@@ -401,6 +401,16 @@ export interface EffectiveAccessPreview {
     source: string;
   }>;
   defaultScope?: ScopeType;
+  branchAssignments?: Array<{
+    id: string;
+    branchId: string;
+    branchName: string;
+    branchCode: string;
+    isPrimary: boolean;
+    isDefault?: boolean;
+    status?: string;
+    createdAt?: string;
+  }>;
   temporaryAuthority?: {
     actingAssignments: Record<string, unknown>[];
     secondmentAssignments: Record<string, unknown>[];

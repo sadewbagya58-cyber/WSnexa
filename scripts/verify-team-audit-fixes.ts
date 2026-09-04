@@ -584,6 +584,59 @@ async function runSuite() {
     'PermissionService.setMembershipStatus logs assignment history event when a member is suspended'
   );
 
+  // -------------------------------------------------------------
+  // Test 18: GAP-4 — Suspended Reporting Manager Integrity Warning
+  // -------------------------------------------------------------
+  console.log('\nTest Group 18: GAP-4 — Suspended Reporting Manager Integrity Warning');
+  assert(
+    orgServiceContent.includes("'manager_suspended'"),
+    'OrganizationService issues union includes manager_suspended'
+  );
+  assert(
+    orgServiceContent.includes('activeCoveredManagerIds') &&
+      orgServiceContent.includes('isMgrSuspended && !hasActingCoverage'),
+    'OrganizationService getOrganizationIntegrityIssues checks for suspended manager and verifies acting coverage'
+  );
+  assert(
+    orgServiceContent.includes('Staff member reports to a suspended manager'),
+    'OrganizationService yields clear actionable diagnostic message for suspended manager reporting'
+  );
+
+  const actingTestNow = new Date();
+  const actPastDate = new Date(actingTestNow.getTime() - 86400000).toISOString();
+  const actFutureDate = new Date(actingTestNow.getTime() + 86400000).toISOString();
+  const actFarPastDate = new Date(actingTestNow.getTime() - 172800000).toISOString();
+
+  // Test acting assignment temporal effectiveness helper
+  const activeEffectiveActing = {
+    status: 'active',
+    starts_at: actPastDate,
+    ends_at: actFutureDate,
+  };
+  const expiredActing = {
+    status: 'active',
+    starts_at: actFarPastDate,
+    ends_at: actPastDate,
+  };
+  const futureActing = {
+    status: 'active',
+    starts_at: actFutureDate,
+    ends_at: null,
+  };
+
+  assert(
+    OrganizationService.isAssignmentEffective(activeEffectiveActing, actingTestNow) === true,
+    'OrganizationService.isAssignmentEffective returns true for current active acting appointment'
+  );
+  assert(
+    OrganizationService.isAssignmentEffective(expiredActing, actingTestNow) === false,
+    'OrganizationService.isAssignmentEffective returns false for expired acting appointment'
+  );
+  assert(
+    OrganizationService.isAssignmentEffective(futureActing, actingTestNow) === false,
+    'OrganizationService.isAssignmentEffective returns false for future acting appointment'
+  );
+
   console.log('\n================================================================');
   console.log(`  RESULTS: ${passedAssertions}/${totalAssertions} Assertions Passed`);
   console.log('================================================================\n');

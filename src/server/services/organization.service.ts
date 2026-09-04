@@ -2742,6 +2742,7 @@ export class OrganizationService {
     const issues: {
       type:
         | 'no_reporting_manager'
+        | 'manager_suspended'
         | 'position_over_capacity'
         | 'branch_access_mismatch'
         | 'temporal_anomaly_expired'
@@ -2756,7 +2757,7 @@ export class OrganizationService {
 
     const now = new Date();
 
-    // 1. Fetch active assignments with hierarchy and positions
+    // 1. Fetch active assignments with hierarchy, positions, and reporting manager info
     const { data: assignments } = await admin
       .from('staff_assignments')
       .select(`
@@ -2765,6 +2766,7 @@ export class OrganizationService {
         branch_id,
         position_id,
         assignment_type,
+        acting_for_assignment_id,
         reports_to_assignment_id,
         status,
         is_primary,
@@ -2775,11 +2777,28 @@ export class OrganizationService {
         membership:business_memberships(id, membership_status),
         reports_to:staff_assignments!reports_to_assignment_id(
           id,
+          business_membership_id,
+          membership:business_memberships(id, membership_status),
           job_title:organization_job_titles(id, name, hierarchy_level:organization_hierarchy_levels(id, name, rank))
         )
       `)
       .eq('business_id', businessId)
       .eq('status', 'active');
+
+    // Build a set of substantive manager assignment IDs that currently have effective acting leadership coverage
+    const activeCoveredManagerIds = new Set<string>();
+    for (const a of assignments || []) {
+      if (
+        a.assignment_type === 'acting' &&
+        a.acting_for_assignment_id &&
+        this.isAssignmentEffective(a, now)
+      ) {
+        const actingMem = a.membership as { membership_status?: string } | null;
+        if (actingMem?.membership_status !== 'suspended') {
+          activeCoveredManagerIds.add(a.acting_for_assignment_id);
+        }
+      }
+    }
 
     // 2. Fetch all branch_assignments for the business
     const { data: branchAccessList } = await admin
@@ -2808,6 +2827,30 @@ export class OrganizationService {
           assignmentId: assign.id,
           membershipId: assign.business_membership_id,
         });
+      }
+
+      // Check: Suspended reporting manager (GAP-4)
+      if (assign.reports_to_assignment_id && assign.reports_to) {
+        const reportsTo = assign.reports_to as unknown as {
+          id: string;
+          business_membership_id?: string;
+          membership?: { membership_status?: string } | { membership_status?: string }[];
+          job_title?: { name?: string };
+        };
+        const mgrMem = Array.isArray(reportsTo.membership) ? reportsTo.membership[0] : reportsTo.membership;
+        const isMgrSuspended = mgrMem?.membership_status === 'suspended';
+        const hasActingCoverage = activeCoveredManagerIds.has(assign.reports_to_assignment_id);
+
+        if (isMgrSuspended && !hasActingCoverage) {
+          const mgrTitle = reportsTo.job_title?.name || 'Manager';
+          issues.push({
+            type: 'manager_suspended',
+            severity: 'warning',
+            message: `Staff member reports to a suspended manager (${mgrTitle}). Appoint an acting manager or reassign the reporting line.`,
+            assignmentId: assign.id,
+            membershipId: assign.business_membership_id,
+          });
+        }
       }
 
       // Check: Temporal anomalies

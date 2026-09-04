@@ -20,8 +20,11 @@ export interface WaiterRequestRecord {
   accepted_by?: string | null;
   accepted_at?: string | null;
   accepted_staff_name?: string | null;
+  accepted_staff_role?: string | null;
   resolved_by?: string | null;
   resolved_at?: string | null;
+  resolved_staff_name?: string | null;
+  resolved_staff_role?: string | null;
   created_at: string;
   updated_at: string;
   table?: {
@@ -29,6 +32,7 @@ export interface WaiterRequestRecord {
     name: string;
     code: string;
     table_number: number | null;
+    service_area_id?: string | null;
   } | null;
 }
 
@@ -384,16 +388,25 @@ export class WaiterService {
       );
     }
 
-    const acceptedByIds = Array.from(new Set(records.map((r) => r.accepted_by).filter(Boolean))) as string[];
-    if (acceptedByIds.length > 0) {
+    const userIds = Array.from(
+      new Set(records.flatMap((r) => [r.accepted_by, r.resolved_by]).filter(Boolean))
+    ) as string[];
+
+    if (userIds.length > 0) {
       try {
         const { PermissionService } = await import('./permission.service');
-        const snapMap = await PermissionService.resolveCanonicalActorSnapshots(acceptedByIds, businessId);
+        const snapMap = await PermissionService.resolveCanonicalActorSnapshots(userIds, businessId);
 
         records.forEach((r) => {
           if (r.accepted_by) {
             const snap = snapMap.get(r.accepted_by);
             r.accepted_staff_name = snap ? snap.displayName : 'Staff';
+            r.accepted_staff_role = snap ? snap.roleName : null;
+          }
+          if (r.resolved_by) {
+            const snap = snapMap.get(r.resolved_by);
+            r.resolved_staff_name = snap ? snap.displayName : 'Staff';
+            r.resolved_staff_role = snap ? snap.roleName : null;
           }
         });
       } catch {

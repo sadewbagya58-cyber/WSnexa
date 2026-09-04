@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { WaiterService } from '@/server/services/waiter.service';
+import { WaiterService, WaiterRequestRecord } from '@/server/services/waiter.service';
 import { SubmitCustomerAssistanceInput, WaiterRequestStatus } from '@/lib/validation/waiter';
 import { ActionResponse } from './auth';
 
@@ -49,4 +49,19 @@ export async function updateWaiterRequestStatusAction(
     success: true,
     message: result.message || `Request updated to ${status}.`,
   };
+}
+
+/**
+ * Retrieves authoritative active waiter assistance requests with canonical actor identities.
+ */
+export async function getBranchWaiterRequestsAction(
+  branchIdInput?: string
+): Promise<{ success: boolean; requests: WaiterRequestRecord[]; message?: string }> {
+  try {
+    const requests = await WaiterService.getBranchWaiterRequests(branchIdInput);
+    return { success: true, requests };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to retrieve waiter requests.';
+    return { success: false, requests: [], message: msg };
+  }
 }

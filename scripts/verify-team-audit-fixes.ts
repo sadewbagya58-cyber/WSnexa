@@ -848,8 +848,9 @@ async function runSuite() {
   );
   assert(
     waiterServiceContent.includes('resolveCanonicalActorSnapshots') &&
-      waiterServiceContent.includes('r.accepted_staff_name = snap ? snap.displayName :'),
-    'WaiterService resolves accepted_staff_name using canonical actor resolution'
+      waiterServiceContent.includes('r.accepted_staff_name = snap ? snap.displayName :') &&
+      waiterServiceContent.includes('r.accepted_staff_role = snap ? snap.roleName :'),
+    'WaiterService resolves accepted_staff_name and accepted_staff_role using canonical actor resolution'
   );
 
   assert(
@@ -858,6 +859,37 @@ async function runSuite() {
       waiterActivityComponentContent.includes('item.resolvedByName') &&
       waiterActivityComponentContent.includes('item.resolvedByRole'),
     'WaiterOperationalActivity UI component renders actor names and roles with mobile-safe wrapping'
+  );
+
+  const waiterActionsContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/actions/waiter.ts'),
+    'utf8'
+  );
+  assert(
+    waiterActionsContent.includes('getBranchWaiterRequestsAction') &&
+      waiterActionsContent.includes('WaiterService.getBranchWaiterRequests'),
+    'Waiter server actions export getBranchWaiterRequestsAction with canonical actor details'
+  );
+
+  const realtimeHookContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/hooks/use-realtime-waiter-requests.ts'),
+    'utf8'
+  );
+  assert(
+    realtimeHookContent.includes('getBranchWaiterRequestsAction') &&
+      realtimeHookContent.includes('refreshAuthoritativeRequests'),
+    'useRealtimeWaiterRequests uses getBranchWaiterRequestsAction for canonical realtime actor sync'
+  );
+
+  const liveQueueComponentContent = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/waiter/waiter-request-center.tsx'),
+    'utf8'
+  );
+  assert(
+    liveQueueComponentContent.includes('Accepted by:') &&
+      liveQueueComponentContent.includes('req.accepted_staff_name') &&
+      liveQueueComponentContent.includes('req.accepted_staff_role'),
+    'Waiter Live Queue renders actual staff name and role (Accepted by: [Name] ([Role])) with mobile-safe wrapping'
   );
 
   console.log('\n================================================================');

@@ -30,7 +30,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   canManageRequests = true,
 }) => {
   const router = useRouter();
-  const { requests, connectionStatus } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
+  const { requests, connectionStatus, refreshRequests } = useRealtimeWaiterRequests(initialRequests, branchId, assignedAreaIds);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -44,6 +44,8 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
       const res = await updateWaiterRequestStatusAction(requestId, nextStatus);
       if (!res.success) {
         setActionError(res.message || 'Failed to update request status');
+      } else {
+        refreshRequests?.();
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update request status';
@@ -216,11 +218,48 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                       </div>
 
                       {req.status === 'accepted' && (
-                        <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1 flex items-center justify-between">
-                          <span>✓ Accepted by {req.accepted_staff_name || 'Staff'}</span>
+                        <div className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span>✓</span>
+                            <span className="truncate">
+                              Accepted by:{' '}
+                              <strong className="text-purple-950 font-bold">
+                                {req.accepted_staff_name || 'Staff'}
+                              </strong>
+                              {req.accepted_staff_role && (
+                                <span className="text-purple-600 font-normal ml-1">
+                                  ({req.accepted_staff_role})
+                                </span>
+                              )}
+                            </span>
+                          </div>
                           {req.accepted_at && (
-                            <span className="text-[10px] text-purple-500 font-mono">
+                            <span className="text-[10px] text-purple-500 font-mono shrink-0">
                               {new Date(req.accepted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {req.status === 'completed' && req.resolved_staff_name && (
+                        <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span>✓</span>
+                            <span className="truncate">
+                              Resolved by:{' '}
+                              <strong className="text-emerald-950 font-bold">
+                                {req.resolved_staff_name}
+                              </strong>
+                              {req.resolved_staff_role && (
+                                <span className="text-emerald-600 font-normal ml-1">
+                                  ({req.resolved_staff_role})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          {req.resolved_at && (
+                            <span className="text-[10px] text-emerald-500 font-mono shrink-0">
+                              {new Date(req.resolved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
                         </div>

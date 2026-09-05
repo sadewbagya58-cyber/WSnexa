@@ -67,10 +67,10 @@ export class SuperAdminVenueService {
     // Fetch active QR tokens to determine WSNexa ordering support
     const businessIds = profiles.map((p) => p.business_id);
     const { data: qrTokens } = await admin
-      .from('table_qr_codes')
+      .from('branch_qr_codes')
       .select('business_id')
-      .in('business_id', businessIds.length > 0 ? businessIds : ['none'])
-      .eq('status', 'active');
+      .in('business_id', businessIds.length > 0 ? businessIds : ['00000000-0000-0000-0000-000000000000'])
+      .eq('is_active', true);
 
     const qrMap = new Set((qrTokens || []).map((q) => q.business_id));
 

@@ -184,12 +184,13 @@ export class VenueReviewService {
     const userIds = Array.from(new Set(reviews.map((r) => r.user_id)));
     const { data: profiles } = await admin
       .from('user_profiles')
-      .select('id, full_name')
+      .select('id, first_name, last_name')
       .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
 
     const profileMap: Record<string, string> = {};
     (profiles || []).forEach((p) => {
-      profileMap[p.id] = p.full_name || 'Verified Customer';
+      const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+      profileMap[p.id] = fullName || 'Verified Customer';
     });
 
     return (reviews as unknown as Array<VenueReviewRecord & { order?: { order_number_formatted?: string } | null }>).map((r) => ({
@@ -341,12 +342,13 @@ export class VenueReviewService {
     const userIds = Array.from(new Set(reviews.map((r) => r.user_id)));
     const { data: profiles } = await admin
       .from('user_profiles')
-      .select('id, full_name')
+      .select('id, first_name, last_name')
       .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
 
     const profileMap: Record<string, string> = {};
     (profiles || []).forEach((p) => {
-      profileMap[p.id] = p.full_name || 'Verified Customer';
+      const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+      profileMap[p.id] = fullName || 'Verified Customer';
     });
 
     return (reviews as unknown as Array<VenueReviewRecord & { order?: { order_number_formatted?: string } | null }>).map((r) => ({

@@ -41,6 +41,8 @@ async function runVenueDiscoveryVerification() {
   let ownerBId: string | null = null;
   let customer1Id: string | null = null;
   let customer2Id: string | null = null;
+  let profileAId: string | null = null;
+  let profileBId: string | null = null;
 
   try {
     // SETUP 1: Create test owners and customers
@@ -109,19 +111,21 @@ async function runVenueDiscoveryVerification() {
       isAcceptingOrders: true,
       featuredBranchId: branchA.id,
     });
+    profileAId = profileARes.data?.id || null;
 
     const profileBRes = await VenueProfileService.upsertProfile(bizBId!, {
       displayName: 'Secret Garden Draft',
       slug: slugB,
       venueType: 'cafe',
-      shortDescription: 'Unpublished draft cafe',
+      shortDescription: 'Cosy draft cafe in Colombo',
       city: 'Colombo',
       country: 'US',
-      addressPublic: '45 Garden Lane',
+      addressPublic: '50 Garden Lane',
       priceLevel: 2,
       isPublished: false,
-      isAcceptingOrders: true,
+      isAcceptingOrders: false,
     });
+    profileBId = profileBRes.data?.id || null;
 
     assert(Boolean(profileARes.success && profileARes.data), 'Test 1: Venue public profile A created & published successfully');
     assert(Boolean(profileBRes.success && profileBRes.data), 'Test 2: Venue public profile B created as unpublished draft');
@@ -275,11 +279,14 @@ async function runVenueDiscoveryVerification() {
   } finally {
     if (bizAId || bizBId) {
       console.log('\n🧹 Cleaning up test discovery business data...');
-      const testBizIds = [bizAId, bizBId].filter(Boolean);
+      const testBizIds = [bizAId, bizBId].filter(Boolean) as string[];
+      const pIds = [profileAId, profileBId].filter(Boolean) as string[];
+      if (pIds.length > 0) {
+        await admin.from('customer_favorite_venues').delete().in('venue_profile_id', pIds);
+        await admin.from('venue_reviews').delete().in('venue_profile_id', pIds);
+        await admin.from('venue_public_profiles').delete().in('id', pIds);
+      }
       for (const bId of testBizIds) {
-        await admin.from('venue_reviews').delete().eq('business_id', bId);
-        await admin.from('venue_favorites').delete().filter('venue_profile_id', 'in', `(select id from venue_public_profiles where business_id = '${bId}')`);
-        await admin.from('venue_public_profiles').delete().eq('business_id', bId);
         await admin.from('branches').delete().eq('business_id', bId);
         await admin.from('business_memberships').delete().eq('business_id', bId);
         await admin.from('businesses').delete().eq('id', bId);

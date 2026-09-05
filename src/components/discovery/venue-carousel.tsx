@@ -8,33 +8,27 @@ interface VenueCarouselProps {
   title: string;
   subtitle?: string;
   venues: VenueRankingMetrics[];
+  isLoggedIn?: boolean;
 }
 
-export function VenueCarousel({ title, subtitle, venues }: VenueCarouselProps) {
+export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false }: VenueCarouselProps) {
   if (!venues || venues.length === 0) return null;
 
   return (
-    <div className="space-y-3 py-4">
-      {/* Section header */}
-      <div className="px-4 sm:px-0">
-        <h2 className="text-lg font-black text-zinc-950">{title}</h2>
-        {subtitle && <p className="text-xs font-medium text-zinc-500 mt-0.5">{subtitle}</p>}
+    <div className="space-y-3 py-3">
+      {/* Section Header */}
+      <div className="px-1 sm:px-0">
+        <h2 className="text-base sm:text-lg font-black text-zinc-950 tracking-tight">{title}</h2>
+        {subtitle && <p className="text-xs font-semibold text-zinc-500 mt-0.5">{subtitle}</p>}
       </div>
 
       {/*
        * Horizontal snap rail.
-       *
-       * Pattern: negative horizontal margins break out of the parent page
-       * padding (px-4 sm:px-6), then re-add the same padding as scroll inset
-       * so the first card aligns with the page content and the trailing end
-       * has a breathing gap.
-       *
-       * Card widths are viewport-relative on mobile (~80vw) so the partial
-       * peek of the next card is guaranteed regardless of screen width.
+       * Viewport relative width (82vw on small mobile) ensures next card preview is clearly visible.
        */}
-      <div className="-mx-4 sm:-mx-6 overflow-x-auto pb-3 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-x">
+      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-x">
         <div
-          className="flex items-stretch gap-3 px-4 sm:px-6 w-max"
+          className="flex items-stretch gap-4 px-4 sm:px-0 w-max"
           role="list"
           aria-label={title}
         >
@@ -42,10 +36,11 @@ export function VenueCarousel({ title, subtitle, venues }: VenueCarouselProps) {
             <div
               key={v.venueId}
               role="listitem"
-              className="w-[80vw] max-w-[320px] sm:w-[280px] lg:w-[320px] shrink-0 snap-start"
+              className="w-[82vw] max-w-[320px] sm:w-[290px] lg:w-[320px] shrink-0 snap-start"
             >
               <VenueCard
                 compact
+                isLoggedIn={isLoggedIn}
                 venue={{
                   id: v.venueId,
                   business_id: v.businessId,
@@ -76,7 +71,7 @@ export function VenueCarousel({ title, subtitle, venues }: VenueCarouselProps) {
               />
             </div>
           ))}
-          {/* Trailing spacer: ensures last card scrolls fully into view */}
+          {/* Trailing breathing spacer */}
           <div className="w-3 sm:w-4 shrink-0" aria-hidden />
         </div>
       </div>

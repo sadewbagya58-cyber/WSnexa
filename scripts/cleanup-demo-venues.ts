@@ -111,13 +111,16 @@ async function safeCleanupDemoVenues() {
 
   console.log('\n🧹 Performing transaction-safe removal of verified test records...');
 
+  const testVenueIds = demoCandidates.map((c) => c.venueId);
   const testBizIds = Array.from(new Set(demoCandidates.map((c) => c.businessId)));
 
+  if (testVenueIds.length > 0) {
+    await admin.from('customer_favorite_venues').delete().in('venue_profile_id', testVenueIds);
+    await admin.from('venue_reviews').delete().in('venue_profile_id', testVenueIds);
+    await admin.from('venue_public_profiles').delete().in('id', testVenueIds);
+  }
+
   for (const bizId of testBizIds) {
-    // Delete in reverse foreign key order
-    await admin.from('venue_reviews').delete().eq('business_id', bizId);
-    await admin.from('venue_favorites').delete().filter('venue_profile_id', 'in', `(select id from venue_public_profiles where business_id = '${bizId}')`);
-    await admin.from('venue_public_profiles').delete().eq('business_id', bizId);
     await admin.from('branches').delete().eq('business_id', bizId);
     await admin.from('business_memberships').delete().eq('business_id', bizId);
     await admin.from('businesses').delete().eq('id', bizId);

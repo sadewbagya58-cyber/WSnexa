@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { getBrowserGoogleMapsApiKey, getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
 import { VenuePublicProfileRecord } from '@/server/services/venue-discovery.service';
+import { VenueMapBottomSheet } from './venue-map-bottom-sheet';
 
-interface MapMarkerItem {
+export interface MapMarkerItem {
   id: string;
   displayName: string;
   venueType: string;
@@ -14,11 +15,27 @@ interface MapMarkerItem {
   lng: number;
   slug?: string;
   isAcceptingOrders?: boolean;
+  coverImageUrl?: string | null;
+  logoUrl?: string | null;
+  priceLevel?: number;
+  averageRating?: number;
+  reviewCount?: number;
+  distanceKm?: number | null;
+  distanceText?: string | null;
+  rawVenue?: VenuePublicProfileRecord;
+}
+
+export interface RouteResultState {
+  distanceText: string;
+  durationText: string;
+  steps: string[];
+  travelMode: 'DRIVING' | 'WALKING';
 }
 
 interface GoogleMapViewProps {
   venues?: VenuePublicProfileRecord[];
   singleVenue?: {
+    id?: string;
     displayName: string;
     venueType: string;
     address?: string | null;
@@ -26,40 +43,105 @@ interface GoogleMapViewProps {
     lat: number | null;
     lng: number | null;
     isAcceptingOrders?: boolean;
+    slug?: string;
   };
+  userLocation?: { lat: number; lng: number } | null;
+  initialRouteToVenue?: boolean;
+  onVenueSelect?: (venue: VenuePublicProfileRecord) => void;
   height?: string;
   className?: string;
 }
 
 interface GoogleMapsGlobal {
   maps: {
-    Map: new (element: HTMLElement, options: unknown) => unknown;
+    Map: new (element: HTMLElement, options: unknown) => {
+      setCenter: (pos: { lat: number; lng: number }) => void;
+      setZoom: (zoom: number) => void;
+      panTo: (pos: { lat: number; lng: number }) => void;
+      fitBounds: (bounds: unknown) => void;
+    };
     LatLngBounds: new () => { extend: (pos: { lat: number; lng: number }) => void };
-    InfoWindow: new () => { setContent: (html: string) => void; open: (map: unknown, marker: unknown) => void };
-    Marker: new (options: unknown) => { addListener: (event: string, handler: () => void) => void };
+    InfoWindow: new () => { setContent: (html: string) => void; open: (map: unknown, marker: unknown) => void; close: () => void };
+    Marker: new (options: unknown) => {
+      addListener: (event: string, handler: () => void) => void;
+      setPosition: (pos: { lat: number; lng: number }) => void;
+      setMap: (map: unknown) => void;
+    };
+    DirectionsService: new () => {
+      route: (
+        request: {
+          origin: { lat: number; lng: number };
+          destination: { lat: number; lng: number };
+          travelMode: string;
+        },
+        callback: (result: GoogleDirectionsResult | null, status: string) => void
+      ) => void;
+    };
+    DirectionsRenderer: new (options: unknown) => {
+      setMap: (map: unknown) => void;
+      setDirections: (result: unknown) => void;
+    };
+    TravelMode: {
+      DRIVING: string;
+      WALKING: string;
+    };
     SymbolPath: { CIRCLE: unknown };
   };
+}
+
+interface GoogleDirectionsResult {
+  routes: Array<{
+    legs: Array<{
+      distance?: { text: string; value: number };
+      duration?: { text: string; value: number };
+      steps?: Array<{ instructions: string }>;
+    }>;
+  }>;
 }
 
 export function GoogleMapView({
   venues = [],
   singleVenue,
+  userLocation,
+  initialRouteToVenue = false,
+  onVenueSelect,
   height = '400px',
   className = '',
 }: GoogleMapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<{
+    setCenter: (pos: { lat: number; lng: number }) => void;
+    setZoom: (zoom: number) => void;
+    panTo: (pos: { lat: number; lng: number }) => void;
+    fitBounds: (bounds: unknown) => void;
+  } | null>(null);
+  const directionsRendererRef = useRef<{
+    setMap: (map: unknown) => void;
+    setDirections: (result: unknown) => void;
+  } | null>(null);
+  const userMarkerRef = useRef<{
+    setPosition: (pos: { lat: number; lng: number }) => void;
+    setMap: (map: unknown) => void;
+  } | null>(null);
+
   const [mapLoaded, setMapLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  // Selected venue state for in-app bottom sheet & routing
+  const [selectedVenue, setSelectedVenue] = useState<VenuePublicProfileRecord | null>(null);
+  const [routeInfo, setRouteInfo] = useState<RouteResultState | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
+  const [routingError, setRoutingError] = useState<string | null>(null);
+
   const apiKey = getBrowserGoogleMapsApiKey();
 
-  // Extract valid marker items with useMemo
+  // Extract valid marker items
   const markers: MapMarkerItem[] = useMemo(() => {
     const list: MapMarkerItem[] = [];
 
     if (singleVenue && singleVenue.lat != null && singleVenue.lng != null) {
       list.push({
-        id: 'single',
+        id: singleVenue.id || 'single',
         displayName: singleVenue.displayName,
         venueType: singleVenue.venueType,
         address: singleVenue.address,
@@ -67,6 +149,7 @@ export function GoogleMapView({
         lat: singleVenue.lat,
         lng: singleVenue.lng,
         isAcceptingOrders: singleVenue.isAcceptingOrders,
+        slug: singleVenue.slug,
       });
     } else if (venues.length > 0) {
       venues.forEach((v) => {
@@ -81,6 +164,14 @@ export function GoogleMapView({
             lng: Number(v.longitude),
             slug: v.slug,
             isAcceptingOrders: v.has_wsnexa_ordering ?? v.is_accepting_orders,
+            coverImageUrl: v.cover_image_url,
+            logoUrl: v.logo_url,
+            priceLevel: v.price_level,
+            averageRating: v.average_rating,
+            reviewCount: v.review_count,
+            distanceKm: v.distance_km,
+            distanceText: v.distance_text,
+            rawVenue: v,
           });
         }
 
@@ -96,6 +187,14 @@ export function GoogleMapView({
               lng: b.longitude,
               slug: v.slug,
               isAcceptingOrders: v.has_wsnexa_ordering ?? v.is_accepting_orders,
+              coverImageUrl: v.cover_image_url,
+              logoUrl: v.logo_url,
+              priceLevel: v.price_level,
+              averageRating: v.average_rating,
+              reviewCount: v.review_count,
+              distanceKm: v.distance_km,
+              distanceText: v.distance_text,
+              rawVenue: v,
             });
           }
         });
@@ -105,8 +204,85 @@ export function GoogleMapView({
     return list;
   }, [venues, singleVenue]);
 
+  // Client Directions Calculation
+  const calculateRoute = useCallback(
+    (
+      destLat: number,
+      destLng: number,
+      mode: 'DRIVING' | 'WALKING' = 'DRIVING'
+    ) => {
+      if (!userLocation) {
+        setRoutingError('Please enable your device location to preview the route.');
+        return;
+      }
+
+      const win = window as unknown as { google?: GoogleMapsGlobal };
+      if (!win.google?.maps) return;
+
+      const googleMaps = win.google.maps;
+      setIsRouting(true);
+      setRoutingError(null);
+
+      const directionsService = new googleMaps.DirectionsService();
+
+      directionsService.route(
+        {
+          origin: { lat: userLocation.lat, lng: userLocation.lng },
+          destination: { lat: destLat, lng: destLng },
+          travelMode:
+            mode === 'WALKING'
+              ? googleMaps.TravelMode.WALKING
+              : googleMaps.TravelMode.DRIVING,
+        },
+        (result: GoogleDirectionsResult | null, status: string) => {
+          setIsRouting(false);
+
+          if (status === 'OK' && result && result.routes && result.routes[0]?.legs[0]) {
+            const leg = result.routes[0].legs[0];
+            const steps = (leg.steps || []).map((s) => s.instructions);
+
+            setRouteInfo({
+              distanceText: leg.distance?.text || 'Nearby',
+              durationText: leg.duration?.text || 'A few mins',
+              steps,
+              travelMode: mode,
+            });
+
+            if (directionsRendererRef.current) {
+              directionsRendererRef.current.setDirections(result);
+            }
+          } else {
+            console.warn('[GoogleMapView] Directions failed with status:', status);
+            setRoutingError('Driving route unavailable for this location. You can still open external Google Maps.');
+            if (directionsRendererRef.current) {
+              directionsRendererRef.current.setDirections({ routes: [] });
+            }
+          }
+        }
+      );
+    },
+    [userLocation]
+  );
+
+  // Clear route
+  const handleClearRoute = () => {
+    setRouteInfo(null);
+    setRoutingError(null);
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setDirections({ routes: [] });
+    }
+  };
+
+  // Re-center on user GPS
+  const handleRecenterUser = () => {
+    if (userLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.panTo(userLocation);
+      mapInstanceRef.current.setZoom(15);
+    }
+  };
+
   useEffect(() => {
-    if (!apiKey || markers.length === 0 || !mapRef.current) {
+    if (!apiKey || (markers.length === 0 && !userLocation) || !mapRef.current) {
       return;
     }
 
@@ -120,7 +296,7 @@ export function GoogleMapView({
 
       try {
         const googleMaps = win.google.maps;
-        const defaultCenter = {
+        const defaultCenter = userLocation || {
           lat: markers[0]?.lat || 6.9271,
           lng: markers[0]?.lng || 79.8612,
         };
@@ -141,9 +317,43 @@ export function GoogleMapView({
           ],
         });
 
-        const bounds = new googleMaps.LatLngBounds();
-        const infoWindow = new googleMaps.InfoWindow();
+        mapInstanceRef.current = map;
 
+        // Setup Directions Renderer with custom stroke
+        const directionsRenderer = new googleMaps.DirectionsRenderer({
+          map,
+          suppressMarkers: false,
+          polylineOptions: {
+            strokeColor: '#09090b',
+            strokeWeight: 5,
+            strokeOpacity: 0.85,
+          },
+        });
+        directionsRendererRef.current = directionsRenderer;
+
+        const bounds = new googleMaps.LatLngBounds();
+
+        // 1. Render User Location Radar Marker if available
+        if (userLocation) {
+          bounds.extend(userLocation);
+
+          const userMarker = new googleMaps.Marker({
+            position: userLocation,
+            map,
+            title: 'Your Location',
+            icon: {
+              path: googleMaps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: '#2563eb',
+              fillOpacity: 1,
+              strokeWeight: 3,
+              strokeColor: '#ffffff',
+            },
+          });
+          userMarkerRef.current = userMarker;
+        }
+
+        // 2. Render Venue Markers
         markers.forEach((m) => {
           const position = { lat: m.lat, lng: m.lng };
           bounds.extend(position);
@@ -157,40 +367,33 @@ export function GoogleMapView({
               scale: 8,
               fillColor: m.isAcceptingOrders ? '#10b981' : '#f59e0b',
               fillOpacity: 1,
-              strokeWeight: 2,
-              strokeColor: '#000000',
+              strokeWeight: 2.5,
+              strokeColor: '#09090b',
             },
           });
 
-          const directionsUrl = getGoogleMapsDirectionsUrl(m.lat, m.lng, m.address || m.city);
-          const badgeText = m.isAcceptingOrders ? '✓ WSNexa Ordering Available' : 'View Venue Only';
-
-          const contentString = `
-            <div style="padding: 6px; max-width: 220px; font-family: sans-serif;">
-              <div style="font-weight: 800; font-size: 13px; color: #09090b; margin-bottom: 2px;">${m.displayName}</div>
-              <div style="font-size: 11px; color: #71717a; margin-bottom: 6px;">📍 ${m.address || m.city || ''}</div>
-              <div style="display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px; margin-bottom: 8px; background-color: ${m.isAcceptingOrders ? '#d1fae5' : '#f4f4f5'}; color: ${m.isAcceptingOrders ? '#065f46' : '#27272a'};">
-                ${badgeText}
-              </div>
-              <div>
-                <a href="${directionsUrl}" target="_blank" rel="noreferrer" style="font-size: 11px; font-weight: 700; color: #d97706; text-decoration: none;">
-                  🧭 Get Directions →
-                </a>
-              </div>
-            </div>
-          `;
-
           marker.addListener('click', () => {
-            infoWindow.setContent(contentString);
-            infoWindow.open(map, marker);
+            // Center map smoothly on tapped venue
+            map.panTo(position);
+
+            const matchedVenue = m.rawVenue || (singleVenue ? (singleVenue as unknown as VenuePublicProfileRecord) : null);
+            if (matchedVenue) {
+              setSelectedVenue(matchedVenue);
+              if (onVenueSelect) onVenueSelect(matchedVenue);
+            }
           });
         });
 
-        if (markers.length > 1) {
-          (map as { fitBounds: (bounds: unknown) => void }).fitBounds(bounds);
+        if (markers.length > 1 || (markers.length === 1 && userLocation)) {
+          map.fitBounds(bounds);
         }
 
         setMapLoaded(true);
+
+        // Auto calculate route for single venue if requested
+        if (initialRouteToVenue && userLocation && markers[0]) {
+          calculateRoute(markers[0].lat, markers[0].lng, 'DRIVING');
+        }
       } catch (err) {
         console.error('[GoogleMapView] Map initialization error:', err);
         setLoadError(true);
@@ -218,10 +421,10 @@ export function GoogleMapView({
     return () => {
       isMounted = false;
     };
-  }, [apiKey, markers]);
+  }, [apiKey, markers, userLocation, initialRouteToVenue, calculateRoute, onVenueSelect]);
 
-  // Graceful degradation fallback when API key is missing or load fails
-  if (!apiKey || loadError || markers.length === 0) {
+  // Graceful degradation fallback
+  if (!apiKey || loadError || (markers.length === 0 && !userLocation)) {
     const mainMarker = markers[0];
     const fallbackDirectionsUrl = mainMarker
       ? getGoogleMapsDirectionsUrl(mainMarker.lat, mainMarker.lng, mainMarker.address || mainMarker.city)
@@ -253,7 +456,7 @@ export function GoogleMapView({
               href={fallbackDirectionsUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-black transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-black transition-colors min-h-[44px] touch-manipulation"
             >
               🧭 Open Directions in Google Maps
             </a>
@@ -269,9 +472,49 @@ export function GoogleMapView({
       style={{ height }}
     >
       <div ref={mapRef} className="w-full h-full" />
+
+      {/* ── GPS Locate Me Button ────────────────────────────────────── */}
+      {userLocation && (
+        <button
+          type="button"
+          onClick={handleRecenterUser}
+          className="absolute top-4 right-4 z-20 h-10 w-10 bg-white/95 backdrop-blur-md rounded-2xl shadow-md border border-zinc-200 text-zinc-900 flex items-center justify-center text-base font-bold hover:bg-white active:scale-95 transition-all touch-manipulation"
+          title="Re-center on my location"
+          aria-label="Re-center on my location"
+        >
+          📍
+        </button>
+      )}
+
+      {/* ── Mobile & In-Map Bottom Sheet ────────────────────────────── */}
+      {selectedVenue && (
+        <VenueMapBottomSheet
+          venue={selectedVenue}
+          userLocation={userLocation}
+          onClose={() => {
+            setSelectedVenue(null);
+            handleClearRoute();
+          }}
+          onGetDirections={(mode) => {
+            if (selectedVenue.latitude != null && selectedVenue.longitude != null) {
+              calculateRoute(Number(selectedVenue.latitude), Number(selectedVenue.longitude), mode);
+            }
+          }}
+          routeInfo={routeInfo}
+          isRouting={isRouting}
+          routingError={routingError}
+          onClearRoute={handleClearRoute}
+          onTravelModeChange={(mode) => {
+            if (selectedVenue.latitude != null && selectedVenue.longitude != null) {
+              calculateRoute(Number(selectedVenue.latitude), Number(selectedVenue.longitude), mode);
+            }
+          }}
+        />
+      )}
+
       {!mapLoaded && (
         <div className="absolute inset-0 bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500 animate-pulse">
-          Loading interactive map...
+          Loading interactive map &amp; routes...
         </div>
       )}
     </div>

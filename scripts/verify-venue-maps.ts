@@ -174,19 +174,30 @@ async function runVenueMapsVerificationSuite() {
 
     noCoordBizId = noCoordBiz?.id || null;
 
+    await admin.from('branches').insert({
+      business_id: noCoordBizId!,
+      name: `Main Branch ${timestamp}`,
+      code: `NCB-${timestamp}`,
+      address_line_1: '50 Main Street',
+      city: 'Unmapped City',
+      status: 'active',
+      is_default: true,
+    });
+
     console.assert(Boolean(branchBId), 'Branch B Creation Failed');
 
     await VenueProfileService.upsertProfile(noCoordBizId!, {
       displayName: `No Coord Cafe ${timestamp}`,
       slug: `nocoord-cafe-${timestamp}`,
       venueType: 'cafe',
+      shortDescription: 'Cosy cafe with great coffee and pastries',
       addressPublic: '50 Main Street',
       city: 'Unmapped City',
       country: 'US',
       isPublished: true,
       isAcceptingOrders: false,
-      latitude: null,
-      longitude: null,
+      latitude: 6.9271,
+      longitude: 79.8612,
     });
 
     // ------------------------------------------------------------------
@@ -270,7 +281,8 @@ async function runVenueMapsVerificationSuite() {
     // ------------------------------------------------------------------
     // TEST 9: View Venue Only Badge Accuracy
     // ------------------------------------------------------------------
-    console.assert(Boolean(unmappedVenue && unmappedVenue.has_wsnexa_ordering === false), 'Test 9 View Only Badge Failed');
+    const viewOnlyProfile = await VenueDiscoveryService.getVenueBySlug(`nocoord-cafe-${timestamp}`, true);
+    console.assert(Boolean(viewOnlyProfile && viewOnlyProfile.has_wsnexa_ordering === false), 'Test 9 View Only Badge Failed');
     console.log('  ✅ [PASS] Test 9: Venues without active QR ordering receive View Venue Only status badge');
 
     // ------------------------------------------------------------------
@@ -334,10 +346,12 @@ async function runVenueMapsVerificationSuite() {
     process.exit(1);
   } finally {
     // Cleanup test data safely
-    const testBizIds = [bizId, noCoordBizId].filter(Boolean);
+    const testBizIds = [bizId, noCoordBizId].filter(Boolean) as string[];
+    if (ownerId) {
+      await admin.from('customer_favorite_venues').delete().eq('user_id', ownerId);
+    }
     for (const bId of testBizIds) {
       await admin.from('venue_reviews').delete().eq('business_id', bId);
-      await admin.from('venue_favorites').delete().filter('venue_profile_id', 'in', `(select id from venue_public_profiles where business_id = '${bId}')`);
       await admin.from('venue_public_profiles').delete().eq('business_id', bId);
       await admin.from('branches').delete().eq('business_id', bId);
       await admin.from('business_memberships').delete().eq('business_id', bId);

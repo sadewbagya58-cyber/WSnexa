@@ -10,6 +10,7 @@ import { VenueFavoriteService } from '@/server/services/venue-favorite.service';
 import { VenueReviewService, ReviewEligibilityResult } from '@/server/services/venue-review.service';
 import { FavoriteButton } from '@/components/discovery/favorite-button';
 import { ReviewForm } from '@/components/discovery/review-form';
+import { VenueDetailActions } from '@/components/discovery/venue-detail-actions';
 import { GoogleMapView } from '@/components/maps/google-map-view';
 import { getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
 
@@ -193,52 +194,28 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
             <span>{venue.review_count || 0} Verified Reviews</span>
           </div>
 
-          {/*
-           * ── CTA Buttons ─────────────────────────────────────────────
-           * All CTAs are <Link> or <a> — no <button> nested inside <a>.
-           * This prevents the invalid HTML <a><button> pattern which causes
-           * click failures on mobile Safari and some Android browsers.
-           */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
-            {(venue.public_menu_enabled ?? true) && venue.has_public_menu && (
-              <Link href={`/venues/${venue.slug}/menu`} className={ctaPrimary}>
-                <span aria-hidden>📖</span> View Menu
-              </Link>
-            )}
-
-            <a href={directionsUrl} target="_blank" rel="noreferrer" className={ctaOutline}>
-              <span aria-hidden>🧭</span> Get Directions
-            </a>
-
-            {venue.phone_public && (
-              <a href={`tel:${venue.phone_public}`} className={ctaOutline}>
-                <span aria-hidden>📞</span> Call Venue
-              </a>
-            )}
-
-            {reservationSettings?.reservationsEnabled && (venue.public_reservations_enabled ?? true) && (
-              isCommerciallySuspended ? (
-                <span className="w-full flex items-center justify-center gap-1.5 min-h-[48px] px-4 py-3 rounded-2xl bg-zinc-200 text-zinc-500 font-extrabold text-xs cursor-not-allowed opacity-75">
-                  <span aria-hidden>📅</span> Reservations Unavailable
-                </span>
-              ) : (
-                <Link href={`/venues/${venue.slug}/reserve`} className={ctaDark}>
-                  <span aria-hidden>📅</span> Reserve Table
-                </Link>
-              )
-            )}
-
-            {(venue.booking_url || venue.external_booking_url || venue.agoda_url) && (
-              <a
-                href={venue.booking_url || venue.external_booking_url || venue.agoda_url!}
-                target="_blank"
-                rel="noreferrer"
-                className={ctaOutline}
-              >
-                <span aria-hidden>🏨</span> Book a Stay ↗
-              </a>
-            )}
-          </div>
+          {/* ── Interactive CTA Actions Bar (In-App Directions + Booking) ── */}
+          <VenueDetailActions
+            venue={{
+              id: venue.id,
+              slug: venue.slug,
+              displayName: venue.display_name,
+              venueType: venue.venue_type,
+              phonePublic: venue.phone_public,
+              addressPublic: venue.address_public,
+              city: venue.city,
+              latitude: venue.latitude,
+              longitude: venue.longitude,
+              bookingUrl: venue.booking_url,
+              agodaUrl: venue.agoda_url,
+              externalBookingUrl: venue.external_booking_url,
+              hasPublicMenu: venue.has_public_menu ?? false,
+              publicMenuEnabled: venue.public_menu_enabled ?? true,
+              publicReservationsEnabled: venue.public_reservations_enabled ?? true,
+              reservationsEnabled: reservationSettings?.reservationsEnabled ?? false,
+              isCommerciallySuspended,
+            }}
+          />
         </div>
 
         {/* ── Desktop 2-Column Layout ───────────────────────────────── */}

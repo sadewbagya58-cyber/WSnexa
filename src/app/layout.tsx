@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { RouteProgress } from '@/components/ui/route-progress';
 
 export const metadata: Metadata = {
   title: 'WSNexa — Smart Hospitality. Simplified.',
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-white text-zinc-950">
+        <RouteProgress />
         {children}
       </body>
     </html>

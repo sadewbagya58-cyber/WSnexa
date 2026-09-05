@@ -105,18 +105,26 @@ export function VenueCard({
 
       {/* ── Card Body Content ─────────────────────────────────────────── */}
       <div className={`flex-1 flex flex-col justify-between ${compact ? 'p-3.5 pt-5' : 'p-4 sm:p-5 pt-6'}`}>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {/* Venue Name & Price Tier */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-base font-black text-zinc-950 leading-snug line-clamp-1 group-hover:text-amber-600 transition-colors">
-              {venue.display_name}
-            </h3>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <h3 className="text-base font-black text-zinc-950 leading-snug truncate group-hover:text-amber-600 transition-colors">
+                {venue.display_name}
+              </h3>
+              {/* Verified Blue Checkmark Badge */}
+              <span className="inline-flex items-center text-blue-600 shrink-0" title="Verified Venue" aria-label="Verified Venue">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </span>
+            </div>
             <span className="text-xs font-mono font-black text-zinc-400 shrink-0 pt-0.5">
               {priceDisplay}
             </span>
           </div>
 
-          {/* Rating, Reviews & Location */}
+          {/* Rating, Reviews & Distance */}
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <div className="flex items-center gap-1 font-extrabold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/80 text-amber-900">
               <span className="text-amber-500">★</span>
@@ -130,13 +138,32 @@ export function VenueCard({
 
             <span className="text-zinc-300 text-[10px]">•</span>
 
-            {/* Distance badge when active */}
+            {/* Distance badge or city */}
             {venue.distance_text ? (
               <span className="text-[11px] font-black text-emerald-950 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300 leading-tight">
                 📍 {venue.distance_text}
               </span>
             ) : (
               <span className="text-xs font-bold text-zinc-500 truncate max-w-[120px]">
+                📍 {venue.city}
+              </span>
+            )}
+          </div>
+
+          {/* Amenities / Features Row (Reference-inspired tag row) */}
+          <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold text-zinc-600">
+            {hasOrdering && (
+              <span className="bg-emerald-50 text-emerald-900 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+                ✓ Dine In &amp; Order
+              </span>
+            )}
+            {venue.has_public_menu && (
+              <span className="bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md">
+                📖 Live Menu
+              </span>
+            )}
+            {venue.city && !venue.distance_text && (
+              <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md">
                 {venue.city}
               </span>
             )}
@@ -151,12 +178,12 @@ export function VenueCard({
         </div>
 
         {/* ── Primary CTA Action ──────────────────────────────────────── */}
-        <div className="pt-4 mt-auto">
+        <div className="pt-3 mt-auto">
           <Link
             href={`/venues/${venue.slug}`}
             className="w-full flex items-center justify-center gap-1.5 min-h-[44px] rounded-2xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs font-black shadow-xs transition-all duration-150 touch-manipulation active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-1"
           >
-            <span>Explore Venue</span>
+            <span>View Details</span>
             <span aria-hidden>→</span>
           </Link>
         </div>

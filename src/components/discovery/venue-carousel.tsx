@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { VenueCard } from './venue-card';
 import { VenueRankingMetrics } from '@/lib/validation/ranking';
 
@@ -9,17 +10,28 @@ interface VenueCarouselProps {
   subtitle?: string;
   venues: VenueRankingMetrics[];
   isLoggedIn?: boolean;
+  seeAllHref?: string;
 }
 
-export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false }: VenueCarouselProps) {
+export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, seeAllHref }: VenueCarouselProps) {
   if (!venues || venues.length === 0) return null;
 
   return (
     <div className="space-y-3 py-3">
-      {/* Section Header */}
-      <div className="px-1 sm:px-0">
-        <h2 className="text-base sm:text-lg font-black text-zinc-950 tracking-tight">{title}</h2>
-        {subtitle && <p className="text-xs font-semibold text-zinc-500 mt-0.5">{subtitle}</p>}
+      {/* Section Header with Title, Subtitle, and See All Action */}
+      <div className="flex items-center justify-between gap-2 px-1 sm:px-0">
+        <div>
+          <h2 className="text-base sm:text-lg font-black text-zinc-950 tracking-tight">{title}</h2>
+          {subtitle && <p className="text-xs font-semibold text-zinc-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {seeAllHref && (
+          <Link
+            href={seeAllHref}
+            className="text-xs font-black text-amber-600 hover:text-amber-700 shrink-0 min-h-[36px] flex items-center px-2.5 py-1 rounded-xl hover:bg-amber-50 active:scale-95 transition-all"
+          >
+            See All →
+          </Link>
+        )}
       </div>
 
       {/*

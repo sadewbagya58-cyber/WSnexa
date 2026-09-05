@@ -7,6 +7,7 @@ import { VenueRankingService } from '@/server/services/venue-ranking.service';
 import { VenueSearchBar } from '@/components/discovery/venue-search-bar';
 import { VenueCarousel } from '@/components/discovery/venue-carousel';
 import { ExploreViewSwitcher } from '@/components/discovery/explore-view-switcher';
+import { PublicBottomNav } from '@/components/discovery/public-bottom-nav';
 
 export const metadata: Metadata = {
   title: 'Explore Hospitality Venues & In-App Maps | WSNexa',
@@ -121,6 +122,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 subtitle="Curated based on your dining history and favorite spots"
                 venues={recommendedVenues}
                 isLoggedIn={!!user}
+                seeAllHref="/explore?sort=recommended"
               />
             )}
 
@@ -129,6 +131,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               subtitle="Popular venues with fast-growing recent orders & customer engagement"
               venues={trendingVenues}
               isLoggedIn={!!user}
+              seeAllHref="/explore?sort=trending"
             />
 
             <VenueCarousel
@@ -136,6 +139,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               subtitle="Highest rating confidence calculated from verified customer visits"
               venues={topRatedVenues}
               isLoggedIn={!!user}
+              seeAllHref="/explore?sort=rating"
             />
 
             {hiddenGemsVenues.length > 0 && (
@@ -144,6 +148,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 subtitle="Exceptional verified ratings in undiscovered spots"
                 venues={hiddenGemsVenues}
                 isLoggedIn={!!user}
+                seeAllHref="/explore?sort=rating"
               />
             )}
           </div>
@@ -181,6 +186,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           </div>
         )}
       </main>
+
+      {/* ── Mobile Persistent Bottom Navigation ────────────────────── */}
+      <PublicBottomNav isLoggedIn={!!user} />
     </div>
   );
 }

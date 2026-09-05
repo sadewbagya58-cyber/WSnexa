@@ -1,9 +1,10 @@
 import React from 'react';
+import { PublicBottomNav } from '@/components/discovery/public-bottom-nav';
 
 export default function ExploreLoading() {
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between overflow-x-hidden max-w-full">
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 animate-pulse">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 animate-pulse pb-24 md:pb-8">
         {/* Hero Title Skeleton */}
         <div className="space-y-2">
           <div className="h-8 w-64 sm:w-96 bg-zinc-200 rounded-xl" />
@@ -35,6 +36,9 @@ export default function ExploreLoading() {
           ))}
         </div>
       </main>
+
+      {/* Persistent Bottom Nav during load */}
+      <PublicBottomNav />
     </div>
   );
 }

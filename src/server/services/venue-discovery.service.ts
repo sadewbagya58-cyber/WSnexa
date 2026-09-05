@@ -257,6 +257,11 @@ export class VenueDiscoveryService {
       venues = venues.filter((v) => v.has_public_menu);
     }
 
+    // Filter by orderingAvailableOnly if requested
+    if (params.orderingAvailableOnly) {
+      venues = venues.filter((v) => v.has_wsnexa_ordering);
+    }
+
     // Filter minRating in memory if requested
     if (params.minRating && params.minRating > 0) {
       venues = venues.filter((v) => (v.average_rating || 0) >= params.minRating!);

@@ -13,6 +13,7 @@ import { ReviewForm } from '@/components/discovery/review-form';
 import { VenueDetailActions } from '@/components/discovery/venue-detail-actions';
 import { GoogleMapView } from '@/components/maps/google-map-view';
 import { getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
+import { sanitizeExternalUrl } from '@/lib/utils/url';
 
 // ── Reusable CTA button style helpers ────────────────────────────────────────
 
@@ -71,6 +72,11 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
   ]);
 
   const isCommerciallySuspended = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
+
+  const sanitizedWebsiteUrl = sanitizeExternalUrl(venue.website_url);
+  const sanitizedBookingUrl = sanitizeExternalUrl(venue.booking_url);
+  const sanitizedAgodaUrl = sanitizeExternalUrl(venue.agoda_url);
+  const hasExternalLinks = Boolean(sanitizedWebsiteUrl || sanitizedBookingUrl || sanitizedAgodaUrl);
 
   const priceDisplay = '$'.repeat(venue.price_level || 2);
   const typeFormatted = venue.venue_type
@@ -206,9 +212,8 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               city: venue.city,
               latitude: venue.latitude,
               longitude: venue.longitude,
-              bookingUrl: venue.booking_url,
-              agodaUrl: venue.agoda_url,
-              externalBookingUrl: venue.external_booking_url,
+              bookingUrl: sanitizedBookingUrl,
+              agodaUrl: sanitizedAgodaUrl,
               hasPublicMenu: venue.has_public_menu ?? false,
               publicMenuEnabled: venue.public_menu_enabled ?? true,
               publicReservationsEnabled: venue.public_reservations_enabled ?? true,
@@ -297,6 +302,62 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               />
             </div>
 
+            {/* Website & Online Bookings */}
+            {hasExternalLinks && (
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-4">
+                <div>
+                  <h3 className="text-base font-black text-zinc-950">Website &amp; Online Bookings</h3>
+                  <p className="text-xs font-semibold text-zinc-500">
+                    Official website and verified hotel reservation channels.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {sanitizedWebsiteUrl && (
+                    <a
+                      href={sanitizedWebsiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-3 rounded-2xl bg-zinc-50 hover:bg-zinc-100 active:bg-zinc-200 border border-zinc-200 text-zinc-950 text-xs font-bold transition-colors flex items-center justify-between min-h-[48px] touch-manipulation group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden>🌐</span>
+                        <span>Official Website</span>
+                      </span>
+                      <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors" aria-hidden>↗</span>
+                    </a>
+                  )}
+                  {sanitizedBookingUrl && (
+                    <a
+                      href={sanitizedBookingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-3 rounded-2xl bg-blue-50/80 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-950 text-xs font-bold transition-colors flex items-center justify-between min-h-[48px] touch-manipulation group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden>🏨</span>
+                        <span>Booking.com</span>
+                      </span>
+                      <span className="text-blue-500 group-hover:text-blue-700 transition-colors" aria-hidden>↗</span>
+                    </a>
+                  )}
+                  {sanitizedAgodaUrl && (
+                    <a
+                      href={sanitizedAgodaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-3 rounded-2xl bg-emerald-50/80 hover:bg-emerald-100 active:bg-emerald-200 border border-emerald-200 text-emerald-950 text-xs font-bold transition-colors flex items-center justify-between min-h-[48px] touch-manipulation group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden>✈️</span>
+                        <span>Agoda</span>
+                      </span>
+                      <span className="text-emerald-600 group-hover:text-emerald-800 transition-colors" aria-hidden>↗</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Reviews */}
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-6">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
@@ -384,42 +445,51 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
                 </a>
               )}
 
-              {(venue.booking_url || venue.agoda_url || venue.external_booking_url) && (
+              {hasExternalLinks && (
                 <div className="pt-3 border-t border-zinc-100 space-y-2">
                   <h4 className="text-[11px] font-black uppercase tracking-wider text-zinc-400">
-                    External Hotel Bookings
+                    Website &amp; Bookings
                   </h4>
                   <div className="space-y-2">
-                    {venue.booking_url && (
+                    {sanitizedWebsiteUrl && (
                       <a
-                        href={venue.booking_url}
+                        href={sanitizedWebsiteUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
+                        className="w-full px-4 py-2.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-zinc-900 text-xs font-bold hover:bg-zinc-100 active:bg-zinc-200 transition-colors flex items-center justify-between min-h-[44px] touch-manipulation"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden>🌐</span>
+                          <span>Official Website</span>
+                        </span>
+                        <span aria-hidden>↗</span>
+                      </a>
+                    )}
+                    {sanitizedBookingUrl && (
+                      <a
+                        href={sanitizedBookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="w-full px-4 py-2.5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold hover:bg-blue-100 active:bg-blue-200 transition-colors flex items-center justify-between min-h-[44px] touch-manipulation"
                       >
-                        <span>🏨 Booking.com</span>
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden>🏨</span>
+                          <span>Booking.com</span>
+                        </span>
                         <span aria-hidden>↗</span>
                       </a>
                     )}
-                    {venue.agoda_url && (
+                    {sanitizedAgodaUrl && (
                       <a
-                        href={venue.agoda_url}
+                        href={sanitizedAgodaUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="w-full px-4 py-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold hover:bg-emerald-100 active:bg-emerald-200 transition-colors flex items-center justify-between min-h-[44px] touch-manipulation"
                       >
-                        <span>🌴 Agoda</span>
-                        <span aria-hidden>↗</span>
-                      </a>
-                    )}
-                    {venue.external_booking_url && (
-                      <a
-                        href={venue.external_booking_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full px-4 py-2.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold hover:bg-purple-100 active:bg-purple-200 transition-colors flex items-center justify-between min-h-[44px] touch-manipulation"
-                      >
-                        <span>🔑 Direct Reservation</span>
+                        <span className="flex items-center gap-2">
+                          <span aria-hidden>✈️</span>
+                          <span>Agoda</span>
+                        </span>
                         <span aria-hidden>↗</span>
                       </a>
                     )}

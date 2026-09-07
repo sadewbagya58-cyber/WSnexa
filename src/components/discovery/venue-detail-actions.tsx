@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { InAppDirectionsModal } from './in-app-directions-modal';
 import { requestBrowserLocation } from '@/lib/maps/google-maps-config';
+import { sanitizeExternalUrl } from '@/lib/utils/url';
 
 interface VenueDetailActionsProps {
   venue: {
@@ -41,6 +42,8 @@ const ctaOutline =
 export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
   const [directionsModalOpen, setDirectionsModalOpen] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  const stayUrl = sanitizeExternalUrl(venue.bookingUrl) || sanitizeExternalUrl(venue.agodaUrl);
 
   const handleOpenDirections = () => {
     setDirectionsModalOpen(true);
@@ -100,11 +103,11 @@ export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
         )}
 
         {/* External Hotel Booking Links */}
-        {(venue.bookingUrl || venue.externalBookingUrl || venue.agodaUrl) && (
+        {stayUrl && (
           <a
-            href={venue.bookingUrl || venue.externalBookingUrl || venue.agodaUrl!}
+            href={stayUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className={ctaOutline}
           >
             <span aria-hidden>🏨</span>

@@ -40,7 +40,7 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
        */}
       <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-y">
         <div
-          className="flex items-stretch gap-4 px-4 sm:px-0 w-max"
+          className="flex items-stretch gap-2.5 sm:gap-4 px-4 sm:px-0 w-max"
           role="list"
           aria-label={title}
         >
@@ -48,7 +48,7 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
             <div
               key={v.venueId}
               role="listitem"
-              className="w-[82vw] max-w-[320px] sm:w-[290px] lg:w-[320px] shrink-0 snap-start"
+              className="w-[calc(50vw-1.25rem)] min-w-[150px] max-w-[210px] sm:w-[290px] sm:max-w-none lg:w-[320px] shrink-0 snap-start"
             >
               <VenueCard
                 compact

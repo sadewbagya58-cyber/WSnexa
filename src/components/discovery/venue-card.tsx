@@ -60,43 +60,45 @@ export function VenueCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
 
         {/* ── Top Floating Badges + Favorite Button ─────────────────── */}
-        <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2 z-10">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className={`absolute ${compact ? 'top-2 left-2 right-2' : 'top-3 left-3 right-3'} flex items-start justify-between gap-1.5 z-10`}>
+          <div className="flex items-center gap-1 flex-wrap max-w-[calc(100%-32px)]">
             {/* Category Badge */}
-            <span className="bg-white/95 backdrop-blur-md text-zinc-900 font-black text-[11px] px-2.5 py-1 rounded-xl border border-white/70 shadow-xs leading-none">
+            <span className={`bg-white/95 backdrop-blur-md text-zinc-900 font-black ${compact ? 'text-[9px] px-1.5 py-0.5 rounded-lg' : 'text-[11px] px-2.5 py-1 rounded-xl'} border border-white/70 shadow-xs leading-none truncate`}>
               {typeFormatted}
             </span>
 
             {/* WSNexa Ordering Badge */}
             {hasOrdering && (
-              <span className="bg-emerald-500/90 backdrop-blur-md text-white font-black text-[10px] px-2 py-1 rounded-xl shadow-xs leading-none">
-                ✓ Ordering
+              <span className={`bg-emerald-500/90 backdrop-blur-md text-white font-black ${compact ? 'text-[8px] px-1.5 py-0.5 rounded-lg' : 'text-[10px] px-2 py-1 rounded-xl'} shadow-xs leading-none shrink-0`}>
+                ✓ Order
               </span>
             )}
           </div>
 
           {/* Integrated Floating Favorite Button */}
-          <FavoriteButton
-            venueProfileId={venue.id}
-            initialIsFavorite={isFavorite}
-            isLoggedIn={isLoggedIn}
-            variant="card-floating"
-          />
+          <div className={compact ? 'scale-90 origin-top-right shrink-0' : 'shrink-0'}>
+            <FavoriteButton
+              venueProfileId={venue.id}
+              initialIsFavorite={isFavorite}
+              isLoggedIn={isLoggedIn}
+              variant="card-floating"
+            />
+          </div>
         </div>
 
         {/* ── Venue Logo Avatar (Overlaps Image Bottom Left) ─────────── */}
-        <div className="absolute -bottom-3 left-4 h-12 w-12 rounded-2xl bg-white p-0.5 shadow-md border border-zinc-200 overflow-hidden shrink-0 z-10">
+        <div className={`absolute ${compact ? '-bottom-2.5 left-2.5 h-8 w-8 rounded-xl' : '-bottom-3 left-4 h-12 w-12 rounded-2xl'} bg-white p-0.5 shadow-md border border-zinc-200 overflow-hidden shrink-0 z-10`}>
           {venue.logo_url ? (
             <Image
               src={venue.logo_url}
               alt={venue.display_name}
-              width={48}
-              height={48}
-              className="object-cover rounded-[14px] w-full h-full"
+              width={compact ? 32 : 48}
+              height={compact ? 32 : 48}
+              className={`object-cover ${compact ? 'rounded-[10px]' : 'rounded-[14px]'} w-full h-full`}
               unoptimized
             />
           ) : (
-            <div className="w-full h-full bg-zinc-950 text-white font-black text-sm flex items-center justify-center rounded-[14px] select-none">
+            <div className={`w-full h-full bg-zinc-950 text-white font-black ${compact ? 'text-xs rounded-[10px]' : 'text-sm rounded-[14px]'} flex items-center justify-center select-none`}>
               {initials.charAt(0)}
             </div>
           )}
@@ -104,73 +106,73 @@ export function VenueCard({
       </div>
 
       {/* ── Card Body Content ─────────────────────────────────────────── */}
-      <div className={`flex-1 flex flex-col justify-between ${compact ? 'p-3.5 pt-5' : 'p-4 sm:p-5 pt-6'}`}>
-        <div className="space-y-2.5">
+      <div className={`flex-1 flex flex-col justify-between ${compact ? 'p-2.5 pt-4 sm:p-3.5 sm:pt-5' : 'p-4 sm:p-5 pt-6'}`}>
+        <div className={compact ? 'space-y-1.5' : 'space-y-2.5'}>
           {/* Venue Name & Price Tier */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <h3 className="text-base font-black text-zinc-950 leading-snug truncate group-hover:text-amber-600 transition-colors">
+          <div className="flex items-start justify-between gap-1">
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <h3 className={`${compact ? 'text-xs sm:text-sm font-black' : 'text-base font-black'} text-zinc-950 leading-snug truncate group-hover:text-amber-600 transition-colors`}>
                 {venue.display_name}
               </h3>
               {/* Verified Blue Checkmark Badge */}
               <span className="inline-flex items-center text-blue-600 shrink-0" title="Verified Venue" aria-label="Verified Venue">
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                <svg className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} fill-current`} viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
               </span>
             </div>
-            <span className="text-xs font-mono font-black text-zinc-400 shrink-0 pt-0.5">
+            <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-mono font-black text-zinc-400 shrink-0 pt-0.5`}>
               {priceDisplay}
             </span>
           </div>
 
           {/* Rating, Reviews & Distance */}
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <div className="flex items-center gap-1 font-extrabold bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/80 text-amber-900">
+          <div className="flex items-center gap-1.5 flex-wrap text-xs">
+            <div className={`flex items-center gap-0.5 font-extrabold bg-amber-50 ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs'} rounded-lg border border-amber-200/80 text-amber-900`}>
               <span className="text-amber-500">★</span>
               <span className="text-zinc-950 font-black">
                 {venue.average_rating ? venue.average_rating.toFixed(1) : 'New'}
               </span>
-              {venue.review_count ? (
+              {venue.review_count && !compact ? (
                 <span className="text-zinc-500 font-medium">({venue.review_count})</span>
               ) : null}
             </div>
 
-            <span className="text-zinc-300 text-[10px]">•</span>
-
             {/* Distance badge or city */}
             {venue.distance_text ? (
-              <span className="text-[11px] font-black text-emerald-950 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300 leading-tight">
+              <span className={`${compact ? 'text-[9px] px-1.5 py-0.2' : 'text-[11px] px-2 py-0.5'} font-black text-emerald-950 bg-emerald-100/80 rounded-lg border border-emerald-300 leading-tight truncate`}>
                 📍 {venue.distance_text}
               </span>
-            ) : (
-              <span className="text-xs font-bold text-zinc-500 truncate max-w-[120px]">
+            ) : venue.city ? (
+              <span className={`${compact ? 'text-[10px] max-w-[65px]' : 'text-xs max-w-[120px]'} font-bold text-zinc-500 truncate`}>
                 📍 {venue.city}
               </span>
-            )}
+            ) : null}
           </div>
 
-          {/* Amenities / Features Row (Reference-inspired tag row) */}
-          <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold text-zinc-600">
-            {hasOrdering && (
-              <span className="bg-emerald-50 text-emerald-900 border border-emerald-200/80 px-2 py-0.5 rounded-md">
-                ✓ Dine In &amp; Order
-              </span>
-            )}
-            {venue.has_public_menu && (
-              <span className="bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md">
-                📖 Live Menu
-              </span>
-            )}
-            {venue.city && !venue.distance_text && (
-              <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md">
-                {venue.city}
-              </span>
-            )}
-          </div>
+          {/* Amenities / Features Row (show simplified when compact) */}
+          {!compact && (
+            <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-bold text-zinc-600">
+              {hasOrdering && (
+                <span className="bg-emerald-50 text-emerald-900 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+                  ✓ Dine In &amp; Order
+                </span>
+              )}
+              {venue.has_public_menu && (
+                <span className="bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md">
+                  📖 Live Menu
+                </span>
+              )}
+              {venue.city && !venue.distance_text && (
+                <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md">
+                  {venue.city}
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* Short Description snippet */}
-          {venue.short_description && (
+          {/* Short Description snippet (only when not compact) */}
+          {!compact && venue.short_description && (
             <p className="text-xs text-zinc-500 font-medium line-clamp-2 leading-relaxed">
               {venue.short_description}
             </p>
@@ -178,10 +180,10 @@ export function VenueCard({
         </div>
 
         {/* ── Primary CTA Action ──────────────────────────────────────── */}
-        <div className="pt-3 mt-auto">
+        <div className={`${compact ? 'pt-2' : 'pt-3'} mt-auto`}>
           <Link
             href={`/venues/${venue.slug}`}
-            className="w-full flex items-center justify-center gap-1.5 min-h-[44px] rounded-2xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs font-black shadow-xs transition-all duration-150 touch-manipulation active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-1"
+            className={`w-full flex items-center justify-center gap-1.5 ${compact ? 'min-h-[38px] py-1.5 text-[11px] rounded-xl' : 'min-h-[44px] rounded-2xl text-xs'} bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white font-black shadow-xs transition-all duration-150 touch-manipulation active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-1`}
           >
             <span>View Details</span>
             <span aria-hidden>→</span>

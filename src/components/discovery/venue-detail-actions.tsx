@@ -23,6 +23,8 @@ interface VenueDetailActionsProps {
     publicReservationsEnabled: boolean;
     reservationsEnabled: boolean;
     isCommerciallySuspended: boolean;
+    coverImageUrl?: string | null;
+    logoUrl?: string | null;
   };
 }
 
@@ -37,6 +39,26 @@ const ctaOutline =
 
 export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
   const [directionsModalOpen, setDirectionsModalOpen] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  const handleOpenDirections = () => {
+    setDirectionsModalOpen(true);
+    // Request geolocation directly on user gesture to preserve transient activation
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        (err) => {
+          console.warn('[VenueDetailActions] Geolocation request error:', err);
+        },
+        { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
+      );
+    }
+  };
 
   return (
     <>
@@ -52,7 +74,7 @@ export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
         {/* In-App Get Directions CTA */}
         <button
           type="button"
-          onClick={() => setDirectionsModalOpen(true)}
+          onClick={handleOpenDirections}
           className={ctaOutline}
         >
           <span aria-hidden>🧭</span>
@@ -107,8 +129,11 @@ export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
           lat: venue.latitude,
           lng: venue.longitude,
           slug: venue.slug,
+          coverImageUrl: venue.coverImageUrl,
+          logoUrl: venue.logoUrl,
         }}
         isOpen={directionsModalOpen}
+        initialUserLocation={userLocation}
         onClose={() => setDirectionsModalOpen(false)}
       />
     </>

@@ -15,19 +15,33 @@ interface InAppDirectionsModalProps {
     lng: number | null;
     isAcceptingOrders?: boolean;
     slug?: string;
+    coverImageUrl?: string | null;
+    logoUrl?: string | null;
   };
   isOpen: boolean;
+  initialUserLocation?: { lat: number; lng: number } | null;
   onClose: () => void;
 }
 
 export function InAppDirectionsModal({
   venue,
   isOpen,
+  initialUserLocation = null,
   onClose,
 }: InAppDirectionsModalProps) {
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    initialUserLocation
+  );
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
+
+  // Sync if initialUserLocation becomes available
+  useEffect(() => {
+    if (initialUserLocation) {
+      setUserLocation(initialUserLocation);
+      setLocError(null);
+    }
+  }, [initialUserLocation]);
 
   const requestLocation = useCallback(() => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
@@ -49,7 +63,15 @@ export function InAppDirectionsModal({
       (err) => {
         setLocating(false);
         console.warn('[InAppDirectionsModal] Geolocation error:', err);
-        setLocError('Location access was denied or timed out. You can retry or open external maps.');
+        if (err.code === 1) {
+          setLocError('Location access was denied. Please allow location access in your browser or retry.');
+        } else if (err.code === 2) {
+          setLocError('Device location is unavailable. Please ensure device GPS is turned on.');
+        } else if (err.code === 3) {
+          setLocError('Location request timed out. Please tap retry.');
+        } else {
+          setLocError('Location access was denied or timed out. You can retry or open external maps.');
+        }
       },
       { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
     );
@@ -57,8 +79,10 @@ export function InAppDirectionsModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    requestLocation();
-  }, [isOpen, requestLocation]);
+    if (!userLocation && !initialUserLocation) {
+      requestLocation();
+    }
+  }, [isOpen, userLocation, initialUserLocation, requestLocation]);
 
   if (!isOpen) return null;
 
@@ -128,6 +152,7 @@ export function InAppDirectionsModal({
           <GoogleMapView
             singleVenue={venue}
             userLocation={userLocation}
+            onUserLocationChange={setUserLocation}
             initialRouteToVenue={Boolean(userLocation && venue.lat != null && venue.lng != null)}
             height="100%"
             className="rounded-none border-none"

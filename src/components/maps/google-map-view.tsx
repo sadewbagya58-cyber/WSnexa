@@ -44,8 +44,11 @@ interface GoogleMapViewProps {
     lng: number | null;
     isAcceptingOrders?: boolean;
     slug?: string;
+    coverImageUrl?: string | null;
+    logoUrl?: string | null;
   };
   userLocation?: { lat: number; lng: number } | null;
+  onUserLocationChange?: (loc: { lat: number; lng: number }) => void;
   initialRouteToVenue?: boolean;
   onVenueSelect?: (venue: VenuePublicProfileRecord) => void;
   height?: string;
@@ -110,8 +113,8 @@ function singleVenueToProfileRecord(
     short_description: null,
     description: null,
     venue_type: sv.venueType || 'venue',
-    logo_url: null,
-    cover_image_url: null,
+    logo_url: sv.logoUrl || null,
+    cover_image_url: sv.coverImageUrl || null,
     phone_public: null,
     email_public: null,
     website_url: null,
@@ -135,6 +138,7 @@ export function GoogleMapView({
   venues = [],
   singleVenue,
   userLocation,
+  onUserLocationChange,
   initialRouteToVenue = false,
   onVenueSelect,
   height = '400px',
@@ -163,6 +167,19 @@ export function GoogleMapView({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  // Internal user location state for direct user gesture capture when userLocation prop is null
+  const [internalUserLocation, setInternalUserLocation] = useState<{ lat: number; lng: number } | null>(
+    userLocation || null
+  );
+
+  useEffect(() => {
+    if (userLocation) {
+      setInternalUserLocation(userLocation);
+    }
+  }, [userLocation]);
+
+  const effectiveUserLocation = userLocation || internalUserLocation;
+
   // Selected venue state for in-app bottom sheet & routing
   // Immediately initialize from singleVenue if present so modal bottom sheet shows instantly
   const [selectedVenue, setSelectedVenue] = useState<VenuePublicProfileRecord | null>(() => {
@@ -183,7 +200,7 @@ export function GoogleMapView({
     if (singleVenue && singleVenue.lat != null && singleVenue.lng != null) {
       setSelectedVenue(singleVenueToProfileRecord(singleVenue));
     }
-  }, [singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName]);
+  }, [singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName, singleVenue?.coverImageUrl, singleVenue?.logoUrl]);
 
   // Extract valid marker items with stable memoization
   const markers: MapMarkerItem[] = useMemo(() => {
@@ -200,6 +217,8 @@ export function GoogleMapView({
         lng: singleVenue.lng,
         isAcceptingOrders: singleVenue.isAcceptingOrders,
         slug: singleVenue.slug,
+        coverImageUrl: singleVenue.coverImageUrl,
+        logoUrl: singleVenue.logoUrl,
       });
     } else if (venues.length > 0) {
       venues.forEach((v) => {
@@ -252,7 +271,7 @@ export function GoogleMapView({
     }
 
     return list;
-  }, [venues, singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName]);
+  }, [venues, singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName, singleVenue?.coverImageUrl, singleVenue?.logoUrl]);
 
   // Client Directions Calculation (Decoupled from map creation)
   const calculateRoute = useCallback(
@@ -261,63 +280,97 @@ export function GoogleMapView({
       destLng: number,
       mode: 'DRIVING' | 'WALKING' = 'DRIVING'
     ) => {
-      if (!userLocation) {
+      const runRoute = (origin: { lat: number; lng: number }) => {
+        const requestKey = `${origin.lat.toFixed(5)},${origin.lng.toFixed(5)}->${destLat.toFixed(5)},${destLng.toFixed(5)}:${mode}`;
+        if (lastRouteRequestKeyRef.current === requestKey) {
+          return; // Skip duplicate execution
+        }
+
+        const win = window as unknown as { google?: GoogleMapsGlobal };
+        if (!win.google?.maps) return;
+
+        const googleMaps = win.google.maps;
+        setIsRouting(true);
+        setRoutingError(null);
+        lastRouteRequestKeyRef.current = requestKey;
+
+        const directionsService = new googleMaps.DirectionsService();
+
+        directionsService.route(
+          {
+            origin: { lat: origin.lat, lng: origin.lng },
+            destination: { lat: destLat, lng: destLng },
+            travelMode:
+              mode === 'WALKING'
+                ? googleMaps.TravelMode.WALKING
+                : googleMaps.TravelMode.DRIVING,
+          },
+          (result: GoogleDirectionsResult | null, status: string) => {
+            setIsRouting(false);
+
+            if (status === 'OK' && result && result.routes && result.routes[0]?.legs[0]) {
+              const leg = result.routes[0].legs[0];
+              const steps = (leg.steps || []).map((s) => s.instructions);
+
+              setRouteInfo({
+                distanceText: leg.distance?.text || 'Nearby',
+                durationText: leg.duration?.text || 'A few mins',
+                steps,
+                travelMode: mode,
+              });
+
+              if (directionsRendererRef.current) {
+                directionsRendererRef.current.setDirections(result);
+              }
+            } else {
+              console.warn('[GoogleMapView] Directions failed with status:', status);
+              setRoutingError('Route preview unavailable for this location. You can still open external Google Maps.');
+              if (directionsRendererRef.current) {
+                directionsRendererRef.current.setDirections({ routes: [] });
+              }
+            }
+          }
+        );
+      };
+
+      if (!effectiveUserLocation) {
+        if (typeof window !== 'undefined' && navigator.geolocation) {
+          setIsRouting(true);
+          setRoutingError(null);
+
+          // Direct user gesture activation for browser location permission
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              setInternalUserLocation(newLoc);
+              onUserLocationChange?.(newLoc);
+              runRoute(newLoc);
+            },
+            (err) => {
+              setIsRouting(false);
+              console.warn('[GoogleMapView] Geolocation error:', err);
+              if (err.code === 1) {
+                setRoutingError('Location permission was denied. Please allow location access in your browser settings to preview the route.');
+              } else if (err.code === 2) {
+                setRoutingError('Device location is unavailable. Please ensure your device GPS is turned on.');
+              } else if (err.code === 3) {
+                setRoutingError('Location request timed out. Please tap to retry.');
+              } else {
+                setRoutingError('Unable to detect location. Please check your browser location settings.');
+              }
+            },
+            { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
+          );
+          return;
+        }
+
         setRoutingError('Please enable your device location to preview the route.');
         return;
       }
 
-      const requestKey = `${userLocation.lat.toFixed(5)},${userLocation.lng.toFixed(5)}->${destLat.toFixed(5)},${destLng.toFixed(5)}:${mode}`;
-      if (lastRouteRequestKeyRef.current === requestKey) {
-        return; // Skip duplicate execution
-      }
-
-      const win = window as unknown as { google?: GoogleMapsGlobal };
-      if (!win.google?.maps) return;
-
-      const googleMaps = win.google.maps;
-      setIsRouting(true);
-      setRoutingError(null);
-      lastRouteRequestKeyRef.current = requestKey;
-
-      const directionsService = new googleMaps.DirectionsService();
-
-      directionsService.route(
-        {
-          origin: { lat: userLocation.lat, lng: userLocation.lng },
-          destination: { lat: destLat, lng: destLng },
-          travelMode:
-            mode === 'WALKING'
-              ? googleMaps.TravelMode.WALKING
-              : googleMaps.TravelMode.DRIVING,
-        },
-        (result: GoogleDirectionsResult | null, status: string) => {
-          setIsRouting(false);
-
-          if (status === 'OK' && result && result.routes && result.routes[0]?.legs[0]) {
-            const leg = result.routes[0].legs[0];
-            const steps = (leg.steps || []).map((s) => s.instructions);
-
-            setRouteInfo({
-              distanceText: leg.distance?.text || 'Nearby',
-              durationText: leg.duration?.text || 'A few mins',
-              steps,
-              travelMode: mode,
-            });
-
-            if (directionsRendererRef.current) {
-              directionsRendererRef.current.setDirections(result);
-            }
-          } else {
-            console.warn('[GoogleMapView] Directions failed with status:', status);
-            setRoutingError('Route preview unavailable for this location. You can still open external Google Maps.');
-            if (directionsRendererRef.current) {
-              directionsRendererRef.current.setDirections({ routes: [] });
-            }
-          }
-        }
-      );
+      runRoute(effectiveUserLocation);
     },
-    [userLocation]
+    [effectiveUserLocation, onUserLocationChange]
   );
 
   // Clear route
@@ -332,8 +385,8 @@ export function GoogleMapView({
 
   // Re-center on user GPS
   const handleRecenterUser = () => {
-    if (userLocation && mapInstanceRef.current) {
-      mapInstanceRef.current.panTo(userLocation);
+    if (effectiveUserLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.panTo(effectiveUserLocation);
       mapInstanceRef.current.setZoom(15);
     }
   };
@@ -483,12 +536,12 @@ export function GoogleMapView({
 
     const googleMaps = win.google.maps;
 
-    if (userLocation) {
+    if (effectiveUserLocation) {
       if (userMarkerRef.current) {
-        userMarkerRef.current.setPosition(userLocation);
+        userMarkerRef.current.setPosition(effectiveUserLocation);
       } else {
         userMarkerRef.current = new googleMaps.Marker({
-          position: userLocation,
+          position: effectiveUserLocation,
           map,
           title: 'Your Location',
           icon: {
@@ -505,23 +558,23 @@ export function GoogleMapView({
       userMarkerRef.current.setMap(null);
       userMarkerRef.current = null;
     }
-  }, [userLocation, mapLoaded]);
+  }, [effectiveUserLocation, mapLoaded]);
 
   // ── Step 4: Auto-Calculate Route when single venue & userLocation are available ──
   useEffect(() => {
     if (
       initialRouteToVenue &&
-      userLocation &&
+      effectiveUserLocation &&
       markers[0] &&
       mapLoaded &&
       directionsRendererRef.current
     ) {
       calculateRoute(markers[0].lat, markers[0].lng, 'DRIVING');
     }
-  }, [initialRouteToVenue, userLocation, markers, mapLoaded, calculateRoute]);
+  }, [initialRouteToVenue, effectiveUserLocation, markers, mapLoaded, calculateRoute]);
 
   // Graceful degradation fallback
-  if (!apiKey || loadError || (markers.length === 0 && !userLocation)) {
+  if (!apiKey || loadError || (markers.length === 0 && !effectiveUserLocation)) {
     const mainMarker = markers[0];
     const fallbackDirectionsUrl = mainMarker
       ? getGoogleMapsDirectionsUrl(
@@ -575,7 +628,7 @@ export function GoogleMapView({
       <div ref={mapRef} className="w-full h-full" />
 
       {/* ── GPS Locate Me Button ────────────────────────────────────── */}
-      {userLocation && (
+      {effectiveUserLocation && (
         <button
           type="button"
           onClick={handleRecenterUser}
@@ -591,7 +644,7 @@ export function GoogleMapView({
       {selectedVenue && (
         <VenueMapBottomSheet
           venue={selectedVenue}
-          userLocation={userLocation}
+          userLocation={effectiveUserLocation}
           onClose={() => {
             setSelectedVenue(null);
             handleClearRoute();

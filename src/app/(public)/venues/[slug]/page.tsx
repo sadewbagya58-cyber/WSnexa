@@ -214,6 +214,8 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               publicReservationsEnabled: venue.public_reservations_enabled ?? true,
               reservationsEnabled: reservationSettings?.reservationsEnabled ?? false,
               isCommerciallySuspended,
+              coverImageUrl: venue.cover_image_url,
+              logoUrl: venue.logo_url,
             }}
           />
         </div>
@@ -281,12 +283,16 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               </div>
               <GoogleMapView
                 singleVenue={{
+                  id: venue.id,
                   displayName: venue.display_name,
                   venueType: venue.venue_type,
                   address: venue.address_public || venue.city,
                   city: venue.city,
                   lat: venue.latitude,
                   lng: venue.longitude,
+                  slug: venue.slug,
+                  coverImageUrl: venue.cover_image_url,
+                  logoUrl: venue.logo_url,
                 }}
               />
             </div>

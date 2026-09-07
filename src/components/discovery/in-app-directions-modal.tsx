@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { GoogleMapView } from '@/components/maps/google-map-view';
 import { getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
 
@@ -29,10 +29,8 @@ export function InAppDirectionsModal({
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (!navigator.geolocation) {
+  const requestLocation = useCallback(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       setLocError('Geolocation is not supported by your device browser.');
       return;
     }
@@ -51,11 +49,16 @@ export function InAppDirectionsModal({
       (err) => {
         setLocating(false);
         console.warn('[InAppDirectionsModal] Geolocation error:', err);
-        setLocError('Location access was denied or timed out. External map link is available below.');
+        setLocError('Location access was denied or timed out. You can retry or open external maps.');
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
     );
-  }, [isOpen]);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    requestLocation();
+  }, [isOpen, requestLocation]);
 
   if (!isOpen) return null;
 
@@ -98,16 +101,25 @@ export function InAppDirectionsModal({
         )}
 
         {locError && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-950 text-xs font-semibold flex items-center justify-between gap-2">
+          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-950 text-xs font-semibold flex items-center justify-between gap-2 flex-wrap">
             <span>⚠️ {locError}</span>
-            <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs font-black text-amber-900 underline shrink-0"
-            >
-              Open Google Maps ↗
-            </a>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={requestLocation}
+                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] transition-all touch-manipulation active:scale-95"
+              >
+                🔄 Retry
+              </button>
+              <a
+                href={fallbackUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-black text-amber-900 underline"
+              >
+                Open Google Maps ↗
+              </a>
+            </div>
           </div>
         )}
 

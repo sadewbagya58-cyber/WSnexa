@@ -38,7 +38,7 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
        * Horizontal snap rail.
        * Viewport relative width (82vw on small mobile) ensures next card preview is clearly visible.
        */}
-      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-x">
+      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-y">
         <div
           className="flex items-stretch gap-4 px-4 sm:px-0 w-max"
           role="list"

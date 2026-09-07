@@ -99,6 +99,38 @@ interface GoogleDirectionsResult {
   }>;
 }
 
+function singleVenueToProfileRecord(
+  sv: NonNullable<GoogleMapViewProps['singleVenue']>
+): VenuePublicProfileRecord {
+  return {
+    id: sv.id || 'single',
+    business_id: '',
+    slug: sv.slug || '',
+    display_name: sv.displayName,
+    short_description: null,
+    description: null,
+    venue_type: sv.venueType || 'venue',
+    logo_url: null,
+    cover_image_url: null,
+    phone_public: null,
+    email_public: null,
+    website_url: null,
+    address_public: sv.address || null,
+    city: sv.city || '',
+    country: 'LK',
+    latitude: sv.lat,
+    longitude: sv.lng,
+    price_level: 2,
+    is_published: true,
+    is_accepting_orders: sv.isAcceptingOrders ?? false,
+    featured_branch_id: null,
+    created_at: '',
+    updated_at: '',
+    average_rating: 0,
+    review_count: 0,
+  };
+}
+
 export function GoogleMapView({
   venues = [],
   singleVenue,
@@ -123,19 +155,37 @@ export function GoogleMapView({
     setPosition: (pos: { lat: number; lng: number }) => void;
     setMap: (map: unknown) => void;
   } | null>(null);
+  const venueMarkersRef = useRef<Array<{ setMap: (map: unknown) => void }>>([]);
+
+  // Ref tracking last route calculation key to prevent duplicate calls or infinite loops
+  const lastRouteRequestKeyRef = useRef<string | null>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
   // Selected venue state for in-app bottom sheet & routing
-  const [selectedVenue, setSelectedVenue] = useState<VenuePublicProfileRecord | null>(null);
+  // Immediately initialize from singleVenue if present so modal bottom sheet shows instantly
+  const [selectedVenue, setSelectedVenue] = useState<VenuePublicProfileRecord | null>(() => {
+    if (singleVenue && singleVenue.lat != null && singleVenue.lng != null) {
+      return singleVenueToProfileRecord(singleVenue);
+    }
+    return null;
+  });
+
   const [routeInfo, setRouteInfo] = useState<RouteResultState | null>(null);
   const [isRouting, setIsRouting] = useState(false);
   const [routingError, setRoutingError] = useState<string | null>(null);
 
   const apiKey = getBrowserGoogleMapsApiKey();
 
-  // Extract valid marker items
+  // Keep selectedVenue in sync with singleVenue changes
+  useEffect(() => {
+    if (singleVenue && singleVenue.lat != null && singleVenue.lng != null) {
+      setSelectedVenue(singleVenueToProfileRecord(singleVenue));
+    }
+  }, [singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName]);
+
+  // Extract valid marker items with stable memoization
   const markers: MapMarkerItem[] = useMemo(() => {
     const list: MapMarkerItem[] = [];
 
@@ -202,9 +252,9 @@ export function GoogleMapView({
     }
 
     return list;
-  }, [venues, singleVenue]);
+  }, [venues, singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName]);
 
-  // Client Directions Calculation
+  // Client Directions Calculation (Decoupled from map creation)
   const calculateRoute = useCallback(
     (
       destLat: number,
@@ -216,12 +266,18 @@ export function GoogleMapView({
         return;
       }
 
+      const requestKey = `${userLocation.lat.toFixed(5)},${userLocation.lng.toFixed(5)}->${destLat.toFixed(5)},${destLng.toFixed(5)}:${mode}`;
+      if (lastRouteRequestKeyRef.current === requestKey) {
+        return; // Skip duplicate execution
+      }
+
       const win = window as unknown as { google?: GoogleMapsGlobal };
       if (!win.google?.maps) return;
 
       const googleMaps = win.google.maps;
       setIsRouting(true);
       setRoutingError(null);
+      lastRouteRequestKeyRef.current = requestKey;
 
       const directionsService = new googleMaps.DirectionsService();
 
@@ -253,7 +309,7 @@ export function GoogleMapView({
             }
           } else {
             console.warn('[GoogleMapView] Directions failed with status:', status);
-            setRoutingError('Driving route unavailable for this location. You can still open external Google Maps.');
+            setRoutingError('Route preview unavailable for this location. You can still open external Google Maps.');
             if (directionsRendererRef.current) {
               directionsRendererRef.current.setDirections({ routes: [] });
             }
@@ -266,6 +322,7 @@ export function GoogleMapView({
 
   // Clear route
   const handleClearRoute = () => {
+    lastRouteRequestKeyRef.current = null;
     setRouteInfo(null);
     setRoutingError(null);
     if (directionsRendererRef.current) {
@@ -281,10 +338,9 @@ export function GoogleMapView({
     }
   };
 
+  // ── Step 1: Initialize Google Maps Canvas exactly ONCE ─────────────────────
   useEffect(() => {
-    if (!apiKey || (markers.length === 0 && !userLocation) || !mapRef.current) {
-      return;
-    }
+    if (!apiKey || !mapRef.current) return;
 
     let isMounted = true;
     const existingScript = document.getElementById('google-maps-js-sdk');
@@ -294,15 +350,18 @@ export function GoogleMapView({
       const win = window as unknown as { google?: GoogleMapsGlobal };
       if (!win.google?.maps) return;
 
+      // If map is already initialized, do not re-instantiate (prevents flickering)
+      if (mapInstanceRef.current) return;
+
       try {
         const googleMaps = win.google.maps;
-        const defaultCenter = userLocation || {
+        const initialCenter = userLocation || {
           lat: markers[0]?.lat || 6.9271,
           lng: markers[0]?.lng || 79.8612,
         };
 
         const map = new googleMaps.Map(mapRef.current, {
-          center: defaultCenter,
+          center: initialCenter,
           zoom: markers.length === 1 ? 14 : 11,
           mapTypeControl: false,
           streetViewControl: false,
@@ -319,7 +378,7 @@ export function GoogleMapView({
 
         mapInstanceRef.current = map;
 
-        // Setup Directions Renderer with custom stroke
+        // Setup persistent Directions Renderer attached to this map
         const directionsRenderer = new googleMaps.DirectionsRenderer({
           map,
           suppressMarkers: false,
@@ -331,69 +390,7 @@ export function GoogleMapView({
         });
         directionsRendererRef.current = directionsRenderer;
 
-        const bounds = new googleMaps.LatLngBounds();
-
-        // 1. Render User Location Radar Marker if available
-        if (userLocation) {
-          bounds.extend(userLocation);
-
-          const userMarker = new googleMaps.Marker({
-            position: userLocation,
-            map,
-            title: 'Your Location',
-            icon: {
-              path: googleMaps.SymbolPath.CIRCLE,
-              scale: 7,
-              fillColor: '#2563eb',
-              fillOpacity: 1,
-              strokeWeight: 3,
-              strokeColor: '#ffffff',
-            },
-          });
-          userMarkerRef.current = userMarker;
-        }
-
-        // 2. Render Venue Markers
-        markers.forEach((m) => {
-          const position = { lat: m.lat, lng: m.lng };
-          bounds.extend(position);
-
-          const marker = new googleMaps.Marker({
-            position,
-            map,
-            title: m.displayName,
-            icon: {
-              path: googleMaps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: m.isAcceptingOrders ? '#10b981' : '#f59e0b',
-              fillOpacity: 1,
-              strokeWeight: 2.5,
-              strokeColor: '#09090b',
-            },
-          });
-
-          marker.addListener('click', () => {
-            // Center map smoothly on tapped venue
-            map.panTo(position);
-
-            const matchedVenue = m.rawVenue || (singleVenue ? (singleVenue as unknown as VenuePublicProfileRecord) : null);
-            if (matchedVenue) {
-              setSelectedVenue(matchedVenue);
-              if (onVenueSelect) onVenueSelect(matchedVenue);
-            }
-          });
-        });
-
-        if (markers.length > 1 || (markers.length === 1 && userLocation)) {
-          map.fitBounds(bounds);
-        }
-
         setMapLoaded(true);
-
-        // Auto calculate route for single venue if requested
-        if (initialRouteToVenue && userLocation && markers[0]) {
-          calculateRoute(markers[0].lat, markers[0].lng, 'DRIVING');
-        }
       } catch (err) {
         console.error('[GoogleMapView] Map initialization error:', err);
         setLoadError(true);
@@ -421,13 +418,117 @@ export function GoogleMapView({
     return () => {
       isMounted = false;
     };
-  }, [apiKey, markers, userLocation, initialRouteToVenue, calculateRoute, onVenueSelect]);
+  }, [apiKey]); // Run once when apiKey / mount is ready
+
+  // ── Step 2: Render & Update Markers whenever markers array updates ─────────
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const win = window as unknown as { google?: GoogleMapsGlobal };
+    if (!map || !win.google?.maps) return;
+
+    const googleMaps = win.google.maps;
+
+    // Clean up previous venue markers
+    venueMarkersRef.current.forEach((m) => m.setMap(null));
+    venueMarkersRef.current = [];
+
+    const bounds = new googleMaps.LatLngBounds();
+
+    if (userLocation) {
+      bounds.extend(userLocation);
+    }
+
+    markers.forEach((m) => {
+      const position = { lat: m.lat, lng: m.lng };
+      bounds.extend(position);
+
+      const marker = new googleMaps.Marker({
+        position,
+        map,
+        title: m.displayName,
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: m.isAcceptingOrders ? '#10b981' : '#f59e0b',
+          fillOpacity: 1,
+          strokeWeight: 2.5,
+          strokeColor: '#09090b',
+        },
+      });
+
+      marker.addListener('click', () => {
+        map.panTo(position);
+        const matchedVenue =
+          m.rawVenue ||
+          (singleVenue ? singleVenueToProfileRecord(singleVenue) : null);
+        if (matchedVenue) {
+          setSelectedVenue(matchedVenue);
+          if (onVenueSelect) onVenueSelect(matchedVenue);
+        }
+      });
+
+      venueMarkersRef.current.push(marker);
+    });
+
+    if (markers.length > 1 || (markers.length === 1 && userLocation)) {
+      map.fitBounds(bounds);
+    }
+  }, [markers, mapLoaded, singleVenue, onVenueSelect]);
+
+  // ── Step 3: Update User Location Marker smoothly when user coordinates update ─
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const win = window as unknown as { google?: GoogleMapsGlobal };
+    if (!map || !win.google?.maps) return;
+
+    const googleMaps = win.google.maps;
+
+    if (userLocation) {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setPosition(userLocation);
+      } else {
+        userMarkerRef.current = new googleMaps.Marker({
+          position: userLocation,
+          map,
+          title: 'Your Location',
+          icon: {
+            path: googleMaps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: '#2563eb',
+            fillOpacity: 1,
+            strokeWeight: 3,
+            strokeColor: '#ffffff',
+          },
+        });
+      }
+    } else if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
+      userMarkerRef.current = null;
+    }
+  }, [userLocation, mapLoaded]);
+
+  // ── Step 4: Auto-Calculate Route when single venue & userLocation are available ──
+  useEffect(() => {
+    if (
+      initialRouteToVenue &&
+      userLocation &&
+      markers[0] &&
+      mapLoaded &&
+      directionsRendererRef.current
+    ) {
+      calculateRoute(markers[0].lat, markers[0].lng, 'DRIVING');
+    }
+  }, [initialRouteToVenue, userLocation, markers, mapLoaded, calculateRoute]);
 
   // Graceful degradation fallback
   if (!apiKey || loadError || (markers.length === 0 && !userLocation)) {
     const mainMarker = markers[0];
     const fallbackDirectionsUrl = mainMarker
-      ? getGoogleMapsDirectionsUrl(mainMarker.lat, mainMarker.lng, mainMarker.address || mainMarker.city)
+      ? getGoogleMapsDirectionsUrl(
+          mainMarker.lat,
+          mainMarker.lng,
+          mainMarker.address || mainMarker.city
+        )
       : 'https://maps.google.com';
 
     return (
@@ -497,7 +598,11 @@ export function GoogleMapView({
           }}
           onGetDirections={(mode) => {
             if (selectedVenue.latitude != null && selectedVenue.longitude != null) {
-              calculateRoute(Number(selectedVenue.latitude), Number(selectedVenue.longitude), mode);
+              calculateRoute(
+                Number(selectedVenue.latitude),
+                Number(selectedVenue.longitude),
+                mode
+              );
             }
           }}
           routeInfo={routeInfo}
@@ -506,7 +611,11 @@ export function GoogleMapView({
           onClearRoute={handleClearRoute}
           onTravelModeChange={(mode) => {
             if (selectedVenue.latitude != null && selectedVenue.longitude != null) {
-              calculateRoute(Number(selectedVenue.latitude), Number(selectedVenue.longitude), mode);
+              calculateRoute(
+                Number(selectedVenue.latitude),
+                Number(selectedVenue.longitude),
+                mode
+              );
             }
           }}
         />

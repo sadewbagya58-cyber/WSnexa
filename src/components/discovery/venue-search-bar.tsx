@@ -132,10 +132,10 @@ export function VenueSearchBar() {
   };
 
   // ── Near Me / Robust Geolocation Permission & Error Handling ───────────────
-  const handleNearMe = async () => {
+  const handleNearMe = () => {
     if (locating || isPending) return;
 
-    if (!navigator.geolocation) {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
       setLocError({
         title: 'Geolocation Unsupported',
         message: 'Your browser does not support GPS location. Please search by city or cuisine instead.',
@@ -146,25 +146,8 @@ export function VenueSearchBar() {
     setLocating(true);
     setLocError(null);
 
-    // Check Permissions API if available to know beforehand if blocked
-    if (navigator.permissions && navigator.permissions.query) {
-      try {
-        const perm = await navigator.permissions.query({ name: 'geolocation' });
-        if (perm.state === 'denied') {
-          setLocating(false);
-          setLocError({
-            title: 'Location Permission Blocked',
-            message:
-              'Location access is blocked for this site. Tap the lock/tune icon in your browser address bar to allow location permissions, then retry.',
-            isBlocked: true,
-          });
-          return;
-        }
-      } catch {
-        // Permissions API query not supported for geolocation on all browsers, continue
-      }
-    }
-
+    // Call getCurrentPosition synchronously within the user gesture handler
+    // to preserve transient user activation for the browser's native permission prompt.
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
@@ -182,23 +165,50 @@ export function VenueSearchBar() {
 
         // Distinguish the exact error cause
         if (err.code === err.PERMISSION_DENIED) {
-          setLocError({
-            title: 'Permission Denied',
-            message:
-              'Browser location permission was not granted. Please allow location access in your browser or search by city.',
-            isBlocked: true,
-          });
+          if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions
+              .query({ name: 'geolocation' })
+              .then((perm) => {
+                if (perm.state === 'denied') {
+                  setLocError({
+                    title: 'Location Permission Blocked',
+                    message:
+                      'Location permission is blocked for WSNexa. Please enable location permission for this site in your browser settings, then tap Retry.',
+                    isBlocked: true,
+                  });
+                } else {
+                  setLocError({
+                    title: 'Location Access Needed',
+                    message: 'Allow location access for WSNexa to find venues near you.',
+                    isBlocked: false,
+                  });
+                }
+              })
+              .catch(() => {
+                setLocError({
+                  title: 'Location Access Needed',
+                  message: 'Allow location access for WSNexa to find venues near you.',
+                  isBlocked: false,
+                });
+              });
+          } else {
+            setLocError({
+              title: 'Location Access Needed',
+              message: 'Allow location access for WSNexa to find venues near you.',
+              isBlocked: false,
+            });
+          }
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           setLocError({
-            title: 'GPS Unavailable',
+            title: 'Device Location Unavailable',
             message:
-              'Device location is currently unavailable. Please check that your device GPS / location services are switched ON.',
+              'Unable to detect your device location. Please ensure your device GPS or location services are turned on and try again.',
           });
         } else if (err.code === err.TIMEOUT) {
           setLocError({
-            title: 'Request Timed Out',
+            title: 'Location Request Timed Out',
             message:
-              'Acquiring your location timed out. Please check your signal and tap Retry.',
+              'Acquiring your GPS location timed out. Please check your signal and tap Retry.',
           });
         } else {
           setLocError({
@@ -207,7 +217,7 @@ export function VenueSearchBar() {
           });
         }
       },
-      { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 }
+      { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
     );
   };
 
@@ -327,7 +337,7 @@ export function VenueSearchBar() {
 
       {/* ── Category Chips (Reference-Inspired Responsive Chip Row) ──────── */}
       <div
-        className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none -mx-4 sm:mx-0 px-4 sm:px-0 touch-pan-x"
+        className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none -mx-4 sm:mx-0 px-4 sm:px-0 touch-pan-y"
         role="group"
         aria-label="Filter by category"
       >
@@ -374,12 +384,12 @@ export function VenueSearchBar() {
                 onClick={handleNearMe}
                 disabled={locating || isPending}
                 className="w-full px-3 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-black text-xs transition-all flex items-center justify-center gap-1.5 min-h-[44px] touch-manipulation disabled:opacity-60 active:scale-[0.98] shadow-xs"
-                aria-label={locating ? 'Locating your position...' : 'Find venues near me'}
+                aria-label={locating ? 'Finding your location...' : 'Find venues near me'}
               >
                 {locating ? (
                   <>
                     <span className="h-2 w-2 rounded-full bg-black animate-ping" />
-                    <span>Locating…</span>
+                    <span>Finding your location…</span>
                   </>
                 ) : (
                   <>

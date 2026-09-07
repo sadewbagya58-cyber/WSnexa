@@ -51,6 +51,7 @@ interface GoogleMapViewProps {
   onUserLocationChange?: (loc: { lat: number; lng: number }) => void;
   initialRouteToVenue?: boolean;
   onVenueSelect?: (venue: VenuePublicProfileRecord) => void;
+  onCloseDirections?: () => void;
   height?: string;
   className?: string;
 }
@@ -141,6 +142,7 @@ export function GoogleMapView({
   onUserLocationChange,
   initialRouteToVenue = false,
   onVenueSelect,
+  onCloseDirections,
   height = '400px',
   className = '',
 }: GoogleMapViewProps) {
@@ -686,8 +688,12 @@ export function GoogleMapView({
           venue={selectedVenue}
           userLocation={effectiveUserLocation}
           onClose={() => {
-            setSelectedVenue(null);
-            handleClearRoute();
+            if (onCloseDirections) {
+              onCloseDirections();
+            } else {
+              setSelectedVenue(null);
+              handleClearRoute();
+            }
           }}
           onGetDirections={(mode) => {
             if (selectedVenue.latitude != null && selectedVenue.longitude != null) {

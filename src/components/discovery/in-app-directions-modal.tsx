@@ -78,28 +78,44 @@ export function InAppDirectionsModal({
   const fallbackUrl = getGoogleMapsDirectionsUrl(venue.lat, venue.lng, venue.address || venue.city);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex flex-col sm:justify-center sm:items-center p-0 sm:p-4 animate-in fade-in duration-200">
       <div
-        className="w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full h-full sm:max-w-3xl sm:h-[85vh] sm:max-h-[750px] sm:rounded-3xl shadow-2xl sm:border sm:border-zinc-200/80 overflow-hidden relative flex flex-col bg-zinc-950"
         role="dialog"
         aria-modal="true"
         aria-labelledby="directions-modal-title"
       >
-        {/* ── Modal Header ───────────────────────────────────────────── */}
-        <div className="p-4 sm:p-5 flex items-center justify-between border-b border-zinc-100 bg-white">
-          <div className="space-y-0.5">
-            <h3 id="directions-modal-title" className="text-base font-black text-zinc-950 flex items-center gap-2">
-              <span>🧭</span> In-App Directions &amp; Route Preview
-            </h3>
-            <p className="text-xs font-bold text-zinc-500 truncate max-w-sm">
-              To {venue.displayName} • {venue.address || venue.city || 'Destination'}
-            </p>
+        {/* ── Interactive Map Canvas (Primary Full-Screen Visual Layer) ── */}
+        <div className="absolute inset-0 w-full h-full">
+          <GoogleMapView
+            singleVenue={venue}
+            userLocation={userLocation}
+            onUserLocationChange={setUserLocation}
+            initialRouteToVenue={Boolean(userLocation && venue.lat != null && venue.lng != null)}
+            height="100%"
+            className="rounded-none border-none h-full"
+            onCloseDirections={onClose}
+          />
+        </div>
+
+        {/* ── Floating Translucent Top Bar Overlay ─────────────────────── */}
+        <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none gap-2">
+          <div className="pointer-events-auto bg-white/95 backdrop-blur-md shadow-md border border-zinc-200/80 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2 max-w-[calc(100%-52px)]">
+            <span className="text-sm shrink-0">🧭</span>
+            <div className="min-w-0">
+              <h3 id="directions-modal-title" className="text-xs sm:text-sm font-black text-zinc-950 truncate leading-tight">
+                {venue.displayName}
+              </h3>
+              <p className="text-[10px] sm:text-xs font-semibold text-zinc-500 truncate leading-tight">
+                {venue.address || venue.city || 'Venue Location'}
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="h-9 w-9 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 flex items-center justify-center font-black text-sm transition-colors touch-manipulation"
+            className="pointer-events-auto h-9 w-9 sm:h-10 sm:w-10 rounded-2xl bg-white/95 backdrop-blur-md shadow-md border border-zinc-200/80 text-zinc-800 flex items-center justify-center font-black text-sm hover:bg-zinc-100 active:scale-95 transition-all touch-manipulation shrink-0"
             aria-label="Close directions"
           >
             ✕
@@ -108,13 +124,13 @@ export function InAppDirectionsModal({
 
         {/* ── Geolocation Notice / Status ────────────────────────────── */}
         {locating && (
-          <div className="px-4 py-2 bg-amber-50 text-amber-900 text-xs font-bold flex items-center gap-2 animate-pulse">
+          <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-16 sm:max-w-md z-30 px-3.5 py-2 bg-amber-50/95 backdrop-blur-md border border-amber-200 text-amber-950 text-xs font-bold rounded-2xl shadow-md flex items-center gap-2 animate-pulse pointer-events-auto">
             <span>📍</span> Acquiring your current location for live route preview...
           </div>
         )}
 
         {locError && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-950 text-xs font-semibold flex items-center justify-between gap-2 flex-wrap">
+          <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-16 sm:max-w-md z-30 p-3 bg-amber-50/95 backdrop-blur-md border border-amber-300 text-amber-950 text-xs font-semibold rounded-2xl shadow-lg flex items-center justify-between gap-2 flex-wrap pointer-events-auto">
             <span>⚠️ {locError}</span>
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -135,44 +151,6 @@ export function InAppDirectionsModal({
             </div>
           </div>
         )}
-
-        {/* ── Interactive Map Canvas ─────────────────────────────────── */}
-        <div className="relative flex-1 min-h-[360px] sm:min-h-[440px]">
-          <GoogleMapView
-            singleVenue={venue}
-            userLocation={userLocation}
-            onUserLocationChange={setUserLocation}
-            initialRouteToVenue={Boolean(userLocation && venue.lat != null && venue.lng != null)}
-            height="100%"
-            className="rounded-none border-none"
-          />
-        </div>
-
-        {/* ── Modal Footer ───────────────────────────────────────────── */}
-        <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-xs font-bold text-zinc-600">
-            📍 {venue.address || venue.city || 'Venue Location'}
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 text-xs font-bold transition-all text-center min-h-[40px] flex items-center justify-center"
-            >
-              Open in Google Maps App ↗
-            </a>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs font-extrabold transition-all min-h-[40px] flex items-center justify-center"
-            >
-              Done
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

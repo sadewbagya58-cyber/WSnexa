@@ -133,9 +133,10 @@ export function VenueSearchBar() {
   };
 
   // ── Near Me / Robust Geolocation Permission & Error Handling ───────────────
-  const handleNearMe = () => {
+  const handleNearMe = (bypassCache: boolean | React.MouseEvent = false) => {
     if (locating || isPending) return;
 
+    const shouldBypass = typeof bypassCache === 'boolean' ? bypassCache : false;
     setLocating(true);
     setLocError(null);
 
@@ -156,7 +157,8 @@ export function VenueSearchBar() {
         setLocating(false);
         console.warn('[VenueSearchBar] Geolocation error:', errInfo.code, errInfo.message);
         setLocError(errInfo);
-      }
+      },
+      { bypassCache: shouldBypass }
     );
   };
 
@@ -258,7 +260,7 @@ export function VenueSearchBar() {
           <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
-              onClick={handleNearMe}
+              onClick={() => handleNearMe(true)}
               className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] transition-all touch-manipulation active:scale-95 shadow-2xs"
             >
               🔄 Retry Location

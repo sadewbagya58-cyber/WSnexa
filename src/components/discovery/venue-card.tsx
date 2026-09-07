@@ -35,18 +35,19 @@ export function VenueCard({
     .join('');
 
   return (
-    <div className="group rounded-3xl border border-zinc-200/90 bg-white shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full relative touch-manipulation">
+    <div className="group rounded-3xl border border-zinc-200/90 bg-white shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full relative">
 
       {/* ── Cover Image Area (Consistent 16:10 Aspect Ratio) ─────────── */}
-      <div className="relative aspect-[16/10] w-full bg-zinc-900 overflow-hidden shrink-0 touch-manipulation">
+      <div className="relative aspect-[16/10] w-full bg-zinc-900 overflow-hidden shrink-0 select-none">
         {venue.cover_image_url ? (
           <Image
             src={venue.cover_image_url}
             alt={venue.display_name}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
+            className="object-cover group-hover:scale-[1.03] transition-transform duration-500 pointer-events-none select-none"
             unoptimized
+            draggable={false}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950 flex items-center justify-center">

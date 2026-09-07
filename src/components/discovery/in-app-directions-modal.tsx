@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { GoogleMapView } from '@/components/maps/google-map-view';
-import { getGoogleMapsDirectionsUrl, requestBrowserLocation } from '@/lib/maps/google-maps-config';
+import { getGoogleMapsDirectionsUrl, requestBrowserLocation, getCachedBrowserLocation } from '@/lib/maps/google-maps-config';
 
 interface InAppDirectionsModalProps {
   venue: {
@@ -30,7 +30,7 @@ export function InAppDirectionsModal({
   onClose,
 }: InAppDirectionsModalProps) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
-    initialUserLocation
+    initialUserLocation || getCachedBrowserLocation()
   );
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function InAppDirectionsModal({
     }
   }, [initialUserLocation]);
 
-  const requestLocation = useCallback(() => {
+  const requestLocation = useCallback((bypassCache = false) => {
     setLocating(true);
     setLocError(null);
 
@@ -56,14 +56,20 @@ export function InAppDirectionsModal({
         setLocating(false);
         console.warn('[InAppDirectionsModal] Geolocation error:', errInfo.code, errInfo.message);
         setLocError(errInfo.message);
-      }
+      },
+      { bypassCache }
     );
   }, []);
 
   useEffect(() => {
     if (!isOpen) return;
     if (!userLocation && !initialUserLocation) {
-      requestLocation();
+      const cached = getCachedBrowserLocation();
+      if (cached) {
+        setUserLocation(cached);
+      } else {
+        requestLocation();
+      }
     }
   }, [isOpen, userLocation, initialUserLocation, requestLocation]);
 
@@ -113,7 +119,7 @@ export function InAppDirectionsModal({
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={requestLocation}
+                onClick={() => requestLocation(true)}
                 className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-[11px] transition-all touch-manipulation active:scale-95"
               >
                 🔄 Retry

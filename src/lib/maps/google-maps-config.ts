@@ -53,14 +53,63 @@ export interface GeolocationErrorInfo {
   isBlocked?: boolean;
 }
 
+const CACHE_STORAGE_KEY = 'wsnexa_cached_coords';
+const CACHE_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+
+let inMemoryLocation: { lat: number; lng: number; timestamp: number } | null = null;
+let activeCallbacks: Array<{
+  onSuccess: (coords: GeolocationCoords) => void;
+  onError: (errInfo: GeolocationErrorInfo) => void;
+}> | null = null;
+
+export function getCachedBrowserLocation(): GeolocationCoords | null {
+  if (typeof window === 'undefined') return null;
+  if (inMemoryLocation && Date.now() - inMemoryLocation.timestamp < CACHE_MAX_AGE_MS) {
+    return { lat: inMemoryLocation.lat, lng: inMemoryLocation.lng };
+  }
+  try {
+    const stored = sessionStorage.getItem(CACHE_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (
+        parsed &&
+        typeof parsed.lat === 'number' &&
+        typeof parsed.lng === 'number' &&
+        isFinite(parsed.lat) &&
+        isFinite(parsed.lng) &&
+        Date.now() - parsed.timestamp < CACHE_MAX_AGE_MS
+      ) {
+        inMemoryLocation = parsed;
+        return { lat: parsed.lat, lng: parsed.lng };
+      }
+    }
+  } catch {
+    // Ignore storage read error
+  }
+  return null;
+}
+
+export function setCachedBrowserLocation(coords: GeolocationCoords): void {
+  if (typeof window === 'undefined') return;
+  if (!isFinite(coords.lat) || !isFinite(coords.lng)) return;
+  inMemoryLocation = { lat: coords.lat, lng: coords.lng, timestamp: Date.now() };
+  try {
+    sessionStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(inMemoryLocation));
+  } catch {
+    // Ignore storage write error
+  }
+}
+
 /**
  * Robust Browser Geolocation Request with automatic network/cache fallback.
- * Prevents mobile GPS timeout errors by attempting high accuracy with a sensible timeout,
- * then falling back to cell/WiFi triangulation before raising a timeout error.
+ * Prevents mobile GPS timeout errors by checking session cache, avoiding concurrent
+ * hardware locks, attempting high accuracy with fallback to network positioning,
+ * and handling PERMISSION_DENIED, POSITION_UNAVAILABLE, and TIMEOUT separately.
  */
 export function requestBrowserLocation(
   onSuccess: (coords: GeolocationCoords) => void,
-  onError: (errInfo: GeolocationErrorInfo) => void
+  onError: (errInfo: GeolocationErrorInfo) => void,
+  options?: { bypassCache?: boolean }
 ): void {
   if (typeof window === 'undefined' || !navigator.geolocation) {
     onError({
@@ -71,8 +120,47 @@ export function requestBrowserLocation(
     return;
   }
 
+  // Check valid recent cached coordinates unless explicitly bypassed (e.g. user tapped Retry)
+  if (!options?.bypassCache) {
+    const cached = getCachedBrowserLocation();
+    if (cached) {
+      onSuccess(cached);
+      return;
+    }
+  }
+
+  // If a hardware location request is already in-flight, queue listeners to avoid concurrent conflicts
+  if (activeCallbacks) {
+    activeCallbacks.push({ onSuccess, onError });
+    return;
+  }
+
+  activeCallbacks = [{ onSuccess, onError }];
+
+  const notifySuccess = (coords: GeolocationCoords) => {
+    setCachedBrowserLocation(coords);
+    const callbacks = activeCallbacks || [];
+    activeCallbacks = null;
+    callbacks.forEach((cb) => cb.onSuccess(coords));
+  };
+
+  const notifyError = (errInfo: GeolocationErrorInfo) => {
+    // If we have a slightly older cached coordinate, use it as an emergency fallback on timeout/unavailable
+    if (errInfo.code === 3 || errInfo.code === 2) {
+      const fallbackCached = getCachedBrowserLocation();
+      if (fallbackCached) {
+        notifySuccess(fallbackCached);
+        return;
+      }
+    }
+
+    const callbacks = activeCallbacks || [];
+    activeCallbacks = null;
+    callbacks.forEach((cb) => cb.onError(errInfo));
+  };
+
   const handlePositionSuccess = (pos: GeolocationPosition) => {
-    onSuccess({
+    notifySuccess({
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
     });
@@ -80,86 +168,79 @@ export function requestBrowserLocation(
 
   const handlePositionError = (err: GeolocationPositionError, isFallback = false) => {
     if (err.code === err.PERMISSION_DENIED) {
-      if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
-        navigator.permissions
-          .query({ name: 'geolocation' })
-          .then((perm) => {
-            if (perm.state === 'denied') {
-              onError({
-                code: 1,
-                title: 'Location Permission Blocked',
-                message:
-                  'Location permission is blocked for WSNexa. Please enable location permission for this site in your browser settings (tap the lock icon in the address bar), then tap Retry.',
-                isBlocked: true,
-              });
-            } else {
-              onError({
-                code: 1,
-                title: 'Location Access Needed',
-                message: 'Allow location access for WSNexa in your browser to find venues near you.',
-                isBlocked: false,
-              });
-            }
-          })
-          .catch(() => {
-            onError({
-              code: 1,
-              title: 'Location Access Needed',
-              message: 'Allow location access for WSNexa in your browser to find venues near you.',
-              isBlocked: false,
-            });
-          });
-      } else {
-        onError({
-          code: 1,
-          title: 'Location Access Needed',
-          message: 'Allow location access for WSNexa in your browser to find venues near you.',
-          isBlocked: false,
-        });
-      }
+      console.warn('[Geolocation] PERMISSION_DENIED:', err.message);
+      notifyError({
+        code: 1,
+        title: 'Location Permission Blocked',
+        message:
+          'Location permission is denied for WSNexa. Please enable location permission for this site in your browser settings (tap the lock icon in the address bar), then tap Retry.',
+        isBlocked: true,
+      });
       return;
     }
 
     if (err.code === err.POSITION_UNAVAILABLE) {
-      onError({
+      console.warn('[Geolocation] POSITION_UNAVAILABLE:', err.message);
+      // If primary high accuracy failed with position unavailable, try low accuracy cell/Wi-Fi
+      if (!isFallback) {
+        navigator.geolocation.getCurrentPosition(
+          handlePositionSuccess,
+          (fallbackErr) => handlePositionError(fallbackErr, true),
+          { timeout: 7000, enableHighAccuracy: false, maximumAge: 600000 }
+        );
+        return;
+      }
+
+      notifyError({
         code: 2,
         title: 'Device Location Unavailable',
         message:
-          'Unable to detect your device location. Please ensure your device GPS or Location Services are turned on in your device settings and try again.',
+          'Unable to detect your device location. Please ensure your device GPS or Location Services are turned on in your device settings and tap Retry.',
       });
       return;
     }
 
     if (err.code === err.TIMEOUT) {
-      // If accurate GPS timed out and we haven't tried fast network/cache fallback yet, try it now!
+      console.warn('[Geolocation] TIMEOUT (isFallback:', isFallback, '):', err.message);
+      // Primary GPS timed out (common indoors); immediately try fast network/cell triangulation
       if (!isFallback) {
         navigator.geolocation.getCurrentPosition(
           handlePositionSuccess,
           (fallbackErr) => handlePositionError(fallbackErr, true),
-          { timeout: 10000, enableHighAccuracy: false, maximumAge: 300000 }
+          { timeout: 7000, enableHighAccuracy: false, maximumAge: 600000 }
         );
         return;
       }
 
-      onError({
+      notifyError({
         code: 3,
         title: 'Location Request Timed Out',
-        message: 'Acquiring your location timed out. Please check your signal and tap Retry.',
+        message: 'Acquiring your location timed out. Please check your device location settings and tap Retry.',
       });
       return;
     }
 
-    onError({
+    console.warn('[Geolocation] Unexpected error code:', err.code, err.message);
+    notifyError({
       code: err.code || 0,
       title: 'Location Error',
       message: 'Unable to determine your current position. You can search by city or cuisine.',
     });
   };
 
-  // Primary attempt: Request with reasonable cache age so if device already has a recent fix, it returns in ~50ms
-  navigator.geolocation.getCurrentPosition(
-    handlePositionSuccess,
-    (err) => handlePositionError(err, false),
-    { timeout: 8000, enableHighAccuracy: true, maximumAge: 120000 }
-  );
+  // Primary attempt: Request GPS with 6s timeout and accept cached fix up to 5 mins
+  try {
+    navigator.geolocation.getCurrentPosition(
+      handlePositionSuccess,
+      (err) => handlePositionError(err, false),
+      { timeout: 6000, enableHighAccuracy: true, maximumAge: 300000 }
+    );
+  } catch (syncErr) {
+    console.error('[Geolocation] Synchronous invocation failure:', syncErr);
+    notifyError({
+      code: 0,
+      title: 'Location Error',
+      message: 'Failed to initiate location request. Please try again.',
+    });
+  }
 }

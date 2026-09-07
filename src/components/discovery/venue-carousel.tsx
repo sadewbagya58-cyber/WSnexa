@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { VenueCard } from './venue-card';
 import { VenueRankingMetrics } from '@/lib/validation/ranking';
@@ -14,6 +14,13 @@ interface VenueCarouselProps {
 }
 
 export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, seeAllHref }: VenueCarouselProps) {
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Reset navigating state when venues or seeAllHref changes
+  useEffect(() => {
+    setIsNavigating(false);
+  }, [seeAllHref, venues]);
+
   if (!venues || venues.length === 0) return null;
 
   return (
@@ -27,19 +34,33 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
         {seeAllHref && (
           <Link
             href={seeAllHref}
-            className="text-xs font-black text-amber-600 hover:text-amber-700 shrink-0 min-h-[44px] flex items-center px-3 py-2 rounded-xl hover:bg-amber-50 active:scale-95 transition-all touch-manipulation"
+            prefetch={true}
+            onClick={() => setIsNavigating(true)}
+            className={`text-xs font-black text-amber-600 hover:text-amber-700 shrink-0 min-h-[44px] flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-amber-50 active:scale-95 transition-all touch-manipulation ${
+              isNavigating ? 'opacity-75 pointer-events-none' : ''
+            }`}
             aria-label={`See all ${title} venues`}
           >
-            See All →
+            {isNavigating ? (
+              <>
+                <span className="inline-block w-3 h-3 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                <span>Loading...</span>
+              </>
+            ) : (
+              <span>See All →</span>
+            )}
           </Link>
         )}
       </div>
 
       {/*
-       * Horizontal snap rail.
+       * Horizontal snap rail with dual-axis touch support and momentum scrolling.
        * Viewport relative width ensures 2 cards are clearly recognizable on mobile.
        */}
-      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-manipulation">
+      <div
+        className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-proximity overscroll-x-contain scrollbar-none touch-pan-x touch-pan-y"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         <div
           className="flex items-stretch gap-2.5 sm:gap-4 px-4 sm:px-0 w-max"
           role="list"

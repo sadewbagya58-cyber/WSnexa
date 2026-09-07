@@ -273,6 +273,26 @@ export function GoogleMapView({
     return list;
   }, [venues, singleVenue?.id, singleVenue?.lat, singleVenue?.lng, singleVenue?.displayName, singleVenue?.coverImageUrl, singleVenue?.logoUrl]);
 
+  const [mapAuthError, setMapAuthError] = useState<string | null>(null);
+
+  // Monitor Google Maps SDK global authentication failures (e.g. RefererNotAllowed, BillingNotEnabled)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const win = window as unknown as { gm_authFailure?: () => void };
+    const prevHandler = win.gm_authFailure;
+    win.gm_authFailure = () => {
+      console.error(
+        '[GoogleMapView] Google Maps SDK authentication failure (gm_authFailure). Check API key restrictions, billing, or enabled APIs in Google Cloud Console.'
+      );
+      setMapAuthError(
+        'Google Maps authentication failed (gm_authFailure). Verify API key restrictions, billing, or enabled APIs in Google Cloud Console.'
+      );
+    };
+    return () => {
+      win.gm_authFailure = prevHandler;
+    };
+  }, []);
+
   // Client Directions Calculation (Decoupled from map creation)
   const calculateRoute = useCallback(
     (
@@ -281,7 +301,19 @@ export function GoogleMapView({
       mode: 'DRIVING' | 'WALKING' = 'DRIVING'
     ) => {
       const runRoute = (origin: { lat: number; lng: number }) => {
-        const requestKey = `${origin.lat.toFixed(5)},${origin.lng.toFixed(5)}->${destLat.toFixed(5)},${destLng.toFixed(5)}:${mode}`;
+        const oLat = Number(origin.lat);
+        const oLng = Number(origin.lng);
+        const dLat = Number(destLat);
+        const dLng = Number(destLng);
+
+        if (!isFinite(oLat) || !isFinite(oLng) || !isFinite(dLat) || !isFinite(dLng)) {
+          console.warn('[GoogleMapView] Invalid coordinates for route preview:', { origin, destLat, destLng });
+          setIsRouting(false);
+          setRoutingError('Invalid GPS coordinates. Origin or destination coordinates are missing.');
+          return;
+        }
+
+        const requestKey = `${oLat.toFixed(5)},${oLng.toFixed(5)}->${dLat.toFixed(5)},${dLng.toFixed(5)}:${mode}`;
         if (lastRouteRequestKeyRef.current === requestKey) {
           return; // Skip duplicate execution
         }
@@ -298,8 +330,8 @@ export function GoogleMapView({
 
         directionsService.route(
           {
-            origin: { lat: origin.lat, lng: origin.lng },
-            destination: { lat: destLat, lng: destLng },
+            origin: { lat: oLat, lng: oLng },
+            destination: { lat: dLat, lng: dLng },
             travelMode:
               mode === 'WALKING'
                 ? googleMaps.TravelMode.WALKING
@@ -323,8 +355,31 @@ export function GoogleMapView({
                 directionsRendererRef.current.setDirections(result);
               }
             } else {
-              console.warn('[GoogleMapView] Directions failed with status:', status);
-              setRoutingError('Route preview unavailable for this location. You can still open external Google Maps.');
+              console.warn('[GoogleMapView] Directions failed. Status:', status, {
+                origin: { lat: oLat, lng: oLng },
+                destination: { lat: dLat, lng: dLng },
+                mode,
+              });
+
+              let errorMsg = '';
+              if (status === 'ZERO_RESULTS') {
+                errorMsg = `No ${mode.toLowerCase()} route could be found to this venue (ZERO_RESULTS). This occurs if you are across water, in another region, or no road connection exists.`;
+              } else if (status === 'REQUEST_DENIED') {
+                errorMsg =
+                  'Directions request denied (REQUEST_DENIED). Google Maps Directions API may not be enabled on your Google Cloud project or API key referrer restrictions may be blocking requests.';
+              } else if (status === 'OVER_QUERY_LIMIT') {
+                errorMsg = 'Google Maps request quota exceeded (OVER_QUERY_LIMIT). Please wait a few moments and try again.';
+              } else if (status === 'NOT_FOUND') {
+                errorMsg = 'Origin or destination coordinates could not be resolved (NOT_FOUND).';
+              } else if (status === 'INVALID_REQUEST') {
+                errorMsg = 'Invalid route request parameters (INVALID_REQUEST).';
+              } else if (status === 'UNKNOWN_ERROR') {
+                errorMsg = 'Google Maps server encountered a temporary error (UNKNOWN_ERROR). Tap to retry.';
+              } else {
+                errorMsg = `Route calculation failed (${status || 'UNKNOWN'}). You can still open external Google Maps.`;
+              }
+
+              setRoutingError(errorMsg);
               if (directionsRendererRef.current) {
                 directionsRendererRef.current.setDirections({ routes: [] });
               }
@@ -645,7 +700,7 @@ export function GoogleMapView({
           }}
           routeInfo={routeInfo}
           isRouting={isRouting}
-          routingError={routingError}
+          routingError={mapAuthError || routingError}
           onClearRoute={handleClearRoute}
           onTravelModeChange={(mode) => {
             if (selectedVenue.latitude != null && selectedVenue.longitude != null) {

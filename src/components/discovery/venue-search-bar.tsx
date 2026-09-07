@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useTransition, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { requestBrowserLocation } from '@/lib/maps/google-maps-config';
 
 export const CATEGORIES = [
   { label: 'All', value: 'all', icon: '✨' },
@@ -135,89 +136,27 @@ export function VenueSearchBar() {
   const handleNearMe = () => {
     if (locating || isPending) return;
 
-    if (typeof window === 'undefined' || !navigator.geolocation) {
-      setLocError({
-        title: 'Geolocation Unsupported',
-        message: 'Your browser does not support GPS location. Please search by city or cuisine instead.',
-      });
-      return;
-    }
-
     setLocating(true);
     setLocError(null);
 
-    // Call getCurrentPosition synchronously within the user gesture handler
+    // Call requestBrowserLocation synchronously within the user gesture handler
     // to preserve transient user activation for the browser's native permission prompt.
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+    requestBrowserLocation(
+      (coords) => {
         setLocating(false);
         setLocError(null);
         setLocalSort('nearest');
         applyFilterUpdates({
-          userLat: pos.coords.latitude.toFixed(6),
-          userLng: pos.coords.longitude.toFixed(6),
+          userLat: coords.lat.toFixed(6),
+          userLng: coords.lng.toFixed(6),
           sort: 'nearest',
         });
       },
-      (err) => {
+      (errInfo) => {
         setLocating(false);
-        console.warn('[VenueSearchBar] Geolocation error:', err.code, err.message);
-
-        // Distinguish the exact error cause
-        if (err.code === err.PERMISSION_DENIED) {
-          if (navigator.permissions && navigator.permissions.query) {
-            navigator.permissions
-              .query({ name: 'geolocation' })
-              .then((perm) => {
-                if (perm.state === 'denied') {
-                  setLocError({
-                    title: 'Location Permission Blocked',
-                    message:
-                      'Location permission is blocked for WSNexa. Please enable location permission for this site in your browser settings, then tap Retry.',
-                    isBlocked: true,
-                  });
-                } else {
-                  setLocError({
-                    title: 'Location Access Needed',
-                    message: 'Allow location access for WSNexa to find venues near you.',
-                    isBlocked: false,
-                  });
-                }
-              })
-              .catch(() => {
-                setLocError({
-                  title: 'Location Access Needed',
-                  message: 'Allow location access for WSNexa to find venues near you.',
-                  isBlocked: false,
-                });
-              });
-          } else {
-            setLocError({
-              title: 'Location Access Needed',
-              message: 'Allow location access for WSNexa to find venues near you.',
-              isBlocked: false,
-            });
-          }
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          setLocError({
-            title: 'Device Location Unavailable',
-            message:
-              'Unable to detect your device location. Please ensure your device GPS or location services are turned on and try again.',
-          });
-        } else if (err.code === err.TIMEOUT) {
-          setLocError({
-            title: 'Location Request Timed Out',
-            message:
-              'Acquiring your GPS location timed out. Please check your signal and tap Retry.',
-          });
-        } else {
-          setLocError({
-            title: 'Location Error',
-            message: 'Unable to determine your current position. You can search by city or cuisine.',
-          });
-        }
-      },
-      { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
+        console.warn('[VenueSearchBar] Geolocation error:', errInfo.code, errInfo.message);
+        setLocError(errInfo);
+      }
     );
   };
 

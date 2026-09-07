@@ -27,7 +27,8 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
         {seeAllHref && (
           <Link
             href={seeAllHref}
-            className="text-xs font-black text-amber-600 hover:text-amber-700 shrink-0 min-h-[36px] flex items-center px-2.5 py-1 rounded-xl hover:bg-amber-50 active:scale-95 transition-all"
+            className="text-xs font-black text-amber-600 hover:text-amber-700 shrink-0 min-h-[44px] flex items-center px-3 py-2 rounded-xl hover:bg-amber-50 active:scale-95 transition-all touch-manipulation"
+            aria-label={`See all ${title} venues`}
           >
             See All →
           </Link>
@@ -36,9 +37,9 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
 
       {/*
        * Horizontal snap rail.
-       * Viewport relative width (82vw on small mobile) ensures next card preview is clearly visible.
+       * Viewport relative width ensures 2 cards are clearly recognizable on mobile.
        */}
-      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-pan-y">
+      <div className="-mx-4 sm:mx-0 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none touch-manipulation">
         <div
           className="flex items-stretch gap-2.5 sm:gap-4 px-4 sm:px-0 w-max"
           role="list"

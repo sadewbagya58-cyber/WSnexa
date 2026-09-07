@@ -275,6 +275,12 @@ export class VenueDiscoveryService {
       venues.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0));
     } else if (params.sort === 'reviews') {
       venues.sort((a, b) => (b.review_count || 0) - (a.review_count || 0));
+    } else if (params.sort === 'trending') {
+      venues.sort(
+        (a, b) =>
+          ((b.review_count || 0) * 3 + (b.average_rating || 0) * 2) -
+          ((a.review_count || 0) * 3 + (a.average_rating || 0) * 2)
+      );
     }
 
     // Paginate in memory if location/distance filters altered the list

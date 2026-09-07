@@ -15,6 +15,8 @@ export const metadata: Metadata = {
     'Discover nearby restaurants, cafes, hotels, resorts, and villas with in-app directions, menus, table reservations, and verified reviews on WSNexa.',
 };
 
+import { VenueRankingMetrics } from '@/lib/validation/ranking';
+
 interface ExplorePageProps {
   searchParams: Promise<{
     q?: string;
@@ -22,6 +24,7 @@ interface ExplorePageProps {
     priceLevel?: string;
     city?: string;
     sort?: string;
+    section?: string;
     page?: string;
     userLat?: string;
     userLng?: string;
@@ -47,14 +50,24 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const section = params.section;
+  const hasSpecificSort = Boolean(
+    params.sort &&
+    params.sort !== 'recommended' &&
+    params.sort !== 'nearest'
+  );
+
   const isDefaultBrowse =
     !params.q &&
     (!params.category || params.category === 'all') &&
     !params.city &&
     !userLat &&
     !orderingAvailableOnly &&
-    !hasPublicMenuOnly;
+    !hasPublicMenuOnly &&
+    !hasSpecificSort &&
+    !section;
 
+  const limit = section ? 50 : 12;
   const searchResult = await VenueDiscoveryService.searchVenues({
     query: params.q,
     category: params.category,
@@ -67,12 +80,65 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     hasPublicMenuOnly,
     sort:
       (params.sort as 'recommended' | 'nearest' | 'rating' | 'reviews' | 'trending' | 'newest') ||
-      (userLat != null ? 'nearest' : 'recommended'),
+      (section === 'trending'
+        ? 'trending'
+        : section === 'top_rated'
+        ? 'rating'
+        : userLat != null
+        ? 'nearest'
+        : 'recommended'),
     page,
-    limit: 12,
+    limit,
   });
 
-  const { venues, total, totalPages } = searchResult;
+  let { venues, total, totalPages } = searchResult;
+
+  if (section) {
+    let rankedMetrics: VenueRankingMetrics[] = [];
+    if (section === 'trending') {
+      rankedMetrics = await VenueRankingService.getRankedVenues('trending', 50);
+    } else if (section === 'top_rated') {
+      rankedMetrics = await VenueRankingService.getRankedVenues('top_rated', 50);
+    } else if (section === 'hidden_gems') {
+      rankedMetrics = await VenueRankingService.getRankedVenues('hidden_gems', 50);
+    } else if (section === 'recommended') {
+      rankedMetrics = await VenueRankingService.getPersonalizedRecommendations(user ? user.id : null, 50);
+    }
+
+    if (rankedMetrics.length > 0) {
+      const rankOrderMap = new Map<string, number>();
+      const tagMap = new Map<string, string>();
+      rankedMetrics.forEach((m, idx) => {
+        rankOrderMap.set(m.venueId, idx);
+        if (m.explanationTag || m.recommendationReason) {
+          tagMap.set(m.venueId, m.explanationTag || m.recommendationReason || '');
+        }
+      });
+
+      if (section === 'hidden_gems') {
+        venues = venues
+          .filter((v) => rankOrderMap.has(v.id))
+          .sort((a, b) => (rankOrderMap.get(a.id) ?? 999) - (rankOrderMap.get(b.id) ?? 999))
+          .map((v) => ({
+            ...v,
+            short_description: tagMap.get(v.id) || v.short_description,
+          }));
+      } else {
+        venues = [...venues]
+          .sort((a, b) => {
+            const rankA = rankOrderMap.has(a.id) ? (rankOrderMap.get(a.id) as number) : 9999;
+            const rankB = rankOrderMap.has(b.id) ? (rankOrderMap.get(b.id) as number) : 9999;
+            return rankA - rankB;
+          })
+          .map((v) => ({
+            ...v,
+            short_description: tagMap.get(v.id) || v.short_description,
+          }));
+      }
+      total = venues.length;
+      totalPages = Math.ceil(total / 12) || 1;
+    }
+  }
 
   // Fetch ranking sections when in default browsing view
   const [trendingVenues, topRatedVenues, hiddenGemsVenues, recommendedVenues] = isDefaultBrowse
@@ -113,6 +179,39 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         {/* ── Interactive Search & Filters Bar ──────────────────────── */}
         <VenueSearchBar />
 
+        {/* ── Active Section Banner (When navigating from "See All →") ─ */}
+        {section && (
+          <div className="flex items-center justify-between bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-xs">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-black text-zinc-950">
+                  {section === 'trending' && '🔥 Trending Now'}
+                  {section === 'top_rated' && '⭐ Top Rated Venues'}
+                  {section === 'hidden_gems' && '💎 Hidden Gems'}
+                  {section === 'recommended' && '✨ Recommended For You'}
+                  {!['trending', 'top_rated', 'hidden_gems', 'recommended'].includes(section) &&
+                    `Curated Collection (${section})`}
+                </h2>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                  {venues.length} {venues.length === 1 ? 'venue' : 'venues'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 font-medium">
+                {section === 'trending' && 'Popular venues with fast-growing recent orders & customer engagement'}
+                {section === 'top_rated' && 'Highest rating confidence calculated from verified customer visits'}
+                {section === 'hidden_gems' && 'Exceptional verified ratings in undiscovered spots'}
+                {section === 'recommended' && 'Curated based on your dining history and favorite spots'}
+              </p>
+            </div>
+            <Link
+              href="/explore"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100 rounded-xl transition-all min-h-[44px] touch-manipulation active:scale-95 shrink-0"
+            >
+              <span>← Back to Explore</span>
+            </Link>
+          </div>
+        )}
+
         {/* ── Default Curated Discovery Carousels ───────────────────── */}
         {isDefaultBrowse && (
           <div className="space-y-4 pt-1 border-t border-zinc-200/80">
@@ -122,7 +221,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 subtitle="Curated based on your dining history and favorite spots"
                 venues={recommendedVenues}
                 isLoggedIn={!!user}
-                seeAllHref="/explore?sort=recommended"
+                seeAllHref="/explore?section=recommended"
               />
             )}
 
@@ -131,7 +230,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               subtitle="Popular venues with fast-growing recent orders & customer engagement"
               venues={trendingVenues}
               isLoggedIn={!!user}
-              seeAllHref="/explore?sort=trending"
+              seeAllHref="/explore?section=trending"
             />
 
             <VenueCarousel
@@ -139,7 +238,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
               subtitle="Highest rating confidence calculated from verified customer visits"
               venues={topRatedVenues}
               isLoggedIn={!!user}
-              seeAllHref="/explore?sort=rating"
+              seeAllHref="/explore?section=top_rated"
             />
 
             {hiddenGemsVenues.length > 0 && (
@@ -148,7 +247,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
                 subtitle="Exceptional verified ratings in undiscovered spots"
                 venues={hiddenGemsVenues}
                 isLoggedIn={!!user}
-                seeAllHref="/explore?sort=rating"
+                seeAllHref="/explore?section=hidden_gems"
               />
             )}
           </div>

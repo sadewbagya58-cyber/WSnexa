@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { InAppDirectionsModal } from './in-app-directions-modal';
+import { requestBrowserLocation } from '@/lib/maps/google-maps-config';
 
 interface VenueDetailActionsProps {
   venue: {
@@ -44,20 +45,14 @@ export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
   const handleOpenDirections = () => {
     setDirectionsModalOpen(true);
     // Request geolocation directly on user gesture to preserve transient activation
-    if (typeof window !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-        },
-        (err) => {
-          console.warn('[VenueDetailActions] Geolocation request error:', err);
-        },
-        { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
-      );
-    }
+    requestBrowserLocation(
+      (coords) => {
+        setUserLocation(coords);
+      },
+      (errInfo) => {
+        console.warn('[VenueDetailActions] Geolocation request error:', errInfo.code, errInfo.message);
+      }
+    );
   };
 
   return (

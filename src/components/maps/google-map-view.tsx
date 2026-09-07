@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { getBrowserGoogleMapsApiKey, getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
+import { getBrowserGoogleMapsApiKey, getGoogleMapsDirectionsUrl, requestBrowserLocation } from '@/lib/maps/google-maps-config';
 import { VenuePublicProfileRecord } from '@/server/services/venue-discovery.service';
 import { VenueMapBottomSheet } from './venue-map-bottom-sheet';
 
@@ -334,37 +334,22 @@ export function GoogleMapView({
       };
 
       if (!effectiveUserLocation) {
-        if (typeof window !== 'undefined' && navigator.geolocation) {
-          setIsRouting(true);
-          setRoutingError(null);
+        setIsRouting(true);
+        setRoutingError(null);
 
-          // Direct user gesture activation for browser location permission
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-              setInternalUserLocation(newLoc);
-              onUserLocationChange?.(newLoc);
-              runRoute(newLoc);
-            },
-            (err) => {
-              setIsRouting(false);
-              console.warn('[GoogleMapView] Geolocation error:', err);
-              if (err.code === 1) {
-                setRoutingError('Location permission was denied. Please allow location access in your browser settings to preview the route.');
-              } else if (err.code === 2) {
-                setRoutingError('Device location is unavailable. Please ensure your device GPS is turned on.');
-              } else if (err.code === 3) {
-                setRoutingError('Location request timed out. Please tap to retry.');
-              } else {
-                setRoutingError('Unable to detect location. Please check your browser location settings.');
-              }
-            },
-            { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
-          );
-          return;
-        }
-
-        setRoutingError('Please enable your device location to preview the route.');
+        // Direct user gesture activation for browser location permission with network fallback
+        requestBrowserLocation(
+          (coords) => {
+            setInternalUserLocation(coords);
+            onUserLocationChange?.(coords);
+            runRoute(coords);
+          },
+          (errInfo) => {
+            setIsRouting(false);
+            console.warn('[GoogleMapView] Geolocation error:', errInfo.code, errInfo.message);
+            setRoutingError(errInfo.message);
+          }
+        );
         return;
       }
 

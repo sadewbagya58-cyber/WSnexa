@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { GoogleMapView } from '@/components/maps/google-map-view';
-import { getGoogleMapsDirectionsUrl } from '@/lib/maps/google-maps-config';
+import { getGoogleMapsDirectionsUrl, requestBrowserLocation } from '@/lib/maps/google-maps-config';
 
 interface InAppDirectionsModalProps {
   venue: {
@@ -44,36 +44,19 @@ export function InAppDirectionsModal({
   }, [initialUserLocation]);
 
   const requestLocation = useCallback(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) {
-      setLocError('Geolocation is not supported by your device browser.');
-      return;
-    }
-
     setLocating(true);
     setLocError(null);
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+    requestBrowserLocation(
+      (coords) => {
         setLocating(false);
-        setUserLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
+        setUserLocation(coords);
       },
-      (err) => {
+      (errInfo) => {
         setLocating(false);
-        console.warn('[InAppDirectionsModal] Geolocation error:', err);
-        if (err.code === 1) {
-          setLocError('Location access was denied. Please allow location access in your browser or retry.');
-        } else if (err.code === 2) {
-          setLocError('Device location is unavailable. Please ensure device GPS is turned on.');
-        } else if (err.code === 3) {
-          setLocError('Location request timed out. Please tap retry.');
-        } else {
-          setLocError('Location access was denied or timed out. You can retry or open external maps.');
-        }
-      },
-      { timeout: 12000, enableHighAccuracy: true, maximumAge: 60000 }
+        console.warn('[InAppDirectionsModal] Geolocation error:', errInfo.code, errInfo.message);
+        setLocError(errInfo.message);
+      }
     );
   }, []);
 

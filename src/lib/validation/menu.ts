@@ -35,6 +35,7 @@ export const createMenuItemSchema = z.object({
   isFeatured: z.boolean().default(false),
   displayOrder: z.number().int().min(0).default(0),
   primaryImageUrl: z.string().trim().optional().nullable(),
+  isActive: z.boolean().default(true).optional(),
 });
 
 export const updateMenuItemSchema = createMenuItemSchema.partial().extend({

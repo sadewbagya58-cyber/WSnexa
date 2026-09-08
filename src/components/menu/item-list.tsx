@@ -360,7 +360,12 @@ export const ItemList: React.FC<ItemListProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-zinc-950">{item.name}</span>
+                      <Link
+                        href={`/dashboard/menu/items/${item.id}`}
+                        className="font-bold text-zinc-950 hover:underline hover:text-amber-600 transition-colors"
+                      >
+                        {item.name}
+                      </Link>
                       {item.is_featured && <Badge variant="neutral">⭐ Featured</Badge>}
                       {isPending && (
                         <span className="text-[10px] text-zinc-500 font-semibold animate-pulse">
@@ -455,13 +460,20 @@ export const ItemList: React.FC<ItemListProps> = ({
                 {/* Secondary Edit/Modifiers/Delete Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/dashboard/menu/items/${item.id}`}
+                      className="flex min-h-[44px] items-center justify-center px-3 py-2 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 active:bg-zinc-300 border border-zinc-200 touch-manipulation"
+                    >
+                      Edit Item
+                    </Link>
+
                     <button
                       type="button"
                       onClick={() => handleOpenEdit(item)}
                       disabled={isPending}
-                      className="flex min-h-[44px] items-center justify-center px-3 py-2 rounded-lg text-xs font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 active:bg-zinc-300 border border-zinc-200 touch-manipulation"
+                      className="flex min-h-[44px] items-center justify-center px-3 py-2 rounded-lg text-xs font-semibold bg-white text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 border border-zinc-200 touch-manipulation"
                     >
-                      Edit Item
+                      Quick Modal
                     </button>
 
                     <Link href={`/dashboard/menu/items/${item.id}/modifiers`}>

@@ -333,6 +333,7 @@ export class VenueDiscoveryService {
         .select('id')
         .eq('business_id', profile.business_id)
         .eq('is_active', true)
+        .neq('availability_status', 'hidden')
         .is('deleted_at', null)
         .limit(1),
       admin
@@ -405,13 +406,14 @@ export class VenueDiscoveryService {
         name,
         description,
         price_cents,
-        image_url,
+        primary_image_url,
         availability_status,
         category:menu_categories(name)
       `)
       .eq('business_id', businessId)
       .eq('branch_id', branchId)
       .eq('is_active', true)
+      .neq('availability_status', 'hidden')
       .is('deleted_at', null)
       .order('price_cents', { ascending: false })
       .limit(12);
@@ -423,7 +425,7 @@ export class VenueDiscoveryService {
       name: string;
       description: string | null;
       price_cents: number;
-      image_url: string | null;
+      primary_image_url: string | null;
       availability_status: string;
       category?: { name?: string } | null;
     }>).map((item) => ({
@@ -432,7 +434,7 @@ export class VenueDiscoveryService {
       name: item.name,
       description: item.description,
       price_cents: item.price_cents,
-      image_url: item.image_url,
+      image_url: item.primary_image_url || null,
       availability_status: item.availability_status,
     }));
   }
@@ -465,13 +467,17 @@ export class VenueDiscoveryService {
         .from('menu_categories')
         .select('id, name, display_order')
         .eq('business_id', businessId)
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .is('deleted_at', null)
         .order('display_order', { ascending: true }),
       admin
         .from('menu_items')
-        .select('id, category_id, name, description, price_cents, image_url, availability_status, display_order')
+        .select('id, category_id, name, description, price_cents, primary_image_url, availability_status, display_order')
         .eq('business_id', businessId)
         .eq('branch_id', branchId)
         .eq('is_active', true)
+        .neq('availability_status', 'hidden')
         .is('deleted_at', null)
         .order('display_order', { ascending: true }),
     ]);
@@ -501,7 +507,7 @@ export class VenueDiscoveryService {
           name: item.name,
           description: item.description || null,
           price_cents: item.price_cents,
-          image_url: item.image_url || null,
+          image_url: item.primary_image_url || null,
           availability_status: item.availability_status || 'AVAILABLE',
         });
       } else {
@@ -518,7 +524,7 @@ export class VenueDiscoveryService {
           name: item.name,
           description: item.description || null,
           price_cents: item.price_cents,
-          image_url: item.image_url || null,
+          image_url: item.primary_image_url || null,
           availability_status: item.availability_status || 'AVAILABLE',
         });
       }

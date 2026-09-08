@@ -278,6 +278,7 @@ export async function createMenuItemAction(
     isFeatured,
     displayOrder,
     primaryImageUrl,
+    isActive,
   } = parsed.data;
 
   const supabase = await createClient();
@@ -335,6 +336,7 @@ export async function createMenuItemAction(
       is_featured: isFeatured,
       display_order: displayOrder,
       primary_image_url: primaryImageUrl || null,
+      is_active: isActive !== undefined ? isActive : true,
     })
     .select()
     .single();
@@ -383,7 +385,8 @@ export async function updateMenuItemAction(
     rest.description !== undefined ||
     rest.isFeatured !== undefined ||
     rest.displayOrder !== undefined ||
-    rest.primaryImageUrl !== undefined;
+    rest.primaryImageUrl !== undefined ||
+    rest.isActive !== undefined;
 
   const hasMenuManage = await can({
     context: authContext,
@@ -438,6 +441,7 @@ export async function updateMenuItemAction(
   if (rest.isFeatured !== undefined) updateData.is_featured = rest.isFeatured;
   if (rest.displayOrder !== undefined) updateData.display_order = rest.displayOrder;
   if (rest.primaryImageUrl !== undefined) updateData.primary_image_url = rest.primaryImageUrl || null;
+  if (rest.isActive !== undefined) updateData.is_active = rest.isActive;
 
   const { error } = await supabase
     .from('menu_items')

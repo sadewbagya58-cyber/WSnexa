@@ -625,6 +625,58 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           </select>
         </div>
 
+        {/* Public Menu Catalog Management Card */}
+        <div className="p-5 rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-amber-50/30 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-black text-zinc-950 flex items-center gap-2">
+                <span>🍽️</span>
+                <span>Public Menu Catalog</span>
+              </h3>
+              <p className="text-xs text-zinc-600 font-medium">
+                Populate categories and menu items for your public venue profile.
+              </p>
+            </div>
+            {formData.slug && (
+              <a
+                href={`/venues/${formData.slug}/menu`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900 underline min-h-[44px] touch-manipulation"
+              >
+                <span>View Live Public Menu</span>
+                <span aria-hidden>↗</span>
+              </a>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+            <Link
+              href="/dashboard/menu"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white hover:bg-zinc-100 active:bg-zinc-200 border border-zinc-200 text-zinc-950 text-xs font-extrabold min-h-[44px] shadow-2xs transition-all touch-manipulation text-center"
+            >
+              <span>📋</span>
+              <span>Menu Overview</span>
+            </Link>
+
+            <Link
+              href="/dashboard/menu/categories"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white hover:bg-zinc-100 active:bg-zinc-200 border border-zinc-200 text-zinc-950 text-xs font-extrabold min-h-[44px] shadow-2xs transition-all touch-manipulation text-center"
+            >
+              <span>🗂️</span>
+              <span>Categories</span>
+            </Link>
+
+            <Link
+              href="/dashboard/menu/items/new"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 text-white text-xs font-extrabold min-h-[44px] shadow-2xs transition-all touch-manipulation text-center"
+            >
+              <span>➕</span>
+              <span>Add Menu Item</span>
+            </Link>
+          </div>
+        </div>
+
         {/* Actions Footer */}
         <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-3">
           {!isLocComplete ? (

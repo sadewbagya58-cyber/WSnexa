@@ -123,39 +123,55 @@ export default async function VenuePublicMenuPage({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {cat.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-white rounded-2xl border border-zinc-200 p-4 shadow-2xs flex flex-col justify-between gap-3 hover:border-zinc-300 transition"
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-extrabold text-sm text-zinc-950 leading-snug">{item.name}</h3>
-                          <span className="font-mono font-black text-sm text-zinc-950 shrink-0">
-                            ${(item.price_cents / 100).toFixed(2)}
-                          </span>
-                        </div>
-                        {item.description && (
-                          <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
-                            {item.description}
-                          </p>
-                        )}
-                      </div>
+                  {cat.items.map((item) => {
+                    const isOutOfStock = item.availability_status?.toLowerCase() === 'out_of_stock';
 
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-100 text-[11px]">
-                        <span
-                          className={`font-extrabold px-2 py-0.5 rounded ${
-                            item.availability_status === 'OUT_OF_STOCK'
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          }`}
-                        >
-                          {item.availability_status === 'OUT_OF_STOCK' ? 'Currently Unavailable' : 'Available'}
-                        </span>
-                        <span className="text-zinc-400 font-semibold">View Only</span>
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-white rounded-2xl border border-zinc-200 p-4 shadow-2xs flex flex-col justify-between gap-3 hover:border-zinc-300 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="font-extrabold text-sm text-zinc-950 leading-snug">{item.name}</h3>
+                              <span className="font-mono font-black text-sm text-zinc-950 shrink-0">
+                                ${(item.price_cents / 100).toFixed(2)}
+                              </span>
+                            </div>
+                            {item.description && (
+                              <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+
+                          {item.image_url && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-zinc-200 shrink-0 shadow-2xs"
+                              loading="lazy"
+                            />
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 text-[11px]">
+                          <span
+                            className={`font-extrabold px-2 py-0.5 rounded ${
+                              isOutOfStock
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            }`}
+                          >
+                            {isOutOfStock ? 'Currently Unavailable' : 'Available'}
+                          </span>
+                          <span className="text-zinc-400 font-semibold">View Only</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ))}

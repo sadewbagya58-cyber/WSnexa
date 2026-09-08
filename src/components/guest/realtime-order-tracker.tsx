@@ -104,45 +104,94 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
     });
   };
 
+  const getStatusBadgeLabel = (status: string) => {
+    const emoji = statusEmojiMap[status] || '📦';
+    switch (status) {
+      case 'pending':
+        return `${emoji} ${t('ORDER RECEIVED', 'ORDER එක ලැබුණි')}`;
+      case 'confirmed':
+        return `${emoji} ${t('CONFIRMED', 'තහවුරු විය')}`;
+      case 'preparing':
+        return `${emoji} ${t('PREPARING', 'පිළියෙල කරමින්')}`;
+      case 'ready':
+        return `${emoji} ${t('READY TO SERVE', 'ලෑස්තියි')}`;
+      case 'completed':
+        return `${emoji} ${t('COMPLETED', 'සම්පූර්ණයි')}`;
+      case 'cancelled':
+        return `${emoji} ${t('CANCELLED', 'අවලංගුයි')}`;
+      default:
+        return `${emoji} ${status.toUpperCase()}`;
+    }
+  };
+
+  const getLocalizedPaymentMethodLabel = (pm: string) => {
+    switch (pm) {
+      case 'pay_at_counter':
+        return t('Pay at Counter', 'Counter එකෙන් ගෙවීම');
+      case 'cash':
+        return t('Cash', 'මුදලින් (Cash)');
+      case 'card':
+        return t('Card at Venue', 'Card මඟින් (Venue)');
+      case 'qr_payment':
+      case 'qr_pay':
+        return t('Venue QR Pay', 'Venue QR Pay');
+      case 'online_payment':
+      case 'online':
+        return t('Online Payment', 'Online ගෙවීම');
+      default:
+        return pm.replace('_', ' ');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-900 pb-16">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 py-3 shadow-xs">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 px-4 py-2.5 shadow-xs">
+        <div className="max-w-2xl mx-auto space-y-2">
+          {/* Row 1: Venue/Business name on left, Language toggle + Live indicator on right */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 truncate max-w-[170px] sm:max-w-xs">
               {businessName}
             </span>
-            <h1 className="text-base font-black tracking-tight text-zinc-950">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <GuestLanguageToggle />
+              {connectionStatus === 'connected' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  {t('Live', 'සජීවී')}
+                </span>
+              )}
+              {connectionStatus === 'reconnecting' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                  {t('Reconnecting...', 'නැවත සම්බන්ධ වෙමින්...')}
+                </span>
+              )}
+              {connectionStatus === 'offline' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 border border-zinc-200">
+                  {t('Offline', 'Offline')}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Live Order Tracker title + Order Status Badge */}
+          <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+            <h1 className="text-sm sm:text-base font-black tracking-tight text-zinc-950 shrink-0">
               {t('Live Order Tracker', 'සජීවී Order Tracker එක')}
             </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <GuestLanguageToggle />
-            {connectionStatus === 'connected' && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-800 border border-emerald-200">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {t('Live', 'සජීවී')}
-              </span>
-            )}
-            {connectionStatus === 'reconnecting' && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800 border border-amber-200">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-                {t('Reconnecting...', 'නැවත සම්බන්ධ වෙමින්...')}
-              </span>
-            )}
-            {connectionStatus === 'offline' && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-bold text-zinc-600 border border-zinc-200">
-                {t('Offline', 'Offline')}
-              </span>
-            )}
-            <Badge variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}>
-              {order.approval_status === 'pending_waiter_approval'
-                ? t('⏳ WAITING FOR STAFF APPROVAL', '⏳ කාර්ය මණ්ඩල අනුමැතිය බලාපොරොත්තුවෙන්')
-                : order.approval_status === 'rejected'
-                ? t('❌ NOT APPROVED', '❌ අනුමත නොවීය')
-                : `${statusEmojiMap[order.status] || '📦'} ${order.status.toUpperCase()}`}
-            </Badge>
+            <div className="shrink-0 max-w-full">
+              <Badge
+                variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}
+                className="text-[10px] sm:text-xs font-bold py-0.5 sm:py-1 px-2.5 text-center whitespace-normal leading-tight max-w-full"
+              >
+                {order.approval_status === 'pending_waiter_approval'
+                  ? t('⏳ WAITING FOR STAFF APPROVAL', '⏳ කාර්ය මණ්ඩල අනුමැතිය බලාපොරොත්තුවෙන්')
+                  : order.approval_status === 'rejected'
+                  ? t('❌ NOT APPROVED', '❌ අනුමත නොවීය')
+                  : getStatusBadgeLabel(order.status)}
+              </Badge>
+            </div>
           </div>
         </div>
       </header>
@@ -414,7 +463,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           <div className="space-y-2 text-xs text-zinc-700 font-bold">
             <div className="flex justify-between">
               <span>{t('Payment Method:', 'ගෙවීම් ක්‍රමය:')}</span>
-              <span className="capitalize">{order.payment_method.replace('_', ' ')}</span>
+              <span>{getLocalizedPaymentMethodLabel(order.payment_method)}</span>
             </div>
             {typeof order.amount_paid_cents === 'number' && (
               <div className="flex justify-between text-emerald-700">

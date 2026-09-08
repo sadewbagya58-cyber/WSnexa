@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { claimOrderAction, storeClaimIntentAction } from '@/server/actions/customer-order';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 interface SaveOrderButtonProps {
   orderId: string;
@@ -18,6 +19,7 @@ export function SaveOrderButton({
   customerUserId,
   currentUserId,
 }: SaveOrderButtonProps) {
+  const { t } = useGuestLanguage();
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
 
@@ -28,17 +30,17 @@ export function SaveOrderButton({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-black text-emerald-900">
             <span>✅</span>
-            <span>Saved to My Account</span>
+            <span>{t('Saved to My Account', 'ගිණුමේ සුරැකිණි')}</span>
           </div>
           <Link
             href={`/customer/orders/${orderId}`}
             className="px-3 py-1.5 rounded-xl bg-emerald-900 text-white font-extrabold text-xs hover:bg-emerald-800 transition-colors"
           >
-            View Receipt →
+            {t('View Receipt →', 'රිසිට්පත බලන්න →')}
           </Link>
         </div>
         <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
-          This order is saved under your customer account history.
+          {t('This order is saved under your customer account history.', 'මෙම ඇණවුම ඔබගේ පාරිභෝගික ගිණුමේ සුරකින ලදී.')}
         </p>
       </div>
     );
@@ -59,7 +61,7 @@ export function SaveOrderButton({
     if (res.success) {
       setStatusMessage({
         success: true,
-        text: res.message || 'Order saved to your account!',
+        text: res.message || t('Order saved to your account!', 'ඇණවුම ඔබගේ ගිණුමේ සුරකින ලදී!'),
       });
     } else {
       // User is logged out; store intent cookie and redirect to login
@@ -76,9 +78,12 @@ export function SaveOrderButton({
           ⭐
         </span>
         <div className="space-y-0.5">
-          <h4 className="text-xs font-extrabold text-zinc-950">Save your order history</h4>
+          <h4 className="text-xs font-extrabold text-zinc-950">{t('Save your order history', 'ඇණවුම් විස්තර සුරකින්න')}</h4>
           <p className="text-[11px] text-zinc-600 leading-relaxed font-medium">
-            Save this order to your WSNexa account to view it later, keep digital receipts, and track your spending.
+            {t(
+              'Save this order to your WSNexa account to view it later, keep digital receipts, and track your spending.',
+              'පසුව බැලීමට සහ ඩිජිටල් රිසිට්පත් ලබා ගැනීමට මෙම ඇණවුම ඔබගේ WSNexa ගිණුමේ සුරකින්න.'
+            )}
           </p>
         </div>
       </div>
@@ -90,7 +95,7 @@ export function SaveOrderButton({
             href={`/customer/orders/${orderId}`}
             className="px-2.5 py-1 rounded-lg bg-emerald-950 text-white font-bold hover:bg-emerald-900 transition-colors"
           >
-            View in Account →
+            {t('View in Account →', 'ගිණුමෙන් බලන්න →')}
           </Link>
         </div>
       ) : (
@@ -102,10 +107,10 @@ export function SaveOrderButton({
           className="w-full text-xs font-extrabold border-amber-300 bg-white hover:bg-amber-100 text-amber-950 shadow-2xs py-2.5"
         >
           {loading
-            ? 'Saving Order...'
+            ? t('Saving Order...', 'සුරකිමින්...')
             : currentUserId
-            ? '✨ Save Order'
-            : '✨ Save to My Account'}
+            ? t('✨ Save Order', '✨ Order එක සුරකින්න')
+            : t('✨ Save to My Account', '✨ ගිණුමේ සුරකින්න')}
         </Button>
       )}
     </div>

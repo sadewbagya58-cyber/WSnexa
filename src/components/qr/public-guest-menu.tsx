@@ -14,9 +14,10 @@ import { CategoryTabs } from '@/components/menu/category-tabs';
 import { MenuItemCard, MenuItemCardProps } from '@/components/menu/menu-item-card';
 import { MenuItemDetails } from '@/components/menu/menu-item-details';
 import { GuestMenuBottomActions } from './guest-menu-bottom-actions';
+import { TablePickerGrid } from './table-picker-grid';
 import { CartDrawer } from '../guest/cart-drawer';
 import { RewardsDrawer } from '../loyalty/rewards-drawer';
-import { CartLine, isTableAccessVerified } from '@/features/cart/cart-types';
+import { CartLine, ConfirmedTableContext, isTableAccessVerified } from '@/features/cart/cart-types';
 import { CustomerLoyaltyAccountRecord, LoyaltyRewardRecord } from '@/lib/validation/loyalty';
 import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
@@ -157,22 +158,26 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   // Cart Drawer & Table Modal state
   const [cartDrawerOpen, setCartDrawerOpen] = useState<boolean>(false);
   const [tableModalOpen, setTableModalOpen] = useState<boolean>(false);
-  const [selectedTableId, setSelectedTableId] = useState<string>(() => initialTableId || '');
-  const [pinInput, setPinInput] = useState<string>('');
-  const [verifying, setVerifying] = useState<boolean>(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  type PendingCustomerAction =
+    | { type: 'quick_add'; item: MenuItemCardProps['item'] }
+    | { type: 'open_details'; item: (typeof items)[0] }
+    | null;
+  const [pendingAction, setPendingAction] = useState<PendingCustomerAction>(null);
 
   // Filter tables and service areas if QR is scoped to an area
   const availableTables = useMemo(() => {
     if (serviceAreaId) {
-      return dining_tables.filter((t) => t.service_area_id === serviceAreaId);
+      const areaScoped = dining_tables.filter((t) => t.service_area_id === serviceAreaId);
+      if (areaScoped.length > 0) return areaScoped;
     }
     return dining_tables;
   }, [dining_tables, serviceAreaId]);
 
   const availableAreas = useMemo(() => {
     if (serviceAreaId) {
-      return service_areas.filter((a) => a.id === serviceAreaId);
+      const areaScoped = service_areas.filter((a) => a.id === serviceAreaId);
+      if (areaScoped.length > 0) return areaScoped;
     }
     return service_areas;
   }, [service_areas, serviceAreaId]);
@@ -182,13 +187,14 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     if (initialTableId && !isTableAccessVerified(confirmedTable)) {
       const targetTable = dining_tables.find((t) => t.id === initialTableId);
       if (targetTable) {
-        setSelectedTableId(targetTable.id);
         if (!branch.require_table_pin) {
           setConfirmedTable({
             branchId: branch.id,
             tableId: targetTable.id,
             tableName: targetTable.name,
             tableCode: targetTable.code,
+            serviceAreaId: targetTable.service_area_id || serviceAreaId || null,
+            serviceAreaName: service_areas.find((a) => a.id === targetTable.service_area_id)?.name || null,
             verifiedAt: new Date().toISOString(),
           });
         } else {
@@ -196,7 +202,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         }
       }
     }
-  }, [initialTableId, dining_tables, branch.id, branch.require_table_pin, confirmedTable, setConfirmedTable]);
+  }, [initialTableId, dining_tables, branch.id, branch.require_table_pin, confirmedTable, setConfirmedTable, serviceAreaId, service_areas]);
 
   const handleSelectCategory = useCallback((catId: string) => {
     setSelectedCategory(catId);
@@ -206,15 +212,55 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
     setSearchQuery(query);
   }, []);
 
+  const handleTableConfirmedFromGrid = useCallback(
+    (table: ConfirmedTableContext) => {
+      setConfirmedTable(table);
+      setTableModalOpen(false);
+
+      if (pendingAction) {
+        if (pendingAction.type === 'quick_add') {
+          const fullItem = items.find((i) => i.id === pendingAction.item.id);
+          if (fullItem) {
+            const hasModifiers = fullItem.modifier_groups && fullItem.modifier_groups.length > 0;
+            if (hasModifiers) {
+              setEditingCartLine(null);
+              setSelectedItem(fullItem);
+            } else {
+              addLine({
+                menuItemId: fullItem.id,
+                itemName: fullItem.name,
+                imageUrl: fullItem.primary_image_url,
+                quantity: 1,
+                basePriceCents: fullItem.price_cents,
+                selectedModifiers: [],
+              });
+            }
+          }
+        } else if (pendingAction.type === 'open_details') {
+          setEditingCartLine(null);
+          setSelectedItem(pendingAction.item);
+        }
+        setPendingAction(null);
+      }
+    },
+    [setConfirmedTable, pendingAction, items, addLine]
+  );
+
   const handleItemClick = useCallback(
     (item: MenuItemCardProps['item']) => {
       const fullItem = items.find((i) => i.id === item.id);
-      if (fullItem) {
-        setEditingCartLine(null);
-        setSelectedItem(fullItem);
+      if (!fullItem) return;
+
+      if (branch.require_table_selection && !isTableAccessVerified(confirmedTable)) {
+        setPendingAction({ type: 'open_details', item: fullItem });
+        setTableModalOpen(true);
+        return;
       }
+
+      setEditingCartLine(null);
+      setSelectedItem(fullItem);
     },
-    [items]
+    [items, branch.require_table_selection, confirmedTable]
   );
 
   const handleCloseItemDetails = useCallback(() => {
@@ -239,6 +285,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       const fullItem = items.find((i) => i.id === item.id);
       if (!fullItem) return;
 
+      if (branch.require_table_selection && !isTableAccessVerified(confirmedTable)) {
+        setPendingAction({ type: 'quick_add', item });
+        setTableModalOpen(true);
+        return;
+      }
+
       const hasModifiers = fullItem.modifier_groups && fullItem.modifier_groups.length > 0;
       if (hasModifiers) {
         setEditingCartLine(null);
@@ -254,51 +306,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         });
       }
     },
-    [items, addLine]
+    [items, addLine, branch.require_table_selection, confirmedTable]
   );
-
-  const handleConfirmTable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTableId) {
-      setVerifyError('Please select a dining table');
-      return;
-    }
-
-    if (branch.require_table_pin && pinInput.length !== (branch.table_pin_length || 4)) {
-      setVerifyError(`Please enter your ${branch.table_pin_length || 4}-digit Table PIN`);
-      return;
-    }
-
-    setVerifying(true);
-    setVerifyError(null);
-
-    const res = await verifyTableAccessAction(
-      branch.id,
-      selectedTableId,
-      pinInput,
-      undefined,
-      serviceAreaId || undefined
-    );
-
-
-    setVerifying(false);
-
-    if (res.success && res.data?.table) {
-      setConfirmedTable({
-        branchId: branch.id,
-        tableId: res.data.table.id,
-        tableName: res.data.table.name,
-        tableCode: res.data.table.code,
-        signedTableAccessProof: res.data.signedTableAccessProof,
-        verifiedAt: res.data.verifiedAt || new Date().toISOString(),
-        expiresAt: res.data.expiresAt,
-      });
-      setTableModalOpen(false);
-      setPinInput('');
-    } else {
-      setVerifyError(res.message || 'Table verification failed');
-    }
-  };
 
   const handleAddToCart = (configuredItem: {
     menuItemId: string;
@@ -388,14 +397,20 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
             {branch.require_table_selection && (
               <button
                 type="button"
-                onClick={() => setTableModalOpen(true)}
+                onClick={() => {
+                  setPendingAction(null);
+                  setTableModalOpen(true);
+                }}
                 className="flex items-center gap-1.5 rounded-full border border-zinc-300 bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-900 hover:bg-zinc-200 transition-colors cursor-pointer"
               >
                 <span>📍</span>
                 {isTableVerified ? (
-                  <span className="text-emerald-800 font-extrabold">{confirmedTable!.tableName}</span>
+                  <span className="text-emerald-800 font-extrabold truncate max-w-[140px]">
+                    {confirmedTable?.serviceAreaName ? `${confirmedTable.serviceAreaName} · ` : ''}
+                    {confirmedTable!.tableName}
+                  </span>
                 ) : (
-                  <span className="text-zinc-600">Select Table</span>
+                  <span className="text-amber-800 font-extrabold">Select Table</span>
                 )}
               </button>
             )}
@@ -419,59 +434,38 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           </div>
         )}
 
-        {/* Step 1 Hero Journey Card */}
+        {/* Step 1 Hero Journey Card: Touch Table Grid */}
         {branch.require_table_selection && !isTableVerified && (
-          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5 shadow-2xs space-y-3.5">
+          <div className="rounded-3xl border-2 border-amber-400/90 bg-amber-50/80 p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
-                  Step 1 of 3
-                </span>
-                <span className="text-[11px] font-bold text-amber-800">Required</span>
-              </div>
-              <span className="text-xl">📍</span>
+              <span className="inline-flex items-center rounded-full bg-amber-200 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
+                Step 1 of 3: Select Your Table
+              </span>
+              <span className="text-[11px] font-extrabold text-amber-900">Required to Order</span>
             </div>
 
-            <div>
-              <h2 className="text-base font-black text-zinc-950">Select Your Dining Table</h2>
-              <p className="text-xs text-zinc-600 mt-1 leading-relaxed">
-                Choose your table number before adding dishes {branch.require_table_pin ? 'with table PIN' : ''}.
-              </p>
-            </div>
-
-            <Button
-              size="lg"
-              className="w-full bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold text-xs sm:text-sm rounded-xl py-3 shadow-xs flex items-center justify-center gap-2 cursor-pointer min-h-[46px]"
-              onClick={() => setTableModalOpen(true)}
-            >
-              <span>📍</span>
-              <span>Select Table to Start Ordering</span>
-              <span className="ml-1 font-mono">➔</span>
-            </Button>
-
-            {/* Step Progress Tracker */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-amber-200/60 text-center">
-              <div className="rounded-lg bg-amber-200/80 py-1.5 px-1">
-                <span className="block text-[10px] font-black text-amber-950">1. Table</span>
-                <span className="text-[9px] font-bold text-amber-800">Required</span>
-              </div>
-              <div className="rounded-lg bg-white/80 py-1.5 px-1">
-                <span className="block text-[10px] font-bold text-zinc-700">2. Menu</span>
-                <span className="text-[9px] text-zinc-500">Pick Food</span>
-              </div>
-              <div className="rounded-lg bg-white/80 py-1.5 px-1">
-                <span className="block text-[10px] font-bold text-zinc-700">3. Checkout</span>
-                <span className="text-[9px] text-zinc-500">Review & Send</span>
-              </div>
-            </div>
+            <TablePickerGrid
+              branchId={branch.id}
+              serviceAreaId={serviceAreaId}
+              serviceAreaName={service_areas.find((a) => a.id === serviceAreaId)?.name}
+              diningTables={availableTables}
+              serviceAreas={availableAreas}
+              requireTablePin={branch.require_table_pin}
+              tablePinLength={branch.table_pin_length}
+              currentTableId={confirmedTable?.tableId}
+              onTableConfirmed={handleTableConfirmedFromGrid}
+              isInline={true}
+              title="ඔයා ඉන්නේ කුමන Table එකේද?"
+              subtitle="Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න."
+            />
           </div>
         )}
 
         {/* Collapsed Active Table Confirmation */}
         {branch.require_table_selection && isTableVerified && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 flex items-center justify-between shadow-2xs">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-3.5 flex items-center justify-between shadow-2xs">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-xs font-bold text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-xs font-black text-white shadow-xs">
                 ✓
               </div>
               <div>
@@ -479,17 +473,23 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
                     Dining Table Confirmed
                   </span>
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
-                <span className="text-xs font-black text-zinc-950">{confirmedTable!.tableName}</span>
+                <span className="text-sm font-black text-zinc-950">
+                  {confirmedTable?.serviceAreaName ? `${confirmedTable.serviceAreaName} · ` : ''}
+                  {confirmedTable!.tableName}
+                </span>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setTableModalOpen(true)}
-              className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline px-2 py-1 cursor-pointer"
+              onClick={() => {
+                setPendingAction(null);
+                setTableModalOpen(true);
+              }}
+              className="text-xs font-black text-emerald-800 hover:text-emerald-950 underline px-2 py-1 cursor-pointer"
             >
-              Change
+              Change Table
             </button>
           </div>
         )}
@@ -558,112 +558,42 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         onEditLine={handleEditCartLine}
       />
 
-      {/* Table Selection & PIN Verification Modal */}
+      {/* Table Selection Bottom Sheet / Modal */}
       {tableModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-150">
-          <form
-            onSubmit={handleConfirmTable}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-zinc-200 space-y-5"
-          >
-            <div className="space-y-1 border-b border-zinc-100 pb-3">
-              <h2 className="text-lg font-bold text-zinc-950">Select Dining Table</h2>
-              <p className="text-xs text-zinc-500">
-                Select your table number to start your guest ordering session at {branch.name}.
-              </p>
-            </div>
-
-            {verifyError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-800">
-                ⚠️ {verifyError}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {/* Area Scope Indicator if Area-Level QR */}
-              {serviceAreaId && (
-                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-zinc-900">
-                    <span>📍</span>
-                    <span>
-                      {availableAreas.find((a) => a.id === serviceAreaId)?.name || 'Assigned Area'}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                    ✓ Area Verified
-                  </span>
-                </div>
-              )}
-
-              {/* Select grouped or filtered by Service Area */}
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1.5">
-                  Dining Table Number *
-                </label>
-                {availableTables.length === 0 ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 space-y-1">
-                    <p className="font-bold">No Dining Tables in this Area</p>
-                    <p className="text-[11px] text-amber-800">
-                      No tables are currently configured for this dining area. Please ask a staff member for assistance.
-                    </p>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedTableId}
-                    onChange={(e) => setSelectedTableId(e.target.value)}
-                    required
-                    className="w-full rounded-xl border border-zinc-300 p-3 text-sm text-zinc-950 focus:border-zinc-950 focus:outline-none"
-                  >
-                    <option value="">-- Choose Table Number --</option>
-                    {availableAreas.map((area) => {
-                      const areaTables = availableTables.filter((t) => t.service_area_id === area.id);
-                      if (areaTables.length === 0) return null;
-                      return (
-                        <optgroup key={area.id} label={`${area.name} (${area.code})`}>
-                          {areaTables.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.name} ({t.code})
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
-                )}
-              </div>
-
-              {/* PIN Input field if require_table_pin is ON */}
-              {branch.require_table_pin && availableTables.length > 0 && (
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 mb-1.5">
-                    Table Security PIN ({branch.table_pin_length || 4} Digits) *
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={branch.table_pin_length || 4}
-                    placeholder={`Enter ${branch.table_pin_length || 4}-digit PIN on table sticker`}
-                    value={pinInput}
-                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-                    className="w-full font-mono text-center text-xl tracking-widest rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none"
-                  />
-                </div>
-              )}
-            </div>
-
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 cursor-pointer"
-                onClick={() => setTableModalOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" className="flex-1 cursor-pointer" disabled={verifying}>
-                {verifying ? 'Verifying...' : 'Confirm Table'}
-              </Button>
-            </div>
-          </form>
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4 animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setTableModalOpen(false);
+              setPendingAction(null);
+            }
+          }}
+        >
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white p-5 sm:p-6 shadow-xl border border-zinc-200 max-h-[85vh] overflow-y-auto">
+            <TablePickerGrid
+              branchId={branch.id}
+              serviceAreaId={serviceAreaId}
+              serviceAreaName={service_areas.find((a) => a.id === serviceAreaId)?.name}
+              diningTables={availableTables}
+              serviceAreas={availableAreas}
+              requireTablePin={branch.require_table_pin}
+              tablePinLength={branch.table_pin_length}
+              currentTableId={confirmedTable?.tableId}
+              onTableConfirmed={handleTableConfirmedFromGrid}
+              onCancel={() => {
+                setTableModalOpen(false);
+                setPendingAction(null);
+              }}
+              title={pendingAction ? '🪑 Table එක select කරන්න' : 'ඔයා ඉන්නේ කුමන Table එකේද?'}
+              subtitle={
+                pendingAction
+                  ? 'ඔයාගේ Order එක යවන්න කලින් Table එක තෝරන්න. (Select table before adding)'
+                  : 'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+              }
+            />
+          </div>
         </div>
       )}
 

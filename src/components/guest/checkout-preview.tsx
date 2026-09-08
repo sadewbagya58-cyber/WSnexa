@@ -13,11 +13,20 @@ import { submitGuestOrderAction, generateLocationProofAction } from '@/server/ac
 import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 import { BranchPaymentMethod, BranchOrderSecuritySettings } from '@/types/database.types';
+import { TablePickerGrid, TableItem, ServiceAreaItem } from '@/components/qr/table-picker-grid';
 
 interface CheckoutPreviewProps {
   token: string;
   branchName: string;
   businessName: string;
+  branchId?: string;
+  diningTables?: TableItem[];
+  serviceAreas?: ServiceAreaItem[];
+  serviceAreaId?: string | null;
+  serviceAreaName?: string | null;
+  requireTableSelection?: boolean;
+  requireTablePin?: boolean;
+  tablePinLength?: number;
   enabledPaymentMethods?: BranchPaymentMethod[];
   securitySettings?: BranchOrderSecuritySettings | null;
   isLoggedIn?: boolean;
@@ -60,12 +69,21 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   token,
   branchName,
   businessName,
+  branchId,
+  diningTables = [],
+  serviceAreas = [],
+  serviceAreaId,
+  serviceAreaName,
+  requireTableSelection = false,
+  requireTablePin = false,
+  tablePinLength = 4,
   enabledPaymentMethods,
   securitySettings,
   isLoggedIn = false,
 }) => {
   const router = useRouter();
-  const { state, clearCart } = useCart();
+  const { state, clearCart, setConfirmedTable } = useCart();
+  const [showCheckoutTablePicker, setShowCheckoutTablePicker] = useState(false);
 
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -209,6 +227,13 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
     e.preventDefault();
     if (isSubmitting) return;
 
+    if (requireTableSelection && !isTableAccessVerified(state.confirmedTable)) {
+      setErrorMessage('කරුණාකර මේස අංකය තෝරන්න / Please select your table above before submitting your order.');
+      setIsSubmitting(false);
+      setShowCheckoutTablePicker(true);
+      return;
+    }
+
     setErrorMessage(null);
     setIsSubmitting(true);
 
@@ -329,10 +354,23 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         )}
 
         {/* Dining Table Context */}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs space-y-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-            Dining Context
-          </span>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Dining Context
+            </span>
+            {diningTables.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowCheckoutTablePicker((prev) => !prev)}
+                className="text-xs font-bold text-amber-800 hover:text-amber-900 underline cursor-pointer"
+              >
+                {isTableAccessVerified(state.confirmedTable)
+                  ? (showCheckoutTablePicker ? 'Hide Table Picker' : 'Change Table')
+                  : 'Select Table'}
+              </button>
+            )}
+          </div>
           <div className="flex items-center justify-between text-sm font-bold text-zinc-950">
             <span>Branch Location:</span>
             <span className="font-semibold">{branchName}</span>
@@ -340,11 +378,49 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
           <div className="flex items-center justify-between text-sm font-bold text-zinc-950">
             <span>Table Status:</span>
             {isTableAccessVerified(state.confirmedTable) ? (
-              <Badge variant="success">📍 Table Verified ({state.confirmedTable!.tableName})</Badge>
+              <Badge variant="success">
+                ✓ {state.confirmedTable?.serviceAreaName ? `${state.confirmedTable.serviceAreaName} · ` : ''}{state.confirmedTable!.tableName}
+              </Badge>
             ) : (
-              <Badge variant="warning">No Valid Table Verification</Badge>
+              <Badge variant="warning">No Table Selected</Badge>
             )}
           </div>
+
+          {/* Fail-safe Table Picker directly on checkout */}
+          {diningTables.length > 0 && (!isTableAccessVerified(state.confirmedTable) || showCheckoutTablePicker) && (
+            <div className="pt-3 border-t border-zinc-100">
+              {!isTableAccessVerified(state.confirmedTable) && (
+                <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900 flex items-start gap-2">
+                  <span className="text-base leading-none mt-0.5">⚠️</span>
+                  <div>
+                    <p className="font-bold">ඇණවුම තහවුරු කිරීමට පෙර ඔබේ මේසය තෝරන්න</p>
+                    <p className="text-[11px] text-amber-800">Please select your table below before placing your order.</p>
+                  </div>
+                </div>
+              )}
+              <TablePickerGrid
+                branchId={branchId || state.branchId}
+                serviceAreaId={serviceAreaId || state.confirmedTable?.serviceAreaId || null}
+                serviceAreaName={serviceAreaName || state.confirmedTable?.serviceAreaName || null}
+                diningTables={diningTables}
+                serviceAreas={serviceAreas}
+                requireTablePin={requireTablePin}
+                tablePinLength={tablePinLength}
+                currentTableId={state.confirmedTable?.tableId}
+                qrVisitSessionToken={state.qrVisitSessionToken}
+                isInline={true}
+                compact={true}
+                title="Select Your Table / මේස අංකය තෝරන්න"
+                subtitle="Select the table number printed on your table"
+                onTableConfirmed={(confirmed) => {
+                  setConfirmedTable(confirmed);
+                  setShowCheckoutTablePicker(false);
+                  setErrorMessage(null);
+                }}
+                onCancel={isTableAccessVerified(state.confirmedTable) ? () => setShowCheckoutTablePicker(false) : undefined}
+              />
+            </div>
+          )}
         </div>
 
         {/* Guest Details Form */}
@@ -645,9 +721,10 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
           {/* Action Buttons */}
           <div className="space-y-3">
             {(() => {
+              const isTableGateBlocked = Boolean(requireTableSelection) && !isTableAccessVerified(state.confirmedTable);
               const isAccountGateBlocked = Boolean(securitySettings?.require_customer_account) && !isLoggedIn;
               const isLocationGateBlocked = Boolean(securitySettings?.require_location_verification) && locationState.status !== 'success';
-              const isSubmitDisabled = isSubmitting || isAccountGateBlocked || isLocationGateBlocked;
+              const isSubmitDisabled = isSubmitting || isTableGateBlocked || isAccountGateBlocked || isLocationGateBlocked;
 
               const effectiveDiscount = IS_LOYALTY_ENABLED && state.selectedReward
                 ? calculateRewardDiscountCents(state.selectedReward, state.subtotalCents, state.lines)
@@ -659,6 +736,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               )})`;
 
               if (isSubmitting) buttonText = 'Placing Order...';
+              else if (isTableGateBlocked) buttonText = '🪑 Select Table Above to Order / මේසය තෝරන්න';
               else if (isAccountGateBlocked) buttonText = '🔐 Sign in Required to Place Order';
               else if (isLocationGateBlocked) buttonText = '📍 Verify Device Location First';
 
@@ -668,7 +746,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                   className={`w-full text-sm font-extrabold py-3.5 shadow-md ${
                     isSubmitDisabled
                       ? 'bg-zinc-300 text-zinc-600 cursor-not-allowed border-zinc-300 shadow-none'
-                      : 'bg-zinc-950 hover:bg-zinc-800 text-white'
+                      : 'bg-zinc-950 hover:bg-zinc-800 text-white cursor-pointer'
                   }`}
                   disabled={isSubmitDisabled}
                 >

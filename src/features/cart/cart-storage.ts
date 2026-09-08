@@ -38,6 +38,8 @@ export function saveCartToStorage(branchId: string, state: CartState): void {
           tableId: state.confirmedTable.tableId,
           tableName: state.confirmedTable.tableName,
           tableCode: state.confirmedTable.tableCode,
+          serviceAreaId: state.confirmedTable.serviceAreaId || null,
+          serviceAreaName: state.confirmedTable.serviceAreaName || null,
           signedTableAccessProof: state.confirmedTable.signedTableAccessProof,
           verifiedAt: state.confirmedTable.verifiedAt,
           expiresAt: state.confirmedTable.expiresAt,
@@ -104,16 +106,16 @@ export function loadCartFromStorage(branchId: string, expectedCurrency?: string)
       return null;
     }
 
-    // Table Proof Expiry & Presence Validation
+    // Table Expiry & Presence Validation
     let validTable: ConfirmedTableContext | null = payload.confirmedTable || null;
     if (validTable) {
-      const proofMissing = !validTable.signedTableAccessProof || validTable.signedTableAccessProof.trim().length === 0;
       const proofExpired = validTable.expiresAt ? new Date(validTable.expiresAt).getTime() < Date.now() : false;
+      const isMalformed = !validTable.tableId || typeof validTable.tableId !== 'string' || validTable.branchId !== branchId;
 
-      if (proofMissing || proofExpired) {
-        console.warn('[loadCartFromStorage] Table context discarded due to missing or expired proof:', {
-          proofMissing,
+      if (proofExpired || isMalformed) {
+        console.warn('[loadCartFromStorage] Table context discarded due to expiration or branch mismatch:', {
           proofExpired,
+          isMalformed,
         });
         validTable = null;
       }

@@ -69,7 +69,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     state.lines.length > 0 && (!requireTableSelection || isTableConfirmed);
 
   const handleCheckoutClick = () => {
-    if (!canProceedToCheckout || isNavigating) return;
+    if (isNavigating) return;
+    if (!isTableConfirmed && requireTableSelection) {
+      onSelectTable();
+      return;
+    }
+    if (state.lines.length === 0) return;
     setIsNavigating(true);
     router.push(`/m/${token}/checkout`);
   };
@@ -95,17 +100,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             {requireTableSelection && (
               <div className="text-xs">
                 {isTableConfirmed ? (
-                  <div className="flex items-center gap-1 text-emerald-800 font-bold">
-                    <span>📍</span>
-                    <span>Confirmed Table: {state.confirmedTable?.tableName}</span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={onSelectTable}
+                    className="flex items-center gap-1.5 text-emerald-800 font-bold hover:underline cursor-pointer text-left"
+                  >
+                    <span>🪑</span>
+                    <span>
+                      {state.confirmedTable?.serviceAreaName
+                        ? `${state.confirmedTable.serviceAreaName} · ${state.confirmedTable.tableName}`
+                        : state.confirmedTable?.tableName}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-normal ml-1">Change</span>
+                  </button>
                 ) : (
                   <button
                     type="button"
                     onClick={onSelectTable}
-                    className="text-amber-800 font-bold underline hover:text-amber-900 cursor-pointer"
+                    className="text-amber-800 font-bold underline hover:text-amber-900 cursor-pointer text-left"
                   >
-                    ⚠️ Table selection required. Click to select.
+                    ⚠️ මේසය තෝරන්න / Select Table
                   </button>
                 )}
               </div>
@@ -251,13 +265,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               <Button
                 className="flex-1 text-sm font-bold py-3 cursor-pointer"
-                disabled={!canProceedToCheckout || isNavigating}
+                disabled={state.lines.length === 0 || isNavigating}
                 onClick={handleCheckoutClick}
               >
                 {isNavigating
                   ? 'Opening Checkout...'
                   : !isTableConfirmed && requireTableSelection
-                  ? 'Confirm Table to Proceed'
+                  ? '🪑 මේසය තෝරන්න / Select Table'
                   : 'Continue to Checkout →'}
               </Button>
             </div>

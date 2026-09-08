@@ -26,17 +26,20 @@ export interface ConfirmedTableContext {
   tableId: string;
   tableName: string;
   tableCode: string;
+  serviceAreaId?: string | null;
+  serviceAreaName?: string | null;
   signedTableAccessProof?: string;
   verifiedAt: string;
   expiresAt?: string;
 }
 
 /**
- * Derives whether table access is valid and verified based on a non-expired signed proof.
+ * Derives whether table access is valid and active.
+ * A table context is valid if it has an authoritative tableId and branchId,
+ * and has not expired.
  */
 export function isTableAccessVerified(table: ConfirmedTableContext | null | undefined): boolean {
-  if (!table) return false;
-  if (!table.signedTableAccessProof || table.signedTableAccessProof.trim().length === 0) return false;
+  if (!table || !table.tableId || !table.branchId) return false;
   if (table.expiresAt && new Date(table.expiresAt).getTime() < Date.now()) return false;
   return true;
 }

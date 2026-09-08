@@ -29,8 +29,32 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   }
 
   const payload = menuData as unknown as {
-    business: { name: string; currency: string };
-    branch: { id: string; name: string; currency?: string };
+    business: { id: string; name: string; currency: string };
+    branch: {
+      id: string;
+      name: string;
+      currency?: string;
+      require_table_selection?: boolean;
+      require_table_pin?: boolean;
+      table_pin_length?: number;
+    };
+    dining_tables?: Array<{
+      id: string;
+      name: string;
+      code: string;
+      table_number: number | null;
+      capacity?: number;
+      service_area_id?: string;
+      has_pin?: boolean;
+    }>;
+    service_areas?: Array<{
+      id: string;
+      name: string;
+      code: string;
+      display_order?: number;
+    }>;
+    service_area_id?: string | null;
+    service_area_name?: string | null;
     qrVisitSessionToken?: string;
   };
 
@@ -58,7 +82,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const [paymentMethods, securitySettings, subContext] = await Promise.all([
     BranchPaymentService.getBranchPaymentMethods(branchId),
     OrderSecurityService.getBranchSecuritySettings(branchId),
-    SubscriptionService.resolveSubscriptionContext((payload as unknown as { business: { id: string } }).business.id),
+    SubscriptionService.resolveSubscriptionContext(payload.business.id),
   ]);
 
   const isOrderingUnavailable = subContext.effectiveStatus === 'SUSPENDED' || subContext.effectiveStatus === 'CANCELLED';
@@ -85,8 +109,16 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
     <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
       <CheckoutPreview
         token={token}
+        branchId={branchId}
         branchName={payload.branch.name}
         businessName={payload.business.name}
+        diningTables={payload.dining_tables || []}
+        serviceAreas={payload.service_areas || []}
+        serviceAreaId={payload.service_area_id || null}
+        serviceAreaName={payload.service_area_name || null}
+        requireTableSelection={Boolean(payload.branch.require_table_selection)}
+        requireTablePin={Boolean(payload.branch.require_table_pin)}
+        tablePinLength={payload.branch.table_pin_length || 4}
         enabledPaymentMethods={enabledPaymentMethods}
         securitySettings={securitySettings}
         isLoggedIn={isLoggedIn}

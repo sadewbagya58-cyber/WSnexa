@@ -3,6 +3,7 @@ import { QrService } from '@/server/services/qr.service';
 import { LoyaltyService } from '@/server/services/loyalty.service';
 import { PublicGuestMenu } from '@/components/qr/public-guest-menu';
 import { CartProvider } from '@/features/cart/cart-context';
+import { GuestLanguageProvider } from '@/features/qr/guest-language-context';
 
 interface PublicMenuPageProps {
   params: Promise<{ token: string }>;
@@ -77,21 +78,23 @@ export default async function PublicMenuPage({ params }: PublicMenuPageProps) {
 
   return (
     <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
-      <PublicGuestMenu
-        token={token}
-        business={payload.business}
-        branch={payload.branch}
-        service_areas={payload.service_areas}
-        dining_tables={payload.dining_tables}
-        categories={payload.categories}
-        items={payload.items}
-        isAuthenticated={!!user}
-        loyaltyAccount={loyaltyAccount}
-        availableRewards={availableRewards}
-        isOrderingUnavailable={isOrderingUnavailable}
-        serviceAreaId={serviceAreaId}
-        initialTableId={initialTableId}
-      />
+      <GuestLanguageProvider>
+        <PublicGuestMenu
+          token={token}
+          business={payload.business}
+          branch={payload.branch}
+          service_areas={payload.service_areas}
+          dining_tables={payload.dining_tables}
+          categories={payload.categories}
+          items={payload.items}
+          isAuthenticated={!!user}
+          loyaltyAccount={loyaltyAccount}
+          availableRewards={availableRewards}
+          isOrderingUnavailable={isOrderingUnavailable}
+          serviceAreaId={serviceAreaId}
+          initialTableId={initialTableId}
+        />
+      </GuestLanguageProvider>
     </CartProvider>
   );
 }

@@ -3,6 +3,7 @@ import { BranchPaymentService } from '@/server/services/branch-payment.service';
 import { OrderSecurityService } from '@/server/services/order-security.service';
 import { CheckoutPreview } from '@/components/guest/checkout-preview';
 import { CartProvider } from '@/features/cart/cart-context';
+import { GuestLanguageProvider } from '@/features/qr/guest-language-context';
 
 interface CheckoutPageProps {
   params: Promise<{ token: string }>;
@@ -107,22 +108,24 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
 
   return (
     <CartProvider branchId={branchId} currency={currency} qrVisitSessionToken={qrVisitSessionToken}>
-      <CheckoutPreview
-        token={token}
-        branchId={branchId}
-        branchName={payload.branch.name}
-        businessName={payload.business.name}
-        diningTables={payload.dining_tables || []}
-        serviceAreas={payload.service_areas || []}
-        serviceAreaId={payload.service_area_id || null}
-        serviceAreaName={payload.service_area_name || null}
-        requireTableSelection={Boolean(payload.branch.require_table_selection)}
-        requireTablePin={Boolean(payload.branch.require_table_pin)}
-        tablePinLength={payload.branch.table_pin_length || 4}
-        enabledPaymentMethods={enabledPaymentMethods}
-        securitySettings={securitySettings}
-        isLoggedIn={isLoggedIn}
-      />
+      <GuestLanguageProvider>
+        <CheckoutPreview
+          token={token}
+          branchId={branchId}
+          branchName={payload.branch.name}
+          businessName={payload.business.name}
+          diningTables={payload.dining_tables || []}
+          serviceAreas={payload.service_areas || []}
+          serviceAreaId={payload.service_area_id || null}
+          serviceAreaName={payload.service_area_name || null}
+          requireTableSelection={Boolean(payload.branch.require_table_selection)}
+          requireTablePin={Boolean(payload.branch.require_table_pin)}
+          tablePinLength={payload.branch.table_pin_length || 4}
+          enabledPaymentMethods={enabledPaymentMethods}
+          securitySettings={securitySettings}
+          isLoggedIn={isLoggedIn}
+        />
+      </GuestLanguageProvider>
     </CartProvider>
   );
 }

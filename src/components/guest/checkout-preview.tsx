@@ -14,6 +14,7 @@ import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
 
 import { BranchPaymentMethod, BranchOrderSecuritySettings } from '@/types/database.types';
 import { TablePickerGrid, TableItem, ServiceAreaItem } from '@/components/qr/table-picker-grid';
+import { useGuestLanguage, GuestLanguageToggle } from '@/features/qr/guest-language-context';
 
 interface CheckoutPreviewProps {
   token: string;
@@ -82,6 +83,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
   isLoggedIn = false,
 }) => {
   const router = useRouter();
+  const { t } = useGuestLanguage();
   const { state, clearCart, setConfirmedTable } = useCart();
   const [showCheckoutTablePicker, setShowCheckoutTablePicker] = useState(false);
 
@@ -228,7 +230,12 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
     if (isSubmitting) return;
 
     if (requireTableSelection && !isTableAccessVerified(state.confirmedTable)) {
-      setErrorMessage('කරුණාකර මේස අංකය තෝරන්න / Please select your table above before submitting your order.');
+      setErrorMessage(
+        t(
+          'Please select your table above before submitting your order.',
+          'කරුණාකර මේස අංකය තෝරන්න / Please select your table above before submitting your order.'
+        )
+      );
       setIsSubmitting(false);
       setShowCheckoutTablePicker(true);
       return;
@@ -327,7 +334,10 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               </h1>
             </div>
           </div>
-          <Badge variant="neutral">{state.totalQuantity} items</Badge>
+          <div className="flex items-center gap-2">
+            <GuestLanguageToggle />
+            <Badge variant="neutral">{state.totalQuantity} items</Badge>
+          </div>
         </div>
       </header>
 
@@ -357,7 +367,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-              Dining Context
+              {t('Dining Context', 'ආපනශාලා තොරතුරු')}
             </span>
             {diningTables.length > 0 && (
               <button
@@ -366,8 +376,8 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 className="text-xs font-bold text-amber-800 hover:text-amber-900 underline cursor-pointer"
               >
                 {isTableAccessVerified(state.confirmedTable)
-                  ? (showCheckoutTablePicker ? 'Hide Table Picker' : 'Change Table')
-                  : 'Select Table'}
+                  ? (showCheckoutTablePicker ? t('Hide Table Picker', 'Table Picker සඟවන්න') : t('Change Table', 'මේසය මාරු කරන්න'))
+                  : t('Select Table', 'මේසය තෝරන්න')}
               </button>
             )}
           </div>
@@ -382,7 +392,7 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 ✓ {state.confirmedTable?.serviceAreaName ? `${state.confirmedTable.serviceAreaName} · ` : ''}{state.confirmedTable!.tableName}
               </Badge>
             ) : (
-              <Badge variant="warning">No Table Selected</Badge>
+              <Badge variant="warning">{t('No Table Selected', 'මේසයක් තෝරා නැත')}</Badge>
             )}
           </div>
 
@@ -393,8 +403,15 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900 flex items-start gap-2">
                   <span className="text-base leading-none mt-0.5">⚠️</span>
                   <div>
-                    <p className="font-bold">ඇණවුම තහවුරු කිරීමට පෙර ඔබේ මේසය තෝරන්න</p>
-                    <p className="text-[11px] text-amber-800">Please select your table below before placing your order.</p>
+                    <p className="font-bold">
+                      {t('Please select your table below before placing your order.', 'ඇණවුම තහවුරු කිරීමට පෙර ඔබේ මේසය තෝරන්න')}
+                    </p>
+                    <p className="text-[11px] text-amber-800">
+                      {t(
+                        'Table selection is required for order delivery.',
+                        'ඔබේ ඇණවුම නිවැරදි මේසයට ලබා දීමට මේසය තෝරා ගැනීම අවශ්‍යයි.'
+                      )}
+                    </p>
                   </div>
                 </div>
               )}
@@ -410,8 +427,8 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 qrVisitSessionToken={state.qrVisitSessionToken}
                 isInline={true}
                 compact={true}
-                title="Select Your Table / මේස අංකය තෝරන්න"
-                subtitle="Select the table number printed on your table"
+                title={t('Select Your Table', 'මේස අංකය තෝරන්න / Select Your Table')}
+                subtitle={t('Select the table number printed on your table', 'ඔබේ මේසයේ ඇති අංකය තෝරන්න')}
                 onTableConfirmed={(confirmed) => {
                   setConfirmedTable(confirmed);
                   setShowCheckoutTablePicker(false);
@@ -735,10 +752,13 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
                 state.currency
               )})`;
 
-              if (isSubmitting) buttonText = 'Placing Order...';
-              else if (isTableGateBlocked) buttonText = '🪑 Select Table Above to Order / මේසය තෝරන්න';
-              else if (isAccountGateBlocked) buttonText = '🔐 Sign in Required to Place Order';
-              else if (isLocationGateBlocked) buttonText = '📍 Verify Device Location First';
+              if (isSubmitting) buttonText = t('Placing Order...', 'ඇණවුම සකසමින් පවතී...');
+              else if (isTableGateBlocked)
+                buttonText = t('🪑 Select Table Above to Order', '🪑 මේසය තෝරන්න / Select Table Above to Order');
+              else if (isAccountGateBlocked)
+                buttonText = t('🔐 Sign in Required to Place Order', '🔐 ඇණවුම සඳහා Sign-in විය යුතුය');
+              else if (isLocationGateBlocked)
+                buttonText = t('📍 Verify Device Location First', '📍 පළමුව ඔබ සිටින ස්ථානය තහවුරු කරන්න');
 
               return (
                 <Button

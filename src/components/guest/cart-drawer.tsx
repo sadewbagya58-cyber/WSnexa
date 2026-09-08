@@ -9,6 +9,7 @@ import { formatCurrency } from '@/features/cart/cart-calculations';
 import { QuantityStepper } from './quantity-stepper';
 import { CartLine } from '@/features/cart/cart-types';
 import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 interface CartDrawerProps {
   token: string;
@@ -29,6 +30,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onEditLine,
 }) => {
   const router = useRouter();
+  const { t } = useGuestLanguage();
   const { state, updateQuantity, removeLine, clearCart, setSelectedReward } = useCart();
 
   // Body scroll lock
@@ -92,7 +94,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         <div className="p-5 border-b border-zinc-200 flex items-center justify-between">
           <div className="space-y-1">
             <h2 id="cart-drawer-title" className="text-lg font-black text-zinc-950 flex items-center gap-2">
-              Your Guest Cart
+              {t('Your Guest Cart', 'ඔබගේ ඇණවුම් බඳුන (Cart)')}
               <Badge variant="neutral">{state.totalQuantity} items</Badge>
             </h2>
 
@@ -111,7 +113,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         ? `${state.confirmedTable.serviceAreaName} · ${state.confirmedTable.tableName}`
                         : state.confirmedTable?.tableName}
                     </span>
-                    <span className="text-[10px] text-zinc-400 font-normal ml-1">Change</span>
+                    <span className="text-[10px] text-zinc-400 font-normal ml-1">
+                      {t('Change', 'මාරු')}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -119,7 +123,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     onClick={onSelectTable}
                     className="text-amber-800 font-bold underline hover:text-amber-900 cursor-pointer text-left"
                   >
-                    ⚠️ මේසය තෝරන්න / Select Table
+                    {t('⚠️ Select Table to Order', '⚠️ මේසය තෝරන්න / Select Table')}
                   </button>
                 )}
               </div>
@@ -210,8 +214,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           {state.lines.length === 0 && (
             <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-2 rounded-2xl border-2 border-dashed border-zinc-200 text-zinc-400">
               <span className="text-4xl">🛒</span>
-              <span className="text-sm font-bold text-zinc-700">Your cart is empty</span>
-              <p className="text-xs text-zinc-500">Add delicious items from the branch menu to get started.</p>
+              <span className="text-sm font-bold text-zinc-700">{t('Your cart is empty', 'ඔබගේ Cart හි අයිතම නොමැත')}</span>
+              <p className="text-xs text-zinc-500">
+                {t(
+                  'Add delicious items from the branch menu to get started.',
+                  'මෙනුවෙන් ආහාර එකතු කරන්න.'
+                )}
+              </p>
             </div>
           )}
         </div>
@@ -242,13 +251,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-600">
-                <span>Items Subtotal ({state.totalQuantity} items)</span>
+                <span>{t('Items Subtotal', 'අයිතම එකතුව')} ({state.totalQuantity} items)</span>
                 <span className="font-mono font-bold text-zinc-950">
                   {formatCurrency(state.subtotalCents, state.currency)}
                 </span>
               </div>
               <div className="flex justify-between text-base font-black text-zinc-950 pt-1 border-t border-zinc-200">
-                <span>Subtotal</span>
+                <span>{t('Subtotal', 'මුළු එකතුව')}</span>
                 <span>{formatCurrency(state.subtotalCents, state.currency)}</span>
               </div>
             </div>
@@ -260,7 +269,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 onClick={clearCart}
                 className="text-xs text-zinc-600 cursor-pointer"
               >
-                Clear Cart
+                {t('Clear Cart', 'Cart ඉවත් කරන්න')}
               </Button>
 
               <Button
@@ -269,10 +278,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 onClick={handleCheckoutClick}
               >
                 {isNavigating
-                  ? 'Opening Checkout...'
+                  ? t('Opening Checkout...', 'Checkout වෙත යමින්...')
                   : !isTableConfirmed && requireTableSelection
-                  ? '🪑 මේසය තෝරන්න / Select Table'
-                  : 'Continue to Checkout →'}
+                  ? t('🪑 Select Table to Continue', '🪑 මේසය තෝරන්න / Select Table')
+                  : t('Continue to Checkout →', 'Checkout වෙත ඉදිරියට යන්න →')}
               </Button>
             </div>
           </div>

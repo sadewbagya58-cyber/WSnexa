@@ -20,6 +20,7 @@ import { RewardsDrawer } from '../loyalty/rewards-drawer';
 import { CartLine, ConfirmedTableContext, isTableAccessVerified } from '@/features/cart/cart-types';
 import { CustomerLoyaltyAccountRecord, LoyaltyRewardRecord } from '@/lib/validation/loyalty';
 import { IS_LOYALTY_ENABLED } from '@/lib/config/features';
+import { useGuestLanguage, GuestLanguageToggle } from '@/features/qr/guest-language-context';
 
 interface PublicGuestMenuProps {
   token: string;
@@ -135,8 +136,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   serviceAreaId = null,
   initialTableId = null,
 }) => {
+  const { t } = useGuestLanguage();
   const { addLine, editLine, setConfirmedTable } = useCartActions();
   const confirmedTable = useConfirmedTable();
+
+  const confirmedTableRef = React.useRef(confirmedTable);
+  confirmedTableRef.current = confirmedTable;
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -251,7 +256,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       const fullItem = items.find((i) => i.id === item.id);
       if (!fullItem) return;
 
-      if (branch.require_table_selection && !isTableAccessVerified(confirmedTable)) {
+      const currentTable = confirmedTableRef.current;
+      if (branch.require_table_selection && !isTableAccessVerified(currentTable)) {
         setPendingAction({ type: 'open_details', item: fullItem });
         setTableModalOpen(true);
         return;
@@ -260,7 +266,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       setEditingCartLine(null);
       setSelectedItem(fullItem);
     },
-    [items, branch.require_table_selection, confirmedTable]
+    [items, branch.require_table_selection]
   );
 
   const handleCloseItemDetails = useCallback(() => {
@@ -285,7 +291,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
       const fullItem = items.find((i) => i.id === item.id);
       if (!fullItem) return;
 
-      if (branch.require_table_selection && !isTableAccessVerified(confirmedTable)) {
+      const currentTable = confirmedTableRef.current;
+      if (branch.require_table_selection && !isTableAccessVerified(currentTable)) {
         setPendingAction({ type: 'quick_add', item });
         setTableModalOpen(true);
         return;
@@ -306,7 +313,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         });
       }
     },
-    [items, addLine, branch.require_table_selection, confirmedTable]
+    [items, addLine, branch.require_table_selection]
   );
 
   const handleAddToCart = (configuredItem: {
@@ -351,7 +358,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   const handleEditCartLine = (line: CartLine) => {
     const itemCatalog = items.find((i) => i.id === line.menuItemId);
     if (!itemCatalog) {
-      alert('This item is no longer available in the branch menu.');
+      alert(t('This item is no longer available in the branch menu.', 'මෙම අයිතමය දැන් මෙනුවේ නොමැත.'));
       return;
     }
 
@@ -377,6 +384,8 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
         address={branch.city || branch.address_line1 || undefined}
         rightActions={
           <div className="flex items-center gap-2">
+            <GuestLanguageToggle />
+
             {/* Loyalty Rewards Pill Button */}
             {IS_LOYALTY_ENABLED && (
               <button
@@ -388,7 +397,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                 {isAuthenticated ? (
                   <span className="font-extrabold text-amber-900">{loyaltyAccount?.pointsBalance || 0} pts</span>
                 ) : (
-                  <span>Rewards</span>
+                  <span>{t('Rewards', 'ප්‍රතිලාභ')}</span>
                 )}
               </button>
             )}
@@ -410,7 +419,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                     {confirmedTable!.tableName}
                   </span>
                 ) : (
-                  <span className="text-amber-800 font-extrabold">Select Table</span>
+                  <span className="text-amber-800 font-extrabold">{t('Select Table', 'මේසය තෝරන්න')}</span>
                 )}
               </button>
             )}
@@ -426,9 +435,14 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3 text-xs text-amber-950">
             <span className="text-xl">💳</span>
             <div>
-              <span className="font-extrabold uppercase tracking-wider text-[10px] block text-amber-900">Ordering Unavailable</span>
+              <span className="font-extrabold uppercase tracking-wider text-[10px] block text-amber-900">
+                {t('Ordering Unavailable', 'ඇණවුම් කිරීම තාවකාලිකව අත්හිටුවා ඇත')}
+              </span>
               <p className="text-amber-950 font-medium leading-relaxed">
-                Ordering is currently unavailable for this venue. Menu is view-only.
+                {t(
+                  'Ordering is currently unavailable for this venue. Menu is view-only.',
+                  'මෙම ස්ථානය සඳහා ඇණවුම් ලබා ගැනීම තාවකාලිකව නවත්වා ඇත. මෙනුව නැරඹීමට පමණි.'
+                )}
               </p>
             </div>
           </div>
@@ -439,9 +453,11 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           <div className="rounded-3xl border-2 border-amber-400/90 bg-amber-50/80 p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center rounded-full bg-amber-200 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
-                Step 1 of 3: Select Your Table
+                {t('Step 1 of 3: Select Your Table', 'පියවර 1/3: ඔබේ මේසය තෝරන්න')}
               </span>
-              <span className="text-[11px] font-extrabold text-amber-900">Required to Order</span>
+              <span className="text-[11px] font-extrabold text-amber-900">
+                {t('Required to Order', 'Order කිරීමට අවශ්‍යයි')}
+              </span>
             </div>
 
             <TablePickerGrid
@@ -455,8 +471,11 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               currentTableId={confirmedTable?.tableId}
               onTableConfirmed={handleTableConfirmedFromGrid}
               isInline={true}
-              title="ඔයා ඉන්නේ කුමන Table එකේද?"
-              subtitle="Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න."
+              title={t('Which table are you at?', 'ඔයා ඉන්නේ කුමන Table එකේද?')}
+              subtitle={t(
+                'Select your table so we can send your order to the correct table.',
+                'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+              )}
             />
           </div>
         )}
@@ -471,7 +490,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
-                    Dining Table Confirmed
+                    {t('Dining Table Confirmed', 'මේසය තහවුරුයි')}
                   </span>
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
@@ -489,7 +508,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               }}
               className="text-xs font-black text-emerald-800 hover:text-emerald-950 underline px-2 py-1 cursor-pointer"
             >
-              Change Table
+              {t('Change Table', 'මේසය මාරු කරන්න')}
             </button>
           </div>
         )}
@@ -519,7 +538,10 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
 
           {filteredItems.length === 0 && (
             <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-xs text-zinc-500">
-              No items matching your search or selected category.
+              {t(
+                'No items matching your search or selected category.',
+                'ඔබ සොයන ආහාර හෝ කාණ්ඩය මෙහි නොමැත.'
+              )}
             </div>
           )}
         </div>
@@ -586,11 +608,21 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
                 setTableModalOpen(false);
                 setPendingAction(null);
               }}
-              title={pendingAction ? '🪑 Table එක select කරන්න' : 'ඔයා ඉන්නේ කුමන Table එකේද?'}
+              title={
+                pendingAction
+                  ? t('Select your table', '🪑 Table එක select කරන්න')
+                  : t('Which table are you at?', 'ඔයා ඉන්නේ කුමන Table එකේද?')
+              }
               subtitle={
                 pendingAction
-                  ? 'ඔයාගේ Order එක යවන්න කලින් Table එක තෝරන්න. (Select table before adding)'
-                  : 'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+                  ? t(
+                      'Please select your table before adding items to order.',
+                      'ඔයාගේ Order එක යවන්න කලින් Table එක තෝරන්න.'
+                    )
+                  : t(
+                      'Select your table so we can send your order to the correct table.',
+                      'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+                    )
               }
             />
           </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmedTableContext } from '@/features/cart/cart-types';
 import { verifyTableAccessAction } from '@/server/actions/table';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 export interface TableItem {
   id: string;
@@ -57,11 +58,19 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
   compact = false,
   isInline = false,
 }) => {
+  const { t } = useGuestLanguage();
   const [selectedTableId, setSelectedTableId] = useState<string>(currentTableId || '');
   const [pinInput, setPinInput] = useState<string>('');
   const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pinInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showPinPrompt && pinInputRef.current) {
+      pinInputRef.current.focus();
+    }
+  }, [showPinPrompt]);
 
   // Filter tables to active service area if scoped
   const filteredTables = React.useMemo(() => {
@@ -91,6 +100,8 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
     return null;
   }, [serviceAreaName, serviceAreaId, serviceAreas]);
 
+  const isTablePinRequired = (table: TableItem) => Boolean(requireTablePin || table.has_pin);
+
   const executeVerification = async (targetTable: TableItem, pin?: string) => {
     setIsVerifying(true);
     setErrorMessage(null);
@@ -117,13 +128,40 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
           expiresAt: res.data.expiresAt,
         };
 
+        setShowPinPrompt(false);
         onTableConfirmed(confirmed);
       } else {
-        const msg = res.message || 'Table එක verify කරන්න බැරි වුණා. කරුණාකර ආයෙත් උත්සාහ කරන්න.';
-        setErrorMessage(msg);
+        const isPinIssue = res.message?.toLowerCase().includes('pin');
+        if (isPinIssue) {
+          setShowPinPrompt(true);
+          setErrorMessage(
+            pin
+              ? t(
+                  "That PIN doesn't match. Please check the 4-digit PIN on your table and try again.",
+                  "PIN අංකය නොගැලපේ. කරුණාකර Table එකේ ඇති 4-digit PIN අංකය පරීක්ෂා කර නැවත උත්සාහ කරන්න."
+                )
+              : t(
+                  "This table requires a PIN. Enter the 4-digit PIN shown on your table.",
+                  "මෙම Table එක සඳහා PIN අංකයක් අවශ්‍යයි. Table එකේ ඇති 4-digit PIN එක ඇතුළත් කරන්න."
+                )
+          );
+        } else {
+          setErrorMessage(
+            res.message ||
+              t(
+                "Unable to verify table. Please try again.",
+                "Table එක තහවුරු කිරීමට නොහැකි විය. කරුණාකර නැවත උත්සාහ කරන්න."
+              )
+          );
+        }
       }
     } catch {
-      setErrorMessage('Connection එකේ ගැටළුවක් තියෙනවා. කරුණාකර නැවත උත්සාහ කරන්න.');
+      setErrorMessage(
+        t(
+          "Connection issue. Please try again.",
+          "Connection එකේ ගැටළුවක් තියෙනවා. කරුණාකර නැවත උත්සාහ කරන්න."
+        )
+      );
     } finally {
       setIsVerifying(false);
     }
@@ -134,7 +172,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
     setSelectedTableId(table.id);
     setErrorMessage(null);
 
-    if (requireTablePin) {
+    if (isTablePinRequired(table)) {
       setShowPinPrompt(true);
       setPinInput('');
     } else {
@@ -147,12 +185,19 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
     e.preventDefault();
     const targetTable = filteredTables.find((t) => t.id === selectedTableId);
     if (!targetTable) {
-      setErrorMessage('කරුණාකර Table එකක් තෝරන්න.');
+      setErrorMessage(
+        t('Please select a table.', 'කරුණාකර Table එකක් තෝරන්න.')
+      );
       return;
     }
 
     if (pinInput.trim().length !== tablePinLength) {
-      setErrorMessage(`කරුණාකර Table sticker එකේ ඇති ඉලක්කම් ${tablePinLength} ක PIN අංකය ඇතුළත් කරන්න.`);
+      setErrorMessage(
+        t(
+          `Please enter the ${tablePinLength}-digit PIN shown on your table.`,
+          `කරුණාකර Table sticker එකේ ඇති ඉලක්කම් ${tablePinLength} ක PIN අංකය ඇතුළත් කරන්න.`
+        )
+      );
       return;
     }
 
@@ -169,7 +214,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-xl">🪑</span>
             <h3 className="text-base sm:text-lg font-black tracking-tight text-zinc-950">
-              {title || 'ඔයා ඉන්නේ කුමන Table එකේද?'}
+              {title || t('Which table are you at?', 'ඔයා ඉන්නේ කුමන Table එකේද?')}
             </h3>
           </div>
           {resolvedAreaName && (
@@ -181,7 +226,11 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
         </div>
 
         <p className="text-xs text-zinc-600 leading-relaxed font-medium">
-          {subtitle || 'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න. (Select your table)'}
+          {subtitle ||
+            t(
+              'Select your table so we can send your order to the correct table.',
+              'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+            )}
         </p>
       </div>
 
@@ -193,47 +242,106 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
         </div>
       )}
 
-      {/* PIN Prompt Sub-view if Table PIN is required */}
+      {/* PIN Prompt View if Table PIN is required */}
       {showPinPrompt && selectedTableObj ? (
-        <form onSubmit={handlePinSubmit} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-3 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black text-zinc-950">
-              Table PIN required for {selectedTableObj.name}
+        <form
+          onSubmit={handlePinSubmit}
+          className="rounded-2xl border-2 border-zinc-950 bg-white p-5 sm:p-6 space-y-4 shadow-lg animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔐</span>
+                <h4 className="text-base sm:text-lg font-black tracking-tight text-zinc-950">
+                  {t('Enter Table PIN', 'Table PIN එක ඇතුළත් කරන්න')}
+                </h4>
+              </div>
+              <p className="text-xs text-zinc-600 font-medium leading-relaxed">
+                {t(
+                  `Enter the ${tablePinLength}-digit PIN shown on your table.`,
+                  `ඔබේ Table එකේ ඇති ඉලක්කම් ${tablePinLength} ක PIN එක ඇතුළත් කරන්න.`
+                )}
+              </p>
+            </div>
+
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1 text-xs font-black text-zinc-900 border border-zinc-200 shrink-0">
+              <span>🪑</span>
+              <span>{selectedTableObj.name}</span>
             </span>
+          </div>
+
+          {/* Secure 4-Digit Display & Hidden Numeric Input */}
+          <div className="py-2">
+            <div
+              onClick={() => pinInputRef.current?.focus()}
+              className="relative flex justify-center items-center gap-3 cursor-pointer py-2"
+            >
+              {Array.from({ length: tablePinLength }).map((_, idx) => {
+                const char = pinInput[idx];
+                const isCurrent = pinInput.length === idx;
+                return (
+                  <div
+                    key={idx}
+                    className={`h-12 w-12 sm:h-14 sm:w-14 rounded-2xl border-2 flex items-center justify-center text-xl font-mono font-black transition-all ${
+                      char
+                        ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
+                        : isCurrent
+                        ? 'border-zinc-950 bg-zinc-50 ring-2 ring-zinc-950/20'
+                        : 'border-zinc-200 bg-zinc-50 text-zinc-400'
+                    }`}
+                  >
+                    {char ? '•' : ''}
+                  </div>
+                );
+              })}
+
+              <input
+                ref={pinInputRef}
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={tablePinLength}
+                value={pinInput}
+                autoFocus
+                disabled={isVerifying}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/\D/g, '').slice(0, tablePinLength);
+                  setPinInput(cleaned);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                aria-label={t('Enter Table PIN', 'Table PIN එක ඇතුළත් කරන්න')}
+              />
+            </div>
+            <p className="text-[11px] text-zinc-400 text-center mt-1 font-medium">
+              {t('Tap above to enter numbers', 'PIN එක ඇතුළත් කිරීමට ඉහත click කරන්න')}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-1">
+            <Button
+              type="submit"
+              disabled={isVerifying || pinInput.length !== tablePinLength}
+              className="w-full text-sm font-extrabold py-3.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl shadow-md min-h-[48px] cursor-pointer disabled:bg-zinc-300 disabled:text-zinc-500 disabled:cursor-not-allowed"
+            >
+              {isVerifying
+                ? t('Verifying...', 'තහවුරු කරමින්...')
+                : t('Verify Table', 'Table එක තහවුරු කරන්න')}
+            </Button>
+
             <button
               type="button"
               onClick={() => {
                 setShowPinPrompt(false);
                 setPinInput('');
+                setErrorMessage(null);
               }}
-              className="text-xs font-bold text-zinc-500 hover:text-zinc-900 underline cursor-pointer"
+              disabled={isVerifying}
+              className="w-full py-2.5 text-xs font-bold text-zinc-600 hover:text-zinc-950 text-center transition-colors cursor-pointer min-h-[44px]"
             >
-              Change Table
+              ← {t('Back to Tables', 'වෙනත් Table එකක් තෝරන්න')}
             </button>
-          </div>
-
-          <p className="text-[11px] text-zinc-600 font-medium">
-            Enter the {tablePinLength}-digit PIN shown on your table sticker:
-          </p>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={tablePinLength}
-              placeholder={`${tablePinLength}-digit PIN`}
-              value={pinInput}
-              autoFocus
-              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-              className="flex-1 text-center font-mono text-lg tracking-widest rounded-xl border border-zinc-300 bg-white p-2.5 text-zinc-950 focus:border-zinc-950 focus:outline-none min-h-[44px]"
-            />
-            <Button
-              type="submit"
-              disabled={isVerifying || pinInput.length !== tablePinLength}
-              className="px-5 font-black text-xs bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl min-h-[44px]"
-            >
-              {isVerifying ? 'Verifying...' : 'Confirm →'}
-            </Button>
           </div>
         </form>
       ) : (
@@ -242,9 +350,12 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
           {filteredTables.length === 0 ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-xs text-amber-900 space-y-1">
               <span className="text-2xl block mb-1">⚠️</span>
-              <p className="font-extrabold">No Dining Tables Found</p>
+              <p className="font-extrabold">{t('No Dining Tables Found', 'Dining Tables කිසිවක් හමු නොවීය')}</p>
               <p className="text-[11px] text-amber-800 font-medium">
-                No active tables configured for this service area. Please ask staff for assistance.
+                {t(
+                  'No active tables configured for this service area. Please ask staff for assistance.',
+                  'මෙම Service Area එක සඳහා active tables සකසා නැත. කරුණාකර කාර්ය මණ්ඩලයෙන් විමසන්න.'
+                )}
               </p>
             </div>
           ) : (
@@ -286,18 +397,18 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
                               isSelected ? 'text-zinc-400' : 'text-zinc-500'
                             }`}
                           >
-                            • {table.capacity} seats
+                            • {table.capacity} {t('seats', 'ආසන')}
                           </span>
                         )}
                       </div>
 
-                      {requireTablePin && table.has_pin && (
+                      {(requireTablePin || table.has_pin) && (
                         <div
                           className={`mt-1 text-[9px] font-bold ${
                             isSelected ? 'text-amber-300' : 'text-amber-700'
                           }`}
                         >
-                          🔒 PIN required
+                          🔒 {t('PIN required', 'PIN අවශ්‍යයි')}
                         </div>
                       )}
                     </button>
@@ -318,7 +429,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
             onClick={onCancel}
             className="text-xs font-bold text-zinc-600 hover:text-zinc-900 cursor-pointer min-h-[44px]"
           >
-            Cancel
+            {t('Cancel', 'අවලංගු කරන්න')}
           </Button>
         </div>
       )}

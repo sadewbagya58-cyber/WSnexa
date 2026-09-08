@@ -36,6 +36,9 @@ function arePropsEqual(prev: MenuItemCardProps, next: MenuItemCardProps): boolea
   if (prev.item.primary_image_url !== next.item.primary_image_url) return false;
   if (prev.addedQuantity !== next.addedQuantity) return false;
   if (prev.currency !== next.currency) return false;
+  if (prev.onClick !== next.onClick) return false;
+  if (prev.onQuickAdd !== next.onQuickAdd) return false;
+  if (prev.onSelect !== next.onSelect) return false;
   return true;
 }
 

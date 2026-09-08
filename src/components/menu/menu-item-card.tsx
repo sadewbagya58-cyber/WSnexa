@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { useItemCartQuantity } from '@/features/cart/cart-context';
 import { getMenuThumbnailUrl } from '@/lib/image-optimizer';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 export interface MenuItemCardProps {
   item: {
@@ -50,8 +51,18 @@ export const MenuItemCard = React.memo(function MenuItemCard({
   onQuickAdd,
   addedQuantity: propAddedQuantity,
 }: MenuItemCardProps) {
+  const { t } = useGuestLanguage();
   const storeQuantity = useItemCartQuantity(item.id);
   const addedQuantity = propAddedQuantity !== undefined ? propAddedQuantity : storeQuantity;
+
+  const [isJustAdded, setIsJustAdded] = React.useState(false);
+  const addTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (addTimeoutRef.current) clearTimeout(addTimeoutRef.current);
+    };
+  }, []);
 
   const itemCurrency = currency || item.currency || 'USD';
   const isAvailable = item.is_available ?? (item.availability_status === 'available');
@@ -62,6 +73,17 @@ export const MenuItemCard = React.memo(function MenuItemCard({
   const handleItemClick = () => {
     if (onClick) onClick(item);
     else if (onSelect) onSelect(item);
+  };
+
+  const handleQuickAddClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!hasModifiers) {
+      setIsJustAdded(true);
+      if (addTimeoutRef.current) clearTimeout(addTimeoutRef.current);
+      addTimeoutRef.current = setTimeout(() => setIsJustAdded(false), 850);
+    }
+    if (onQuickAdd) onQuickAdd(item, e);
+    else handleItemClick();
   };
 
   return (
@@ -83,13 +105,13 @@ export const MenuItemCard = React.memo(function MenuItemCard({
 
           {item.is_featured && !isSoldOut && (
             <Badge variant="warning" className="text-[10px] py-0 px-1.5 font-bold">
-              Featured
+              {t('Featured', 'විශේෂ')}
             </Badge>
           )}
 
           {isSoldOut && (
             <Badge variant="destructive" className="text-[10px] py-0 px-1.5 font-black uppercase bg-red-100 text-red-900 border border-red-200">
-              SOLD OUT
+              {t('SOLD OUT', 'අවසන් වී ඇත')}
             </Badge>
           )}
         </div>
@@ -107,7 +129,7 @@ export const MenuItemCard = React.memo(function MenuItemCard({
 
           {hasModifiers && !isSoldOut && (
             <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-              • Customizable
+              • {t('Customizable', 'වෙනස් කළ හැක')}
             </span>
           )}
         </div>
@@ -148,20 +170,29 @@ export const MenuItemCard = React.memo(function MenuItemCard({
         <div>
           {isSoldOut ? (
             <span className="text-[11px] font-extrabold text-zinc-400 uppercase px-2.5 py-1 bg-zinc-100 rounded-lg">
-              Unavailable
+              {t('Unavailable', 'නොමැත')}
             </span>
           ) : (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onQuickAdd) onQuickAdd(item, e);
-                else handleItemClick();
-              }}
-              className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-950 px-3 py-1.5 text-xs font-extrabold text-white shadow-xs hover:bg-zinc-800 active:scale-95 transition-transform cursor-pointer touch-manipulation"
+              onClick={handleQuickAddClick}
+              className={`inline-flex items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-extrabold shadow-xs active:scale-95 transition-all cursor-pointer touch-manipulation min-h-[36px] ${
+                isJustAdded
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-600/30'
+                  : 'bg-zinc-950 text-white hover:bg-zinc-800'
+              }`}
             >
-              <span>{hasModifiers ? 'Customize' : 'Add'}</span>
-              <span>{hasModifiers ? '⚙️' : '+'}</span>
+              {isJustAdded ? (
+                <>
+                  <span>{t('Added', 'එකතු විය')}</span>
+                  <span>✓</span>
+                </>
+              ) : (
+                <>
+                  <span>{hasModifiers ? t('Customize', 'වෙනස් කරන්න') : t('Add', 'එකතු කරන්න')}</span>
+                  <span>{hasModifiers ? '⚙️' : '+'}</span>
+                </>
+              )}
             </button>
           )}
         </div>

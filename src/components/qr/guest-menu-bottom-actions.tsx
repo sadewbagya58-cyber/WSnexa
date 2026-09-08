@@ -8,6 +8,7 @@ import {
   getActiveOrdersFromStorage,
   SafeActiveOrderRecord,
 } from '@/features/cart/active-order-storage';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 interface GuestMenuBottomActionsProps {
   branchId: string;
@@ -22,6 +23,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
   currency,
   onOpenCart,
 }: GuestMenuBottomActionsProps) {
+  const { t } = useGuestLanguage();
   const { totalQuantity, subtotalCents, isHydrated } = useCartSummary();
   const totalCartQuantity = isHydrated ? totalQuantity : 0;
   const hasCartItems = totalCartQuantity > 0;
@@ -107,7 +109,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                 </div>
                 <div>
                   <div className="text-xs font-black tracking-tight text-zinc-300 uppercase">
-                    New Cart ({totalCartQuantity} {totalCartQuantity === 1 ? 'item' : 'items'})
+                    {t('New Cart', 'Cart එක')} ({totalCartQuantity} {totalCartQuantity === 1 ? t('item', 'අයිතමය') : t('items', 'අයිතම')})
                   </div>
                   <div className="text-sm font-black font-mono text-white">
                     {formatCurrency(subtotalCents, currency)}
@@ -120,7 +122,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                 onClick={onOpenCart}
                 className="inline-flex items-center justify-center rounded-xl bg-white text-zinc-950 font-black text-xs px-4 py-2.5 shadow-xs hover:bg-zinc-100 active:scale-95 transition-all min-h-[44px] cursor-pointer touch-manipulation"
               >
-                View Cart →
+                {t('View Cart →', 'Cart එක බලන්න →')}
               </button>
             </div>
           )}
@@ -135,12 +137,12 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-black tracking-tight text-white truncate">
-                      Order {primaryOrder.orderNumberFormatted}
+                      {t('Order', 'Order')} {primaryOrder.orderNumberFormatted}
                     </span>
                     {renderStatusBadge(primaryOrder.latestStatus)}
                   </div>
                   <p className="text-[11px] text-zinc-400 truncate">
-                    {primaryOrder.tableName ? `📍 ${primaryOrder.tableName}` : 'Active Order'}
+                    {primaryOrder.tableName ? `📍 ${primaryOrder.tableName}` : t('Active Order', 'ක්‍රියාකාරී Order එක')}
                   </p>
                 </div>
               </div>
@@ -153,7 +155,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                     className="inline-flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs px-2.5 py-2 min-h-[44px] cursor-pointer"
                     aria-label={`View all ${activeOrders.length} active orders`}
                   >
-                    +{activeOrders.length - 1} more
+                    +{activeOrders.length - 1} {t('more', 'තව')}
                   </button>
                 )}
 
@@ -161,7 +163,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                   href={`/m/${token}/order/${primaryOrder.orderId}?access_token=${primaryOrder.accessToken}`}
                   className="inline-flex items-center justify-center rounded-xl bg-white text-zinc-950 font-black text-xs px-4 py-2.5 shadow-xs hover:bg-zinc-100 active:scale-95 transition-all min-h-[44px] cursor-pointer touch-manipulation"
                 >
-                  View Status →
+                  {t('View Status →', 'තත්ත්වය බලන්න →')}
                 </Link>
               </div>
             </div>
@@ -179,7 +181,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                   <div className="min-w-0 space-y-0.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-                        Active Order
+                        {t('Active Order', 'ක්‍රියාකාරී Order එක')}
                       </span>
                       <span className="text-xs font-black text-white">
                         {primaryOrder.orderNumberFormatted}
@@ -204,7 +206,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                     href={`/m/${token}/order/${primaryOrder.orderId}?access_token=${primaryOrder.accessToken}`}
                     className="inline-flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 font-bold text-xs px-3 py-1.5 min-h-[36px] cursor-pointer transition-all"
                   >
-                    View Status →
+                    {t('View Status →', 'තත්ත්වය බලන්න →')}
                   </Link>
                 </div>
               </div>
@@ -217,7 +219,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                   </div>
                   <div>
                     <div className="text-[10px] font-black tracking-wider text-zinc-400 uppercase">
-                      New Cart ({totalCartQuantity} {totalCartQuantity === 1 ? 'item' : 'items'})
+                      {t('New Cart', 'Cart එක')} ({totalCartQuantity} {totalCartQuantity === 1 ? t('item', 'අයිතමය') : t('items', 'අයිතම')})
                     </div>
                     <div className="text-sm font-black font-mono text-white">
                       {formatCurrency(subtotalCents, currency)}
@@ -230,7 +232,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
                   onClick={onOpenCart}
                   className="inline-flex items-center justify-center rounded-xl bg-white text-zinc-950 font-black text-xs px-4 py-2.5 shadow-xs hover:bg-zinc-100 active:scale-95 transition-all min-h-[44px] cursor-pointer touch-manipulation"
                 >
-                  View Cart →
+                  {t('View Cart →', 'Cart එක බලන්න →')}
                 </button>
               </div>
             </div>
@@ -243,7 +245,7 @@ export const GuestMenuBottomActions = React.memo(function GuestMenuBottomActions
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl space-y-4 max-h-[80vh] overflow-y-auto border border-zinc-200">
             <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-              <h3 className="text-sm font-black text-zinc-950">Active Orders ({activeOrders.length})</h3>
+              <h3 className="text-sm font-black text-zinc-950">{t('Active Orders', 'ක්‍රියාකාරී Orders')} ({activeOrders.length})</h3>
               <button
                 type="button"
                 className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 text-sm font-bold min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"

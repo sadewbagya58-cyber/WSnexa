@@ -400,82 +400,81 @@ export class QrService {
         }
       }
 
-      // Fetch Area and verify it is active and non-deleted
-      const { data: area, error: areaErr } = await admin
-        .from('service_areas')
-        .select('id, business_id, branch_id, name, code, description, display_order, is_active, deleted_at')
-        .eq('id', areaId)
-        .eq('branch_id', branchId)
-        .is('deleted_at', null)
-        .maybeSingle();
+      // Concurrently fetch Area, Branch, Business, Tables, Categories, and Items
+      const [
+        { data: area, error: areaErr },
+        { data: branch, error: branchErr },
+        { data: business, error: bizErr },
+        { data: diningTables },
+        { data: categories },
+        { data: items },
+      ] = await Promise.all([
+        admin
+          .from('service_areas')
+          .select('id, business_id, branch_id, name, code, description, display_order, is_active, deleted_at')
+          .eq('id', areaId)
+          .eq('branch_id', branchId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        admin
+          .from('branches')
+          .select('id, name, code, phone, address_line_1, city, status, deleted_at, require_table_selection, require_table_pin, table_pin_length')
+          .eq('id', branchId)
+          .is('deleted_at', null)
+          .maybeSingle(),
+        admin
+          .from('businesses')
+          .select('id, name, logo_url, description, default_currency')
+          .eq('id', businessId)
+          .maybeSingle(),
+        admin
+          .from('dining_tables')
+          .select('id, name, code, table_number, capacity, service_area_id, is_active, deleted_at, table_pin_hash, display_order')
+          .eq('business_id', businessId)
+          .eq('branch_id', branchId)
+          .eq('service_area_id', areaId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order', { ascending: true }),
+        admin
+          .from('menu_categories')
+          .select('id, name, slug, description, display_order, is_active, deleted_at')
+          .eq('business_id', businessId)
+          .eq('branch_id', branchId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order', { ascending: true }),
+        admin
+          .from('menu_items')
+          .select(`
+            id, category_id, name, slug, description, price_cents, currency,
+            availability_status, is_featured, primary_image_url, display_order,
+            modifier_groups (
+              id, name, description, selection_type, min_selections, max_selections, is_required, display_order, is_active, deleted_at,
+              modifier_options (
+                id, name, additional_price_cents, is_active, display_order, deleted_at
+              )
+            )
+          `)
+          .eq('business_id', businessId)
+          .eq('branch_id', branchId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .neq('availability_status', 'hidden')
+          .order('display_order', { ascending: true }),
+      ]);
 
       if (areaErr || !area || !area.is_active) {
         return { success: false, error: 'AREA_UNAVAILABLE' };
       }
 
-      // Fetch Branch details
-      const { data: branch, error: branchErr } = await admin
-        .from('branches')
-        .select('id, name, code, phone, address_line_1, city, status, deleted_at, require_table_selection, require_table_pin, table_pin_length')
-        .eq('id', branchId)
-        .is('deleted_at', null)
-        .maybeSingle();
-
       if (branchErr || !branch || branch.status !== 'active') {
         return { success: false, error: 'BRANCH_UNAVAILABLE' };
       }
 
-      // Fetch Business details
-      const { data: business, error: bizErr } = await admin
-        .from('businesses')
-        .select('id, name, logo_url, description, default_currency')
-        .eq('id', businessId)
-        .maybeSingle();
-
       if (bizErr || !business) {
         return { success: false, error: 'BUSINESS_UNAVAILABLE' };
       }
-
-      // Fetch Dining Tables strictly scoped to this service area
-      const { data: diningTables } = await admin
-        .from('dining_tables')
-        .select('id, name, code, table_number, capacity, service_area_id, is_active, deleted_at, table_pin_hash, display_order')
-        .eq('business_id', businessId)
-        .eq('branch_id', branchId)
-        .eq('service_area_id', areaId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true });
-
-      // Fetch Active Categories
-      const { data: categories } = await admin
-        .from('menu_categories')
-        .select('id, name, slug, description, display_order, is_active, deleted_at')
-        .eq('business_id', businessId)
-        .eq('branch_id', branchId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true });
-
-      // Fetch Active Menu Items with Modifiers
-      const { data: items } = await admin
-        .from('menu_items')
-        .select(`
-          id, category_id, name, slug, description, price_cents, currency,
-          availability_status, is_featured, primary_image_url, display_order,
-          modifier_groups (
-            id, name, description, selection_type, min_selections, max_selections, is_required, display_order, is_active, deleted_at,
-            modifier_options (
-              id, name, additional_price_cents, is_active, display_order, deleted_at
-            )
-          )
-        `)
-        .eq('business_id', businessId)
-        .eq('branch_id', branchId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .neq('availability_status', 'hidden')
-        .order('display_order', { ascending: true });
 
       // Format Items & Modifiers
       const formattedItems = (items || []).map((item) => {

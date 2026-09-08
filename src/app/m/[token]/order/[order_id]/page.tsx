@@ -3,6 +3,7 @@ import { OrderService } from '@/server/services/order.service';
 import { QrService } from '@/server/services/qr.service';
 import { Button } from '@/components/ui/button';
 import { RealtimeOrderTracker } from '@/components/guest/realtime-order-tracker';
+import { GuestLanguageProvider } from '@/features/qr/guest-language-context';
 
 interface OrderConfirmationPageProps {
   params: Promise<{ token: string; order_id: string }>;
@@ -49,12 +50,14 @@ export default async function OrderConfirmationPage({ params, searchParams }: Or
       : 'WSNexa Venue';
 
   return (
-    <RealtimeOrderTracker
-      initialOrder={order}
-      token={token}
-      businessName={businessName}
-      accessToken={access_token || order.access_token}
-      currentUserId={user ? user.id : null}
-    />
+    <GuestLanguageProvider>
+      <RealtimeOrderTracker
+        initialOrder={order}
+        token={token}
+        businessName={businessName}
+        accessToken={access_token || order.access_token}
+        currentUserId={user ? user.id : null}
+      />
+    </GuestLanguageProvider>
   );
 }

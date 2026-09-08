@@ -10,6 +10,7 @@ import { formatCurrency } from '@/features/cart/cart-calculations';
 import { submitCustomerAssistanceAction } from '@/server/actions/waiter';
 import { WaiterRequestType } from '@/lib/validation/waiter';
 import { SaveOrderButton } from '@/components/guest/save-order-button';
+import { useGuestLanguage, GuestLanguageToggle } from '@/features/qr/guest-language-context';
 
 interface RealtimeOrderTrackerProps {
   initialOrder: OrderRecord;
@@ -26,6 +27,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   accessToken,
   currentUserId,
 }) => {
+  const { t } = useGuestLanguage();
   const { order, connectionStatus } = useRealtimeOrder(initialOrder, accessToken);
   const [isPending, startTransition] = useTransition();
   const [assistanceFeedback, setAssistanceFeedback] = useState<{ success: boolean; message: string } | null>(null);
@@ -49,11 +51,11 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   };
 
   const steps = [
-    { key: 'pending', label: 'Order Received' },
-    { key: 'confirmed', label: 'Confirmed' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'ready', label: 'Ready to Serve' },
-    { key: 'completed', label: 'Completed' },
+    { key: 'pending', label: t('Order Received', 'Order ලැබුණි') },
+    { key: 'confirmed', label: t('Confirmed', 'තහවුරු විය') },
+    { key: 'preparing', label: t('Preparing', 'සකසමින්') },
+    { key: 'ready', label: t('Ready to Serve', 'ලෑස්තියි') },
+    { key: 'completed', label: t('Completed', 'සම්පූර්ණයි') },
   ];
 
   const getStepStatus = (stepKey: string) => {
@@ -71,7 +73,10 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
     if (!order.table_id) {
       setAssistanceFeedback({
         success: false,
-        message: 'Table verification required to request assistance.',
+        message: t(
+          'Table verification required to request assistance.',
+          'සේවකයෙකු කැඳවීමට Table එක තහවුරු කළ යුතුය.'
+        ),
       });
       return;
     }
@@ -88,12 +93,12 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
       if (res.success) {
         setAssistanceFeedback({
           success: true,
-          message: `Request sent: "${label}". A waiter will attend to your table shortly!`,
+          message: `${t('Request sent:', 'ඉල්ලීම යවන ලදී:')} "${label}". ${t('A waiter will attend to your table shortly!', 'කාර්ය මණ්ඩලය සුළු මොහොතකින් පැමිණෙනු ඇත!')}`,
         });
       } else {
         setAssistanceFeedback({
           success: false,
-          message: res.message || 'Failed to send assistance request.',
+          message: res.message || t('Failed to send assistance request.', 'ඉල්ලීම යැවීමට නොහැකි විය.'),
         });
       }
     });
@@ -109,32 +114,33 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
               {businessName}
             </span>
             <h1 className="text-base font-black tracking-tight text-zinc-950">
-              Live Order Tracker
+              {t('Live Order Tracker', 'සජීවී Order Tracker එක')}
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <GuestLanguageToggle />
             {connectionStatus === 'connected' && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-800 border border-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live
+                {t('Live', 'සජීවී')}
               </span>
             )}
             {connectionStatus === 'reconnecting' && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800 border border-amber-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-                Reconnecting...
+                {t('Reconnecting...', 'නැවත සම්බන්ධ වෙමින්...')}
               </span>
             )}
             {connectionStatus === 'offline' && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-bold text-zinc-600 border border-zinc-200">
-                Offline
+                {t('Offline', 'Offline')}
               </span>
             )}
             <Badge variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}>
               {order.approval_status === 'pending_waiter_approval'
-                ? '⏳ WAITING FOR STAFF APPROVAL'
+                ? t('⏳ WAITING FOR STAFF APPROVAL', '⏳ කාර්ය මණ්ඩල අනුමැතිය බලාපොරොත්තුවෙන්')
                 : order.approval_status === 'rejected'
-                ? '❌ NOT APPROVED'
+                ? t('❌ NOT APPROVED', '❌ අනුමත නොවීය')
                 : `${statusEmojiMap[order.status] || '📦'} ${order.status.toUpperCase()}`}
             </Badge>
           </div>
@@ -153,7 +159,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           </div>
           <div>
             <span className="text-[11px] font-extrabold uppercase tracking-widest text-zinc-400">
-              Order Number
+              {t('Order Number', 'Order අංකය')}
             </span>
             <h2 className="text-3xl font-black text-zinc-950 tracking-tight">
               {order.order_number_formatted}
@@ -162,22 +168,34 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           <p className="text-xs text-zinc-600 max-w-sm mx-auto leading-relaxed font-medium">
             {order.approval_status === 'pending_waiter_approval' && (
               <span className="text-amber-800 font-bold">
-                Your order has been submitted and is waiting for staff approval before being sent to the kitchen.
+                {t(
+                  'Your order has been submitted and is waiting for staff approval before being sent to the kitchen.',
+                  'ඔබගේ Order එක ලැබී ඇති අතර කුස්සියට යැවීමට පෙර කාර්ය මණ්ඩලයේ අනුමැතිය බලාපොරොත්තුවෙන් සිටී.'
+                )}
               </span>
             )}
             {order.approval_status === 'rejected' && (
               <span className="text-rose-700 font-bold">
-                Order was not accepted by staff. Reason: {order.rejection_reason || 'Table/session verification failed.'}
+                {t('Order was not accepted by staff.', 'කාර්ය මණ්ඩලය විසින් Order එක ප්‍රතික්ෂේප කරන ලදී.')}{' '}
+                {order.rejection_reason && `${t('Reason:', 'හේතුව:')} ${order.rejection_reason}`}
               </span>
             )}
             {order.approval_status === 'approved' && (
               <>
-                {order.status === 'pending' && 'Your order has been received by the kitchen. Preparation will begin shortly.'}
-                {order.status === 'confirmed' && 'Your order has been confirmed by the kitchen.'}
-                {order.status === 'preparing' && 'Your meal is actively being prepared in the kitchen!'}
-                {order.status === 'ready' && 'Your order is ready! It will be served to your table shortly.'}
-                {order.status === 'completed' && 'Order completed. Thank you for dining with us!'}
-                {order.status === 'cancelled' && 'This order was cancelled.'}
+                {order.status === 'pending' &&
+                  t(
+                    'Your order has been received by the kitchen. Preparation will begin shortly.',
+                    'කුස්සියට Order එක ලැබී ඇත. පිළියෙල කිරීම ඉක්මනින් ආරම්භ වේ.'
+                  )}
+                {order.status === 'confirmed' &&
+                  t('Your order has been confirmed by the kitchen.', 'කුස්සිය විසින් ඔබගේ Order එක තහවුරු කරන ලදී.')}
+                {order.status === 'preparing' &&
+                  t('Your meal is actively being prepared in the kitchen!', 'ඔබගේ ආහාර පිළියෙල වෙමින් පවතී!')}
+                {order.status === 'ready' &&
+                  t('Your order is ready! It will be served to your table shortly.', 'ඔබගේ Order එක සූදානම්! සුළු මොහොතකින් මේසයට ගෙනෙනු ඇත.')}
+                {order.status === 'completed' &&
+                  t('Order completed. Thank you for dining with us!', 'Order එක සම්පූර්ණයි. පැමිණීම ගැන ස්තූතියි!')}
+                {order.status === 'cancelled' && t('This order was cancelled.', 'මෙම Order එක අවලංගු කරන ලදී.')}
               </>
             )}
           </p>
@@ -215,7 +233,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         {/* Customer Assistance Quick Action Buttons */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs space-y-3">
           <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-            Need Assistance at Your Table?
+            {t('Need Assistance at Your Table?', 'ඔබගේ මේසයට සේවකයෙකු අවශ්‍යද?')}
           </div>
 
           {assistanceFeedback && (
@@ -233,38 +251,38 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
-              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5"
+              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 min-h-[44px]"
               onClick={() => handleAssistanceRequest('call_waiter', 'Call Waiter')}
               disabled={isPending}
             >
-              <span>🔔</span> Call Waiter
+              <span>🔔</span> {t('Call Waiter', 'Waiter අමතන්න')}
             </Button>
 
             <Button
               variant="outline"
-              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5"
+              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 min-h-[44px]"
               onClick={() => handleAssistanceRequest('need_water', 'Need Water')}
               disabled={isPending}
             >
-              <span>💧</span> Need Water
+              <span>💧</span> {t('Need Water', 'වතුර අවශ්‍යයි')}
             </Button>
 
             <Button
               variant="outline"
-              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5"
+              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 min-h-[44px]"
               onClick={() => handleAssistanceRequest('need_bill', 'Need Bill')}
               disabled={isPending}
             >
-              <span>🍽️</span> Need Bill
+              <span>🍽️</span> {t('Need Bill', 'බිල අවශ්‍යයි')}
             </Button>
 
             <Button
               variant="outline"
-              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5"
+              className="text-xs font-bold py-2.5 flex items-center justify-center gap-1.5 min-h-[44px]"
               onClick={() => handleAssistanceRequest('need_assistance', 'Need Assistance')}
               disabled={isPending}
             >
-              <span>❓</span> Need Assistance
+              <span>❓</span> {t('Need Assistance', 'උදව් අවශ්‍යයි')}
             </Button>
           </div>
         </div>
@@ -272,31 +290,31 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         {/* Order Info Details */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xs space-y-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-            Order Metadata
+            {t('Order Details', 'Order විස්තර')}
           </span>
           <div className="flex items-center justify-between text-sm font-bold text-zinc-950">
-            <span>Dining Table:</span>
+            <span>{t('Dining Table:', 'මේසය:')}</span>
             {order.table ? (
               <span className="text-emerald-800 font-extrabold">📍 {order.table.name}</span>
             ) : (
-              <span className="text-zinc-500 font-normal">Direct Order</span>
+              <span className="text-zinc-500 font-normal">{t('Direct Order', 'සෘජු ඇණවුම')}</span>
             )}
           </div>
           <div className="flex items-center justify-between text-sm text-zinc-600">
-            <span>Placed At:</span>
+            <span>{t('Placed At:', 'වේලාව:')}</span>
             <span className="font-mono text-xs">
               {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
           {order.guest_name && (
             <div className="flex items-center justify-between text-sm text-zinc-600">
-              <span>Guest Name:</span>
+              <span>{t('Guest Name:', 'නම:')}</span>
               <span className="font-semibold text-zinc-900">{order.guest_name}</span>
             </div>
           )}
           {order.guest_notes && (
             <div className="pt-2 border-t border-zinc-100 text-xs text-amber-900 italic">
-              📝 Special Notes: &quot;{order.guest_notes}&quot;
+              📝 {t('Special Notes:', 'විශේෂ සටහන්:')} &quot;{order.guest_notes}&quot;
             </div>
           )}
         </div>
@@ -304,7 +322,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         {/* Itemized Order Breakdown */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-4">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-500 border-b border-zinc-100 pb-3">
-            Itemized Order
+            {t('Itemized Order', 'ඇණවුම් කළ අයිතම')}
           </h3>
 
           <div className="space-y-3 divide-y divide-zinc-100">
@@ -342,7 +360,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
 
           <div className="pt-4 border-t border-zinc-200 space-y-2">
             <div className="flex justify-between text-xs text-zinc-600">
-              <span>Subtotal</span>
+              <span>{t('Subtotal', 'උප එකතුව')}</span>
               <span className="font-mono font-bold">
                 {formatCurrency(order.subtotal_cents, order.currency)}
               </span>
@@ -350,21 +368,21 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             {(order.reward_title_snapshot || (order.discount_cents || 0) > 0) && (
               <>
                 <div className="flex justify-between text-xs text-emerald-800 font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                  <span>🎁 Reward Used: {order.reward_title_snapshot || 'Discount Applied'}</span>
+                  <span>🎁 {t('Reward Used:', 'ලැබුණු ප්‍රතිලාභය:')} {order.reward_title_snapshot || t('Discount Applied', 'වට්ටම යොදන ලදී')}</span>
                   <span className="font-mono">
                     -{formatCurrency(order.discount_cents || 0, order.currency)}
                   </span>
                 </div>
                 {order.reward_points_redeemed_snapshot ? (
                   <div className="flex justify-between text-[11px] text-amber-800 italic px-1">
-                    <span>Points Redeemed</span>
+                    <span>{t('Points Redeemed', 'භාවිතා කළ Points')}</span>
                     <span className="font-mono font-bold">{order.reward_points_redeemed_snapshot} pts</span>
                   </div>
                 ) : null}
               </>
             )}
             <div className="flex justify-between text-base font-black text-zinc-950 pt-2 border-t border-zinc-100">
-              <span>Total Amount</span>
+              <span>{t('Total Amount', 'මුළු මුදල')}</span>
               <span>{formatCurrency(order.total_cents, order.currency)}</span>
             </div>
           </div>
@@ -374,7 +392,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
             <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-500">
-              Payment Summary
+              {t('Payment Summary', 'ගෙවීම් සාරාංශය')}
             </span>
             <Badge
               variant={
@@ -385,9 +403,9 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
                   : 'destructive'
               }
             >
-              {order.payment_status === 'paid' && '💵 Payment Completed'}
-              {order.payment_status === 'partially_paid' && '⚖️ Partially Paid'}
-              {order.payment_status === 'unpaid' && '🔴 Unpaid'}
+              {order.payment_status === 'paid' && t('💵 Payment Completed', '💵 ගෙවීම සම්පූර්ණයි')}
+              {order.payment_status === 'partially_paid' && t('⚖️ Partially Paid', '⚖️ අර්ධ වශයෙන් ගෙවා ඇත')}
+              {order.payment_status === 'unpaid' && t('🔴 Unpaid', '🔴 නොගෙවූ')}
               {!['paid', 'partially_paid', 'unpaid'].includes(order.payment_status) &&
                 order.payment_status.toUpperCase()}
             </Badge>
@@ -395,28 +413,28 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
 
           <div className="space-y-2 text-xs text-zinc-700 font-bold">
             <div className="flex justify-between">
-              <span>Payment Method:</span>
+              <span>{t('Payment Method:', 'ගෙවීම් ක්‍රමය:')}</span>
               <span className="capitalize">{order.payment_method.replace('_', ' ')}</span>
             </div>
             {typeof order.amount_paid_cents === 'number' && (
               <div className="flex justify-between text-emerald-700">
-                <span>Amount Paid:</span>
+                <span>{t('Amount Paid:', 'ගෙවූ මුදල:')}</span>
                 <span className="font-mono">{formatCurrency(order.amount_paid_cents, order.currency)}</span>
               </div>
             )}
             {typeof order.balance_due_cents === 'number' && order.balance_due_cents > 0 && (
               <div className="flex justify-between text-rose-700">
-                <span>Balance Due:</span>
+                <span>{t('Balance Due:', 'ඉතිරි මුදල:')}</span>
                 <span className="font-mono font-extrabold">{formatCurrency(order.balance_due_cents, order.currency)}</span>
               </div>
             )}
             {order.payment_status === 'paid' ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center text-xs font-black text-emerald-800">
-                ✅ Payment Completed. Thank you!
+                {t('✅ Payment Completed. Thank you!', '✅ ගෙවීම සම්පූර්ණයි. ස්තූතියි!')}
               </div>
             ) : (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-xs font-bold text-amber-900">
-                Please settle payment at the cashier counter.
+                {t('Please settle payment at the cashier counter.', 'කරුණාකර කැෂියර් වෙත ගෙවීම සිදු කරන්න.')}
               </div>
             )}
           </div>
@@ -433,7 +451,9 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
         {/* Return to Menu Button */}
         <div className="space-y-3">
           <Link href={`/m/${token}`}>
-            <Button className="w-full text-xs font-bold py-3">← Back to Digital Menu</Button>
+            <Button className="w-full text-xs font-bold py-3 min-h-[44px]">
+              {t('← Back to Digital Menu', '← නැවත මෙනුවට')}
+            </Button>
           </Link>
         </div>
       </main>

@@ -453,7 +453,9 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           <div className="rounded-3xl border-2 border-amber-400/90 bg-amber-50/80 p-4 sm:p-5 shadow-sm space-y-3 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center rounded-full bg-amber-200 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
-                {t('Step 1 of 3: Select Your Table', 'පියවර 1/3: ඔබේ මේසය තෝරන්න')}
+                {!serviceAreaId && service_areas.length > 1
+                  ? t('Step 1 of 3: Select Area & Table', 'පියවර 1/3: ඔබ සිටින Area එක සහ Table එක තෝරන්න')
+                  : t('Step 1 of 3: Select Your Table', 'පියවර 1/3: ඔබේ මේසය තෝරන්න')}
               </span>
               <span className="text-[11px] font-extrabold text-amber-900">
                 {t('Required to Order', 'Order කිරීමට අවශ්‍යයි')}

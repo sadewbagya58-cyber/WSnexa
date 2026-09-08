@@ -72,11 +72,42 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
     }
   }, [showPinPrompt]);
 
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(() => {
+    if (serviceAreaId) return serviceAreaId;
+    if (currentTableId) {
+      const match = diningTables.find((t) => t.id === currentTableId);
+      if (match?.service_area_id) return match.service_area_id;
+    }
+    if (serviceAreas && serviceAreas.length === 1) return serviceAreas[0].id;
+    return null;
+  });
+
+  useEffect(() => {
+    if (serviceAreaId) {
+      setSelectedAreaId(serviceAreaId);
+    }
+  }, [serviceAreaId]);
+
+  const effectiveAreaId = serviceAreaId || selectedAreaId;
+  const isBranchQrWithMultipleAreas = !serviceAreaId && Boolean(serviceAreas && serviceAreas.length > 1);
+  const showAreaSelection = isBranchQrWithMultipleAreas && !selectedAreaId;
+
+  // Count tables per service area
+  const areaTableCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of diningTables) {
+      if (t.service_area_id) {
+        counts.set(t.service_area_id, (counts.get(t.service_area_id) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [diningTables]);
+
   // Filter tables to active service area if scoped
   const filteredTables = React.useMemo(() => {
     let tables = diningTables;
-    if (serviceAreaId) {
-      const areaScoped = diningTables.filter((t) => t.service_area_id === serviceAreaId);
+    if (effectiveAreaId) {
+      const areaScoped = diningTables.filter((t) => t.service_area_id === effectiveAreaId);
       if (areaScoped.length > 0) {
         tables = areaScoped;
       }
@@ -88,17 +119,18 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
       }
       return a.name.localeCompare(b.name, undefined, { numeric: true });
     });
-  }, [diningTables, serviceAreaId]);
+  }, [diningTables, effectiveAreaId]);
 
   // Resolve service area name for badge
   const resolvedAreaName = React.useMemo(() => {
     if (serviceAreaName) return serviceAreaName;
-    if (serviceAreaId && serviceAreas.length > 0) {
-      const found = serviceAreas.find((a) => a.id === serviceAreaId);
+    const targetAreaId = effectiveAreaId;
+    if (targetAreaId && serviceAreas && serviceAreas.length > 0) {
+      const found = serviceAreas.find((a) => a.id === targetAreaId);
       if (found) return found.name;
     }
     return null;
-  }, [serviceAreaName, serviceAreaId, serviceAreas]);
+  }, [serviceAreaName, effectiveAreaId, serviceAreas]);
 
   const isTablePinRequired = (table: TableItem) => Boolean(requireTablePin || table.has_pin);
 
@@ -112,7 +144,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
         targetTable.id,
         pin,
         qrVisitSessionToken || undefined,
-        serviceAreaId || undefined
+        effectiveAreaId || targetTable.service_area_id || undefined
       );
 
       if (res.success && res.data?.table) {
@@ -121,7 +153,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
           tableId: res.data.table.id,
           tableName: res.data.table.name,
           tableCode: res.data.table.code,
-          serviceAreaId: targetTable.service_area_id || serviceAreaId || null,
+          serviceAreaId: targetTable.service_area_id || effectiveAreaId || null,
           serviceAreaName: resolvedAreaName,
           signedTableAccessProof: res.data.signedTableAccessProof,
           verifiedAt: res.data.verifiedAt || new Date().toISOString(),
@@ -208,39 +240,120 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
 
   return (
     <div className={`space-y-4 text-zinc-900 ${compact ? 'p-1' : ''}`}>
-      {/* Header with Bilingual Guidance */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🪑</span>
-            <h3 className="text-base sm:text-lg font-black tracking-tight text-zinc-950">
-              {title || t('Which table are you at?', 'ඔයා ඉන්නේ කුමන Table එකේද?')}
-            </h3>
+      {showAreaSelection ? (
+        <>
+          {/* Header with Bilingual Guidance */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📍</span>
+              <h3 className="text-base sm:text-lg font-black tracking-tight text-zinc-950">
+                {t('Choose Your Seating Area', 'ඔබ සිටින Area එක තෝරන්න')}
+              </h3>
+            </div>
+            <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+              {t(
+                'Select your area to view available tables.',
+                'ලබා ගත හැකි Table බැලීමට ඔබ සිටින ප්‍රදේශය තෝරන්න.'
+              )}
+            </p>
           </div>
-          {resolvedAreaName && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-extrabold text-zinc-800 border border-zinc-200 shrink-0">
-              <span>📍</span>
-              <span className="truncate max-w-[130px]">{resolvedAreaName}</span>
-            </span>
+
+          {/* Error Feedback */}
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-900 flex items-start gap-2 animate-in fade-in duration-150">
+              <span className="text-sm">⚠️</span>
+              <span className="flex-1 leading-snug">{errorMessage}</span>
+            </div>
           )}
-        </div>
 
-        <p className="text-xs text-zinc-600 leading-relaxed font-medium">
-          {subtitle ||
-            t(
-              'Select your table so we can send your order to the correct table.',
-              'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
-            )}
-        </p>
-      </div>
+          {/* Area Selection Cards */}
+          <div className="space-y-2.5 max-h-72 sm:max-h-80 overflow-y-auto pr-1 py-1">
+            {serviceAreas.map((area) => {
+              const count = areaTableCounts.get(area.id) || 0;
+              return (
+                <button
+                  key={area.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedAreaId(area.id);
+                    setErrorMessage(null);
+                  }}
+                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50 active:scale-[0.98] transition-all shadow-2xs cursor-pointer text-left w-full min-h-[56px] touch-manipulation"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-lg border border-zinc-200 group-hover:bg-zinc-200/70 transition-colors">
+                      📍
+                    </div>
+                    <div>
+                      <h4 className="text-sm sm:text-base font-black text-zinc-950 tracking-tight leading-tight">
+                        {area.name}
+                      </h4>
+                      <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
+                        {count === 1
+                          ? t('1 table available', 'Table 1ක් ඇත')
+                          : t(`${count} tables available`, `Table ${count}ක් ඇත`)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-base font-black text-zinc-400 group-hover:text-zinc-950 group-hover:translate-x-1 transition-all">
+                    →
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Header with Bilingual Guidance */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🪑</span>
+                <h3 className="text-base sm:text-lg font-black tracking-tight text-zinc-950">
+                  {title || t('Which table are you at?', 'ඔයා ඉන්නේ කුමන Table එකේද?')}
+                </h3>
+              </div>
+              {resolvedAreaName && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[11px] font-extrabold text-zinc-800 border border-zinc-200">
+                    <span>📍</span>
+                    <span className="truncate max-w-[110px] sm:max-w-[140px]">{resolvedAreaName}</span>
+                  </span>
+                  {isBranchQrWithMultipleAreas && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAreaId(null);
+                        setSelectedTableId('');
+                        setShowPinPrompt(false);
+                        setErrorMessage(null);
+                      }}
+                      className="text-[11px] font-bold text-zinc-600 hover:text-zinc-950 underline px-1 cursor-pointer transition-colors"
+                    >
+                      {t('Change Area', 'Area මාරු කරන්න')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
-      {/* Error Feedback */}
-      {errorMessage && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-900 flex items-start gap-2 animate-in fade-in duration-150">
-          <span className="text-sm">⚠️</span>
-          <span className="flex-1 leading-snug">{errorMessage}</span>
-        </div>
-      )}
+            <p className="text-xs text-zinc-600 leading-relaxed font-medium">
+              {subtitle ||
+                t(
+                  'Select your table so we can send your order to the correct table.',
+                  'Order එක නිවැරදි Table එකට එවන්න ඔයාගේ Table එක තෝරන්න.'
+                )}
+            </p>
+          </div>
+
+          {/* Error Feedback */}
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-900 flex items-start gap-2 animate-in fade-in duration-150">
+              <span className="text-sm">⚠️</span>
+              <span className="flex-1 leading-snug">{errorMessage}</span>
+            </div>
+          )}
 
       {/* PIN Prompt View if Table PIN is required */}
       {showPinPrompt && selectedTableObj ? (
@@ -418,6 +531,8 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
 
       {/* Action Footer if not inline */}

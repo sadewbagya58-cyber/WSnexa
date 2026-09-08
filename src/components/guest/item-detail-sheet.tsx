@@ -9,6 +9,7 @@ import { validateItemModifiers, CatalogModifierGroup } from '@/features/cart/car
 import { calculateLineUnitPriceCents, calculateLineTotalCents, formatCurrency } from '@/features/cart/cart-calculations';
 import { SelectedModifierSnapshot } from '@/features/cart/cart-types';
 import { getMenuThumbnailUrl } from '@/lib/image-optimizer';
+import { useGuestLanguage } from '@/features/qr/guest-language-context';
 
 export interface ItemDetailSheetProps {
   item: {
@@ -51,6 +52,7 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
   onClose,
   onAddToCart,
 }: ItemDetailSheetProps) {
+  const { t } = useGuestLanguage();
   const [quantity, setQuantity] = useState<number>(editingLine?.quantity || 1);
   const [notes, setNotes] = useState<string>(editingLine?.specialInstructions || '');
   const [selectedOptionsMap, setSelectedOptionsMap] = useState<Record<string, string[]>>(() => {
@@ -170,8 +172,8 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
                 <h2 id="item-sheet-title" className="text-xl font-extrabold text-zinc-950">
                   {item.name}
                 </h2>
-                {item.is_featured && <Badge variant="warning">Featured</Badge>}
-                {isOutOfStock && <Badge variant="destructive">Out of Stock</Badge>}
+                {item.is_featured && <Badge variant="warning">{t('Featured', 'විශේෂ')}</Badge>}
+                {isOutOfStock && <Badge variant="destructive">{t('Out of Stock', 'අවසන් වී ඇත')}</Badge>}
               </div>
               <div className="text-base font-black text-zinc-950">
                 {formatCurrency(item.price_cents, currency)}
@@ -180,7 +182,7 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
 
             <button
               type="button"
-              aria-label="Close sheet"
+              aria-label={t('Close sheet', 'වසන්න')}
               onClick={onClose}
               className="rounded-full p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
@@ -210,7 +212,7 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
           {item.modifier_groups && item.modifier_groups.length > 0 && (
             <div className="space-y-4 pt-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                Customize Your Order
+                {t('Customize Your Order', 'ඔබගේ Order එක වෙනස් කරන්න')}
               </h3>
 
               {item.modifier_groups.map((group) => (
@@ -230,14 +232,19 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
           <div className="space-y-1.5 pt-2">
             <div className="flex items-center justify-between text-xs">
               <label htmlFor="special-notes" className="font-bold text-zinc-700">
-                Special Instructions
+                {t('Special Instructions', 'විශේෂ සටහන්')}
               </label>
-              <span className="text-[11px] text-zinc-400">{250 - notes.length} left</span>
+              <span className="text-[11px] text-zinc-400">
+                {250 - notes.length} {t('left', 'ඉතිරි')}
+              </span>
             </div>
             <textarea
               id="special-notes"
               maxLength={250}
-              placeholder="e.g. Extra crispy, sauce on the side, no onions..."
+              placeholder={t(
+                'e.g. Extra crispy, sauce on the side, no onions...',
+                'උදා: කටගැස්ම වැඩිපුර, සෝස් වෙනම, ලූනු එපා...'
+              )}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full rounded-xl border border-zinc-300 p-3 text-xs text-zinc-950 focus:border-zinc-950 focus:outline-none resize-none h-20"
@@ -262,10 +269,10 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
             className="flex-1 py-3.5 text-sm font-bold shadow-xs min-h-[44px] touch-manipulation cursor-pointer active:scale-[0.98]"
           >
             {isOutOfStock
-              ? 'Out of Stock'
+              ? t('Out of Stock', 'අවසන් වී ඇත')
               : editingLine
-              ? `Update Item • ${formatCurrency(lineTotalCents, currency)}`
-              : `Add to Cart • ${formatCurrency(lineTotalCents, currency)}`}
+              ? `${t('Update Item', 'යාවත්කාලීන කරන්න')} • ${formatCurrency(lineTotalCents, currency)}`
+              : `${t('Add to Cart', 'Cart එකට දමන්න')} • ${formatCurrency(lineTotalCents, currency)}`}
           </Button>
         </div>
       </div>

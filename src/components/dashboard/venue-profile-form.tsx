@@ -13,6 +13,7 @@ import {
 } from '@/server/actions/venue-discovery';
 import { normalizeVenueSlug } from '@/lib/validation/venue';
 import { ImageUploadDropzone } from '@/components/ui/image-upload-dropzone';
+import { VenueLocationPickerModal } from '@/components/maps/venue-location-picker-modal';
 
 interface VenueProfileFormProps {
   businessId: string;
@@ -52,6 +53,8 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [showMapPreview, setShowMapPreview] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [branchError, setBranchError] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
 
   const isLocComplete = Boolean(
@@ -135,7 +138,37 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleLocationConfirm = (coords: { lat: number; lng: number }) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: Number(coords.lat.toFixed(6)),
+      longitude: Number(coords.lng.toFixed(6)),
+    }));
+    setShowMapPreview(true);
+    setMessage({
+      success: true,
+      text: `📍 Venue coordinates updated: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+    });
+  };
+
   const handleSave = async (shouldPublish?: boolean) => {
+    const willPublish = shouldPublish !== undefined ? shouldPublish : formData.isPublished;
+
+    // Fast client pre-check for required featured branch when publishing
+    if (willPublish && (!formData.featuredBranchId || formData.featuredBranchId.trim().length === 0)) {
+      setMessage({
+        success: false,
+        text: 'Please select a Featured Menu Branch before publishing your venue.',
+      });
+      setBranchError(true);
+      const el = document.getElementById('featuredBranchId');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
@@ -156,6 +189,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
     setLoading(false);
 
     if (res.success) {
+      setBranchError(false);
       setMessage({ success: true, text: res.message || 'Profile saved successfully.' });
       setFormData((prev) => ({
         ...prev,
@@ -164,21 +198,54 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
       }));
     } else {
       setMessage({ success: false, text: res.message || 'Failed to update profile.' });
+      if (res.message?.includes('Featured Menu Branch')) {
+        setBranchError(true);
+        const el = document.getElementById('featuredBranchId');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        }
+      }
     }
   };
 
   const handleToggleStatus = async () => {
-    setLoading(true);
     setMessage(null);
     const nextStatus = !formData.isPublished;
+
+    // Fast client pre-check for required featured branch when publishing
+    if (nextStatus && (!formData.featuredBranchId || formData.featuredBranchId.trim().length === 0)) {
+      setMessage({
+        success: false,
+        text: 'Please select a Featured Menu Branch before publishing your venue.',
+      });
+      setBranchError(true);
+      const el = document.getElementById('featuredBranchId');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+      return;
+    }
+
+    setLoading(true);
     const res = await toggleVenuePublishedStatusAction(nextStatus);
     setLoading(false);
 
     if (res.success) {
+      setBranchError(false);
       setMessage({ success: true, text: res.message || 'Status updated.' });
       setFormData((prev) => ({ ...prev, isPublished: nextStatus }));
     } else {
       setMessage({ success: false, text: res.message || 'Status update failed.' });
+      if (res.message?.includes('Featured Menu Branch')) {
+        setBranchError(true);
+        const el = document.getElementById('featuredBranchId');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+        }
+      }
     }
   };
 
@@ -389,16 +456,26 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               )}
             </h3>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleUseCurrentLocation}
                 disabled={geoLoading}
-                className="text-xs font-bold border-zinc-200 text-zinc-800"
+                className="text-xs font-bold border-zinc-200 text-zinc-800 min-h-[44px]"
               >
                 {geoLoading ? 'Detecting...' : '📍 Use Current Location'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMapPicker(true)}
+                className="text-xs font-bold border-zinc-200 text-zinc-800 hover:bg-zinc-50 min-h-[44px]"
+              >
+                🗺️ Select on Map
               </Button>
 
               {formData.latitude !== '' && formData.longitude !== '' && (
@@ -407,7 +484,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
                   variant="outline"
                   size="sm"
                   onClick={() => setShowMapPreview(!showMapPreview)}
-                  className="text-xs font-bold border-zinc-200 text-zinc-800"
+                  className="text-xs font-bold border-zinc-200 text-zinc-800 min-h-[44px]"
                 >
                   {showMapPreview ? 'Hide Map' : '🗺 Preview on Map'}
                 </Button>
@@ -609,20 +686,46 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
 
         {/* Featured Branch Selector */}
         <div className="space-y-1">
-          <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Featured Menu Branch</label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="featuredBranchId" className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+              Featured Menu Branch
+            </label>
+            {branchError && (
+              <span className="text-[11px] font-bold text-rose-600 animate-in fade-in">
+                Selection Required for Publishing
+              </span>
+            )}
+          </div>
           <select
+            id="featuredBranchId"
             name="featuredBranchId"
             value={formData.featuredBranchId}
-            onChange={handleChange}
-            className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+            onChange={(e) => {
+              handleChange(e);
+              setBranchError(false);
+            }}
+            className={`w-full rounded-2xl border p-3 text-xs font-semibold text-zinc-950 focus:outline-hidden transition-all ${
+              branchError
+                ? 'border-rose-500 ring-2 ring-rose-200 bg-rose-50/40 text-rose-950'
+                : 'border-zinc-200 focus:border-amber-500'
+            }`}
           >
-            <option value="">Default Branch</option>
+            <option value="">Select a branch…</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
           </select>
+          {branchError ? (
+            <p className="text-[11px] font-bold text-rose-600 animate-in fade-in">
+              Please select a Featured Menu Branch before publishing your venue.
+            </p>
+          ) : (
+            <p className="text-[11px] text-zinc-500">
+              The branch whose active menu catalog and pricing will be featured on your public venue page.
+            </p>
+          )}
         </div>
 
         {/* Public Menu Catalog Management Card */}
@@ -721,6 +824,16 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           </div>
         </div>
       </div>
+
+      {/* Map Location Picker Modal */}
+      <VenueLocationPickerModal
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        initialLat={formData.latitude !== '' && formData.latitude != null ? Number(formData.latitude) : null}
+        initialLng={formData.longitude !== '' && formData.longitude != null ? Number(formData.longitude) : null}
+        venueName={formData.displayName}
+        onConfirm={handleLocationConfirm}
+      />
     </div>
   );
 }

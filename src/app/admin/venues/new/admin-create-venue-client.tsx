@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { createAdminVenueAction } from '@/server/actions/super-admin';
 import { normalizeVenueSlug, VenueType } from '@/lib/validation/venue';
+import { VenueLocationPickerModal } from '@/components/maps/venue-location-picker-modal';
 
 interface AdminCreateVenueClientProps {
   existingBusinesses: Array<{ id: string; name: string }>;
@@ -16,6 +17,7 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
 
   const [formData, setFormData] = useState({
@@ -93,6 +95,18 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleLocationConfirm = (coords: { lat: number; lng: number }) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: coords.lat,
+      longitude: coords.lng,
+    }));
+    setMessage({
+      success: true,
+      text: `📍 Venue coordinates set: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+    });
   };
 
   const handleSubmit = async (shouldPublish: boolean) => {
@@ -414,15 +428,26 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             </div>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleUseCurrentLocation}
-            disabled={geoLoading}
-            className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px]"
-          >
-            {geoLoading ? 'Detecting Coordinates...' : '📍 Capture Current Device Location'}
-          </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleUseCurrentLocation}
+              disabled={geoLoading}
+              className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px]"
+            >
+              {geoLoading ? 'Detecting Coordinates...' : '📍 Capture Device Location'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowMapPicker(true)}
+              className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px] hover:bg-zinc-50"
+            >
+              🗺️ Select on Map
+            </Button>
+          </div>
 
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => setStep(2)} className="flex-1 text-xs font-bold min-h-[44px]">
@@ -568,6 +593,16 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
           </div>
         </div>
       )}
+
+      {/* Map Location Picker Modal */}
+      <VenueLocationPickerModal
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        initialLat={formData.latitude !== '' && formData.latitude != null ? Number(formData.latitude) : null}
+        initialLng={formData.longitude !== '' && formData.longitude != null ? Number(formData.longitude) : null}
+        venueName={formData.displayName}
+        onConfirm={handleLocationConfirm}
+      />
     </div>
   );
 }

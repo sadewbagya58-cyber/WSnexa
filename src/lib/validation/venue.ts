@@ -87,10 +87,24 @@ export const venueProfileSchema = z.object({
   isAcceptingOrders: z.boolean().default(true),
   publicReservationsEnabled: z.boolean().default(true),
   publicMenuEnabled: z.boolean().default(true),
-  featuredBranchId: z.string().uuid('Invalid featured branch ID').optional().nullable(),
+  featuredBranchId: z
+    .string()
+    .uuid('Please select a Featured Menu Branch before publishing your venue.')
+    .optional()
+    .nullable()
+    .or(z.literal(''))
+    .transform((val) => (val === '' ? null : val)),
   bookingUrl: z.string().url('Invalid Booking.com URL').optional().nullable().or(z.literal('')),
   agodaUrl: z.string().url('Invalid Agoda URL').optional().nullable().or(z.literal('')),
   externalBookingUrl: z.string().url('Invalid external booking URL').optional().nullable().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (data.isPublished && !data.featuredBranchId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['featuredBranchId'],
+      message: 'Please select a Featured Menu Branch before publishing your venue.',
+    });
+  }
 });
 
 export type VenueProfileInput = z.input<typeof venueProfileSchema>;

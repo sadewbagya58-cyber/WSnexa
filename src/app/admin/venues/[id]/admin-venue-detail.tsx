@@ -13,6 +13,7 @@ import {
   reactivateAdminVenueAction,
 } from '@/server/actions/super-admin';
 import { VenueType } from '@/lib/validation/venue';
+import { VenueLocationPickerModal } from '@/components/maps/venue-location-picker-modal';
 
 interface AdminVenueDetailProps {
   venue: AdminVenueDetail;
@@ -23,6 +24,8 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
   const [venue, setVenue] = useState<AdminVenueDetail>(initialVenue);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [feedback, setFeedback] = useState<{ success: boolean; text: string } | null>(null);
 
   // Suspension modal state
@@ -74,6 +77,42 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
     } else {
       setFeedback({ success: false, text: res.message || 'Failed to update venue.' });
     }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setFeedback({ success: false, text: 'Geolocation is not supported by your browser.' });
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLoading(false);
+        setFormData((prev) => ({
+          ...prev,
+          latitude: String(Number(pos.coords.latitude.toFixed(6))),
+          longitude: String(Number(pos.coords.longitude.toFixed(6))),
+        }));
+        setFeedback({ success: true, text: '📍 Device coordinates captured successfully!' });
+      },
+      (err) => {
+        setGeoLoading(false);
+        setFeedback({ success: false, text: `Geolocation failed: ${err.message}` });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleLocationConfirm = (coords: { lat: number; lng: number }) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: String(coords.lat),
+      longitude: String(coords.lng),
+    }));
+    setFeedback({
+      success: true,
+      text: `📍 Venue coordinates set: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+    });
   };
 
   const handleTogglePublish = async () => {
@@ -364,6 +403,27 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUseCurrentLocation}
+                  disabled={geoLoading}
+                  className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px]"
+                >
+                  {geoLoading ? 'Detecting Coordinates...' : '📍 Capture Device Location'}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowMapPicker(true)}
+                  className="w-full text-xs font-extrabold border-zinc-200 min-h-[44px] hover:bg-zinc-50"
+                >
+                  🗺️ Select on Map
+                </Button>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-zinc-700">Booking.com URL</label>
@@ -612,6 +672,16 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
           </div>
         </div>
       )}
+
+      {/* Map Location Picker Modal */}
+      <VenueLocationPickerModal
+        isOpen={showMapPicker}
+        onClose={() => setShowMapPicker(false)}
+        initialLat={formData.latitude !== '' && formData.latitude != null ? Number(formData.latitude) : null}
+        initialLng={formData.longitude !== '' && formData.longitude != null ? Number(formData.longitude) : null}
+        venueName={formData.displayName}
+        onConfirm={handleLocationConfirm}
+      />
     </div>
   );
 }

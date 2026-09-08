@@ -206,6 +206,12 @@ export class VenueProfileService {
           message: 'Minimum profile information (Display Name, City, Public Address) is required before publishing.',
         };
       }
+      if (!profile.featured_branch_id) {
+        return {
+          success: false,
+          message: 'Please select a Featured Menu Branch before publishing your venue.',
+        };
+      }
     }
 
     const admin = createAdminClient();

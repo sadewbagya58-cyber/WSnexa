@@ -13,6 +13,11 @@ import { useRealtimeWaiterRequests } from '@/hooks/use-realtime-waiter-requests'
 import { WaiterOperationalActivity } from './waiter-operational-activity';
 import { EntityTimelineDialog } from '@/components/audit/entity-timeline-dialog';
 import { IconHistory } from '@/components/audit/audit-icons';
+import {
+  getPendingApprovalsAction,
+  approveGuestOrderAction,
+  rejectGuestOrderAction,
+} from '@/server/actions/waiter-approval';
 
 interface WaiterRequestCenterProps {
   initialRequests: WaiterRequestRecord[];
@@ -44,10 +49,15 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   const [processingKey, setProcessingKey] = useState<string | null>(null);
   const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null);
   const [isRefreshingQueue, setIsRefreshingQueue] = useState<boolean>(false);
+  const [isOpeningMenu, setIsOpeningMenu] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'queue' | 'activity'>('queue');
   const [timelineRequestId, setTimelineRequestId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    router.prefetch('/dashboard/waiter/order');
+  }, [router]);
 
   const handleRefreshQueue = async () => {
     if (isRefreshingQueue) return;
@@ -191,10 +201,22 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
-                onClick={() => router.push('/dashboard/waiter/menu')}
+                className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform flex items-center gap-1.5"
+                disabled={isOpeningMenu}
+                aria-busy={isOpeningMenu}
+                onClick={() => {
+                  setIsOpeningMenu(true);
+                  router.push('/dashboard/waiter/order');
+                }}
               >
-                🍽️ Take New Order / Menu
+                {isOpeningMenu ? (
+                  <>
+                    <span className="animate-spin inline-block">⏳</span>
+                    <span>Opening Menu...</span>
+                  </>
+                ) : (
+                  <span>🍽️ Take New Order / Menu</span>
+                )}
               </Button>
 
               <Button
@@ -454,13 +476,17 @@ function PendingOrderApprovalsSection({
   const [loading, setLoading] = React.useState(true);
   const [processingKey, setProcessingKey] = React.useState<string | null>(null);
   const [confirmingRejectId, setConfirmingRejectId] = React.useState<string | null>(null);
+  const handledOrderIdsRef = React.useRef<Set<string>>(new Set());
 
   const fetchApprovals = React.useCallback(async () => {
     try {
-      const { getPendingApprovalsAction } = await import('@/server/actions/waiter-approval');
       const res = await getPendingApprovalsAction(branchId);
       if (res.success && res.orders) {
-        setApprovals(res.orders as unknown as OrderRecord[]);
+        // Exclude any orders that have already been approved or rejected in this session
+        const freshOrders = (res.orders as unknown as OrderRecord[]).filter(
+          (o) => !handledOrderIdsRef.current.has(o.id)
+        );
+        setApprovals(freshOrders);
       }
     } catch {
       // ignore
@@ -523,16 +549,22 @@ function PendingOrderApprovalsSection({
   const handleApprove = async (orderId: string) => {
     const key = `${orderId}:approve`;
     setProcessingKey(key);
+    handledOrderIdsRef.current.add(orderId);
     const previousApprovals = [...approvals];
     setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+
     try {
-      const { approveGuestOrderAction } = await import('@/server/actions/waiter-approval');
       const res = await approveGuestOrderAction(orderId);
       if (!res.success) {
+        handledOrderIdsRef.current.delete(orderId);
         setApprovals(previousApprovals);
+      } else {
+        // Authoritatively ensure the card is removed from state
+        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
       }
     } catch (err) {
       console.warn('Approve order error:', err);
+      handledOrderIdsRef.current.delete(orderId);
       setApprovals(previousApprovals);
     } finally {
       setProcessingKey(null);
@@ -542,19 +574,25 @@ function PendingOrderApprovalsSection({
   const handleReject = async (orderId: string) => {
     const key = `${orderId}:reject`;
     setProcessingKey(key);
+    handledOrderIdsRef.current.add(orderId);
     const previousApprovals = [...approvals];
     setApprovals((prev) => prev.filter((o) => o.id !== orderId));
+
     try {
-      const { rejectGuestOrderAction } = await import('@/server/actions/waiter-approval');
       const res = await rejectGuestOrderAction(orderId, undefined, 'Rejected by waiter');
       if (!res.success) {
+        handledOrderIdsRef.current.delete(orderId);
         setApprovals(previousApprovals);
+      } else {
+        setApprovals((prev) => prev.filter((o) => o.id !== orderId));
       }
     } catch (err) {
       console.warn('Reject order error:', err);
+      handledOrderIdsRef.current.delete(orderId);
       setApprovals(previousApprovals);
     } finally {
       setProcessingKey(null);
+      setConfirmingRejectId(null);
     }
   };
 

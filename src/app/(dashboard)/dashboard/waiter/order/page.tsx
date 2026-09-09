@@ -54,25 +54,28 @@ export default async function WaiterOrderPage() {
 
   const supabase = await createClient();
 
-  // Fetch areas
-  let areas = await ServiceAreaService.listBranchAreas(businessId, branchId);
-
-  // If user is waiter role, filter to assigned areas
-  if (tenantContext.membership.role === 'waiter') {
-    const assignedIds = await ServiceAreaService.getStaffAssignedAreaIds(tenantContext.membership.id);
-    if (assignedIds.length > 0) {
-      areas = areas.filter((a) => assignedIds.includes(a.id));
-    }
-  }
-
-  // Fetch dining tables for active branch
-  const { data: tablesData } = await supabase
-    .from('dining_tables')
-    .select('id, name, table_number, service_area_id')
-    .eq('business_id', businessId)
-    .eq('branch_id', branchId)
-    .is('deleted_at', null)
-    .order('display_order', { ascending: true });
+  // Concurrently fetch areas, dining tables, and canonical catalog to eliminate sequential waterfall
+  const [areas, tablesData, catalog] = await Promise.all([
+    (async () => {
+      let branchAreas = await ServiceAreaService.listBranchAreas(businessId, branchId);
+      if (tenantContext.membership.role === 'waiter') {
+        const assignedIds = await ServiceAreaService.getStaffAssignedAreaIds(tenantContext.membership.id);
+        if (assignedIds.length > 0) {
+          branchAreas = branchAreas.filter((a) => assignedIds.includes(a.id));
+        }
+      }
+      return branchAreas;
+    })(),
+    supabase
+      .from('dining_tables')
+      .select('id, name, table_number, service_area_id')
+      .eq('business_id', businessId)
+      .eq('branch_id', branchId)
+      .is('deleted_at', null)
+      .order('display_order', { ascending: true })
+      .then((res) => res.data),
+    MenuCatalogService.getBranchMenuCatalog(businessId, branchId),
+  ]);
 
   const tables = (tablesData || []).map((t) => ({
     id: t.id,
@@ -80,9 +83,6 @@ export default async function WaiterOrderPage() {
     tableNumber: t.table_number,
     serviceAreaId: t.service_area_id,
   }));
-
-  // Fetch canonical branch menu catalog from MenuCatalogService
-  const catalog = await MenuCatalogService.getBranchMenuCatalog(businessId, branchId);
 
   if (!catalog) {
     redirect('/dashboard');

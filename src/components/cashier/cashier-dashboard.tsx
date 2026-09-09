@@ -95,6 +95,27 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
     [playChime, refreshCashierData]
   );
 
+  const handlePaymentSuccess = useCallback(
+    (data?: { orderId: string; paidCents: number; balanceDueCents: number; paymentStatus: string }) => {
+      if (data) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === data.orderId
+              ? {
+                  ...o,
+                  paid_cents: data.paidCents,
+                  balance_due_cents: data.balanceDueCents,
+                  payment_status: data.paymentStatus as 'paid' | 'partially_paid' | 'unpaid',
+                }
+              : o
+          )
+        );
+      }
+      refreshCashierData();
+    },
+    [refreshCashierData]
+  );
+
   // Subscribe to Realtime Cashier Updates
   useCashierRealtime(branchId, refreshCashierData, handleNewBillRequest);
 
@@ -290,7 +311,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           order={selectedSettlementOrder}
           isOpen={Boolean(selectedSettlementOrder)}
           onClose={() => setSelectedSettlementOrder(null)}
-          onSuccess={refreshCashierData}
+          onSuccess={handlePaymentSuccess}
         />
       )}
 

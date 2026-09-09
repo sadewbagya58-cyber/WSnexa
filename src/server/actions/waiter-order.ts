@@ -125,29 +125,33 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
     >();
 
     if (allModifierOptionIds.length > 0) {
-      const { data: optionsData } = await admin
+      const { data: optionsData, error: optErr } = await admin
         .from('modifier_options')
         .select(
-          'id, modifier_group_id, name, price_cents, additional_price_cents, modifier_groups!inner(id, name, menu_item_id, menu_items!inner(id, branch_id))'
+          'id, modifier_group_id, branch_id, name, additional_price_cents, modifier_groups!inner(id, name, menu_item_id, branch_id)'
         )
         .in('id', allModifierOptionIds);
+
+      if (optErr) {
+        console.error('[createWaiterOrderAction] Error querying modifier options:', optErr);
+      }
 
       if (optionsData) {
         type OptionRow = {
           id: string;
           modifier_group_id: string;
+          branch_id?: string | null;
           name: string;
-          price_cents?: number | null;
           additional_price_cents?: number | null;
           modifier_groups?: {
             id: string;
             name?: string | null;
             menu_item_id: string;
-            menu_items?: { id: string; branch_id: string } | null;
+            branch_id: string;
           } | null;
         };
         for (const opt of optionsData as unknown as OptionRow[]) {
-          const modPriceCents = opt.price_cents ?? opt.additional_price_cents ?? 0;
+          const modPriceCents = opt.additional_price_cents ?? 0;
           optionMap.set(opt.id, {
             id: opt.id,
             modifier_group_id: opt.modifier_group_id,
@@ -155,7 +159,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
             name: opt.name,
             price_cents: modPriceCents,
             menu_item_id: opt.modifier_groups?.menu_item_id || '',
-            branch_id: opt.modifier_groups?.menu_items?.branch_id || '',
+            branch_id: opt.branch_id || opt.modifier_groups?.branch_id || '',
           });
         }
       }

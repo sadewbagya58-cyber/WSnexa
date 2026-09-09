@@ -7,11 +7,18 @@ import { recordOrderPaymentAction } from '@/server/actions/payment';
 import { CashierOrderRecord } from '@/server/services/payment.service';
 import { PaymentMethod } from '@/lib/validation/payment';
 
+export interface PaymentSuccessData {
+  orderId: string;
+  paidCents: number;
+  balanceDueCents: number;
+  paymentStatus: string;
+}
+
 interface PaymentSettlementModalProps {
   order: CashierOrderRecord;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (data?: PaymentSuccessData) => void;
 }
 
 export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
@@ -86,12 +93,23 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
         return;
       }
 
+      // Immediately propagate server-verified payment result to parent dashboard (Rule 13 compliant)
+      if (res.data) {
+        onSuccess({
+          orderId: order.id,
+          paidCents: res.data.paidCents,
+          balanceDueCents: res.data.balanceDueCents,
+          paymentStatus: res.data.paymentStatus,
+        });
+      } else {
+        onSuccess();
+      }
+
       setIsSuccess(true);
       setIsSubmitting(false);
       setTimeout(() => {
-        onSuccess();
         onClose();
-      }, 600);
+      }, 500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unexpected payment settlement error.';
       setErrorMessage(msg);

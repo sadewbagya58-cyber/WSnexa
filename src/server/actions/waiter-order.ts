@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { randomUUID } from 'crypto';
 import { can, resolveAuthorizationContext } from '@/server/auth';
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -207,7 +208,9 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       const lineSubtotalCents = unitPriceCents * itemInput.quantity;
       totalSubtotalCents += lineSubtotalCents;
 
+      const orderItemId = randomUUID();
       orderItemsPayload.push({
+        id: orderItemId,
         menu_item_id: item.id,
         item_name_snapshot: item.name,
         quantity: itemInput.quantity,
@@ -262,8 +265,9 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       return { success: false, message: 'Unable to place the order right now. Please try again.' };
     }
 
-    // 9. Insert order items
+    // 9. Insert order items with pre-assigned unique IDs to guarantee modifier 1:1 mapping
     const orderItemRows = orderItemsPayload.map((itemPayload) => ({
+      id: itemPayload.id,
       order_id: newOrder.id,
       menu_item_id: itemPayload.menu_item_id,
       item_name_snapshot: itemPayload.item_name_snapshot,
@@ -285,13 +289,12 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
       return { success: false, message: 'Unable to place the order right now. Please try again.' };
     }
 
-    // 10. Insert order item modifiers if any
+    // 10. Insert order item modifiers if any, strictly linking to each item's unique id
     if (orderItemsPayload.some((op) => op.selectedModifiers && op.selectedModifiers.length > 0)) {
-      const itemMapByMenuId = new Map(insertedItems.map((i) => [i.menu_item_id, i.id]));
       const modifierRows = [];
 
       for (const op of orderItemsPayload) {
-        const orderItemId = itemMapByMenuId.get(op.menu_item_id);
+        const orderItemId = op.id;
         if (orderItemId && op.selectedModifiers) {
           for (const mod of op.selectedModifiers) {
             const optDetails = optionMap.get(mod.optionId);
@@ -301,7 +304,7 @@ export async function createWaiterOrderAction(input: CreateWaiterOrderInput) {
               modifier_option_id: mod.optionId,
               group_name_snapshot: optDetails?.group_name || 'Option Group',
               option_name_snapshot: mod.nameSnapshot,
-              additional_price_cents_snapshot: mod.priceSnapshot,
+              additional_price_cents_snapshot: optDetails?.price_cents ?? Math.round(mod.priceSnapshot * 100),
             });
           }
         }

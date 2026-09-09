@@ -24,10 +24,11 @@ export default async function CustomerPage() {
 
   const { data: memberships } = await supabase
     .from('business_memberships')
-    .select('id')
-    .eq('user_id', user.id)
+    .select('id, role')
+    .eq('user_id', user.id);
   const customerData = await AccountService.getCustomerProfile(user.id);
   const hasBusinessAccess = !!(memberships && memberships.length > 0);
+  const primaryRole = memberships?.[0]?.role ?? null;
 
   const { CustomerOrderService } = await import('@/server/services/customer-order.service');
   const { VenueRankingService } = await import('@/server/services/venue-ranking.service');
@@ -46,6 +47,7 @@ export default async function CustomerPage() {
       displayName={customerData.displayName}
       email={customerData.email}
       hasBusinessAccess={hasBusinessAccess}
+      businessRole={primaryRole}
     >
       <CustomerDashboard
         displayName={customerData.displayName}

@@ -196,21 +196,44 @@ export function WaiterOrderBuilder({
     const totalPriceCents = unitPriceCents * configuredItem.quantity;
     const lineId = `${configuredItem.menuItemId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-    setCart((prev) => [
-      ...prev,
-      {
-        lineId,
-        menuItemId: configuredItem.menuItemId,
-        itemName: configuredItem.itemName,
-        imageUrl: configuredItem.imageUrl,
-        quantity: configuredItem.quantity,
-        basePriceCents: configuredItem.basePriceCents,
-        selectedModifiers: configuredItem.selectedModifiers,
-        specialInstructions: configuredItem.specialInstructions,
-        unitPriceCents,
-        totalPriceCents,
-      },
-    ]);
+    setCart((prev) => {
+      const existingIndex = prev.findIndex((line) => {
+        if (line.menuItemId !== configuredItem.menuItemId) return false;
+        if ((line.specialInstructions || '').trim() !== (configuredItem.specialInstructions || '').trim()) return false;
+        if (line.selectedModifiers.length !== configuredItem.selectedModifiers.length) return false;
+        const lineMods = [...line.selectedModifiers].map((m) => m.optionId).sort().join(',');
+        const newMods = [...configuredItem.selectedModifiers].map((m) => m.optionId).sort().join(',');
+        return lineMods === newMods;
+      });
+
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        const existing = updated[existingIndex];
+        const newQty = Math.min(99, existing.quantity + configuredItem.quantity);
+        updated[existingIndex] = {
+          ...existing,
+          quantity: newQty,
+          totalPriceCents: existing.unitPriceCents * newQty,
+        };
+        return updated;
+      }
+
+      return [
+        ...prev,
+        {
+          lineId,
+          menuItemId: configuredItem.menuItemId,
+          itemName: configuredItem.itemName,
+          imageUrl: configuredItem.imageUrl,
+          quantity: configuredItem.quantity,
+          basePriceCents: configuredItem.basePriceCents,
+          selectedModifiers: configuredItem.selectedModifiers,
+          specialInstructions: configuredItem.specialInstructions,
+          unitPriceCents,
+          totalPriceCents,
+        },
+      ];
+    });
 
     setSelectedItem(null);
   };

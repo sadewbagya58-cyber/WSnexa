@@ -429,6 +429,19 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                       💳 Subscription & Billing
                     </Link>
                   )}
+                  <Link
+                    href="/customer"
+                    role="menuitem"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        sessionStorage.setItem('wsnexa_origin_role', userRole);
+                      }
+                      setUserMenuOpen(false);
+                    }}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-950 transition-colors"
+                  >
+                    🛍️ Switch to Customer
+                  </Link>
                 </div>
                 <div className="py-1">
                   <form action="/api/auth/logout" method="POST">
@@ -566,6 +579,18 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                       💳 Subscription & Billing
                     </Link>
                   )}
+                  <Link
+                    href="/customer"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        sessionStorage.setItem('wsnexa_origin_role', userRole);
+                      }
+                      setMobileOpen(false);
+                    }}
+                    className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 hover:text-emerald-950 transition-colors"
+                  >
+                    🛍️ Switch to Customer
+                  </Link>
                 </div>
 
                 <form action="/api/auth/logout" method="POST">

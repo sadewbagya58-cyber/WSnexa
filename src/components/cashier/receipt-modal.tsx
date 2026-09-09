@@ -16,6 +16,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ orderId, isOpen, onC
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !orderId) return;
@@ -40,7 +41,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ orderId, isOpen, onC
   if (!isOpen) return null;
 
   const handlePrint = () => {
-    window.print();
+    setIsPrinting(true);
+    setTimeout(() => {
+      try {
+        window.print();
+      } finally {
+        setIsPrinting(false);
+      }
+    }, 150);
   };
 
   return (
@@ -76,16 +84,28 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ orderId, isOpen, onC
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-2 border-t border-zinc-100">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
+          <Button
+            variant="outline"
+            className="flex-1 min-h-[44px] touch-manipulation active:scale-[0.98] transition-all"
+            onClick={onClose}
+          >
             Close
           </Button>
           <Button
             type="button"
-            className="flex-1 font-bold bg-zinc-950 hover:bg-zinc-800 text-white"
+            className="flex-1 font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation active:scale-[0.98] transition-all shadow-xs"
             onClick={handlePrint}
-            disabled={loading || !receiptData}
+            disabled={loading || !receiptData || isPrinting}
+            aria-busy={isPrinting}
           >
-            🖨️ Print Receipt
+            {isPrinting ? (
+              <span className="flex items-center justify-center gap-1.5">
+                <span className="animate-spin inline-block">🖨️</span>
+                <span>Opening Print Dialog...</span>
+              </span>
+            ) : (
+              '🖨️ Print Receipt'
+            )}
           </Button>
         </div>
       </div>

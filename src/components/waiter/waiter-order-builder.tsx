@@ -89,6 +89,8 @@ export function WaiterOrderBuilder({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [branchNotice, setBranchNotice] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const prevBranchIdRef = React.useRef<string>(effectiveBranchId);
@@ -234,41 +236,50 @@ export function WaiterOrderBuilder({
   const totalCartCents = cart.reduce((sum, item) => sum + item.totalPriceCents, 0);
 
   const handleSubmitOrder = async () => {
-    if (!selectedTableId || cart.length === 0) return;
+    if (!selectedTableId || cart.length === 0 || isSubmitting || isPending || isSuccess || !canCreateOrders) return;
 
     setErrorMsg(null);
     setSuccessMsg(null);
+    setIsSubmitting(true);
 
     startTransition(async () => {
-      const orderItemsInput = cart.map((c) => ({
-        menuItemId: c.menuItemId,
-        quantity: c.quantity,
-        selectedModifiers: c.selectedModifiers.map((m) => ({
-          groupId: m.groupId,
-          optionId: m.optionId,
-          nameSnapshot: m.optionName,
-          priceSnapshot: m.additionalPriceCents / 100,
-        })),
-        notes: c.specialInstructions,
-      }));
+      try {
+        const orderItemsInput = cart.map((c) => ({
+          menuItemId: c.menuItemId,
+          quantity: c.quantity,
+          selectedModifiers: c.selectedModifiers.map((m) => ({
+            groupId: m.groupId,
+            optionId: m.optionId,
+            nameSnapshot: m.optionName,
+            priceSnapshot: m.additionalPriceCents / 100,
+          })),
+          notes: c.specialInstructions,
+        }));
 
-      const res = await createWaiterOrderAction({
-        tableId: selectedTableId,
-        items: orderItemsInput,
-        notes: orderNotes,
-      });
+        const res = await createWaiterOrderAction({
+          tableId: selectedTableId,
+          items: orderItemsInput,
+          notes: orderNotes,
+        });
 
-      if (res.success) {
-        setSuccessMsg(`Order #${res.orderNumber} created successfully!`);
-        clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
-        setCart([]);
-        setOrderNotes('');
-        setTimeout(() => {
-          router.push('/dashboard/waiter');
-          router.refresh();
-        }, 1200);
-      } else {
-        setErrorMsg(res.message || 'Failed to place order.');
+        if (res.success) {
+          setIsSuccess(true);
+          setSuccessMsg(`Order #${res.orderNumber} created successfully!`);
+          clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
+          setCart([]);
+          setOrderNotes('');
+          setTimeout(() => {
+            router.push('/dashboard/waiter');
+            router.refresh();
+          }, 1200);
+        } else {
+          setErrorMsg(res.message || 'Failed to place order.');
+          setIsSubmitting(false);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to place order.';
+        setErrorMsg(msg);
+        setIsSubmitting(false);
       }
     });
   };
@@ -385,7 +396,7 @@ export function WaiterOrderBuilder({
                       setSelectedAreaId(area.id);
                       setSelectedTableId('');
                     }}
-                    className={`p-3 rounded-xl border text-left font-bold text-xs transition-all min-h-[48px] ${
+                    className={`p-3 rounded-xl border text-left font-bold text-xs transition-all min-h-[48px] touch-manipulation active:scale-[0.98] ${
                       selectedAreaId === area.id
                         ? 'bg-zinc-950 text-white border-zinc-950 shadow-xs'
                         : 'bg-zinc-50 text-zinc-900 border-zinc-200 hover:bg-zinc-100'
@@ -415,7 +426,7 @@ export function WaiterOrderBuilder({
                         setSelectedTableId(t.id);
                         setStep('menu');
                       }}
-                      className={`p-4 rounded-xl border text-center font-extrabold text-sm transition-all min-h-[56px] flex flex-col justify-center items-center ${
+                      className={`p-4 rounded-xl border text-center font-extrabold text-sm transition-all min-h-[56px] touch-manipulation active:scale-[0.98] flex flex-col justify-center items-center ${
                         selectedTableId === t.id
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                           : 'bg-white text-zinc-950 border-zinc-200 hover:bg-zinc-50'
@@ -495,7 +506,7 @@ export function WaiterOrderBuilder({
                 <button
                   type="button"
                   onClick={() => handleGoToReview()}
-                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-white text-zinc-950 hover:bg-zinc-100 shadow-md"
+                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-white text-zinc-950 hover:bg-zinc-100 shadow-md min-h-[44px] touch-manipulation active:scale-[0.98] transition-all"
                 >
                   Review Order →
                 </button>
@@ -574,17 +585,32 @@ export function WaiterOrderBuilder({
               <button
                 type="button"
                 onClick={() => setStep('menu')}
-                className="flex-1 py-3 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
+                className="flex-1 py-3 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200 min-h-[44px] touch-manipulation active:scale-[0.98] transition-all"
               >
                 ← Add More Items
               </button>
               <button
                 type="button"
                 onClick={handleSubmitOrder}
-                disabled={isPending || cart.length === 0 || !canCreateOrders}
-                className="flex-1 py-3 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50 shadow-md"
+                disabled={isSubmitting || isPending || isSuccess || cart.length === 0 || !canCreateOrders}
+                aria-busy={isSubmitting || isPending}
+                className="flex-1 py-3 rounded-xl text-xs font-extrabold bg-zinc-950 text-white hover:bg-zinc-800 disabled:opacity-50 shadow-md min-h-[44px] touch-manipulation active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
               >
-                {!canCreateOrders ? 'Order Creation Disabled' : isPending ? 'Placing Order...' : 'Confirm & Send to Kitchen'}
+                {!canCreateOrders ? (
+                  'Order Creation Disabled'
+                ) : isSuccess ? (
+                  <span className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold">
+                    <span>✓</span>
+                    <span>Order Sent to Kitchen!</span>
+                  </span>
+                ) : isSubmitting || isPending ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <span className="animate-spin inline-block">⏳</span>
+                    <span>Sending to Kitchen...</span>
+                  </span>
+                ) : (
+                  'Confirm & Send to Kitchen'
+                )}
               </button>
             </div>
           </div>

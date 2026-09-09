@@ -128,10 +128,11 @@ export function WaiterOperationalActivity({
             type="button"
             onClick={fetchActivity}
             disabled={loading}
-            className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-colors flex items-center gap-1.5"
+            aria-busy={loading}
+            className="min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-all active:scale-[0.98] touch-manipulation disabled:opacity-60 flex items-center gap-1.5"
           >
             <IconRefresh className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-            <span>Refresh Activity</span>
+            <span>{loading ? 'Refreshing Activity...' : 'Refresh Activity'}</span>
           </button>
         </div>
 
@@ -348,7 +349,7 @@ export function WaiterOperationalActivity({
                         `${isAssistance ? 'Assistance Request' : 'Order Event'} #${entityId.slice(0, 8)}`
                       )
                     }
-                    className="min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 transition-colors"
+                    className="min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center gap-1.5 transition-all active:scale-[0.98] touch-manipulation"
                   >
                     <IconHistory className="w-3.5 h-3.5" />
                     <span>View Request Audit Timeline</span>

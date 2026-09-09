@@ -36,6 +36,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('wsnexa_cashier_sound') === 'enabled';
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Settlement & Receipt Modal state
   const [selectedSettlementOrder, setSelectedSettlementOrder] = useState<CashierOrderRecord | null>(null);
@@ -145,6 +146,17 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
   const countPaid = orders.filter((o) => o.payment_status === 'paid').length;
   const countBillReq = orders.filter((o) => o.bill_requested).length;
 
+  const handleManualRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refreshCashierData();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header Bar */}
@@ -171,7 +183,8 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           <Button
             variant="outline"
             size="sm"
-            className="text-xs font-bold"
+            aria-pressed={soundEnabled}
+            className="text-xs font-bold min-h-[38px] touch-manipulation active:scale-[0.98] transition-all"
             onClick={toggleSound}
           >
             {soundEnabled ? '🔔 Sound ON' : '🔕 Sound Muted'}
@@ -181,10 +194,13 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
           <Button
             variant="outline"
             size="sm"
-            className="text-xs font-bold"
-            onClick={refreshCashierData}
+            className="text-xs font-bold min-h-[38px] touch-manipulation active:scale-[0.98] transition-all flex items-center gap-1.5"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            aria-busy={isRefreshing}
           >
-            🔄 Refresh
+            <span className={isRefreshing ? 'animate-spin inline-block' : ''}>🔄</span>
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
         </div>
       </div>
@@ -203,7 +219,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id as TabFilter)}
-            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all min-h-[40px] touch-manipulation active:scale-[0.98] ${
               activeTab === tab.id
                 ? 'bg-zinc-950 text-white shadow-xs'
                 : 'bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100'

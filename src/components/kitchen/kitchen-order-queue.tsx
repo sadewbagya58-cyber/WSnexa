@@ -25,7 +25,10 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 }) => {
   const router = useRouter();
   const { orders, connectionStatus } = useRealtimeKitchen(initialOrders, branchId);
-  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [actionKey, setActionKey] = useState<string | null>(null);
+  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
+  const [transientSuccessKey, setTransientSuccessKey] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(() => kitchenSoundEngine.isSoundMuted());
 
@@ -38,19 +41,36 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
     }
   };
 
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      router.refresh();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     setActionError(null);
-    setProcessingOrderId(orderId);
+    const key = `${orderId}:${nextStatus}`;
+    setActionKey(key);
     try {
       const res = await updateOrderStatusAction(orderId, nextStatus);
       if (!res.success) {
         setActionError(res.message || 'Failed to update order status');
+      } else {
+        setTransientSuccessKey(key);
+        setTimeout(() => {
+          setTransientSuccessKey((curr) => (curr === key ? null : curr));
+        }, 800);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update order status';
       setActionError(msg);
     } finally {
-      setProcessingOrderId(null);
+      setActionKey(null);
     }
   };
 
@@ -97,7 +117,8 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            className="flex-1 sm:flex-none text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] touch-manipulation"
+            aria-pressed={!isMuted}
+            className="flex-1 sm:flex-none text-xs font-bold flex items-center justify-center gap-1.5 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
             onClick={handleSoundToggle}
           >
             <span>{isMuted ? '🔇' : '🔊'}</span>
@@ -106,11 +127,13 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
           <Button
             variant="outline"
-            className="flex-1 sm:flex-none text-xs font-bold min-h-[44px] touch-manipulation flex items-center justify-center gap-1"
-            onClick={() => router.refresh()}
-            disabled={processingOrderId !== null}
+            className="flex-1 sm:flex-none text-xs font-bold min-h-[44px] touch-manipulation flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+            onClick={handleRefresh}
+            disabled={isRefreshing || actionKey !== null}
+            aria-busy={isRefreshing}
           >
-            🔄 Refresh
+            <span className={isRefreshing ? 'animate-spin inline-block' : ''}>🔄</span>
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
         </div>
       </div>
@@ -135,8 +158,6 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                 badge: 'neutral',
                 icon: '📦',
               };
-
-              const isProcessing = processingOrderId === order.id;
 
               // Resolve clean Table + Service Area label
               const tableName =
@@ -258,52 +279,136 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                     {canUpdate ? (
                       <>
                         {order.status === 'pending' && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button
-                              variant="outline"
-                              className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation"
-                              onClick={() => handleStatusChange(order.id, 'cancelled')}
-                              disabled={isProcessing}
-                            >
-                              {isProcessing ? '...' : 'Cancel'}
-                            </Button>
-                            <Button
-                              className="text-xs font-extrabold min-h-[44px] touch-manipulation bg-zinc-900 hover:bg-zinc-800 text-white"
-                              onClick={() => handleStatusChange(order.id, 'confirmed')}
-                              disabled={isProcessing}
-                            >
-                              {isProcessing ? 'Confirming...' : 'Confirm Order'}
-                            </Button>
-                          </div>
+                          confirmingCancelId === order.id ? (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="destructive"
+                                className="flex-1 text-xs font-black min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-red-600 hover:bg-red-700 text-white shadow-xs"
+                                onClick={() => {
+                                  setConfirmingCancelId(null);
+                                  handleStatusChange(order.id, 'cancelled');
+                                }}
+                                disabled={actionKey !== null}
+                                aria-busy={actionKey === `${order.id}:cancelled`}
+                              >
+                                {actionKey === `${order.id}:cancelled` ? (
+                                  <span className="flex items-center justify-center gap-1.5">
+                                    <span className="animate-spin inline-block">⏳</span>
+                                    <span>Cancelling...</span>
+                                  </span>
+                                ) : (
+                                  '⚠️ Confirm Cancel'
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="text-xs font-bold min-h-[44px] px-3 touch-manipulation active:scale-[0.98] transition-transform"
+                                onClick={() => setConfirmingCancelId(null)}
+                                disabled={actionKey !== null}
+                              >
+                                Dismiss
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                variant="outline"
+                                className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform border-red-200"
+                                onClick={() => setConfirmingCancelId(order.id)}
+                                disabled={actionKey !== null}
+                              >
+                                Cancel Order
+                              </Button>
+                              <Button
+                                className="text-xs font-extrabold min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs"
+                                onClick={() => handleStatusChange(order.id, 'confirmed')}
+                                disabled={actionKey !== null}
+                                aria-busy={actionKey === `${order.id}:confirmed`}
+                              >
+                                {transientSuccessKey === `${order.id}:confirmed` ? (
+                                  <span className="flex items-center justify-center gap-1 text-emerald-300 font-black">
+                                    <span>✓</span>
+                                    <span>Confirmed!</span>
+                                  </span>
+                                ) : actionKey === `${order.id}:confirmed` ? (
+                                  <span className="flex items-center justify-center gap-1.5">
+                                    <span className="animate-spin inline-block">⏳</span>
+                                    <span>Confirming...</span>
+                                  </span>
+                                ) : (
+                                  '📋 Confirm Order'
+                                )}
+                              </Button>
+                            </div>
+                          )
                         )}
 
                         {order.status === 'confirmed' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
+                            className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
                             onClick={() => handleStatusChange(order.id, 'preparing')}
-                            disabled={isProcessing}
+                            disabled={actionKey !== null}
+                            aria-busy={actionKey === `${order.id}:preparing`}
                           >
-                            {isProcessing ? 'Updating...' : '🍳 Start Preparing'}
+                            {transientSuccessKey === `${order.id}:preparing` ? (
+                              <span className="flex items-center justify-center gap-1 text-blue-100 font-black">
+                                <span>✓</span>
+                                <span>In Preparation</span>
+                              </span>
+                            ) : actionKey === `${order.id}:preparing` ? (
+                              <span className="flex items-center justify-center gap-1.5">
+                                <span className="animate-spin inline-block">🍳</span>
+                                <span>Starting...</span>
+                              </span>
+                            ) : (
+                              '🍳 Start Preparing'
+                            )}
                           </Button>
                         )}
 
                         {order.status === 'preparing' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
+                            className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
                             onClick={() => handleStatusChange(order.id, 'ready')}
-                            disabled={isProcessing}
+                            disabled={actionKey !== null}
+                            aria-busy={actionKey === `${order.id}:ready`}
                           >
-                            {isProcessing ? 'Updating...' : '🔔 Mark Ready to Serve'}
+                            {transientSuccessKey === `${order.id}:ready` ? (
+                              <span className="flex items-center justify-center gap-1 text-emerald-100 font-black">
+                                <span>✓</span>
+                                <span>Ready to Serve!</span>
+                              </span>
+                            ) : actionKey === `${order.id}:ready` ? (
+                              <span className="flex items-center justify-center gap-1.5">
+                                <span className="animate-spin inline-block">🔔</span>
+                                <span>Marking Ready...</span>
+                              </span>
+                            ) : (
+                              '🔔 Mark Ready to Serve'
+                            )}
                           </Button>
                         )}
 
                         {order.status === 'ready' && (
                           <Button
-                            className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-98 transition-all"
+                            className="w-full text-xs font-extrabold bg-zinc-900 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
                             onClick={() => handleStatusChange(order.id, 'completed')}
-                            disabled={isProcessing}
+                            disabled={actionKey !== null}
+                            aria-busy={actionKey === `${order.id}:completed`}
                           >
-                            {isProcessing ? 'Updating...' : '✅ Mark Completed'}
+                            {transientSuccessKey === `${order.id}:completed` ? (
+                              <span className="flex items-center justify-center gap-1 text-emerald-300 font-black">
+                                <span>✓</span>
+                                <span>Completed!</span>
+                              </span>
+                            ) : actionKey === `${order.id}:completed` ? (
+                              <span className="flex items-center justify-center gap-1.5">
+                                <span className="animate-spin inline-block">✅</span>
+                                <span>Completing...</span>
+                              </span>
+                            ) : (
+                              '✅ Mark Completed'
+                            )}
                           </Button>
                         )}
                       </>

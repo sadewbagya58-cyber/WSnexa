@@ -41,15 +41,30 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
     branchId,
     assignedAreaIds
   );
-  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [processingKey, setProcessingKey] = useState<string | null>(null);
+  const [confirmingDismissId, setConfirmingDismissId] = useState<string | null>(null);
+  const [isRefreshingQueue, setIsRefreshingQueue] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'queue' | 'activity'>('queue');
   const [timelineRequestId, setTimelineRequestId] = useState<string | null>(null);
 
+  const handleRefreshQueue = async () => {
+    if (isRefreshingQueue) return;
+    setIsRefreshingQueue(true);
+    try {
+      refreshRequests();
+      router.refresh();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    } finally {
+      setIsRefreshingQueue(false);
+    }
+  };
+
   const handleStatusChange = async (requestId: string, nextStatus: WaiterRequestStatus) => {
     setActionError(null);
-    setProcessingRequestId(requestId);
+    const key = `${requestId}:${nextStatus}`;
+    setProcessingKey(key);
 
     // Capture snapshot for optimistic rollback
     const previousRequests = [...requests];
@@ -86,7 +101,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
       const msg = err instanceof Error ? err.message : 'Failed to update request status';
       setActionError(msg);
     } finally {
-      setProcessingRequestId(null);
+      setProcessingKey(null);
     }
   };
 
@@ -176,7 +191,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[40px]"
+                className="text-xs font-black bg-zinc-950 text-white hover:bg-zinc-800 shadow-xs cursor-pointer min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
                 onClick={() => router.push('/dashboard/waiter/menu')}
               >
                 🍽️ Take New Order / Menu
@@ -184,11 +199,13 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 
               <Button
                 variant="outline"
-                className="text-xs font-bold min-h-[40px]"
-                onClick={() => router.refresh()}
-                disabled={processingRequestId !== null}
+                className="text-xs font-bold min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform flex items-center gap-1.5"
+                onClick={handleRefreshQueue}
+                disabled={isRefreshingQueue || processingKey !== null}
+                aria-busy={isRefreshingQueue}
               >
-                🔄 Refresh Queue
+                <span className={isRefreshingQueue ? 'animate-spin inline-block' : ''}>🔄</span>
+                <span>{isRefreshingQueue ? 'Refreshing...' : 'Refresh Queue'}</span>
               </Button>
             </div>
           </div>
@@ -207,7 +224,6 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {requests.map((req) => {
                 const typeInfo = typeMap[req.request_type] || { label: req.request_type, icon: '🛎️' };
-                const isProcessing = processingRequestId === req.id;
 
                 return (
                   <div
@@ -309,47 +325,95 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 
                     <div className="pt-3 border-t border-zinc-100 grid grid-cols-2 gap-2">
                       {canManageRequests ? (
-                        <>
-                          {req.status === 'pending' && (
-                            <>
-                              <Button
-                                variant="outline"
-                                className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
-                                onClick={() => handleStatusChange(req.id, 'dismissed')}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? '...' : 'Dismiss'}
-                              </Button>
-                              <Button
-                                className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px]"
-                                onClick={() => handleStatusChange(req.id, 'accepted')}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? 'Accepting...' : 'Accept Request ⚡'}
-                              </Button>
-                            </>
-                          )}
+                        confirmingDismissId === req.id ? (
+                          <div className="col-span-2 flex items-center gap-2">
+                            <Button
+                              variant="destructive"
+                              className="flex-1 text-xs font-black min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+                              onClick={() => {
+                                setConfirmingDismissId(null);
+                                handleStatusChange(req.id, 'dismissed');
+                              }}
+                              disabled={processingKey !== null}
+                              aria-busy={processingKey === `${req.id}:dismissed`}
+                            >
+                              {processingKey === `${req.id}:dismissed` ? (
+                                <span className="flex items-center justify-center gap-1.5">
+                                  <span className="animate-spin inline-block">⏳</span>
+                                  <span>Dismissing...</span>
+                                </span>
+                              ) : (
+                                '⚠️ Confirm Dismiss'
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="text-xs font-bold min-h-[44px] px-3 touch-manipulation active:scale-[0.98] transition-transform"
+                              onClick={() => setConfirmingDismissId(null)}
+                              disabled={processingKey !== null}
+                            >
+                              Keep
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            {req.status === 'pending' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
+                                  onClick={() => setConfirmingDismissId(req.id)}
+                                  disabled={processingKey !== null}
+                                >
+                                  Dismiss
+                                </Button>
+                                <Button
+                                  className="text-xs font-extrabold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform shadow-xs"
+                                  onClick={() => handleStatusChange(req.id, 'accepted')}
+                                  disabled={processingKey !== null}
+                                  aria-busy={processingKey === `${req.id}:accepted`}
+                                >
+                                  {processingKey === `${req.id}:accepted` ? (
+                                    <span className="flex items-center justify-center gap-1.5">
+                                      <span className="animate-spin inline-block">⚡</span>
+                                      <span>Accepting...</span>
+                                    </span>
+                                  ) : (
+                                    'Accept Request ⚡'
+                                  )}
+                                </Button>
+                              </>
+                            )}
 
-                          {req.status === 'accepted' && (
-                            <>
-                              <Button
-                                variant="outline"
-                                className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px]"
-                                onClick={() => handleStatusChange(req.id, 'dismissed')}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? '...' : 'Dismiss'}
-                              </Button>
-                              <Button
-                                className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-                                onClick={() => handleStatusChange(req.id, 'completed')}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? 'Completing...' : 'Mark Completed ✓'}
-                              </Button>
-                            </>
-                          )}
-                        </>
+                            {req.status === 'accepted' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  className="text-xs font-bold text-zinc-600 hover:text-zinc-900 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
+                                  onClick={() => setConfirmingDismissId(req.id)}
+                                  disabled={processingKey !== null}
+                                >
+                                  Dismiss
+                                </Button>
+                                <Button
+                                  className="text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform shadow-xs"
+                                  onClick={() => handleStatusChange(req.id, 'completed')}
+                                  disabled={processingKey !== null}
+                                  aria-busy={processingKey === `${req.id}:completed`}
+                                >
+                                  {processingKey === `${req.id}:completed` ? (
+                                    <span className="flex items-center justify-center gap-1.5">
+                                      <span className="animate-spin inline-block">✓</span>
+                                      <span>Completing...</span>
+                                    </span>
+                                  ) : (
+                                    'Mark Completed ✓'
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                          </>
+                        )
                       ) : (
                         <div className="col-span-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
                           🔒 Read-Only Waiter View
@@ -388,7 +452,8 @@ function PendingOrderApprovalsSection({
 }) {
   const [approvals, setApprovals] = React.useState<OrderRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [processingId, setProcessingId] = React.useState<string | null>(null);
+  const [processingKey, setProcessingKey] = React.useState<string | null>(null);
+  const [confirmingRejectId, setConfirmingRejectId] = React.useState<string | null>(null);
 
   const fetchApprovals = React.useCallback(async () => {
     try {
@@ -456,7 +521,8 @@ function PendingOrderApprovalsSection({
   }, [branchId, fetchApprovals]);
 
   const handleApprove = async (orderId: string) => {
-    setProcessingId(orderId);
+    const key = `${orderId}:approve`;
+    setProcessingKey(key);
     const previousApprovals = [...approvals];
     setApprovals((prev) => prev.filter((o) => o.id !== orderId));
     try {
@@ -469,12 +535,13 @@ function PendingOrderApprovalsSection({
       console.warn('Approve order error:', err);
       setApprovals(previousApprovals);
     } finally {
-      setProcessingId(null);
+      setProcessingKey(null);
     }
   };
 
   const handleReject = async (orderId: string) => {
-    setProcessingId(orderId);
+    const key = `${orderId}:reject`;
+    setProcessingKey(key);
     const previousApprovals = [...approvals];
     setApprovals((prev) => prev.filter((o) => o.id !== orderId));
     try {
@@ -487,7 +554,7 @@ function PendingOrderApprovalsSection({
       console.warn('Reject order error:', err);
       setApprovals(previousApprovals);
     } finally {
-      setProcessingId(null);
+      setProcessingKey(null);
     }
   };
 
@@ -563,28 +630,72 @@ function PendingOrderApprovalsSection({
             </div>
 
             {canManageRequests ? (
-              <div className="pt-2 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleReject(ord.id)}
-                  disabled={processingId === ord.id}
-                  className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px]"
-                >
-                  {processingId === ord.id ? '...' : 'Reject'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleApprove(ord.id)}
-                  disabled={processingId === ord.id}
-                  className="w-1/2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-                >
-                  {processingId === ord.id ? 'Approving...' : 'Approve Order'}
-                </Button>
-              </div>
+              confirmingRejectId === ord.id ? (
+                <div className="pt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setConfirmingRejectId(null);
+                      handleReject(ord.id);
+                    }}
+                    disabled={processingKey !== null}
+                    aria-busy={processingKey === `${ord.id}:reject`}
+                    className="flex-1 text-xs font-black min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+                  >
+                    {processingKey === `${ord.id}:reject` ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <span className="animate-spin inline-block">⏳</span>
+                        <span>Rejecting...</span>
+                      </span>
+                    ) : (
+                      '⚠️ Confirm Reject'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmingRejectId(null)}
+                    disabled={processingKey !== null}
+                    className="text-xs font-bold min-h-[44px] px-3 touch-manipulation active:scale-[0.98] transition-transform"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="pt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmingRejectId(ord.id)}
+                    disabled={processingKey !== null}
+                    className="w-1/2 text-xs font-bold border-rose-200 text-rose-700 hover:bg-rose-50 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform"
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleApprove(ord.id)}
+                    disabled={processingKey !== null}
+                    aria-busy={processingKey === `${ord.id}:approve`}
+                    className="w-1/2 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform shadow-xs"
+                  >
+                    {processingKey === `${ord.id}:approve` ? (
+                      <span className="flex items-center justify-center gap-1.5">
+                        <span className="animate-spin inline-block">⏳</span>
+                        <span>Approving...</span>
+                      </span>
+                    ) : (
+                      'Approve Order'
+                    )}
+                  </Button>
+                </div>
+              )
             ) : (
               <div className="pt-2 text-[11px] text-zinc-400 font-bold text-center italic py-1 border border-dashed border-zinc-200 rounded-lg">
                 🔒 Approval Disabled

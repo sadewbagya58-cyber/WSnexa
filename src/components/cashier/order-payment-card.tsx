@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/features/cart/cart-calculations';
@@ -21,6 +21,18 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
   onAcknowledgeBill,
   canRecordPayments = true,
 }) => {
+  const [isAcknowledging, setIsAcknowledging] = useState(false);
+
+  const handleAcknowledge = async () => {
+    if (isAcknowledging || !order.waiter_request_id || !onAcknowledgeBill) return;
+    setIsAcknowledging(true);
+    try {
+      await onAcknowledgeBill(order.waiter_request_id);
+    } finally {
+      setIsAcknowledging(false);
+    }
+  };
+
   const formattedTime = new Date(order.created_at).toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -96,10 +108,19 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
             <Button
               size="sm"
               variant="outline"
-              className="text-[10px] h-7 bg-white border-amber-400 hover:bg-amber-50"
-              onClick={() => onAcknowledgeBill(order.waiter_request_id!)}
+              disabled={isAcknowledging}
+              aria-busy={isAcknowledging}
+              className="text-[10px] h-7 min-h-[32px] bg-white border-amber-400 hover:bg-amber-50 touch-manipulation active:scale-[0.98] transition-all flex items-center gap-1 font-bold"
+              onClick={handleAcknowledge}
             >
-              Acknowledge
+              {isAcknowledging ? (
+                <>
+                  <span className="animate-spin inline-block">⏳</span>
+                  <span>Acknowledging...</span>
+                </>
+              ) : (
+                'Acknowledge'
+              )}
             </Button>
           )}
         </div>
@@ -171,7 +192,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
         <Button
           variant="outline"
           size="sm"
-          className="flex-1 text-xs font-bold"
+          className="flex-1 text-xs font-bold min-h-[40px] touch-manipulation active:scale-[0.98] transition-all"
           onClick={() => onPrintReceipt(order.id)}
         >
           🖨️ Receipt
@@ -180,7 +201,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
           <Button
             size="sm"
             disabled={!canRecordPayments}
-            className="flex-1 text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white disabled:opacity-50"
+            className="flex-1 text-xs font-bold bg-zinc-950 hover:bg-zinc-800 text-white disabled:opacity-50 min-h-[40px] touch-manipulation active:scale-[0.98] transition-all shadow-xs"
             onClick={() => onSettlePayment(order)}
           >
             💳 Settle ({formatCurrency(order.balance_due_cents, order.currency)})
@@ -189,7 +210,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
           <Button
             size="sm"
             variant="outline"
-            className="flex-1 text-xs font-bold bg-emerald-50 text-emerald-800 border-emerald-200"
+            className="flex-1 text-xs font-bold bg-emerald-50 text-emerald-800 border-emerald-200 min-h-[40px]"
             disabled
           >
             ✅ Settlement Complete

@@ -27,6 +27,7 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
   const [externalReference, setExternalReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const amountInputId = useId();
@@ -36,12 +37,13 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
   if (!isOpen) return null;
 
   const handlePayFullBalance = () => {
+    if (isSubmitting || isSuccess) return;
     setAmountInput((order.balance_due_cents / 100).toFixed(2));
   };
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || isSuccess) return;
 
     const parsedAmount = parseFloat(amountInput);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -84,9 +86,12 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
         return;
       }
 
+      setIsSuccess(true);
       setIsSubmitting(false);
-      onSuccess();
-      onClose();
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 600);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unexpected payment settlement error.';
       setErrorMessage(msg);
@@ -156,8 +161,9 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
                 <button
                   key={m.id}
                   type="button"
+                  disabled={isSubmitting || isSuccess}
                   onClick={() => setPaymentMethod(m.id as PaymentMethod)}
-                  className={`rounded-xl p-3 text-xs font-bold border transition-all text-center ${
+                  className={`rounded-xl p-3 text-xs font-bold border transition-all text-center min-h-[44px] touch-manipulation active:scale-[0.98] disabled:opacity-60 ${
                     paymentMethod === m.id
                       ? 'border-zinc-950 bg-zinc-950 text-white shadow-xs'
                       : 'border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-100'
@@ -178,7 +184,8 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
               <button
                 type="button"
                 onClick={handlePayFullBalance}
-                className="text-[11px] font-extrabold text-indigo-600 hover:underline"
+                disabled={isSubmitting || isSuccess}
+                className="text-[11px] font-extrabold text-indigo-600 hover:underline disabled:opacity-50"
               >
                 Pay Full Balance
               </button>
@@ -191,8 +198,9 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
               max={(order.balance_due_cents / 100).toFixed(2)}
               value={amountInput}
               onChange={(e) => setAmountInput(e.target.value)}
+              disabled={isSubmitting || isSuccess}
               required
-              className="w-full font-mono text-xl font-bold text-center rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none"
+              className="w-full font-mono text-xl font-bold text-center rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
             />
           </div>
 
@@ -209,7 +217,8 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
                 placeholder="e.g. TXN-998182"
                 value={externalReference}
                 onChange={(e) => setExternalReference(e.target.value)}
-                className="w-full text-xs rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none"
+                disabled={isSubmitting || isSuccess}
+                className="w-full text-xs rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
               />
             </div>
           )}
@@ -226,22 +235,42 @@ export const PaymentSettlementModal: React.FC<PaymentSettlementModalProps> = ({
               placeholder="e.g. Customer requested split payment"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full text-xs rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none"
+              disabled={isSubmitting || isSuccess}
+              className="w-full text-xs rounded-xl border border-zinc-300 p-3 text-zinc-950 focus:border-zinc-950 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
             />
           </div>
         </div>
 
         {/* Footer Actions */}
         <div className="flex gap-2 pt-2 border-t border-zinc-100">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 min-h-[44px] touch-manipulation active:scale-[0.98] transition-all"
+            onClick={onClose}
+            disabled={isSubmitting || isSuccess}
+          >
             Cancel
           </Button>
           <Button
             type="submit"
-            className="flex-1 font-bold bg-zinc-950 hover:bg-zinc-800 text-white"
-            disabled={isSubmitting}
+            className="flex-1 font-bold bg-zinc-950 hover:bg-zinc-800 text-white min-h-[44px] touch-manipulation active:scale-[0.98] transition-all shadow-xs"
+            disabled={isSubmitting || isSuccess}
+            aria-busy={isSubmitting}
           >
-            {isSubmitting ? 'Processing...' : 'Confirm Payment'}
+            {isSuccess ? (
+              <span className="flex items-center justify-center gap-1 text-emerald-400 font-black">
+                <span>✓</span>
+                <span>Payment Recorded!</span>
+              </span>
+            ) : isSubmitting ? (
+              <span className="flex items-center justify-center gap-1.5">
+                <span className="animate-spin inline-block">⏳</span>
+                <span>Recording Payment...</span>
+              </span>
+            ) : (
+              'Confirm Payment'
+            )}
           </Button>
         </div>
       </form>

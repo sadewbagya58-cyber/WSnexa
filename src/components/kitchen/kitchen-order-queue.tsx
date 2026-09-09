@@ -9,6 +9,8 @@ import { updateOrderStatusAction } from '@/server/actions/order';
 import { OrderStatus } from '@/lib/validation/order';
 import { useRealtimeKitchen } from '@/hooks/use-realtime-kitchen';
 import { kitchenSoundEngine } from '@/lib/sound/kitchen-sound-engine';
+import { StaffCancelOrderModal } from '@/components/orders/staff-cancel-order-modal';
+import { StaffCancelItemModal } from '@/components/orders/staff-cancel-item-modal';
 
 interface KitchenOrderQueueProps {
   initialOrders: OrderRecord[];
@@ -26,7 +28,15 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   const router = useRouter();
   const { orders, connectionStatus } = useRealtimeKitchen(initialOrders, branchId);
   const [actionKey, setActionKey] = useState<string | null>(null);
-  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null);
+  const [selectedOrderForCancel, setSelectedOrderForCancel] = useState<OrderRecord | null>(null);
+  const [selectedItemForCancel, setSelectedItemForCancel] = useState<{
+    orderId: string;
+    orderItemId: string;
+    itemName: string;
+    unitPriceCents: number;
+    quantity: number;
+    cancelledQuantity: number;
+  } | null>(null);
   const [transientSuccessKey, setTransientSuccessKey] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -233,11 +243,42 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                           return (
                             <div key={item.id} className="p-2.5 space-y-1">
                               <div className="flex items-start justify-between gap-2 text-xs">
-                                <div className="font-bold text-zinc-900 break-words hyphens-auto min-w-0 leading-snug">
+                                <div className={`font-bold break-words hyphens-auto min-w-0 leading-snug ${item.status === 'cancelled' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
                                   <span className="inline-block bg-zinc-900 text-white text-[10px] font-mono px-1.5 py-0.2 rounded mr-1.5 font-bold shrink-0">
-                                    {item.quantity}x
+                                    {item.status === 'partially_cancelled' && item.cancelled_quantity
+                                      ? `${item.quantity - item.cancelled_quantity}x`
+                                      : `${item.quantity}x`}
                                   </span>
                                   {item.item_name_snapshot}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {item.status === 'cancelled' && (
+                                    <span className="bg-red-100 text-red-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                                      Cancelled
+                                    </span>
+                                  )}
+                                  {item.status === 'partially_cancelled' && (
+                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                                      {item.cancelled_quantity} cancelled
+                                    </span>
+                                  )}
+                                  {canUpdate && item.status !== 'cancelled' && order.status !== 'completed' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedItemForCancel({
+                                        orderId: order.id,
+                                        orderItemId: item.id,
+                                        itemName: item.item_name_snapshot,
+                                        unitPriceCents: item.unit_price_cents_snapshot,
+                                        quantity: item.quantity,
+                                        cancelledQuantity: item.cancelled_quantity || 0,
+                                      })}
+                                      className="text-[10px] text-zinc-400 hover:text-red-600 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
+                                      title="Adjust or cancel item"
+                                    >
+                                      Adjust
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -274,119 +315,109 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                     )}
                   </div>
 
-                  {/* Operational Action Controls */}
+                    {/* Operational Action Controls */}
                   <div className="pt-3 border-t border-zinc-100">
                     {canUpdate ? (
                       <>
                         {order.status === 'pending' && (
-                          confirmingCancelId === order.id ? (
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="destructive"
-                                className="flex-1 text-xs font-black min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-red-600 hover:bg-red-700 text-white shadow-xs"
-                                onClick={() => {
-                                  setConfirmingCancelId(null);
-                                  handleStatusChange(order.id, 'cancelled');
-                                }}
-                                disabled={actionKey !== null}
-                                aria-busy={actionKey === `${order.id}:cancelled`}
-                              >
-                                {actionKey === `${order.id}:cancelled` ? (
-                                  <span className="flex items-center justify-center gap-1.5">
-                                    <span className="animate-spin inline-block">⏳</span>
-                                    <span>Cancelling...</span>
-                                  </span>
-                                ) : (
-                                  '⚠️ Confirm Cancel'
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                className="text-xs font-bold min-h-[44px] px-3 touch-manipulation active:scale-[0.98] transition-transform"
-                                onClick={() => setConfirmingCancelId(null)}
-                                disabled={actionKey !== null}
-                              >
-                                Dismiss
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                variant="outline"
-                                className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform border-red-200"
-                                onClick={() => setConfirmingCancelId(order.id)}
-                                disabled={actionKey !== null}
-                              >
-                                Cancel Order
-                              </Button>
-                              <Button
-                                className="text-xs font-extrabold min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs"
-                                onClick={() => handleStatusChange(order.id, 'confirmed')}
-                                disabled={actionKey !== null}
-                                aria-busy={actionKey === `${order.id}:confirmed`}
-                              >
-                                {transientSuccessKey === `${order.id}:confirmed` ? (
-                                  <span className="flex items-center justify-center gap-1 text-emerald-300 font-black">
-                                    <span>✓</span>
-                                    <span>Confirmed!</span>
-                                  </span>
-                                ) : actionKey === `${order.id}:confirmed` ? (
-                                  <span className="flex items-center justify-center gap-1.5">
-                                    <span className="animate-spin inline-block">⏳</span>
-                                    <span>Confirming...</span>
-                                  </span>
-                                ) : (
-                                  '📋 Confirm Order'
-                                )}
-                              </Button>
-                            </div>
-                          )
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant="outline"
+                              className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform border-red-200"
+                              onClick={() => setSelectedOrderForCancel(order)}
+                              disabled={actionKey !== null}
+                            >
+                              Cancel Order
+                            </Button>
+                            <Button
+                              className="text-xs font-extrabold min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs"
+                              onClick={() => handleStatusChange(order.id, 'confirmed')}
+                              disabled={actionKey !== null}
+                              aria-busy={actionKey === `${order.id}:confirmed`}
+                            >
+                              {transientSuccessKey === `${order.id}:confirmed` ? (
+                                <span className="flex items-center justify-center gap-1 text-emerald-300 font-black">
+                                  <span>✓</span>
+                                  <span>Confirmed!</span>
+                                </span>
+                              ) : actionKey === `${order.id}:confirmed` ? (
+                                <span className="flex items-center justify-center gap-1.5">
+                                  <span className="animate-spin inline-block">⏳</span>
+                                  <span>Confirming...</span>
+                                </span>
+                              ) : (
+                                '📋 Confirm Order'
+                              )}
+                            </Button>
+                          </div>
                         )}
 
                         {order.status === 'confirmed' && (
-                          <Button
-                            className="w-full text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
-                            onClick={() => handleStatusChange(order.id, 'preparing')}
-                            disabled={actionKey !== null}
-                            aria-busy={actionKey === `${order.id}:preparing`}
-                          >
-                            {transientSuccessKey === `${order.id}:preparing` ? (
-                              <span className="flex items-center justify-center gap-1 text-blue-100 font-black">
-                                <span>✓</span>
-                                <span>In Preparation</span>
-                              </span>
-                            ) : actionKey === `${order.id}:preparing` ? (
-                              <span className="flex items-center justify-center gap-1.5">
-                                <span className="animate-spin inline-block">🍳</span>
-                                <span>Starting...</span>
-                              </span>
-                            ) : (
-                              '🍳 Start Preparing'
-                            )}
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="text-xs font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 px-3 min-h-[44px] touch-manipulation border-zinc-200"
+                              onClick={() => setSelectedOrderForCancel(order)}
+                              disabled={actionKey !== null}
+                              title="Cancel order"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              className="flex-1 text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
+                              onClick={() => handleStatusChange(order.id, 'preparing')}
+                              disabled={actionKey !== null}
+                              aria-busy={actionKey === `${order.id}:preparing`}
+                            >
+                              {transientSuccessKey === `${order.id}:preparing` ? (
+                                <span className="flex items-center justify-center gap-1 text-blue-100 font-black">
+                                  <span>✓</span>
+                                  <span>In Preparation</span>
+                                </span>
+                              ) : actionKey === `${order.id}:preparing` ? (
+                                <span className="flex items-center justify-center gap-1.5">
+                                  <span className="animate-spin inline-block">🍳</span>
+                                  <span>Starting...</span>
+                                </span>
+                              ) : (
+                                '🍳 Start Preparing'
+                              )}
+                            </Button>
+                          </div>
                         )}
 
                         {order.status === 'preparing' && (
-                          <Button
-                            className="w-full text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
-                            onClick={() => handleStatusChange(order.id, 'ready')}
-                            disabled={actionKey !== null}
-                            aria-busy={actionKey === `${order.id}:ready`}
-                          >
-                            {transientSuccessKey === `${order.id}:ready` ? (
-                              <span className="flex items-center justify-center gap-1 text-emerald-100 font-black">
-                                <span>✓</span>
-                                <span>Ready to Serve!</span>
-                              </span>
-                            ) : actionKey === `${order.id}:ready` ? (
-                              <span className="flex items-center justify-center gap-1.5">
-                                <span className="animate-spin inline-block">🔔</span>
-                                <span>Marking Ready...</span>
-                              </span>
-                            ) : (
-                              '🔔 Mark Ready to Serve'
-                            )}
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              className="text-xs font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 px-3 min-h-[44px] touch-manipulation border-zinc-200"
+                              onClick={() => setSelectedOrderForCancel(order)}
+                              disabled={actionKey !== null}
+                              title="Cancel order"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              className="flex-1 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px] touch-manipulation shadow-xs active:scale-[0.98] transition-all"
+                              onClick={() => handleStatusChange(order.id, 'ready')}
+                              disabled={actionKey !== null}
+                              aria-busy={actionKey === `${order.id}:ready`}
+                            >
+                              {transientSuccessKey === `${order.id}:ready` ? (
+                                <span className="flex items-center justify-center gap-1 text-emerald-100 font-black">
+                                  <span>✓</span>
+                                  <span>Ready to Serve!</span>
+                                </span>
+                              ) : actionKey === `${order.id}:ready` ? (
+                                <span className="flex items-center justify-center gap-1.5">
+                                  <span className="animate-spin inline-block">🔔</span>
+                                  <span>Marking Ready...</span>
+                                </span>
+                              ) : (
+                                '🔔 Mark Ready to Serve'
+                              )}
+                            </Button>
+                          </div>
                         )}
 
                         {order.status === 'ready' && (
@@ -422,6 +453,42 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
               );
             })}
         </div>
+      )}
+
+      {selectedOrderForCancel && (
+        <StaffCancelOrderModal
+          isOpen={true}
+          onClose={() => setSelectedOrderForCancel(null)}
+          orderId={selectedOrderForCancel.id}
+          orderNumberFormatted={selectedOrderForCancel.order_number_formatted}
+          channel="kitchen_kds"
+          currentStatus={selectedOrderForCancel.status}
+          isPaid={selectedOrderForCancel.payment_status === 'paid'}
+          totalCents={selectedOrderForCancel.total_cents}
+          currency={selectedOrderForCancel.currency}
+          onSuccess={() => {
+            setSelectedOrderForCancel(null);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {selectedItemForCancel && (
+        <StaffCancelItemModal
+          isOpen={true}
+          onClose={() => setSelectedItemForCancel(null)}
+          orderId={selectedItemForCancel.orderId}
+          orderItemId={selectedItemForCancel.orderItemId}
+          itemName={selectedItemForCancel.itemName}
+          unitPriceCents={selectedItemForCancel.unitPriceCents}
+          quantity={selectedItemForCancel.quantity}
+          cancelledQuantity={selectedItemForCancel.cancelledQuantity}
+          channel="kitchen_kds"
+          onSuccess={() => {
+            setSelectedItemForCancel(null);
+            router.refresh();
+          }}
+        />
       )}
     </div>
   );

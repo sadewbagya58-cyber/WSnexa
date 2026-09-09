@@ -143,6 +143,9 @@ export class OrderSecurityService {
       qr_session_duration_minutes: 120,
       location_radius_meters: 150,
       allow_verified_online_payment_bypass: true,
+      customer_cancellation_policy: 'before_confirmation',
+      cancellation_time_limit_minutes: 5,
+      require_manager_approval_after_prep: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

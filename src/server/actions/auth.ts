@@ -19,6 +19,7 @@ import {
 export type ActionResponse<T = unknown> = {
   success: boolean;
   message?: string;
+  code?: string;
   data?: T;
   errors?: Record<string, string[]>;
 };

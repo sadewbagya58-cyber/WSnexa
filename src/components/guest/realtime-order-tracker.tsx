@@ -11,6 +11,7 @@ import { submitCustomerAssistanceAction } from '@/server/actions/waiter';
 import { WaiterRequestType } from '@/lib/validation/waiter';
 import { SaveOrderButton } from '@/components/guest/save-order-button';
 import { useGuestLanguage, GuestLanguageToggle } from '@/features/qr/guest-language-context';
+import { CustomerCancelOrderModal } from '@/components/guest/customer-cancel-order-modal';
 
 interface RealtimeOrderTrackerProps {
   initialOrder: OrderRecord;
@@ -31,6 +32,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   const { order, connectionStatus } = useRealtimeOrder(initialOrder, accessToken);
   const [isPending, startTransition] = useTransition();
   const [assistanceFeedback, setAssistanceFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   const statusVariantMap: Record<string, 'neutral' | 'warning' | 'success' | 'destructive'> = {
     pending: 'warning',
@@ -334,6 +336,18 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
               <span>❓</span> {t('Need Assistance', 'උදව් අවශ්‍යයි')}
             </Button>
           </div>
+
+          {order.status !== 'completed' && order.status !== 'cancelled' && (
+            <div className="pt-2 border-t border-zinc-100 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setIsCancelModalOpen(true)}
+                className="text-[11px] font-bold text-zinc-400 hover:text-red-600 transition-colors cursor-pointer py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1"
+              >
+                <span>🚫</span> {t('Need to cancel this order?', 'මෙම order එක cancel කිරීමට අවශ්‍යද?')}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Order Info Details */}
@@ -505,6 +519,18 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             </Button>
           </Link>
         </div>
+
+        <CustomerCancelOrderModal
+          isOpen={isCancelModalOpen}
+          onClose={() => setIsCancelModalOpen(false)}
+          orderId={order.id}
+          orderNumberFormatted={order.order_number_formatted}
+          guestAccessToken={accessToken || order.access_token}
+          isPaid={order.payment_status === 'paid'}
+          onCancelled={() => {
+            setIsCancelModalOpen(false);
+          }}
+        />
       </main>
     </div>
   );

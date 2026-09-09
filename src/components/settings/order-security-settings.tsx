@@ -359,6 +359,88 @@ export function OrderSecuritySettings({
           </div>
         </div>
 
+        {/* Venue Order Cancellation Policy (Phase 38) */}
+        <div className="pt-4 border-t border-zinc-200 space-y-4">
+          <div>
+            <h4 className="font-black text-sm text-zinc-950 flex items-center gap-2">
+              <span>🚫</span>
+              <span>Customer & Staff Cancellation Policy</span>
+            </h4>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Control when customers can cancel their orders and whether kitchen prep requires manager approval.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="block text-xs font-bold text-zinc-700 mb-1">
+                Customer Cancellation Rule
+              </label>
+              <select
+                disabled={!canManage || isSaving}
+                value={settings.customer_cancellation_policy || 'before_confirmation'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    customer_cancellation_policy: e.target.value as any,
+                  })
+                }
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
+              >
+                <option value="disabled">🚫 Disabled (Staff Only)</option>
+                <option value="before_confirmation">⏳ Before Order Confirmation Only</option>
+                <option value="within_time_limit">⏱️ Within Time Limit (X Minutes)</option>
+                <option value="before_preparation">🍳 Before Kitchen Preparation Starts</option>
+              </select>
+            </div>
+
+            {settings.customer_cancellation_policy === 'within_time_limit' && (
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  Cancellation Time Limit (Minutes)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  disabled={!canManage || isSaving}
+                  value={settings.cancellation_time_limit_minutes || 5}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      cancellation_time_limit_minutes: Math.max(1, Math.min(60, parseInt(e.target.value) || 5)),
+                    })
+                  }
+                  className="w-full rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-950 min-h-[44px] disabled:opacity-50"
+                />
+              </div>
+            )}
+          </div>
+
+          <div
+            onClick={() => canManage && setSettings({ ...settings, require_manager_approval_after_prep: !settings.require_manager_approval_after_prep })}
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
+              settings.require_manager_approval_after_prep ?? true
+                ? 'bg-zinc-50 border-zinc-300 ring-1 ring-zinc-950/10'
+                : 'bg-white border-zinc-200 hover:bg-zinc-50'
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words">Require Manager Approval Once Prepared</h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
+                Prevents regular staff from cancelling food once kitchen preparation begins without a manager&apos;s authorization.
+              </p>
+            </div>
+            <span
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
+                settings.require_manager_approval_after_prep ?? true ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-500'
+              }`}
+            >
+              {settings.require_manager_approval_after_prep ?? true ? 'ON' : 'OFF'}
+            </span>
+          </div>
+        </div>
+
         {/* Submit */}
         {canManage && (
           <div className="pt-3 sm:pt-4 flex flex-col sm:flex-row justify-end">

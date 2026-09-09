@@ -130,6 +130,11 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
       <div className="flex items-center gap-2 flex-wrap">
         {getKitchenBadge(order.status)}
         {getPaymentBadge(order.payment_status)}
+        {order.refund_eligibility === 'eligible' && (
+          <Badge variant="destructive" className="font-extrabold bg-rose-600 text-white">
+            ↩️ Refund Required
+          </Badge>
+        )}
         {order.payment_method && (
           <span className="text-[11px] font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-full border border-zinc-200">
             Preferred: {order.payment_method === 'cash' ? '💵 Cash' : order.payment_method === 'card' ? '💳 Card' : order.payment_method === 'qr_pay' ? '📱 QR Pay' : '🏪 Pay at Counter'}
@@ -197,7 +202,15 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
         >
           🖨️ Receipt
         </Button>
-        {order.balance_due_cents > 0 ? (
+        {order.status === 'cancelled' && (order.paid_cents > 0 || order.payment_status === 'paid') ? (
+          <Button
+            size="sm"
+            className="flex-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white min-h-[40px] touch-manipulation active:scale-[0.98] transition-all shadow-xs"
+            onClick={() => onSettlePayment(order)}
+          >
+            ↩️ Process Refund ({formatCurrency(order.paid_cents || order.total_cents, order.currency)})
+          </Button>
+        ) : order.balance_due_cents > 0 ? (
           <Button
             size="sm"
             disabled={!canRecordPayments}

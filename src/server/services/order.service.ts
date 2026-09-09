@@ -24,6 +24,8 @@ export interface OrderItemRecord {
   quantity: number;
   line_subtotal_cents: number;
   special_instructions: string | null;
+  status?: 'active' | 'cancelled' | 'partially_cancelled';
+  cancelled_quantity?: number;
   order_item_modifiers: OrderItemModifierRecord[];
 }
 
@@ -57,6 +59,9 @@ export interface OrderRecord {
   created_at: string;
   updated_at: string;
   cancelled_at: string | null;
+  cancellation_reason?: string | null;
+  refund_eligibility?: 'none' | 'eligible' | 'not_applicable' | 'processed';
+  last_cancellation_id?: string | null;
   service_area_id?: string | null;
   service_area_name_snapshot?: string | null;
   approval_status?: string;
@@ -737,6 +742,20 @@ export class OrderService {
 
     if (nextStatus === 'cancelled') {
       isAuthorized = await can({ context: authContext, permission: 'orders.cancel', resource });
+      if (!isAuthorized) {
+        return { success: false, message: `Forbidden: Missing permission to cancel order.` };
+      }
+      const { CancellationService } = await import('@/server/services/cancellation.service');
+      const res = await CancellationService.cancelOrder({
+        orderId,
+        channel: 'manager_workflow',
+        requestedByType: 'staff',
+        reasonCategory: 'staff_cancellation',
+        reasonNotes: notes || `Status updated to cancelled`,
+        inventoryDisposition: 'record_waste',
+        actorUserId: authContext.userId,
+      });
+      return { success: res.success, message: res.message };
     } else if (nextStatus === 'preparing' || nextStatus === 'ready') {
       isAuthorized =
         (await can({ context: authContext, permission: 'kitchen.update', resource })) ||
@@ -763,7 +782,7 @@ export class OrderService {
         status: nextStatus,
         updated_at: new Date().toISOString(),
         completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
-        cancelled_at: nextStatus === 'cancelled' ? new Date().toISOString() : null,
+        cancelled_at: null,
       })
       .eq('id', orderId);
 

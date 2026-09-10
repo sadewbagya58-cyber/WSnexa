@@ -228,7 +228,7 @@ BEGIN
         INSERT INTO public.inventory_waste_records (
           business_id, branch_id, location_id, item_id,
           quantity, unit, quantity_base, reason,
-          cost_per_unit_cents, total_cost_cents, currency, notes, actor_id
+          unit_cost_cents, total_cost_cents, currency, notes, actor_id
         ) VALUES (
           v_cons.business_id, v_cons.branch_id, v_cons.location_id, v_cons.item_id,
           v_qty_to_rev, v_item_def.base_unit, v_qty_to_rev, 'prep_waste',

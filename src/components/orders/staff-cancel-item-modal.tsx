@@ -19,6 +19,7 @@ interface StaffCancelItemModalProps {
   quantity: number;
   cancelledQuantity: number;
   channel: CancellationChannel;
+  currentStatus?: string;
   currency?: string;
   onSuccess?: () => void;
 }
@@ -41,6 +42,7 @@ export function StaffCancelItemModal({
   quantity,
   cancelledQuantity,
   channel,
+  currentStatus,
   currency = 'USD',
   onSuccess,
 }: StaffCancelItemModalProps) {
@@ -48,7 +50,9 @@ export function StaffCancelItemModal({
   const [qtyToCancel, setQtyToCancel] = useState(1);
   const [reasonCategory, setReasonCategory] = useState(REASON_CATEGORIES[0].value);
   const [reasonNotes, setReasonNotes] = useState('');
-  const [disposition, setDisposition] = useState<InventoryDisposition>('record_waste');
+  const [disposition, setDisposition] = useState<InventoryDisposition>(
+    currentStatus === 'preparing' || currentStatus === 'ready' ? 'record_waste' : 'return_to_stock'
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -157,21 +161,32 @@ export function StaffCancelItemModal({
 
           <div className="space-y-2 pt-2 border-t border-zinc-100">
             <label className="text-xs font-bold text-zinc-700">Ingredient Stock Disposition:</label>
+            {(currentStatus === 'preparing' || currentStatus === 'ready') && (
+              <div className="rounded-xl p-2.5 text-[11px] font-semibold border border-amber-200 bg-amber-50 text-amber-900 flex items-center gap-1.5">
+                <span>ℹ️</span>
+                <span>
+                  Food is already preparing/ready. Cooked items cannot return to raw stock and will be logged as kitchen waste (<code>prep_waste</code>).
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
+                disabled={currentStatus === 'preparing' || currentStatus === 'ready'}
                 onClick={() => setDisposition('return_to_stock')}
-                className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                  disposition === 'return_to_stock'
-                    ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20'
-                    : 'border-zinc-200 bg-zinc-50'
+                className={`p-2 rounded-xl border text-left transition-all ${
+                  currentStatus === 'preparing' || currentStatus === 'ready'
+                    ? 'opacity-40 cursor-not-allowed border-zinc-200 bg-zinc-100'
+                    : disposition === 'return_to_stock'
+                    ? 'border-emerald-500 bg-emerald-50/80 ring-2 ring-emerald-500/20 cursor-pointer'
+                    : 'border-zinc-200 bg-zinc-50 cursor-pointer'
                 }`}
               >
                 <div className="text-xs font-bold text-zinc-950 flex items-center gap-1">
                   <span>📦</span> Restock
                 </div>
                 <div className="text-[10px] text-zinc-500 leading-tight mt-0.5">
-                  Uncooked
+                  {currentStatus === 'preparing' || currentStatus === 'ready' ? 'Unavailable' : 'Uncooked'}
                 </div>
               </button>
 

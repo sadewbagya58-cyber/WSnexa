@@ -737,6 +737,13 @@ export class OrderService {
       return { success: false, message: 'Order not found in active business.' };
     }
 
+    if (order.status === 'cancelled') {
+      return { success: false, message: 'Cannot update status of a cancelled order. Cancelled orders are terminal.' };
+    }
+    if (order.status === 'completed') {
+      return { success: false, message: 'Completed orders are immutable and cannot be updated.' };
+    }
+
     let isAuthorized = false;
     const resource = { type: 'order' as const, id: orderId };
 
@@ -776,7 +783,7 @@ export class OrderService {
 
     const previousStatus = order.status;
 
-    const { error: updateErr } = await admin
+    const { data: updatedRows, error: updateErr } = await admin
       .from('orders')
       .update({
         status: nextStatus,
@@ -784,10 +791,16 @@ export class OrderService {
         completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
         cancelled_at: null,
       })
-      .eq('id', orderId);
+      .eq('id', orderId)
+      .neq('status', 'cancelled')
+      .neq('status', 'completed')
+      .select('id');
 
     if (updateErr) {
       return { success: false, message: updateErr.message };
+    }
+    if (!updatedRows || updatedRows.length === 0) {
+      return { success: false, message: 'Order could not be updated because it is already cancelled or completed.' };
     }
 
     await admin.from('order_status_history').insert({

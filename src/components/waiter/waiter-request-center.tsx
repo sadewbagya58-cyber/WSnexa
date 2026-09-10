@@ -11,6 +11,7 @@ import { WaiterRequestStatus } from '@/lib/validation/waiter';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useRealtimeWaiterRequests } from '@/hooks/use-realtime-waiter-requests';
 import { WaiterOperationalActivity } from './waiter-operational-activity';
+import { WaiterTableOrdersSection } from './waiter-table-orders-section';
 import { EntityTimelineDialog } from '@/components/audit/entity-timeline-dialog';
 import { IconHistory } from '@/components/audit/audit-icons';
 import {
@@ -52,7 +53,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   const [isOpeningMenu, setIsOpeningMenu] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'queue' | 'activity'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'orders' | 'activity'>('queue');
   const [timelineRequestId, setTimelineRequestId] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -137,8 +138,8 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
         </div>
       )}
 
-      {/* Tab Switcher: Live Queue vs 48-Hour Activity */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 pb-3">
+      {/* Tab Switcher: Live Queue vs Table Orders vs 48-Hour Activity */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 pb-3 flex-wrap">
         <button
           type="button"
           onClick={() => setActiveTab('queue')}
@@ -157,6 +158,17 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab('orders')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors min-h-[40px] flex items-center gap-1.5 ${
+            activeTab === 'orders'
+              ? 'bg-zinc-950 text-white shadow-xs'
+              : 'bg-zinc-100 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+          }`}
+        >
+          <span>🍽️ Table Orders</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('activity')}
           className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors min-h-[40px] flex items-center gap-1.5 ${
             activeTab === 'activity'
@@ -170,6 +182,8 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
 
       {activeTab === 'activity' ? (
         <WaiterOperationalActivity branchId={branchId} assignedAreaIds={assignedAreaIds} />
+      ) : activeTab === 'orders' ? (
+        <WaiterTableOrdersSection branchId={branchId} canManageOrders={canManageRequests} />
       ) : (
         <>
           {/* Pending Guest Order Approvals Section */}

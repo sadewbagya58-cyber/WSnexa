@@ -98,3 +98,28 @@ export async function rejectGuestOrderAction(orderId: string, _waiterUserId?: st
     return { success: false, message: msg };
   }
 }
+
+export async function getActiveTableOrdersAction(branchId: string) {
+  try {
+    const authContext = await resolveAuthorizationContext();
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized session.' };
+    }
+
+    const branchResource = { type: 'branch' as const, id: branchId };
+    const canView =
+      (await can({ context: authContext, permission: 'waiter.access', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'orders.view', resource: branchResource })) ||
+      (await can({ context: authContext, permission: 'waiter.orders.create', resource: branchResource }));
+
+    if (!canView) {
+      return { success: false, message: 'Forbidden: Missing permissions to view table orders.' };
+    }
+
+    const orders = await WaiterService.getActiveTableOrdersForWaiter(branchId, authContext.userId);
+    return { success: true, orders };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch active table orders.';
+    return { success: false, message: msg };
+  }
+}

@@ -143,6 +143,7 @@ export class OrderSecurityService {
       qr_session_duration_minutes: 120,
       location_radius_meters: 150,
       allow_verified_online_payment_bypass: true,
+      allow_customer_cancellation: true,
       customer_cancellation_policy: 'before_confirmation',
       cancellation_time_limit_minutes: 5,
       require_manager_approval_after_prep: true,
@@ -216,6 +217,22 @@ export class OrderSecurityService {
         updates.allow_verified_online_payment_bypass !== undefined
           ? updates.allow_verified_online_payment_bypass
           : existing.allow_verified_online_payment_bypass,
+      allow_customer_cancellation:
+        updates.allow_customer_cancellation !== undefined
+          ? updates.allow_customer_cancellation
+          : (existing.allow_customer_cancellation ?? true),
+      customer_cancellation_policy:
+        updates.customer_cancellation_policy !== undefined
+          ? updates.customer_cancellation_policy
+          : (existing.customer_cancellation_policy ?? 'before_confirmation'),
+      cancellation_time_limit_minutes:
+        updates.cancellation_time_limit_minutes !== undefined
+          ? updates.cancellation_time_limit_minutes
+          : (existing.cancellation_time_limit_minutes ?? 5),
+      require_manager_approval_after_prep:
+        updates.require_manager_approval_after_prep !== undefined
+          ? updates.require_manager_approval_after_prep
+          : (existing.require_manager_approval_after_prep ?? true),
       updated_at: new Date().toISOString(),
     };
 

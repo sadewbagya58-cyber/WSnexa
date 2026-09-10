@@ -17,7 +17,9 @@ export type CustomerCancellationPolicy =
   | 'disabled'
   | 'before_confirmation'
   | 'within_time_limit'
-  | 'before_preparation';
+  | 'before_preparation'
+  | 'during_preparation'
+  | 'until_ready';
 
 export interface CustomerPolicyEvaluation {
   canCancel: boolean;
@@ -78,7 +80,12 @@ export class CancellationService {
   static async evaluateCustomerCancellationPolicy(
     orderId: string,
     guestAccessToken?: string | null,
-    customerUserId?: string | null
+    customerUserId?: string | null,
+    overridePolicySettings?: {
+      customer_cancellation_policy?: CustomerCancellationPolicy;
+      cancellation_time_limit_minutes?: number;
+      allow_customer_cancellation?: boolean;
+    }
   ): Promise<CustomerPolicyEvaluation> {
     const admin = createAdminClient();
 
@@ -132,12 +139,26 @@ export class CancellationService {
       };
     }
 
-    // 4. Fetch venue policy from branch_order_security_settings
-    const { data: settings } = await admin
-      .from('branch_order_security_settings')
-      .select('customer_cancellation_policy, cancellation_time_limit_minutes')
-      .eq('branch_id', order.branch_id)
-      .maybeSingle();
+    // 4. Fetch venue policy from branch_order_security_settings (or use override if provided)
+    let settings = overridePolicySettings;
+    if (!settings) {
+      const { data: fetchedSettings } = await admin
+        .from('branch_order_security_settings')
+        .select('customer_cancellation_policy, cancellation_time_limit_minutes, allow_customer_cancellation')
+        .eq('branch_id', order.branch_id)
+        .maybeSingle();
+      settings = fetchedSettings as any;
+    }
+
+    if (settings?.allow_customer_cancellation === false) {
+      return {
+        canCancel: false,
+        policy: 'disabled',
+        timeLimitMinutes: 0,
+        reason: 'Customer cancellation is disabled by this venue. Please notify a staff member.',
+        order,
+      };
+    }
 
     const policy: CustomerCancellationPolicy = settings?.customer_cancellation_policy || 'before_confirmation';
     const timeLimitMinutes: number = settings?.cancellation_time_limit_minutes || 5;
@@ -199,6 +220,32 @@ export class CancellationService {
       };
     }
 
+    if (policy === 'during_preparation') {
+      const isDuringPrep = order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing';
+      return {
+        canCancel: isDuringPrep,
+        policy,
+        timeLimitMinutes,
+        reason: isDuringPrep
+          ? undefined
+          : 'Order preparation is complete. Order cannot be cancelled directly.',
+        order,
+      };
+    }
+
+    if (policy === 'until_ready') {
+      const isUntilReady = order.status === 'pending' || order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready';
+      return {
+        canCancel: isUntilReady,
+        policy,
+        timeLimitMinutes,
+        reason: isUntilReady
+          ? undefined
+          : 'Order has been completed or picked up and cannot be cancelled.',
+        order,
+      };
+    }
+
     return {
       canCancel: false,
       policy: 'disabled',
@@ -217,7 +264,7 @@ export class CancellationService {
     // 1. Fetch target order
     const { data: order, error: fetchErr } = await admin
       .from('orders')
-      .select('id, business_id, branch_id, status, payment_status, total_cents, access_token, customer_user_id')
+      .select('id, business_id, branch_id, status, approval_status, payment_status, total_cents, access_token, customer_user_id')
       .eq('id', params.orderId)
       .maybeSingle();
 
@@ -244,7 +291,27 @@ export class CancellationService {
       };
     }
 
+    // Safe inventory rule (QA Finding #6):
+    // 1. If food has entered 'preparing' or 'ready', it CANNOT be returned to stock - MUST be recorded as waste
+    // 2. If order is 'pending' or 'confirmed', check if any consumption records exist.
+    //    If zero consumption occurred, force disposition to 'none' (never record fake waste, never create phantom stock)
     let effectiveDisposition: InventoryDisposition = params.inventoryDisposition || 'none';
+
+    if (order.status === 'preparing' || order.status === 'ready') {
+      effectiveDisposition = 'record_waste';
+    } else if (order.status === 'pending' || order.status === 'confirmed') {
+      const { data: consumptions } = await admin
+        .from('inventory_order_consumptions')
+        .select('id')
+        .eq('order_id', order.id)
+        .limit(1);
+
+      if (!consumptions || consumptions.length === 0) {
+        effectiveDisposition = 'none';
+      } else {
+        effectiveDisposition = params.inventoryDisposition || 'return_to_stock';
+      }
+    }
 
     // 4. Channel / Requestor validation
     if (params.requestedByType === 'customer') {
@@ -261,20 +328,16 @@ export class CancellationService {
           message: evalResult.reason || 'Order cancellation is not permitted under current venue policy.',
         };
       }
-
-      // Safe inventory rule: if cancelled before prep, disposition is 'none' (zero phantom stock)
-      // If food had already started prep (under time-limit policy), food is wasted
-      if (order.status === 'pending' || order.status === 'confirmed') {
-        effectiveDisposition = 'none';
-      } else {
-        effectiveDisposition = 'record_waste';
-      }
     } else if (params.requestedByType === 'staff') {
       // Staff authorization validation
       const { can, resolveAuthorizationContext } = await import('@/server/auth');
       let authContext;
       try {
-        authContext = await resolveAuthorizationContext();
+        authContext = await resolveAuthorizationContext(
+          params.actorUserId
+            ? { overrideUserId: params.actorUserId, requestedBusinessId: order.business_id }
+            : {}
+        );
       } catch {
         return { success: false, code: 'UNAUTHORIZED', message: 'Unauthorized staff session.' };
       }
@@ -283,17 +346,26 @@ export class CancellationService {
         return { success: false, code: 'UNAUTHORIZED', message: 'Staff user does not belong to this business.' };
       }
 
-      const isAuthorized = await can({
+      let isAuthorized = await can({
         context: authContext,
         permission: 'orders.cancel',
         resource: { type: 'order', id: order.id },
       });
 
+      if (!isAuthorized && params.channel === 'waiter_menu') {
+        const canWaiter =
+          (await can({ context: authContext, permission: 'waiter.orders.create', resource: { type: 'branch', id: order.branch_id } })) ||
+          (await can({ context: authContext, permission: 'waiter.access', resource: { type: 'branch', id: order.branch_id } }));
+        if (canWaiter) {
+          isAuthorized = true;
+        }
+      }
+
       if (!isAuthorized) {
         return {
           success: false,
           code: 'FORBIDDEN',
-          message: 'You do not have permission to cancel orders (orders.cancel).',
+          message: 'You do not have permission to cancel orders.',
         };
       }
 
@@ -322,6 +394,77 @@ export class CancellationService {
       }
     }
 
+    // Pre-dismiss pending waiter approval order to 'rejected' before calling cancel_order_atomic
+    // so the order is immediately dismissed from waiter queue and satisfies the PostgreSQL
+    // check constraint orders_approval_status_check ('approved', 'pending_waiter_approval', 'rejected').
+    if (order.approval_status === 'pending_waiter_approval') {
+      await admin
+        .from('orders')
+        .update({
+          approval_status: 'rejected',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .eq('approval_status', 'pending_waiter_approval');
+    }
+
+    // Safe waste recording for in-prep food prior to RPC to prevent PostgreSQL 42703 error (QA Finding #6)
+    if (effectiveDisposition === 'record_waste') {
+      const { data: consumptions } = await admin
+        .from('inventory_order_consumptions')
+        .select('*, item:inventory_items(base_unit)')
+        .eq('order_id', order.id)
+        .gt('quantity_consumed_base', 0);
+
+      if (consumptions && consumptions.length > 0) {
+        for (const cons of consumptions) {
+          await admin.from('inventory_waste_records').insert({
+            business_id: cons.business_id,
+            branch_id: cons.branch_id,
+            location_id: cons.location_id,
+            item_id: cons.item_id,
+            quantity: cons.quantity_consumed_base,
+            unit: (cons as any).item?.base_unit || 'unit',
+            quantity_base: cons.quantity_consumed_base,
+            reason: 'prep_waste',
+            unit_cost_cents: cons.unit_cost_cents_snapshot || 0,
+            total_cost_cents: cons.total_cost_cents_snapshot || 0,
+            currency: cons.currency,
+            notes: `Order cancellation waste: ${params.reasonNotes || params.reasonCategory}`,
+            actor_id: params.actorUserId || null,
+          });
+
+          await admin.from('inventory_consumption_reversals').insert({
+            business_id: cons.business_id,
+            branch_id: cons.branch_id,
+            order_id: order.id,
+            consumption_id: cons.id,
+            item_id: cons.item_id,
+            location_id: cons.location_id,
+            quantity_reversed_base: cons.quantity_consumed_base,
+            disposition: 'record_waste',
+            cost_cents_snapshot: cons.total_cost_cents_snapshot || 0,
+            currency: cons.currency,
+            reason: params.reasonNotes || params.reasonCategory,
+            actor_id: params.actorUserId || null,
+            idempotency_key: `${cons.id}_record_waste_${Date.now()}`,
+          });
+
+          await admin
+            .from('inventory_order_consumptions')
+            .update({
+              status: 'reversed_as_waste',
+              quantity_consumed_base: 0,
+              total_cost_cents_snapshot: 0,
+              reversed_at: new Date().toISOString(),
+              reversal_reason: params.reasonNotes || params.reasonCategory,
+              reversal_actor_id: params.actorUserId || null,
+            })
+            .eq('id', cons.id);
+        }
+      }
+    }
+
     // 5. Execute atomic cancellation RPC
     const { data: rpcData, error: rpcError } = await admin.rpc('cancel_order_atomic', {
       p_order_id: order.id,
@@ -343,6 +486,26 @@ export class CancellationService {
         message: rpcError?.message || rpcData?.error || 'Failed to cancel order.',
       };
     }
+
+    if (effectiveDisposition === 'record_waste') {
+      await admin
+        .from('order_cancellations')
+        .update({ inventory_disposition: 'record_waste' })
+        .eq('id', rpcData.cancellation_id);
+
+      rpcData.disposition = 'record_waste';
+      rpcData.inventory_reversed = true;
+    }
+
+    // Ensure orders table has approval_status set to rejected if it was pending_waiter_approval (Finding #1)
+    await admin
+      .from('orders')
+      .update({
+        approval_status: 'rejected',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', order.id)
+      .eq('approval_status', 'pending_waiter_approval');
 
     // 6. Audit Logging
     try {
@@ -399,23 +562,31 @@ export class CancellationService {
   static async cancelOrderItem(params: CancelOrderItemParams) {
     const admin = createAdminClient();
 
-    // 1. Authorization check
-    const { can, resolveAuthorizationContext } = await import('@/server/auth');
-    let authContext;
-    try {
-      authContext = await resolveAuthorizationContext();
-    } catch {
-      return { success: false, code: 'UNAUTHORIZED', message: 'Unauthorized staff session.' };
-    }
-
-    // 2. Fetch order & target item
+    // 1. Fetch order
     const { data: order } = await admin
       .from('orders')
       .select('id, business_id, branch_id, status, payment_status, total_cents, subtotal_cents')
       .eq('id', params.orderId)
       .maybeSingle();
 
-    if (!order || order.business_id !== authContext?.businessId) {
+    if (!order) {
+      return { success: false, code: 'ORDER_NOT_FOUND', message: 'Order not found.' };
+    }
+
+    // 2. Authorization check
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext(
+        params.actorUserId
+          ? { overrideUserId: params.actorUserId, requestedBusinessId: order.business_id }
+          : {}
+      );
+    } catch {
+      return { success: false, code: 'UNAUTHORIZED', message: 'Unauthorized staff session.' };
+    }
+
+    if (order.business_id !== authContext?.businessId) {
       return { success: false, code: 'ORDER_NOT_FOUND', message: 'Order not found in active business.' };
     }
 
@@ -427,11 +598,20 @@ export class CancellationService {
       return { success: false, code: 'ORDER_ALREADY_CANCELLED', message: 'Order is already cancelled.' };
     }
 
-    const isAuthorized = await can({
+    let isAuthorized = await can({
       context: authContext,
       permission: 'orders.cancel',
       resource: { type: 'order', id: order.id },
     });
+
+    if (!isAuthorized && params.channel === 'waiter_menu') {
+      const canWaiter =
+        (await can({ context: authContext, permission: 'waiter.orders.create', resource: { type: 'branch', id: order.branch_id } })) ||
+        (await can({ context: authContext, permission: 'waiter.access', resource: { type: 'branch', id: order.branch_id } }));
+      if (canWaiter) {
+        isAuthorized = true;
+      }
+    }
 
     if (!isAuthorized) {
       return {
@@ -461,17 +641,34 @@ export class CancellationService {
       };
     }
 
+    // Safe item disposition (QA Finding #6)
+    let effectiveItemDisposition: InventoryDisposition = params.inventoryDisposition || 'none';
+    if (order.status === 'preparing' || order.status === 'ready') {
+      effectiveItemDisposition = 'record_waste';
+    } else if (order.status === 'pending' || order.status === 'confirmed') {
+      const { data: consumptions } = await admin
+        .from('inventory_order_consumptions')
+        .select('id')
+        .eq('order_item_id', item.id)
+        .limit(1);
+
+      if (!consumptions || consumptions.length === 0) {
+        effectiveItemDisposition = 'none';
+      }
+    }
+
     // 3. Execute atomic item inventory reversal RPC
     const { data: rpcData, error: rpcError } = await admin.rpc('reverse_order_item_consumption', {
       p_order_id: order.id,
       p_order_item_id: item.id,
       p_cancelled_qty: params.cancelledQuantity,
-      p_disposition: params.inventoryDisposition,
+      p_disposition: effectiveItemDisposition,
       p_reason: params.reasonNotes || params.reasonCategory,
       p_actor_id: params.actorUserId,
     });
 
     if (rpcError || !rpcData?.success) {
+      console.error('[CancellationService.cancelOrderItem] RPC error:', rpcError || rpcData?.error);
       return {
         success: false,
         code: rpcData?.error || 'ITEM_REVERSAL_FAILED',
@@ -497,7 +694,7 @@ export class CancellationService {
         reason_notes: params.reasonNotes || '',
         approval_status: 'approved',
         approved_by_user_id: params.actorUserId,
-        inventory_disposition: params.inventoryDisposition,
+        inventory_disposition: effectiveItemDisposition,
         refund_required: order.payment_status === 'paid',
         approved_at: new Date().toISOString(),
         metadata: {
@@ -517,7 +714,7 @@ export class CancellationService {
         quantity_cancelled: params.cancelledQuantity,
         unit_price_cents_snapshot: item.unit_price_cents_snapshot,
         line_subtotal_cancelled_cents: centsDeducted,
-        inventory_disposition: params.inventoryDisposition,
+        inventory_disposition: effectiveItemDisposition,
         base_quantity_reversed: rpcData.total_base_qty_reversed || 0.0,
         cost_cents_reversed: rpcData.total_cost_cents_reversed || 0,
       });
@@ -560,7 +757,7 @@ export class CancellationService {
         newValues: {
           cancelled_quantity: (item.cancelled_quantity || 0) + params.cancelledQuantity,
           status: isFullItemCancel ? 'cancelled' : 'partially_cancelled',
-          disposition: params.inventoryDisposition,
+          disposition: effectiveItemDisposition,
         },
         reason: params.reasonNotes || params.reasonCategory,
       });

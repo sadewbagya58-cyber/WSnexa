@@ -29,7 +29,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   currentUserId,
 }) => {
   const { t } = useGuestLanguage();
-  const { order, connectionStatus } = useRealtimeOrder(initialOrder, accessToken);
+  const { order, connectionStatus, refetchOrderState, setOrder } = useRealtimeOrder(initialOrder, accessToken);
   const [isPending, startTransition] = useTransition();
   const [assistanceFeedback, setAssistanceFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -184,10 +184,12 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
             </h1>
             <div className="shrink-0 max-w-full">
               <Badge
-                variant={order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}
+                variant={order.status === 'cancelled' ? 'destructive' : order.approval_status === 'pending_waiter_approval' ? 'warning' : statusVariantMap[order.status] || 'neutral'}
                 className="text-[10px] sm:text-xs font-bold py-0.5 sm:py-1 px-2.5 text-center whitespace-normal leading-tight max-w-full"
               >
-                {order.approval_status === 'pending_waiter_approval'
+                {order.status === 'cancelled'
+                  ? t('❌ ORDER CANCELLED', '❌ ඇණවුම අවලංගු කර ඇත')
+                  : order.approval_status === 'pending_waiter_approval'
                   ? t('⏳ WAITING FOR STAFF APPROVAL', '⏳ කාර්ය මණ්ඩල අනුමැතිය බලාපොරොත්තුවෙන්')
                   : order.approval_status === 'rejected'
                   ? t('❌ NOT APPROVED', '❌ අනුමත නොවීය')
@@ -201,8 +203,14 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
       <main className="max-w-2xl mx-auto px-4 pt-4 space-y-6">
         {/* Status Card */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm text-center space-y-3">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-50 text-4xl border border-amber-200 shadow-inner">
-            {order.approval_status === 'pending_waiter_approval'
+          <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-4xl shadow-inner ${
+            order.status === 'cancelled'
+              ? 'bg-rose-50 border border-rose-200 text-rose-600'
+              : 'bg-amber-50 border border-amber-200'
+          }`}>
+            {order.status === 'cancelled'
+              ? '❌'
+              : order.approval_status === 'pending_waiter_approval'
               ? '⏳'
               : order.approval_status === 'rejected'
               ? '🛑'
@@ -216,40 +224,54 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
               {order.order_number_formatted}
             </h2>
           </div>
-          <p className="text-xs text-zinc-600 max-w-sm mx-auto leading-relaxed font-medium">
-            {order.approval_status === 'pending_waiter_approval' && (
-              <span className="text-amber-800 font-bold">
+          {order.status === 'cancelled' ? (
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 text-left max-w-md mx-auto space-y-1">
+              <p className="text-sm font-bold text-rose-900 flex items-center gap-1.5">
+                <span>❌</span>
+                <span>{t('This order has been cancelled', 'මෙම ඇණවුම අවලංගු කර ඇත')}</span>
+              </p>
+              <p className="text-xs text-rose-700 leading-relaxed">
                 {t(
-                  'Your order has been submitted and is waiting for staff approval before being sent to the kitchen.',
-                  'ඔබගේ Order එක ලැබී ඇති අතර කුස්සියට යැවීමට පෙර කාර්ය මණ්ඩලයේ අනුමැතිය බලාපොරොත්තුවෙන් සිටී.'
+                  'No further preparation or delivery will occur. If you paid online, any eligible refund will be processed by the management.',
+                  'තවදුරටත් ආහාර පිළියෙල කිරීමක් සිදු නොවේ. ඔබ මුදල් ගෙවා ඇත්නම්, අදාළ මුදල් ආපසු ගෙවීම කළමනාකාරීත්වය විසින් සිදු කරනු ඇත.'
                 )}
-              </span>
-            )}
-            {order.approval_status === 'rejected' && (
-              <span className="text-rose-700 font-bold">
-                {t('Order was not accepted by staff.', 'කාර්ය මණ්ඩලය විසින් Order එක ප්‍රතික්ෂේප කරන ලදී.')}{' '}
-                {order.rejection_reason && `${t('Reason:', 'හේතුව:')} ${order.rejection_reason}`}
-              </span>
-            )}
-            {order.approval_status === 'approved' && (
-              <>
-                {order.status === 'pending' &&
-                  t(
-                    'Your order has been received by the kitchen. Preparation will begin shortly.',
-                    'කුස්සියට Order එක ලැබී ඇත. පිළියෙල කිරීම ඉක්මනින් ආරම්භ වේ.'
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-600 max-w-sm mx-auto leading-relaxed font-medium">
+              {order.approval_status === 'pending_waiter_approval' && (
+                <span className="text-amber-800 font-bold">
+                  {t(
+                    'Your order has been submitted and is waiting for staff approval before being sent to the kitchen.',
+                    'ඔබගේ Order එක ලැබී ඇති අතර කුස්සියට යැවීමට පෙර කාර්ය මණ්ඩලයේ අනුමැතිය බලාපොරොත්තුවෙන් සිටී.'
                   )}
-                {order.status === 'confirmed' &&
-                  t('Your order has been confirmed by the kitchen.', 'කුස්සිය විසින් ඔබගේ Order එක තහවුරු කරන ලදී.')}
-                {order.status === 'preparing' &&
-                  t('Your meal is actively being prepared in the kitchen!', 'ඔබගේ ආහාර පිළියෙල වෙමින් පවතී!')}
-                {order.status === 'ready' &&
-                  t('Your order is ready! It will be served to your table shortly.', 'ඔබගේ Order එක සූදානම්! සුළු මොහොතකින් මේසයට ගෙනෙනු ඇත.')}
-                {order.status === 'completed' &&
-                  t('Order completed. Thank you for dining with us!', 'Order එක සම්පූර්ණයි. පැමිණීම ගැන ස්තූතියි!')}
-                {order.status === 'cancelled' && t('This order was cancelled.', 'මෙම Order එක අවලංගු කරන ලදී.')}
-              </>
-            )}
-          </p>
+                </span>
+              )}
+              {order.approval_status === 'rejected' && (
+                <span className="text-rose-700 font-bold">
+                  {t('Order was not accepted by staff.', 'කාර්ය මණ්ඩලය විසින් Order එක ප්‍රතික්ෂේප කරන ලදී.')}{' '}
+                  {order.rejection_reason && `${t('Reason:', 'හේතුව:')} ${order.rejection_reason}`}
+                </span>
+              )}
+              {order.approval_status === 'approved' && (
+                <>
+                  {order.status === 'pending' &&
+                    t(
+                      'Your order has been received by the kitchen. Preparation will begin shortly.',
+                      'කුස්සියට Order එක ලැබී ඇත. පිළියෙල කිරීම ඉක්මනින් ආරම්භ වේ.'
+                    )}
+                  {order.status === 'confirmed' &&
+                    t('Your order has been confirmed by the kitchen.', 'කුස්සිය විසින් ඔබගේ Order එක තහවුරු කරන ලදී.')}
+                  {order.status === 'preparing' &&
+                    t('Your meal is actively being prepared in the kitchen!', 'ඔබගේ ආහාර පිළියෙල වෙමින් පවතී!')}
+                  {order.status === 'ready' &&
+                    t('Your order is ready! It will be served to your table shortly.', 'ඔබගේ Order එක සූදානම්! සුළු මොහොතකින් මේසයට ගෙනෙනු ඇත.')}
+                  {order.status === 'completed' &&
+                    t('Order completed. Thank you for dining with us!', 'Order එක සම්පූර්ණයි. පැමිණීම ගැන ස්තූතියි!')}
+                </>
+              )}
+            </p>
+          )}
 
           {/* Timeline Progress Tracker */}
           {order.status !== 'cancelled' && order.approval_status === 'approved' && (
@@ -529,6 +551,14 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           isPaid={order.payment_status === 'paid'}
           onCancelled={() => {
             setIsCancelModalOpen(false);
+            if (setOrder) {
+              setOrder((prev: OrderRecord) => ({
+                ...prev,
+                status: 'cancelled',
+                approval_status: 'rejected',
+              }));
+            }
+            refetchOrderState();
           }}
         />
       </main>

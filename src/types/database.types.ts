@@ -1161,7 +1161,8 @@ export interface BranchOrderSecuritySettings {
   qr_session_duration_minutes: number;
   location_radius_meters: number;
   allow_verified_online_payment_bypass: boolean;
-  customer_cancellation_policy?: 'disabled' | 'before_confirmation' | 'within_time_limit' | 'before_preparation';
+  allow_customer_cancellation?: boolean;
+  customer_cancellation_policy?: 'disabled' | 'before_confirmation' | 'within_time_limit' | 'before_preparation' | 'during_preparation' | 'until_ready';
   cancellation_time_limit_minutes?: number;
   require_manager_approval_after_prep?: boolean;
   created_at: string;

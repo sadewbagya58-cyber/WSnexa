@@ -371,13 +371,40 @@ export function OrderSecuritySettings({
             </p>
           </div>
 
+          {/* Master Enable/Disable for Customer Order Cancellation */}
+          <div
+            onClick={() => canManage && setSettings({ ...settings, allow_customer_cancellation: !(settings.allow_customer_cancellation ?? true) })}
+            className={`flex items-start sm:items-center justify-between gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer min-h-[48px] touch-manipulation min-w-0 w-full ${
+              settings.allow_customer_cancellation ?? true
+                ? 'bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-500/20'
+                : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100/60'
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-xs text-zinc-950 break-words flex items-center gap-1.5">
+                <span>📱</span>
+                <span>Allow Customer Order Cancellation</span>
+              </h4>
+              <p className="text-[11px] text-zinc-500 mt-0.5 break-words leading-relaxed">
+                When enabled, customers can cancel their own orders directly from the digital tracker according to the policy below. If disabled, only staff can cancel orders.
+              </p>
+            </div>
+            <span
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-black shrink-0 mt-0.5 sm:mt-0 ${
+                settings.allow_customer_cancellation ?? true ? 'bg-emerald-600 text-white' : 'bg-zinc-200 text-zinc-600'
+              }`}
+            >
+              {settings.allow_customer_cancellation ?? true ? 'ENABLED' : 'DISABLED'}
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-bold text-zinc-700 mb-1">
                 Customer Cancellation Rule
               </label>
               <select
-                disabled={!canManage || isSaving}
+                disabled={!canManage || isSaving || settings.allow_customer_cancellation === false}
                 value={settings.customer_cancellation_policy || 'before_confirmation'}
                 onChange={(e) =>
                   setSettings({
@@ -391,6 +418,8 @@ export function OrderSecuritySettings({
                 <option value="before_confirmation">⏳ Before Order Confirmation Only</option>
                 <option value="within_time_limit">⏱️ Within Time Limit (X Minutes)</option>
                 <option value="before_preparation">🍳 Before Kitchen Preparation Starts</option>
+                <option value="during_preparation">🍲 During Kitchen Preparation</option>
+                <option value="until_ready">✅ Until Ready / Cooked</option>
               </select>
             </div>
 
@@ -403,7 +432,7 @@ export function OrderSecuritySettings({
                   type="number"
                   min={1}
                   max={60}
-                  disabled={!canManage || isSaving}
+                  disabled={!canManage || isSaving || settings.allow_customer_cancellation === false}
                   value={settings.cancellation_time_limit_minutes || 5}
                   onChange={(e) =>
                     setSettings({

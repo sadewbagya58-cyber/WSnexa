@@ -474,6 +474,7 @@ export class WaiterService {
       `)
       .eq('branch_id', branchId)
       .eq('approval_status', 'pending_waiter_approval')
+      .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
 
     if (error || !pendingOrders) return [];
@@ -489,6 +490,63 @@ export class WaiterService {
   }
 
   /**
+   * Retrieves active table orders for the waiter's assigned floor/service area.
+   */
+  static async getActiveTableOrdersForWaiter(branchId: string, waiterUserId: string) {
+    const { createAdminClient } = await import('@/lib/supabase/server');
+    const admin = createAdminClient();
+
+    let allowedAreaIds: string[] | null = null;
+    const { data: mem } = await admin
+      .from('business_memberships')
+      .select('id, role, business_id')
+      .eq('user_id', waiterUserId)
+      .maybeSingle();
+
+    const isPropertyLevel =
+      mem?.role === 'business_owner' ||
+      mem?.role === 'branch_manager' ||
+      mem?.role === 'admin';
+
+    if (mem && !isPropertyLevel) {
+      const { data: assigns } = await admin
+        .from('staff_area_assignments')
+        .select('service_area_id')
+        .eq('business_membership_id', mem.id)
+        .eq('branch_id', branchId);
+
+      allowedAreaIds = (assigns || []).map((a) => a.service_area_id);
+      if (allowedAreaIds.length === 0) {
+        return [];
+      }
+    }
+
+    const { data: activeOrders, error } = await admin
+      .from('orders')
+      .select(`
+        *,
+        table:dining_tables(id, name, code, table_number, service_area_id),
+        order_items(*, order_item_modifiers(*))
+      `)
+      .eq('branch_id', branchId)
+      .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+      .neq('status', 'cancelled')
+      .neq('status', 'completed')
+      .order('created_at', { ascending: false });
+
+    if (error || !activeOrders) return [];
+
+    if (allowedAreaIds !== null) {
+      return activeOrders.filter((o) => {
+        const areaId = o.service_area_id || (o.table as { service_area_id?: string } | null)?.service_area_id;
+        return areaId && allowedAreaIds!.includes(areaId);
+      });
+    }
+
+    return activeOrders;
+  }
+
+  /**
    * Approves a pending guest order. Atomically transitions approval_status to 'approved' and releases to kitchen.
    */
   static async approveGuestOrder(orderId: string, waiterUserId: string) {
@@ -498,7 +556,7 @@ export class WaiterService {
     // 1. Fetch order details with table service area to verify tenancy & scope
     const { data: order } = await admin
       .from('orders')
-      .select('id, business_id, branch_id, table_id, service_area_id, approval_status, table:dining_tables(service_area_id)')
+      .select('id, business_id, branch_id, table_id, service_area_id, approval_status, status, table:dining_tables(service_area_id)')
       .eq('id', orderId)
       .maybeSingle();
 
@@ -506,7 +564,11 @@ export class WaiterService {
       return { success: false, message: 'Order not found.' };
     }
 
-    if (order.approval_status !== 'pending_waiter_approval') {
+    if (order.status === 'cancelled') {
+      return { success: false, message: 'Cannot approve a cancelled order. Cancelled orders are terminal.' };
+    }
+
+    if (order.approval_status !== 'pending_waiter_approval' || order.status !== 'pending') {
       return { success: false, message: 'Order is no longer pending approval.' };
     }
 
@@ -553,6 +615,7 @@ export class WaiterService {
       })
       .eq('id', orderId)
       .eq('approval_status', 'pending_waiter_approval')
+      .eq('status', 'pending')
       .select('id, business_id, branch_id, order_number_formatted');
 
     if (error) {

@@ -126,5 +126,5 @@ export function useRealtimeOrder(initialOrder: OrderRecord, accessToken?: string
     };
   }, [initialOrder.id, refetchOrderState]);
 
-  return { order, connectionStatus, refetchOrderState };
+  return { order, connectionStatus, refetchOrderState, setOrder };
 }

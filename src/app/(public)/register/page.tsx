@@ -236,7 +236,14 @@ export default function RegisterPage() {
               className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950"
             />
             <label htmlFor="termsAccepted" className="text-xs text-zinc-600">
-              I accept the WSNexa Terms of Service and Privacy Policy.
+              I accept the WSNexa{' '}
+              <Link href="/legal/terms" target="_blank" className="font-bold text-zinc-950 underline hover:no-underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/legal/privacy" target="_blank" className="font-bold text-zinc-950 underline hover:no-underline">
+                Privacy Policy
+              </Link>.
             </label>
           </div>
           {fieldErrors.termsAccepted && (

@@ -283,6 +283,34 @@ export default async function SettingsHubPage() {
             </div>
           </div>
         )}
+
+        {/* 8. Legal, Support & Trust Center */}
+        <div className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-xs flex flex-col justify-between hover:border-zinc-950 transition-all group">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-2xl p-2.5 rounded-xl bg-zinc-50 border border-zinc-100 group-hover:bg-zinc-100 transition-colors">
+                ⚖️
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md">
+                Trust & Support
+              </span>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-950">Legal, Support & Status</h3>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                Review Terms of Service, Privacy Policy, contact support desk, report security disclosures, or check live service status.
+              </p>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-zinc-100 mt-4 flex items-center justify-between">
+            <Link
+              href="/dashboard/settings/legal"
+              className="text-xs font-bold text-zinc-950 hover:underline inline-flex items-center gap-1"
+            >
+              Legal & Support Hub →
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

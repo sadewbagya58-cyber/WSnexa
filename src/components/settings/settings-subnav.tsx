@@ -50,5 +50,7 @@ export function SettingsSubNav({
     items.push({ id: 'subscription', label: 'Billing & Plans', href: '/dashboard/settings/subscription', icon: '💎' });
   }
 
+  items.push({ id: 'legal-support', label: 'Legal & Support', href: '/dashboard/settings/legal', icon: '⚖️' });
+
   return <HubSubNavigation items={items} className={className} />;
 }

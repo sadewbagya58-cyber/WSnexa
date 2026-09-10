@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 export const metadata = {
   title: 'Contact WSNexa | Corporate & Support Contact',
@@ -13,6 +14,9 @@ export default function ContactPage() {
       <div className="max-w-4xl mx-auto space-y-12">
         {/* Header */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">
+          <div className="flex justify-center pb-2">
+            <WSNexaLogo variant="full" size="lg" priority />
+          </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 text-zinc-700 text-xs font-bold uppercase tracking-wider">
             <span>📞</span>
             <span>Get in Touch</span>

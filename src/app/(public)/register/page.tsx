@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { signUpAction, signInWithGoogleAction } from '@/server/actions/auth';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,11 @@ export default function RegisterPage() {
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md space-y-6 p-8 shadow-md border-zinc-200">
         <div className="text-center space-y-2">
+          <div className="flex justify-center pb-2">
+            <Link href="/" aria-label="WSNexa Home">
+              <WSNexaLogo variant="full" size="lg" priority />
+            </Link>
+          </div>
           <Badge variant="neutral" className="mb-1 uppercase tracking-widest text-[10px]">
             Create Account
           </Badge>

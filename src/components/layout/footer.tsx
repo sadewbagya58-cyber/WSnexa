@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -11,17 +12,9 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
           {/* Brand & Address Column (2 cols wide on large screens) */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-zinc-950 text-white font-black text-base flex items-center justify-center rounded-lg shadow-xs">
-                W
-              </div>
-              <span className="text-lg font-black tracking-wider uppercase text-zinc-950">
-                {OFFICIAL_BUSINESS_INFO.brand}
-              </span>
-              <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 border border-zinc-200 uppercase">
-                OS
-              </span>
-            </div>
+            <Link href="/" className="inline-block" aria-label="WSNexa Home">
+              <WSNexaLogo variant="full" size="lg" />
+            </Link>
 
             <p className="text-xs font-bold text-zinc-900 tracking-tight">
               {OFFICIAL_BUSINESS_INFO.tagline}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 interface PublicNavbarProps {
   isAuthenticated: boolean;
@@ -20,14 +21,8 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
     <header className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-white/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 tracking-tight group">
-          <div className="w-8 h-8 bg-zinc-950 text-white font-black text-base flex items-center justify-center rounded-lg shadow-xs group-hover:bg-zinc-800 transition-colors">
-            W
-          </div>
-          <span className="text-lg font-black tracking-wider uppercase text-zinc-950">WSNexa</span>
-          <span className="rounded bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 border border-zinc-200 uppercase">
-            OS
-          </span>
+        <Link href="/" className="flex items-center gap-2 tracking-tight group" aria-label="WSNexa Home">
+          <WSNexaLogo variant="full" size="md" priority />
         </Link>
 
         {/* Desktop Navigation Links */}

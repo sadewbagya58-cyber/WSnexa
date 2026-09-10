@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 export const metadata = {
   title: 'About WSNexa | Smart Hospitality. Simplified.',
@@ -34,8 +35,8 @@ export default function AboutPage() {
       <div className="max-w-5xl mx-auto space-y-16">
         {/* Hero Section */}
         <section className="text-center space-y-4 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-950 text-white text-[11px] font-extrabold uppercase tracking-widest">
-            <span>WSNexa Hospitality OS</span>
+          <div className="flex justify-center pb-2">
+            <WSNexaLogo variant="full" size="xl" priority />
           </div>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-zinc-950">
             {OFFICIAL_BUSINESS_INFO.tagline}

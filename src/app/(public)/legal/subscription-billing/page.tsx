@@ -5,7 +5,7 @@ import { LegalDocumentView } from '@/components/legal/legal-document-view';
 
 export const metadata = {
   title: 'Subscription & Billing Policy | WSNexa',
-  description: 'Billing terms, Starter/Growth/Enterprise plans in LKR, payment providers (OnePay, Dialog, PayHere), and renewal rules.',
+  description: 'Pre-commercial billing terms, indicative Starter/Growth/Enterprise configurations in LKR, payment processing status, and renewal rules.',
 };
 
 export default function SubscriptionBillingPage() {

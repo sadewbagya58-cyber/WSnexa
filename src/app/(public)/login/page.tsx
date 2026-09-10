@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { signInAction, signInWithGoogleAction } from '@/server/actions/auth';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 function LoginFormContent() {
   const searchParams = useSearchParams();
@@ -61,6 +62,11 @@ function LoginFormContent() {
   return (
     <Card className="w-full max-w-md space-y-6 p-8 shadow-md border-zinc-200">
       <div className="text-center space-y-2">
+        <div className="flex justify-center pb-2">
+          <Link href="/" aria-label="WSNexa Home">
+            <WSNexaLogo variant="full" size="lg" priority />
+          </Link>
+        </div>
         <Badge variant="neutral" className="mb-1 uppercase tracking-widest text-[10px]">
           Welcome Back
         </Badge>

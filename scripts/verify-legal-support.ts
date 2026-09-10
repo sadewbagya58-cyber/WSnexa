@@ -121,8 +121,9 @@ async function runTests() {
   const subText = JSON.stringify(subPolicy);
   assert(subText.includes(String(SUBSCRIPTION_PRICING_CONFIG.starterMonthlyLkr)), `Subscription policy includes Starter price LKR ${SUBSCRIPTION_PRICING_CONFIG.starterMonthlyLkr}`);
   assert(subText.includes(String(SUBSCRIPTION_PRICING_CONFIG.growthMonthlyLkr)), `Subscription policy includes Growth price LKR ${SUBSCRIPTION_PRICING_CONFIG.growthMonthlyLkr}`);
-  assert(subText.includes(String(SUBSCRIPTION_PRICING_CONFIG.enterpriseBaseMonthlyLkr)), `Subscription policy includes Enterprise base price LKR ${SUBSCRIPTION_PRICING_CONFIG.enterpriseBaseMonthlyLkr}`);
-  assert(subText.includes('OnePay') && subText.includes('Dialog') && subText.includes('PayHere'), 'Subscription policy lists verified payment providers');
+  assert(subText.includes('Production Payment Gateway Status') && subText.includes('not yet activated a production online payment gateway'), 'Subscription policy truthfully states that production payment gateways are not yet activated');
+  assert(subText.includes('Indicative Subscription Tiers (Pre-Commercial)'), 'Subscription policy presents pricing as indicative pre-commercial configurations');
+  assert(!subText.includes('verified payment provider') && !subText.includes('supported payment gateway'), 'Subscription policy contains no false verified gateway claims');
 
   // Refund Policy Specifics
   const refundPolicy = getLegalDocumentBySlug('refund-cancellation')!;

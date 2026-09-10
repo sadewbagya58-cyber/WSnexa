@@ -817,6 +817,14 @@ export const CANONICAL_DASHBOARD_NAV_SECTIONS: readonly DashboardNavSectionConfi
             context: 'MIXED',
             aliases: ['diagnostics', 'faq', 'fix issues'],
           },
+          {
+            id: 'legal_support',
+            label: 'Legal & Support',
+            href: '/dashboard/settings/legal',
+            icon: '⚖️',
+            context: 'MIXED',
+            aliases: ['legal policies', 'terms', 'privacy', 'support contact', 'status', 'security report'],
+          },
         ],
       },
     ],
@@ -916,6 +924,7 @@ export const DETAIL_ROUTE_PARENT_MAP: Record<string, string> = {
   '/dashboard/settings/subscription/checkout': '/dashboard/settings',
   '/dashboard/help': '/dashboard/settings',
   '/dashboard/help/troubleshooting': '/dashboard/settings',
+  '/dashboard/settings/legal': '/dashboard/settings',
 };
 
 /**

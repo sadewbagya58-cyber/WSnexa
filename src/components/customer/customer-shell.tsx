@@ -144,6 +144,20 @@ export function CustomerShell({ displayName, email, hasBusinessAccess, businessR
                       <span>👤</span> Account Profile
                     </Link>
 
+                    <Link
+                      href="/help"
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                    >
+                      <span>❓</span> Help Center
+                    </Link>
+
+                    <Link
+                      href="/legal"
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition-colors"
+                    >
+                      <span>⚖️</span> Legal & Policies
+                    </Link>
+
                     <form action="/api/auth/logout" method="POST">
                       <button
                         type="submit"

@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { getAllCategories, getPopularArticles, getTroubleshootingArticles } from '@/content/help/registry';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 export const metadata = {
   title: 'Help Center & Documentation | WSNexa',
@@ -19,6 +20,9 @@ export default function PublicHelpCenterPage() {
       {/* Hero Header */}
       <section className="bg-zinc-950 text-white py-16 px-4 sm:px-6 lg:px-8 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto text-center space-y-4">
+          <div className="flex justify-center pb-1">
+            <WSNexaLogo variant="full" size="lg" priority />
+          </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800 text-zinc-300 text-xs font-bold uppercase tracking-wider">
             <span>📖</span>
             <span>WSNexa Knowledge Base</span>

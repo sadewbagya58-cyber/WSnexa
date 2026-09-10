@@ -21,6 +21,7 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { SubscriptionRealtimeListener } from '@/components/subscription/subscription-realtime-listener';
 import { RoutePrefetcher } from '@/components/layout/route-prefetcher';
 import { HelpLanguageProvider } from '@/components/help/help-language-context';
+import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
 
 interface DashboardShellProps {
@@ -343,8 +344,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         {/* Left: Logo + (mobile) business badge | (desktop) business + branch switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0 touch-manipulation active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 rounded-lg">
-            <span className="rounded-lg bg-zinc-950 px-2 py-1 sm:px-2.5 sm:py-1.5 text-[11px] sm:text-xs font-extrabold text-white tracking-widest">
-              WSNEXA
+            <WSNexaLogo variant="mark" size="sm" />
+            <span className="font-extrabold text-xs text-zinc-950 tracking-wider uppercase">
+              WSNexa
             </span>
           </Link>
 
@@ -418,6 +420,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
                   >
                     ❓ Help & Guides
+                  </Link>
+                  <Link
+                    href="/dashboard/settings/legal"
+                    role="menuitem"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"
+                  >
+                    ⚖️ Legal & Support
                   </Link>
                   {userRole === 'business_owner' && (
                     <Link
@@ -569,6 +579,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors"
                   >
                     ❓ Help & Guides
+                  </Link>
+                  <Link
+                    href="/dashboard/settings/legal"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 transition-colors"
+                  >
+                    ⚖️ Legal & Support
                   </Link>
                   {userRole === 'business_owner' && (
                     <Link

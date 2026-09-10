@@ -6,6 +6,14 @@ export const metadata: Metadata = {
   title: 'WSNexa — Smart Hospitality. Simplified.',
   description:
     'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
+  icons: {
+    icon: [
+      { url: '/brand/ws-mark.png', sizes: 'any', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/brand/ws-mark.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

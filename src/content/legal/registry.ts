@@ -97,9 +97,9 @@ export const LEGAL_DOCUMENTS: LegalDocumentMetadata[] = [
         id: 'subscriptions-billing',
         title: '7. Subscriptions, Fees & Billing',
         paragraphs: [
-          'Subscription fees are billed in Sri Lankan Rupees (LKR) on a recurring monthly billing cycle according to the selected plan tier (Starter, Growth, or Enterprise).',
-          'Fees are payable via authorized payment gateways (OnePay, Dialog Genie, PayHere). Failure to maintain timely subscription payments may result in account suspension after a reasonable grace period.',
-          'Detailed billing terms, upgrade policies, and fee schedules are governed by our Subscription & Billing Policy.',
+          'Subscription fees are denominated in Sri Lankan Rupees (LKR). Indicative monthly plan tiers (Starter, Growth, or Enterprise) reflect current pre-commercial evaluation and pilot configurations.',
+          'WSNexa has not activated a production online payment gateway. During current evaluation and pilot phases, billing arrangements and subscription activations are coordinated directly via approved settlement or pilot billing agreements. Technical integrations for Sri Lankan payment gateways are under active development for future commercial activation. Failure to maintain agreed subscription terms may result in account suspension after a reasonable grace period.',
+          'Detailed billing terms, upgrade policies, and draft fee schedules are governed by our Subscription & Billing Policy.',
         ],
       },
       {
@@ -203,7 +203,7 @@ export const LEGAL_DOCUMENTS: LegalDocumentMetadata[] = [
         ],
         bulletPoints: [
           'Cloud Database & Auth Infrastructure: Supabase (managed PostgreSQL database, secure user authentication, and encrypted file storage).',
-          'Payment Gateway Integrations: Authorized payment processors (OnePay, Dialog Genie / eZ Cash, PayHere) for processing subscription fees or merchant settlements when enabled by the venue.',
+          'Direct Billing & Settlement Processing: During the current pre-commercial phase, subscription and pilot transactions are processed directly without an active third-party payment gateway. Technical integrations with Sri Lankan payment service providers remain in development for future activation, at which point applicable processing terms will be updated.',
           'No Advertising Trackers: WSNexa does NOT embed advertising pixels, social media trackers, or third-party behavioral analytics scripts.',
         ],
       },
@@ -385,7 +385,7 @@ export const LEGAL_DOCUMENTS: LegalDocumentMetadata[] = [
     status: 'under_review',
     requiresLegalReview: true,
     summary:
-      'Definitive billing terms, verified plan tiers, pricing in LKR, payment providers (OnePay, Dialog, PayHere), renewal rules, and account suspension terms.',
+      'Pre-commercial billing terms, indicative plan configurations in LKR, payment processing status, renewal policies, and account suspension terms.',
     href: '/legal/subscription-billing',
     sections: [
       {
@@ -398,26 +398,23 @@ export const LEGAL_DOCUMENTS: LegalDocumentMetadata[] = [
       },
       {
         id: 'plan-tiers',
-        title: '2. Standard Subscription Tiers',
+        title: '2. Indicative Subscription Tiers (Pre-Commercial)',
         paragraphs: [
-          'WSNexa offers the following standardized monthly subscription plans as implemented in our pricing engine:',
+          'WSNexa provides the following indicative monthly subscription configurations as implemented in our current software engine for evaluation and pilot deployments (commercial rates subject to final confirmation prior to formal commercial release):',
         ],
         bulletPoints: [
-          'Starter Plan: LKR 4,499 (4499) / month. Includes 1 branch outlet, up to 10 active staff accounts, 50 dining tables, 250 menu items, and 3 custom operational roles.',
-          'Growth Plan: LKR 8,999 (8999) / month. Includes up to 3 branch outlets, 40 active staff accounts, 200 dining tables, 1,000 menu items, and 15 custom operational roles.',
-          'Enterprise Plan: Custom base LKR 24,999 (24999) / month. Includes 5 branch outlets and 75 active staff accounts. Additional branches are billed at LKR 3,000 / month each, and additional staff blocks of 25 accounts are billed at LKR 2,000 / month.',
+          'Starter Tier (Indicative): LKR 4,499 (4499) / month. Designed for 1 branch outlet, up to 10 active staff accounts, 50 dining tables, 250 menu items, and 3 custom operational roles.',
+          'Growth Tier (Indicative): LKR 8,999 (8999) / month. Designed for up to 3 branch outlets, 40 active staff accounts, 200 dining tables, 1,000 menu items, and 15 custom operational roles.',
+          'Enterprise Tier (Indicative): Custom base LKR 24,999 (24999) / month. Designed for 5 branch outlets and 75 active staff accounts. Additional branches are billed at LKR 3,000 / month each, and additional staff blocks of 25 accounts are billed at LKR 2,000 / month.',
         ],
       },
       {
         id: 'payment-methods',
-        title: '3. Supported Payment Providers',
+        title: '3. Payment Processing Status & Direct Settlement',
         paragraphs: [
-          'Subscription payments may be completed using our integrated Sri Lankan payment gateways:',
-        ],
-        bulletPoints: [
-          'OnePay: Secure debit/credit card and direct bank payment processing.',
-          'Dialog: Dialog Genie and eZ Cash mobile wallet payments.',
-          'PayHere: Credit/debit cards, internet banking, and mobile wallet settlement.',
+          'Production Payment Gateway Status: WSNexa has not yet activated a production online payment gateway. All online payment gateway integrations are currently in pre-commercial development and are not active for automated self-service card or mobile wallet processing.',
+          'Pilot & Evaluation Billing: During current pilot and evaluation phases, subscription billing and account activations are coordinated directly between WSNexa and the Business Owner via approved direct settlement or manual invoicing arrangements.',
+          'Future Gateway Integrations: Technical adapters for major Sri Lankan payment methods (including local card networks, Dialog Genie / eZ Cash, and direct bank transfer processors) are engineered in the platform and will be activated upon formal commercial release.',
         ],
       },
       {

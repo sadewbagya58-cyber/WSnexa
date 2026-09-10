@@ -12,7 +12,7 @@ export default function LegalHubPage() {
   const documents = getAllLegalDocuments();
 
   return (
-    <div className="space-y-10">
+    <div className="bg-white rounded-3xl border border-zinc-200 p-6 sm:p-10 shadow-xs space-y-10">
       {/* Header */}
       <div className="space-y-3 border-b border-zinc-200 pb-6">
         <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-700 text-[11px] font-extrabold uppercase tracking-wider">
@@ -32,7 +32,7 @@ export default function LegalHubPage() {
         {documents.map((doc) => (
           <div
             key={doc.id}
-            className="rounded-2xl border border-zinc-200 p-5 bg-white hover:border-zinc-950 transition-all flex flex-col justify-between group shadow-2xs"
+            className="rounded-2xl border border-zinc-200 p-5 bg-zinc-50/50 hover:bg-white hover:border-zinc-950 transition-all flex flex-col justify-between group shadow-2xs"
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
@@ -51,7 +51,7 @@ export default function LegalHubPage() {
               </p>
             </div>
 
-            <div className="pt-4 mt-4 border-t border-zinc-100 flex items-center justify-between text-xs">
+            <div className="pt-4 mt-4 border-t border-zinc-200/60 flex items-center justify-between text-xs">
               <span className="text-[11px] text-zinc-400 font-semibold">
                 Updated: {doc.lastUpdatedDate}
               </span>

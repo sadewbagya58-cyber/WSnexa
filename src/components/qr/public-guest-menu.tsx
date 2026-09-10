@@ -546,6 +546,12 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
               )}
             </div>
           )}
+
+          <div className="pt-8 pb-4 text-center">
+            <span className="text-[11px] font-medium text-zinc-400">
+              Powered by <strong className="text-zinc-500 font-bold">WSNexa</strong>
+            </span>
+          </div>
         </div>
       </main>
 

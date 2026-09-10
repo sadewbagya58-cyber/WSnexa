@@ -6,6 +6,7 @@ import { getOperationsAnalytics, OperationsAnalyticsResult, getGroupedOperations
 import { getMenuAnalytics, MenuAnalyticsResult } from './menu-analytics';
 import { getInventoryAnalytics, InventoryAnalyticsResult, getGroupedInventoryByBranch } from './inventory-analytics';
 import { getReviewAnalytics, ReviewAnalyticsResult, getGroupedReviewsByBranch } from './review-analytics';
+import { getCancellationAnalytics, CancellationAnalyticsResult } from './cancellation-analytics';
 
 export interface AnalyticsQueryInput {
   branchId?: string | null;
@@ -20,6 +21,7 @@ export interface ExecutiveOverviewDTO {
   menu: MenuAnalyticsResult;
   inventory: InventoryAnalyticsResult;
   reviews: ReviewAnalyticsResult;
+  cancellations: CancellationAnalyticsResult;
   summary: SummaryAnalyticsDTO;
   branchComparison?: BranchComparisonItemDTO[];
   authorizedBranches: { id: string; name: string }[];
@@ -130,6 +132,34 @@ export class AnalyticsService {
   }
 
   /**
+   * Fetches Order Cancellation, Refund, and Waste Cost Analytics metrics.
+   */
+  static async getCancellationSummary(input: AnalyticsQueryInput): Promise<{
+    cancellations: CancellationAnalyticsResult;
+    resolvedDateRange: ResolvedDateRange;
+    currency: string;
+    hasFinancialAccess: boolean;
+  }> {
+    const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+
+    const cancellations = await getCancellationAnalytics(
+      auth.businessId,
+      auth.targetBranchIds,
+      resolvedBounds,
+      auth.currency,
+      auth.hasFinancialAccess
+    );
+
+    return {
+      cancellations,
+      resolvedDateRange: resolvedBounds,
+      currency: auth.currency,
+      hasFinancialAccess: auth.hasFinancialAccess,
+    };
+  }
+
+  /**
    * Computes multi-branch comparison dataset using batched grouped domain queries across authorized target branches.
    * Query complexity is O(1) constant (4 grouped queries total) regardless of branch count.
    */
@@ -186,12 +216,13 @@ export class AnalyticsService {
     const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
 
     // Parallelize independent domain analytics queries with Promise.all
-    const [sales, operations, menu, inventory, reviews] = await Promise.all([
+    const [sales, operations, menu, inventory, reviews, cancellations] = await Promise.all([
       getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
       getOperationsAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds),
       getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
       getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
       getReviewAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds),
+      getCancellationAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess),
     ]);
 
     // Fetch multi-branch comparison if user is authorized for multiple branches & requesting overview
@@ -256,6 +287,7 @@ export class AnalyticsService {
       menu,
       inventory,
       reviews,
+      cancellations,
       summary: summaryDTO,
       branchComparison,
       authorizedBranches: auth.authorizedBranchDetails,

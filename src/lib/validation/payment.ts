@@ -50,7 +50,32 @@ export const voidPaymentSchema = z.object({
     .max(300, 'Void reason cannot exceed 300 characters'),
 });
 
+export const recordRefundSchema = z.object({
+  orderId: z.string().uuid('Invalid order ID format'),
+  amountCents: z
+    .number()
+    .int('Refund amount must be an integer (minor units)')
+    .positive('Refund amount must be greater than 0')
+    .max(100000000, 'Refund amount exceeds maximum limit'),
+  refundMethod: paymentMethodSchema.optional().default('cash'),
+  reason: z
+    .string()
+    .min(1, 'Refund reason is required')
+    .max(500, 'Refund reason cannot exceed 500 characters'),
+  notes: z
+    .string()
+    .max(500, 'Notes cannot exceed 500 characters')
+    .optional()
+    .nullable(),
+  idempotencyKey: z
+    .string()
+    .min(1, 'Idempotency key is required')
+    .max(100, 'Idempotency key cannot exceed 100 characters'),
+});
+
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 export type VoidPaymentInput = z.infer<typeof voidPaymentSchema>;
+export type RecordRefundInput = z.infer<typeof recordRefundSchema>;
+

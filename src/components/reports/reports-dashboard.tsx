@@ -13,6 +13,7 @@ import { OperationsAnalyticsView } from './operations-analytics-view';
 import { MenuAnalyticsView } from './menu-analytics-view';
 import { InventoryAnalyticsView } from './inventory-analytics-view';
 import { ReputationAnalyticsView } from './reputation-analytics-view';
+import { CancellationAnalyticsView } from './cancellation-analytics-view';
 import { BranchComparisonView } from './branch-comparison-view';
 import { ExportCenterModal } from './export-center-modal';
 
@@ -20,7 +21,7 @@ import { InsightsTab } from './insights-tab';
 import { ExecutiveOverviewInsightsCard } from './executive-overview-insights-card';
 import { OperationalInsightDTO } from '@/lib/insights/insight-types';
 
-export type AnalyticsTab = 'overview' | 'insights' | 'sales' | 'operations' | 'menu' | 'inventory' | 'reputation' | 'comparison';
+export type AnalyticsTab = 'overview' | 'insights' | 'sales' | 'operations' | 'cancellations' | 'menu' | 'inventory' | 'reputation' | 'comparison';
 
 interface AnalyticsDataResponse extends ExecutiveOverviewDTO {
   insights?: OperationalInsightDTO[];
@@ -85,6 +86,7 @@ export function ReportsDashboard() {
     { key: 'insights', label: 'Operational Insights', icon: '💡' },
     { key: 'sales', label: 'Sales & Revenue', icon: '💰' },
     { key: 'operations', label: 'Operations & Speed', icon: '⚡' },
+    { key: 'cancellations', label: 'Cancellations', icon: '🚫' },
     { key: 'menu', label: 'Menu Performance', icon: '🍽️' },
     { key: 'inventory', label: 'Inventory & Waste', icon: '📦' },
     { key: 'reputation', label: 'Guests & Reviews', icon: '⭐' },
@@ -220,6 +222,14 @@ export function ReportsDashboard() {
 
           {activeTab === 'operations' && (
             <OperationsAnalyticsView operations={data.operations} />
+          )}
+
+          {activeTab === 'cancellations' && (
+            <CancellationAnalyticsView
+              cancellations={data.cancellations}
+              currency={currency}
+              hasFinancialAccess={hasFinancialAccess}
+            />
           )}
 
           {activeTab === 'menu' && (

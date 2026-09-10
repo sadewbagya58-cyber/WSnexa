@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { PaymentService, ReceiptData } from '@/server/services/payment.service';
-import { RecordPaymentInput, VoidPaymentInput } from '@/lib/validation/payment';
+import { RecordPaymentInput, VoidPaymentInput, RecordRefundInput } from '@/lib/validation/payment';
 import { ActionResponse } from './auth';
 import { createAdminClient } from '@/lib/supabase/server';
 
@@ -16,6 +16,21 @@ export async function recordOrderPaymentAction(
   if (result.success) {
     revalidatePath('/dashboard/cashier');
     revalidatePath('/dashboard/kitchen');
+  }
+  return result;
+}
+
+/**
+ * Records a partial or full refund for an order.
+ */
+export async function recordOrderRefundAction(
+  input: RecordRefundInput
+): Promise<ActionResponse<{ orderId: string; refundedCents: number; remainingRefundableCents: number; paymentStatus: string }>> {
+  const result = await PaymentService.recordRefund(input);
+  if (result.success) {
+    revalidatePath('/dashboard/cashier');
+    revalidatePath('/dashboard/orders');
+    revalidatePath('/dashboard/reports');
   }
   return result;
 }

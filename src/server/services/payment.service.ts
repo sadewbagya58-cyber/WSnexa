@@ -5,6 +5,8 @@ import {
   recordPaymentSchema,
   VoidPaymentInput,
   voidPaymentSchema,
+  RecordRefundInput,
+  recordRefundSchema,
   PaymentMethod,
   PaymentStatus,
 } from '@/lib/validation/payment';
@@ -43,6 +45,8 @@ export interface PaymentEventRecord {
 
 export interface CashierOrderRecord extends OrderRecord {
   paid_cents: number;
+  refunded_cents?: number;
+  refundable_amount_cents?: number;
   balance_due_cents: number;
   payments: PaymentRecord[];
   bill_requested?: boolean;
@@ -324,12 +328,19 @@ export class PaymentService {
 
     const orderIds = orders.map((o) => o.id);
 
-    // 2. Fetch Payments for Branch Orders
-    const { data: payments } = await admin
-      .from('payments')
-      .select('*')
-      .in('order_id', orderIds)
-      .order('created_at', { ascending: true });
+    // 2. Fetch Payments and Refund Events for Branch Orders
+    const [{ data: payments }, { data: refundEvents }] = await Promise.all([
+      admin
+        .from('payments')
+        .select('*')
+        .in('order_id', orderIds)
+        .order('created_at', { ascending: true }),
+      admin
+        .from('payment_events')
+        .select('order_id, amount_cents')
+        .in('order_id', orderIds)
+        .eq('event_type', 'refund_issued'),
+    ]);
 
     const paymentsByOrder = new Map<string, PaymentRecord[]>();
     if (payments) {
@@ -340,6 +351,13 @@ export class PaymentService {
       }
     }
 
+    const refundedByOrder = new Map<string, number>();
+    if (refundEvents) {
+      for (const re of refundEvents) {
+        refundedByOrder.set(re.order_id, (refundedByOrder.get(re.order_id) || 0) + (re.amount_cents || 0));
+      }
+    }
+
     const pendingBillMap = new Map<string, string>();
     if (billRequestsRes.data) {
       for (const req of billRequestsRes.data) {
@@ -347,16 +365,26 @@ export class PaymentService {
       }
     }
 
-    // 4. Calculate Derived Totals & Balances
+    // 4. Calculate Derived Totals, Balances, and Authoritative Refundable Amounts
     return orders.map((o) => {
       const orderPayments = paymentsByOrder.get(o.id) || [];
       const completedPayments = orderPayments.filter((p) => p.payment_status === 'completed');
       const paidCents = completedPayments.reduce((sum, p) => sum + p.amount_cents, 0);
-      const balanceDueCents = Math.max(0, o.total_cents - paidCents);
+
+      // Explicitly refunded payment records count as refunded
+      const refundedPayments = orderPayments.filter((p) => p.payment_status === 'refunded');
+      const refundedPaymentsCents = refundedPayments.reduce((sum, p) => sum + p.amount_cents, 0);
+      const refundedEventsCents = refundedByOrder.get(o.id) || 0;
+      const refundedCents = Math.max(refundedEventsCents, refundedPaymentsCents);
+
+      const refundableAmountCents = Math.max(0, paidCents - refundedCents);
+      const balanceDueCents = o.status === 'cancelled' ? 0 : Math.max(0, o.total_cents - paidCents);
 
       return {
         ...o,
         paid_cents: paidCents,
+        refunded_cents: refundedCents,
+        refundable_amount_cents: refundableAmountCents,
         balance_due_cents: balanceDueCents,
         payments: orderPayments,
         bill_requested: pendingBillMap.has(o.id),
@@ -608,5 +636,254 @@ export class PaymentService {
     }
 
     return { success: true, message: 'Payment voided successfully.' };
+  }
+
+  /**
+   * Calculates the authoritative refundable amount for an order.
+   */
+  static async calculateAuthoritativeRefundableAmount(orderId: string): Promise<{
+    totalPaidCents: number;
+    totalRefundedCents: number;
+    refundableAmountCents: number;
+    payments: PaymentRecord[];
+  }> {
+    const admin = createAdminClient();
+    const [{ data: payments }, { data: refundEvents }] = await Promise.all([
+      admin
+        .from('payments')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true }),
+      admin
+        .from('payment_events')
+        .select('amount_cents')
+        .eq('order_id', orderId)
+        .eq('event_type', 'refund_issued'),
+    ]);
+
+    const orderPayments = (payments as unknown as PaymentRecord[]) || [];
+    const completedPayments = orderPayments.filter((p) => p.payment_status === 'completed');
+    const totalPaidCents = completedPayments.reduce((sum, p) => sum + p.amount_cents, 0);
+
+    const refundedPayments = orderPayments.filter((p) => p.payment_status === 'refunded');
+    const refundedPaymentsCents = refundedPayments.reduce((sum, p) => sum + p.amount_cents, 0);
+    const refundedEventsCents = (refundEvents || []).reduce((sum, re) => sum + (re.amount_cents || 0), 0);
+    const totalRefundedCents = Math.max(refundedEventsCents, refundedPaymentsCents);
+
+    const refundableAmountCents = Math.max(0, totalPaidCents - totalRefundedCents);
+
+    return {
+      totalPaidCents,
+      totalRefundedCents,
+      refundableAmountCents,
+      payments: orderPayments,
+    };
+  }
+
+  /**
+   * Records a partial or full refund for an order.
+   * Strictly enforces: requestedAmountCents <= authoritativeRefundableCents.
+   */
+  static async recordRefund(input: RecordRefundInput): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      orderId: string;
+      refundedCents: number;
+      remainingRefundableCents: number;
+      paymentStatus: string;
+      is_duplicate?: boolean;
+    };
+    errorType?: string;
+  }> {
+    const { can, resolveAuthorizationContext } = await import('@/server/auth');
+    let authContext;
+    try {
+      authContext = await resolveAuthorizationContext();
+    } catch {
+      return { success: false, message: 'Unauthorized or session context not found.' };
+    }
+
+    if (!authContext || !authContext.businessId) {
+      return { success: false, message: 'Unauthorized or session context not found.' };
+    }
+
+    const parsed = recordRefundSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: 'Validation failed: ' + parsed.error.issues.map((i) => i.message).join(', '),
+      };
+    }
+
+    const { orderId, amountCents, refundMethod, reason, notes, idempotencyKey } = parsed.data;
+    const orderResource = { type: 'order' as const, id: orderId };
+
+    const canRefund =
+      (await can({ context: authContext, permission: 'payments.record', resource: orderResource })) ||
+      (await can({ context: authContext, permission: 'cashier.access', resource: orderResource })) ||
+      authContext.isBusinessOwner;
+
+    if (!canRefund) {
+      return { success: false, message: 'Forbidden. Missing permissions to process refund.' };
+    }
+
+    const admin = createAdminClient();
+
+    // 1. Verify order belongs to active business
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, branch_id, status, payment_status, total_cents, currency')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== authContext.businessId) {
+      return { success: false, message: 'Order not found in active business.' };
+    }
+
+    // 2. Idempotency Check
+    const { data: existingEvent } = await admin
+      .from('payment_events')
+      .select('id, amount_cents, new_status, metadata')
+      .eq('order_id', orderId)
+      .eq('event_type', 'refund_issued')
+      .filter('metadata->>idempotency_key', 'eq', idempotencyKey)
+      .maybeSingle();
+
+    if (existingEvent) {
+      return {
+        success: true,
+        message: 'Duplicate refund request detected (idempotent replay).',
+        data: {
+          orderId,
+          refundedCents: existingEvent.amount_cents,
+          remainingRefundableCents: 0,
+          paymentStatus: existingEvent.new_status,
+          is_duplicate: true,
+        },
+      };
+    }
+
+    // 3. Compute Authoritative Refundable Amount
+    const { totalPaidCents, totalRefundedCents, refundableAmountCents, payments } =
+      await this.calculateAuthoritativeRefundableAmount(orderId);
+
+    if (totalPaidCents <= 0) {
+      return {
+        success: false,
+        message: 'Cannot process refund: No successful payments found on this unpaid order.',
+        errorType: 'ORDER_UNPAID',
+      };
+    }
+
+    if (refundableAmountCents <= 0) {
+      return {
+        success: false,
+        message: 'No refundable amount remaining for this order.',
+        errorType: 'NO_REFUNDABLE_AMOUNT',
+      };
+    }
+
+    // 4. Strict Backend Boundary: requested amount must NOT exceed authoritative refundable amount
+    if (amountCents > refundableAmountCents) {
+      return {
+        success: false,
+        message: `Requested refund amount of ${(amountCents / 100).toFixed(2)} exceeds authoritative refundable balance of ${(refundableAmountCents / 100).toFixed(2)}.`,
+        errorType: 'REFUND_EXCEEDS_REFUNDABLE',
+      };
+    }
+
+    const newTotalRefunded = totalRefundedCents + amountCents;
+    const isFullRefund = newTotalRefunded >= totalPaidCents;
+    const newPaymentStatus: PaymentStatus = isFullRefund ? 'refunded' : 'partially_refunded';
+
+    // 5. Insert payment_events Audit Row
+    const completedPayments = payments.filter((p) => p.payment_status === 'completed');
+    const primaryPaymentId = completedPayments[0]?.id || null;
+
+    const { error: eventErr } = await admin.from('payment_events').insert({
+      payment_id: primaryPaymentId,
+      order_id: orderId,
+      event_type: 'refund_issued',
+      previous_status: order.payment_status,
+      new_status: newPaymentStatus,
+      amount_cents: amountCents,
+      actor_id: authContext.userId,
+      metadata: {
+        reason,
+        refund_method: refundMethod || 'cash',
+        notes: notes || null,
+        idempotency_key: idempotencyKey,
+        refunded_cents_before: totalRefundedCents,
+        refunded_cents_after: newTotalRefunded,
+        is_full_refund: isFullRefund,
+      },
+    });
+
+    if (eventErr) {
+      return { success: false, message: `Failed to record refund event: ${eventErr.message}` };
+    }
+
+    // 6. Update Orders Row
+    const { error: orderErr } = await admin
+      .from('orders')
+      .update({
+        payment_status: newPaymentStatus,
+        refund_eligibility: isFullRefund ? 'processed' : 'eligible',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+
+    if (orderErr) {
+      return { success: false, message: `Failed to update order status: ${orderErr.message}` };
+    }
+
+    // 7. If Full Refund Reached, Mark Completed Payments as Refunded
+    if (isFullRefund) {
+      await admin
+        .from('payments')
+        .update({
+          payment_status: 'refunded',
+          refunded_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('order_id', orderId)
+        .eq('payment_status', 'completed');
+    }
+
+    // 8. Audit Logging
+    try {
+      const { AuditService } = await import('./audit.service');
+      await AuditService.logAuditEvent({
+        businessId: authContext.businessId,
+        branchId: order.branch_id || authContext.activeBranchId || null,
+        actorUserId: authContext.userId,
+        action: 'cashier.payment.refunded',
+        entityType: 'payment',
+        entityId: primaryPaymentId || orderId,
+        oldValues: { payment_status: order.payment_status },
+        newValues: { payment_status: newPaymentStatus, refunded_cents: amountCents },
+        reason: reason || 'Refund processed by cashier',
+        metadata: {
+          order_id: orderId,
+          refund_method: refundMethod,
+          is_full_refund: isFullRefund,
+          remaining_refundable_cents: refundableAmountCents - amountCents,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[PaymentService.recordRefund] Audit warning:', auditErr);
+    }
+
+    return {
+      success: true,
+      message: isFullRefund ? 'Full refund processed successfully.' : 'Partial refund processed successfully.',
+      data: {
+        orderId,
+        refundedCents: amountCents,
+        remainingRefundableCents: Math.max(0, refundableAmountCents - amountCents),
+        paymentStatus: newPaymentStatus,
+      },
+    };
   }
 }

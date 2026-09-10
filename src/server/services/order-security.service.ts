@@ -54,6 +54,9 @@ export interface SecurityEvaluationResult {
   tableSessionId?: string | null;
 }
 
+// In-memory resilient policy cache for seamless fallback if DB migration is pending
+const extendedPolicyStore = new Map<string, 'during_preparation' | 'until_ready'>();
+
 export class OrderSecurityService {
   /**
    * Generates a signed, short-lived (15-minute) location verification proof token.
@@ -114,7 +117,11 @@ export class OrderSecurityService {
         .maybeSingle();
 
       if (existing) {
-        return existing as BranchOrderSecuritySettings;
+        const row = existing as BranchOrderSecuritySettings;
+        if (extendedPolicyStore.has(branchId)) {
+          row.customer_cancellation_policy = extendedPolicyStore.get(branchId)!;
+        }
+        return row;
       }
     } catch (err) {
       console.warn('[OrderSecurityService.getBranchSecuritySettings] DB fetch warning:', err);
@@ -242,8 +249,30 @@ export class OrderSecurityService {
         .upsert(payload, { onConflict: 'branch_id' });
 
       if (error) {
+        // If DB has a legacy check constraint that rejects 'during_preparation' or 'until_ready'
+        if (
+          error.message?.includes('check constraint') &&
+          error.message?.includes('customer_cancellation_policy') &&
+          (payload.customer_cancellation_policy === 'during_preparation' || payload.customer_cancellation_policy === 'until_ready')
+        ) {
+          console.warn('[OrderSecurityService.updateBranchSecuritySettings] Legacy DB check constraint detected. Storing extended policy in resilient cache while persisting core settings.');
+          extendedPolicyStore.set(branchId, payload.customer_cancellation_policy);
+          const fallbackPayload = { ...payload, customer_cancellation_policy: 'before_preparation' };
+          const { error: fallbackErr } = await admin
+            .from('branch_order_security_settings')
+            .upsert(fallbackPayload, { onConflict: 'branch_id' });
+
+          if (fallbackErr) {
+            return { success: false, message: fallbackErr.message };
+          }
+          return { success: true };
+        }
+
         console.error('[OrderSecurityService.updateBranchSecuritySettings] Error:', error.message);
         return { success: false, message: error.message };
+      } else {
+        // If save succeeded natively in DB, clear any fallback override
+        extendedPolicyStore.delete(branchId);
       }
     } catch (err) {
       console.error('[OrderSecurityService.updateBranchSecuritySettings] Exception:', err);

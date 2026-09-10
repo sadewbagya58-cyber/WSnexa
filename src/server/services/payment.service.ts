@@ -299,6 +299,8 @@ export class PaymentService {
             item_name_snapshot,
             unit_price_cents_snapshot,
             quantity,
+            cancelled_quantity,
+            status,
             line_subtotal_cents,
             special_instructions,
             order_item_modifiers(
@@ -413,6 +415,8 @@ export class PaymentService {
           item_name_snapshot,
           unit_price_cents_snapshot,
           quantity,
+          cancelled_quantity,
+          status,
           line_subtotal_cents,
           special_instructions,
           order_item_modifiers(

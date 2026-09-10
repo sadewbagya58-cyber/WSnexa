@@ -145,20 +145,62 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
             👤 {order.guest_name}
           </span>
         )}
+        {(() => {
+          const cancelledCount = (order.items || []).filter(
+            (i) => i.status === 'cancelled' || (i.cancelled_quantity || 0) > 0
+          ).length;
+          if (cancelledCount === 0) return null;
+          return (
+            <Badge variant="destructive" className="font-extrabold bg-red-100 text-red-800 border-red-200">
+              ❌ {cancelledCount} Item{cancelledCount > 1 ? 's' : ''} Cancelled
+            </Badge>
+          );
+        })()}
       </div>
 
-      {/* Line Item Preview Summary */}
-      <div className="space-y-1 text-xs text-zinc-700 bg-zinc-50 p-3 rounded-xl border border-zinc-100">
-        {(order.items || []).slice(0, 3).map((item) => (
-          <div key={item.id} className="flex justify-between">
-            <span className="truncate pr-2">
-              <strong className="text-zinc-950">{item.quantity}x</strong> {item.item_name_snapshot}
-            </span>
-            <span className="font-mono text-zinc-900">
-              {formatCurrency(item.line_subtotal_cents, order.currency)}
-            </span>
-          </div>
-        ))}
+      {/* Line Item Preview Summary (QA-12: Display cancelled items and quantities clearly) */}
+      <div className="space-y-1.5 text-xs text-zinc-700 bg-zinc-50 p-3 rounded-xl border border-zinc-100">
+        {(order.items || []).slice(0, 3).map((item) => {
+          const isCancelled = item.status === 'cancelled';
+          const isPartiallyCancelled = item.status === 'partially_cancelled' && Boolean(item.cancelled_quantity);
+          const activeQty = isCancelled ? 0 : item.quantity - (item.cancelled_quantity || 0);
+
+          return (
+            <div
+              key={item.id}
+              className={`flex justify-between items-center ${
+                isCancelled ? 'text-zinc-400' : ''
+              }`}
+            >
+              <span className="truncate pr-2 flex items-center gap-1 min-w-0">
+                {isCancelled ? (
+                  <span className="line-through text-zinc-400 truncate">
+                    <strong className="text-zinc-400">{item.quantity}x</strong> {item.item_name_snapshot}
+                  </span>
+                ) : isPartiallyCancelled ? (
+                  <span className="truncate">
+                    <strong className="text-zinc-950">{activeQty}x</strong> {item.item_name_snapshot}
+                    <span className="ml-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                      ({item.cancelled_quantity}x cancelled)
+                    </span>
+                  </span>
+                ) : (
+                  <span className="truncate">
+                    <strong className="text-zinc-950">{item.quantity}x</strong> {item.item_name_snapshot}
+                  </span>
+                )}
+                {isCancelled && (
+                  <span className="shrink-0 text-[9px] font-black uppercase text-red-700 bg-red-50 border border-red-200 px-1 py-0.2 rounded ml-1">
+                    Cancelled
+                  </span>
+                )}
+              </span>
+              <span className={`font-mono shrink-0 ${isCancelled ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
+                {formatCurrency(item.line_subtotal_cents, order.currency)}
+              </span>
+            </div>
+          );
+        })}
         {(order.items || []).length > 3 && (
           <p className="text-[10px] text-zinc-400 italic">
             + {(order.items || []).length - 3} more items...

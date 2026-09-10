@@ -3,6 +3,7 @@ const MUTE_STORAGE_KEY = 'wsnexa_kitchen_sound_muted';
 class KitchenSoundEngine {
   private audioCtx: AudioContext | null = null;
   private playedOrderIds: Set<string> = new Set();
+  private playedCancellationOrderIds: Set<string> = new Set();
   private isMuted: boolean = false;
 
   constructor() {
@@ -88,6 +89,50 @@ class KitchenSoundEngine {
       osc2.stop(now + 0.5);
     } catch (err: unknown) {
       console.error('Failed to play kitchen chime:', err);
+    }
+  }
+
+  /**
+   * Plays a sharp, distinctive warning alert for a CANCELLED order (QA-10).
+   * Grabs kitchen staff attention immediately with a 3-pulse descending tone.
+   */
+  public playCancellationAlert(orderId: string): void {
+    if (this.isMuted) return;
+    if (this.playedCancellationOrderIds.has(orderId)) return;
+
+    this.playedCancellationOrderIds.add(orderId);
+    if (this.playedCancellationOrderIds.size > 200) {
+      const firstKey = this.playedCancellationOrderIds.values().next().value;
+      if (firstKey) this.playedCancellationOrderIds.delete(firstKey);
+    }
+
+    this.initAudioContext();
+    if (!this.audioCtx) return;
+
+    try {
+      const now = this.audioCtx.currentTime;
+
+      // 3-pulse descending warning tone: 880Hz -> 587Hz -> 440Hz
+      const tones = [880, 587, 440];
+      tones.forEach((freq, idx) => {
+        const osc = this.audioCtx!.createOscillator();
+        const gain = this.audioCtx!.createGain();
+        const startTime = now + idx * 0.14;
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.2, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.11);
+
+        osc.connect(gain);
+        gain.connect(this.audioCtx!.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.11);
+      });
+    } catch (err: unknown) {
+      console.error('Failed to play cancellation alert:', err);
     }
   }
 }

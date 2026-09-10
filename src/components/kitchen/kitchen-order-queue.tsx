@@ -26,7 +26,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   canUpdate = true,
 }) => {
   const router = useRouter();
-  const { orders, connectionStatus } = useRealtimeKitchen(initialOrders, branchId);
+  const { orders, connectionStatus, recentCancellations, acknowledgeCancellation } = useRealtimeKitchen(initialOrders, branchId);
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [selectedOrderForCancel, setSelectedOrderForCancel] = useState<OrderRecord | null>(null);
   const [selectedItemForCancel, setSelectedItemForCancel] = useState<{
@@ -101,6 +101,85 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
       {actionError && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-900 break-words">
           ⚠️ {actionError}
+        </div>
+      )}
+
+      {/* QA-10: Prominent Recent Cancellations Banner & Feed */}
+      {recentCancellations.length > 0 && (
+        <div className="space-y-3 rounded-2xl border-2 border-red-500 bg-red-50/90 p-4 shadow-md animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between gap-2 border-b border-red-200 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-white font-black text-sm animate-pulse">
+                🛑
+              </span>
+              <div>
+                <h3 className="text-sm font-black text-red-950 uppercase tracking-tight">
+                  Cancelled Orders — Do Not Prepare ({recentCancellations.length})
+                </h3>
+                <p className="text-[11px] font-semibold text-red-700">
+                  These orders were cancelled and have been removed from the active kitchen queue.
+                </p>
+              </div>
+            </div>
+            {recentCancellations.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs font-bold text-red-700 border-red-300 hover:bg-red-100 min-h-[32px]"
+                onClick={() => {
+                  recentCancellations.forEach((c) => acknowledgeCancellation(c.orderId));
+                }}
+              >
+                Acknowledge All ({recentCancellations.length})
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {recentCancellations.map((notice) => (
+              <div
+                key={notice.orderId}
+                className="flex flex-col justify-between rounded-xl border border-red-300 bg-white p-3.5 shadow-xs space-y-2"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-black text-red-950 font-mono">
+                      {notice.orderNumber}
+                    </span>
+                    <span className="text-[11px] font-bold text-red-800 bg-red-100 px-2 py-0.5 rounded-full">
+                      📍 {notice.tableLabel} {notice.serviceArea ? `• ${notice.serviceArea}` : ''}
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-700 font-medium break-words">
+                    <strong>Items:</strong> {notice.itemsSummary}
+                  </div>
+                  <div className="text-[11px] text-red-600 italic">
+                    Reason: {notice.cancellationReason}
+                  </div>
+                  <div className="text-[10px] font-black uppercase text-red-700 tracking-wider">
+                    ⚠️ DO NOT PREPARE THIS ORDER
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    {new Date(notice.cancelledAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })}
+                  </span>
+                  <Button
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs h-8 px-4 rounded-lg active:scale-[0.98] transition-transform shadow-xs cursor-pointer"
+                    onClick={() => acknowledgeCancellation(notice.orderId)}
+                  >
+                    ✓ Acknowledge
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -231,81 +310,120 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                       </span>
                     </div>
 
-                    {/* Items List */}
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                        Order Items ({items.reduce((sum, item) => sum + item.quantity, 0)})
-                      </div>
-                      <div className="divide-y divide-zinc-100 border rounded-xl border-zinc-100 overflow-hidden bg-zinc-50/40">
-                        {items.map((item) => {
-                          const modifiersList = (item.order_item_modifiers || (item as unknown as { modifiers?: Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }> }).modifiers || []) as Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }>;
+                    {/* Items List (QA-12: Exclude cancelled items from active count) */}
+                    {(() => {
+                      const activeItemsCount = items.reduce(
+                        (sum, item) =>
+                          sum +
+                          (item.status === 'cancelled'
+                            ? 0
+                            : item.quantity - (item.cancelled_quantity || 0)),
+                        0
+                      );
+                      const totalCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-                          return (
-                            <div key={item.id} className="p-2.5 space-y-1">
-                              <div className="flex items-start justify-between gap-2 text-xs">
-                                <div className={`font-bold break-words hyphens-auto min-w-0 leading-snug ${item.status === 'cancelled' ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
-                                  <span className="inline-block bg-zinc-900 text-white text-[10px] font-mono px-1.5 py-0.2 rounded mr-1.5 font-bold shrink-0">
-                                    {item.status === 'partially_cancelled' && item.cancelled_quantity
-                                      ? `${item.quantity - item.cancelled_quantity}x`
-                                      : `${item.quantity}x`}
-                                  </span>
-                                  {item.item_name_snapshot}
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {item.status === 'cancelled' && (
-                                    <span className="bg-red-100 text-red-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
-                                      Cancelled
-                                    </span>
-                                  )}
-                                  {item.status === 'partially_cancelled' && (
-                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
-                                      {item.cancelled_quantity} cancelled
-                                    </span>
-                                  )}
-                                  {canUpdate && item.status !== 'cancelled' && order.status !== 'completed' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedItemForCancel({
-                                        orderId: order.id,
-                                        orderItemId: item.id,
-                                        itemName: item.item_name_snapshot,
-                                        unitPriceCents: item.unit_price_cents_snapshot,
-                                        quantity: item.quantity,
-                                        cancelledQuantity: item.cancelled_quantity || 0,
-                                      })}
-                                      className="text-[10px] text-zinc-400 hover:text-red-600 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
-                                      title="Adjust or cancel item"
+                      return (
+                        <div className="space-y-1.5">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                            <span>
+                              Active Items ({activeItemsCount}
+                              {activeItemsCount !== totalCount ? ` / ${totalCount} total` : ''})
+                            </span>
+                            {activeItemsCount !== totalCount && (
+                              <span className="text-red-600 font-extrabold text-[9px] bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                                {totalCount - activeItemsCount} CANCELLED
+                              </span>
+                            )}
+                          </div>
+                          <div className="divide-y divide-zinc-100 border rounded-xl border-zinc-100 overflow-hidden bg-zinc-50/40">
+                            {items.map((item) => {
+                              const modifiersList = (item.order_item_modifiers || (item as unknown as { modifiers?: Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }> }).modifiers || []) as Array<{ id: string; option_name_snapshot: string; group_name_snapshot?: string; modifier_name_snapshot?: string }>;
+                              const isCancelled = item.status === 'cancelled';
+                              const isPartiallyCancelled = item.status === 'partially_cancelled' && Boolean(item.cancelled_quantity);
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`p-2.5 space-y-1 transition-colors ${
+                                    isCancelled ? 'bg-red-50/50 opacity-75' : ''
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2 text-xs">
+                                    <div
+                                      className={`font-bold break-words hyphens-auto min-w-0 leading-snug ${
+                                        isCancelled ? 'line-through text-zinc-400' : 'text-zinc-900'
+                                      }`}
                                     >
-                                      Adjust
-                                    </button>
+                                      <span
+                                        className={`inline-block text-[10px] font-mono px-1.5 py-0.2 rounded mr-1.5 font-bold shrink-0 ${
+                                          isCancelled
+                                            ? 'bg-zinc-400 text-white'
+                                            : 'bg-zinc-900 text-white'
+                                        }`}
+                                      >
+                                        {isPartiallyCancelled
+                                          ? `${item.quantity - item.cancelled_quantity!}x`
+                                          : `${item.quantity}x`}
+                                      </span>
+                                      {item.item_name_snapshot}
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {isCancelled && (
+                                        <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-2xs">
+                                          CANCELLED — DO NOT PREPARE
+                                        </span>
+                                      )}
+                                      {isPartiallyCancelled && (
+                                        <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                                          {item.cancelled_quantity} cancelled
+                                        </span>
+                                      )}
+                                      {canUpdate && !isCancelled && order.status !== 'completed' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedItemForCancel({
+                                            orderId: order.id,
+                                            orderItemId: item.id,
+                                            itemName: item.item_name_snapshot,
+                                            unitPriceCents: item.unit_price_cents_snapshot,
+                                            quantity: item.quantity,
+                                            cancelledQuantity: item.cancelled_quantity || 0,
+                                          })}
+                                          className="text-[10px] text-zinc-400 hover:text-red-600 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                                          title="Adjust or cancel item"
+                                        >
+                                          Adjust
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Item Modifiers */}
+                                  {modifiersList.length > 0 && (
+                                    <div className="pl-3 sm:pl-4 text-[11px] text-zinc-600 font-medium space-y-0.5 break-words">
+                                      {modifiersList.map((mod) => (
+                                        <div key={mod.id} className="flex flex-wrap items-baseline gap-1">
+                                          <span className="text-zinc-400">•</span>
+                                          <span>{mod.modifier_name_snapshot || mod.group_name_snapshot}</span>
+                                          <span className="text-zinc-500 font-semibold">({mod.option_name_snapshot})</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Item Special Instructions */}
+                                  {item.special_instructions && (
+                                    <div className="text-[11px] text-amber-900 bg-amber-50 p-2 rounded-lg font-medium italic border border-amber-200/60 break-words">
+                                      Note: &quot;{item.special_instructions}&quot;
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-
-                              {/* Item Modifiers */}
-                              {modifiersList.length > 0 && (
-                                <div className="pl-3 sm:pl-4 text-[11px] text-zinc-600 font-medium space-y-0.5 break-words">
-                                  {modifiersList.map((mod) => (
-                                    <div key={mod.id} className="flex flex-wrap items-baseline gap-1">
-                                      <span className="text-zinc-400">•</span>
-                                      <span>{mod.modifier_name_snapshot || mod.group_name_snapshot}</span>
-                                      <span className="text-zinc-500 font-semibold">({mod.option_name_snapshot})</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Item Special Instructions */}
-                              {item.special_instructions && (
-                                <div className="text-[11px] text-amber-900 bg-amber-50 p-2 rounded-lg font-medium italic border border-amber-200/60 break-words">
-                                  Note: &quot;{item.special_instructions}&quot;
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Order Notes */}
                     {order.guest_notes && (

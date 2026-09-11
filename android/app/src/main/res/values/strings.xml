@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WSNexa</string>
+    <string name="title_activity_main">WSNexa</string>
+    <string name="package_name">com.wsnexa.app</string>
+    <string name="custom_url_scheme">com.wsnexa.app</string>
+</resources>

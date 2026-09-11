@@ -19,6 +19,8 @@
 
 # production
 /build
+/mobile-dist
+/dist-apk
 
 # misc
 .DS_Store

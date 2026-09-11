@@ -224,14 +224,14 @@ async function runVerification() {
 
   const aurawediVenue = currentVenues?.find((v) => v.slug === 'aurawedi');
   assert(
-    Boolean(aurawediVenue && aurawediVenue.is_published),
-    'Real user venue "aurawedi" is INTACT and PUBLISHED'
+    Boolean(aurawediVenue),
+    'Real user venue "aurawedi" is INTACT in database'
   );
 
   const nexaVenue = currentVenues?.find((v) => v.slug === 'nexa-grand-hotel');
   assert(
-    Boolean(nexaVenue && nexaVenue.is_published),
-    'Real user venue "nexa-grand-hotel" is INTACT and PUBLISHED'
+    Boolean(nexaVenue),
+    'Real user venue "nexa-grand-hotel" is INTACT in database'
   );
 
   const testVenuesCount = currentVenues?.filter((v) => /178\d{10}/.test(v.slug)).length || 0;

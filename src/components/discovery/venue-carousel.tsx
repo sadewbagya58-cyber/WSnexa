@@ -21,6 +21,36 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
     setIsNavigating(false);
   }, [seeAllHref, venues]);
 
+  const transformedVenues = React.useMemo(() => {
+    return (venues || []).map((v) => ({
+      id: v.venueId,
+      business_id: v.businessId,
+      slug: v.slug,
+      display_name: v.displayName,
+      short_description: v.explanationTag || null,
+      description: null,
+      venue_type: v.venueType,
+      logo_url: v.logoUrl,
+      cover_image_url: v.coverImageUrl,
+      phone_public: null,
+      email_public: null,
+      website_url: null,
+      address_public: null,
+      city: v.city,
+      country: 'US',
+      latitude: null,
+      longitude: null,
+      price_level: v.priceLevel,
+      is_published: v.isPublished,
+      is_accepting_orders: v.isAcceptingOrders,
+      featured_branch_id: null,
+      created_at: '',
+      updated_at: '',
+      average_rating: v.rawRatingAverage,
+      review_count: v.verifiedReviewCount,
+    }));
+  }, [venues]);
+
   if (!venues || venues.length === 0) return null;
 
   return (
@@ -66,42 +96,16 @@ export function VenueCarousel({ title, subtitle, venues, isLoggedIn = false, see
           role="list"
           aria-label={title}
         >
-          {venues.map((v) => (
+          {transformedVenues.map((venue) => (
             <div
-              key={v.venueId}
+              key={venue.id}
               role="listitem"
-              className="w-[calc(50vw-1.25rem)] min-w-[150px] max-w-[210px] sm:w-[290px] sm:max-w-none lg:w-[320px] shrink-0 snap-start"
+              className="w-[calc(50vw-1.25rem)] min-w-[150px] max-w-[210px] sm:w-[290px] sm:max-w-none lg:w-[320px] shrink-0 snap-start [content-visibility:auto] [contain-intrinsic-size:auto_210px]"
             >
               <VenueCard
                 compact
                 isLoggedIn={isLoggedIn}
-                venue={{
-                  id: v.venueId,
-                  business_id: v.businessId,
-                  slug: v.slug,
-                  display_name: v.displayName,
-                  short_description: v.explanationTag || null,
-                  description: null,
-                  venue_type: v.venueType,
-                  logo_url: v.logoUrl,
-                  cover_image_url: v.coverImageUrl,
-                  phone_public: null,
-                  email_public: null,
-                  website_url: null,
-                  address_public: null,
-                  city: v.city,
-                  country: 'US',
-                  latitude: null,
-                  longitude: null,
-                  price_level: v.priceLevel,
-                  is_published: v.isPublished,
-                  is_accepting_orders: v.isAcceptingOrders,
-                  featured_branch_id: null,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  average_rating: v.rawRatingAverage,
-                  review_count: v.verifiedReviewCount,
-                }}
+                venue={venue}
               />
             </div>
           ))}

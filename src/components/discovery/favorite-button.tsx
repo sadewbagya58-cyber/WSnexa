@@ -61,10 +61,10 @@ export function FavoriteButton({
         onClick={handleToggle}
         aria-label={isFav ? 'Remove from saved favorites' : 'Save this venue to favorites'}
         aria-pressed={isFav}
-        className={`h-9 w-9 rounded-full flex items-center justify-center backdrop-blur-md transition-all duration-200 shadow-md touch-manipulation active:scale-90 focus:outline-none focus:ring-2 focus:ring-rose-500 pointer-events-auto ${
+        className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors duration-150 shadow-xs touch-manipulation active:scale-90 focus:outline-none focus:ring-2 focus:ring-rose-500 pointer-events-auto ${
           isFav
             ? 'bg-rose-500 text-white border border-rose-400 shadow-rose-500/20'
-            : 'bg-white/85 hover:bg-white text-zinc-700 hover:text-rose-600 border border-white/60'
+            : 'bg-white/95 hover:bg-white text-zinc-700 hover:text-rose-600 border border-zinc-200'
         } ${className}`}
       >
         <span className="text-base select-none leading-none pt-0.5">

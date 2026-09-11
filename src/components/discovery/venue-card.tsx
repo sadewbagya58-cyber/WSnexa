@@ -14,7 +14,7 @@ interface VenueCardProps {
   isFavorite?: boolean;
 }
 
-export function VenueCard({
+export const VenueCard = React.memo(function VenueCard({
   venue,
   compact = false,
   isLoggedIn = false,
@@ -35,7 +35,7 @@ export function VenueCard({
     .join('');
 
   return (
-    <div className="group rounded-3xl border border-zinc-200/90 bg-white shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full relative">
+    <div className="group rounded-3xl border border-zinc-200/90 bg-white shadow-xs sm:hover:shadow-md transition-shadow duration-200 overflow-hidden flex flex-col h-full relative [content-visibility:auto] [contain-intrinsic-size:auto_300px]">
 
       {/* ── Cover Image Area (Consistent 16:10 Aspect Ratio) ─────────── */}
       <div className="relative aspect-[16/10] w-full bg-zinc-900 overflow-hidden shrink-0 select-none">
@@ -45,8 +45,10 @@ export function VenueCard({
             alt={venue.display_name}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover group-hover:scale-[1.03] transition-transform duration-500 pointer-events-none select-none"
+            className="object-cover sm:group-hover:scale-[1.02] transition-transform duration-300 pointer-events-none select-none"
             unoptimized
+            loading="lazy"
+            decoding="async"
             draggable={false}
           />
         ) : (
@@ -64,13 +66,13 @@ export function VenueCard({
         <div className={`absolute ${compact ? 'top-2 left-2 right-2' : 'top-3 left-3 right-3'} flex items-start justify-between gap-1.5 z-10`}>
           <div className="flex items-center gap-1 flex-wrap max-w-[calc(100%-32px)]">
             {/* Category Badge */}
-            <span className={`bg-white/95 backdrop-blur-md text-zinc-900 font-black ${compact ? 'text-[9px] px-1.5 py-0.5 rounded-lg' : 'text-[11px] px-2.5 py-1 rounded-xl'} border border-white/70 shadow-xs leading-none truncate`}>
+            <span className={`bg-white/95 text-zinc-900 font-black ${compact ? 'text-[9px] px-1.5 py-0.5 rounded-lg' : 'text-[11px] px-2.5 py-1 rounded-xl'} border border-zinc-200 shadow-2xs leading-none truncate`}>
               {typeFormatted}
             </span>
 
             {/* WSNexa Ordering Badge */}
             {hasOrdering && (
-              <span className={`bg-emerald-500/90 backdrop-blur-md text-white font-black ${compact ? 'text-[8px] px-1.5 py-0.5 rounded-lg' : 'text-[10px] px-2 py-1 rounded-xl'} shadow-xs leading-none shrink-0`}>
+              <span className={`bg-emerald-600 text-white font-black ${compact ? 'text-[8px] px-1.5 py-0.5 rounded-lg' : 'text-[10px] px-2 py-1 rounded-xl'} shadow-2xs leading-none shrink-0`}>
                 ✓ Order
               </span>
             )}
@@ -97,6 +99,8 @@ export function VenueCard({
               height={compact ? 32 : 48}
               className={`object-cover ${compact ? 'rounded-[10px]' : 'rounded-[14px]'} w-full h-full`}
               unoptimized
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className={`w-full h-full bg-zinc-950 text-white font-black ${compact ? 'text-xs rounded-[10px]' : 'text-sm rounded-[14px]'} flex items-center justify-center select-none`}>
@@ -193,4 +197,4 @@ export function VenueCard({
       </div>
     </div>
   );
-}
+});

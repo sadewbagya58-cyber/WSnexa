@@ -39,7 +39,7 @@ export function CustomerDashboard({
       <div className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span className="text-[11px] font-black text-zinc-500 uppercase tracking-wider">Customer Portal</span>
-          <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 mt-0.5">Good afternoon, {displayName} 👋</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-zinc-950 mt-0.5">Welcome back, {displayName} 👋</h1>
           <p className="text-xs text-zinc-500 mt-1">{email}</p>
         </div>
         <Link

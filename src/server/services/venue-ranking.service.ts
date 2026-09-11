@@ -1,12 +1,21 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { VenueRankingMetrics, RankingMode, CustomerPersonalizedInsight } from '@/lib/validation/ranking';
 
+let cachedMetrics: VenueRankingMetrics[] | null = null;
+let cachedMetricsTimestamp = 0;
+const METRICS_CACHE_TTL_MS = 30_000; // 30s cache to eliminate duplicate database query storm on Explore
+
 export class VenueRankingService {
   /**
    * Calculates comprehensive ranking metrics and scores for all published venues.
    * Deterministic, explainable, anti-gaming math using verified production signals only.
    */
-  static async calculateAllVenueMetrics(): Promise<VenueRankingMetrics[]> {
+  static async calculateAllVenueMetrics(forceRefresh = false): Promise<VenueRankingMetrics[]> {
+    const nowMs = Date.now();
+    if (!forceRefresh && cachedMetrics && nowMs - cachedMetricsTimestamp < METRICS_CACHE_TTL_MS) {
+      return cachedMetrics;
+    }
+
     const admin = createAdminClient();
 
     // 1. Fetch published venue profiles
@@ -197,6 +206,8 @@ export class VenueRankingService {
       };
     });
 
+    cachedMetrics = metricsList;
+    cachedMetricsTimestamp = nowMs;
     return metricsList;
   }
 

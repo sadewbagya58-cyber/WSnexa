@@ -172,8 +172,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           </div>
 
           {/* Decorative background glow */}
-          <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -left-16 -top-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+          <div className="absolute -left-16 -top-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-xl pointer-events-none" />
         </div>
 
         {/* ── Interactive Search & Filters Bar ──────────────────────── */}

@@ -78,7 +78,7 @@ export default async function PurchasingPage() {
   }
 
   const purchaseOrders = await PurchasingService.getPurchaseOrders();
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">

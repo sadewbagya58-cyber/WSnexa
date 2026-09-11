@@ -68,7 +68,7 @@ export default async function NewRecipePage() {
     yieldUnit: s.yield_unit,
   }));
 
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">

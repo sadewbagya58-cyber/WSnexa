@@ -44,7 +44,7 @@ export default async function NewInventoryItemPage() {
       <InventoryItemForm
         categories={categories}
         locations={locations}
-        defaultCurrency={context.business.defaultCurrency || 'USD'}
+        defaultCurrency={context.activeBranch?.currency || context.business.defaultCurrency || 'USD'}
       />
     </div>
   );

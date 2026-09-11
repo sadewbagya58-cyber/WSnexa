@@ -39,7 +39,7 @@ export class AnalyticsService {
     hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const sales = await getSalesAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
@@ -59,7 +59,7 @@ export class AnalyticsService {
     resolvedDateRange: ResolvedDateRange;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const operations = await getOperationsAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds);
 
@@ -79,7 +79,7 @@ export class AnalyticsService {
     hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const menu = await getMenuAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
@@ -101,7 +101,7 @@ export class AnalyticsService {
     hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const inventory = await getInventoryAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds, auth.currency, auth.hasFinancialAccess);
 
@@ -121,7 +121,7 @@ export class AnalyticsService {
     resolvedDateRange: ResolvedDateRange;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const reviews = await getReviewAnalytics(auth.businessId, auth.targetBranchIds, resolvedBounds);
 
@@ -141,7 +141,7 @@ export class AnalyticsService {
     hasFinancialAccess: boolean;
   }> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     const cancellations = await getCancellationAnalytics(
       auth.businessId,
@@ -213,7 +213,7 @@ export class AnalyticsService {
    */
   static async getExecutiveOverview(input: AnalyticsQueryInput): Promise<ExecutiveOverviewDTO> {
     const auth = await requireAnalyticsAccess(input.branchId, input.branchIds);
-    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone);
+    const resolvedBounds = resolveAnalyticsDateRange(input.dateRange, input.timezone || auth.timezone);
 
     // Parallelize independent domain analytics queries with Promise.all
     const [sales, operations, menu, inventory, reviews, cancellations] = await Promise.all([

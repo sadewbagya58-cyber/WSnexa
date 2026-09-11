@@ -40,14 +40,19 @@ export class ReservationService {
     const admin = createAdminClient();
     const settings = await ReservationSettingsService.getBranchSettings(input.businessId, input.branchId);
 
-    // Fetch branch timezone if available
+    // Fetch branch timezone if available, falling back to business timezone or UTC
     const { data: branch } = await admin
       .from('branches')
       .select('timezone')
       .eq('id', input.branchId)
       .single();
 
-    const branchTimezone = branch?.timezone || 'Asia/Colombo';
+    let branchTimezone = branch?.timezone;
+    if (!branchTimezone && input.businessId) {
+      const { data: biz } = await admin.from('businesses').select('timezone').eq('id', input.businessId).maybeSingle();
+      branchTimezone = biz?.timezone;
+    }
+    branchTimezone = branchTimezone || 'UTC';
     const isStaffCreation = actorType === 'STAFF';
     const duration = input.durationMinutes || settings.defaultDurationMinutes;
 

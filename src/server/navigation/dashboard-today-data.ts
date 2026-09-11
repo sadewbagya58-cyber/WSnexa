@@ -59,16 +59,21 @@ interface DiningTableRow {
  */
 export async function fetchDashboardTodayData(
   businessId: string,
-  activeBranch: { id: string; name: string; timezone?: string },
+  activeBranch: { id: string; name: string; timezone?: string | null; currency?: string | null },
   model: DashboardHomeModel,
   currency: string = 'USD'
 ): Promise<DashboardTodayData> {
   const admin = createAdminClient();
-  const tz = activeBranch.timezone || 'Asia/Colombo';
-  const dateRange = resolveAnalyticsDateRange({ preset: 'today' }, tz);
+  let tz = activeBranch.timezone;
+  if (!tz) {
+    const { data: biz } = await admin.from('businesses').select('timezone').eq('id', businessId).maybeSingle();
+    tz = biz?.timezone || 'UTC';
+  }
+  const safeTz = tz || 'UTC';
+  const dateRange = resolveAnalyticsDateRange({ preset: 'today' }, safeTz);
 
   // Local YYYY-MM-DD for date-based table queries (e.g., reservations)
-  const localDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+  const localDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: safeTz }).format(new Date());
 
   // Prepare conditional query promises (only execute for permitted cards)
   const ordersTodayPromise = model.showOrdersTodayCard

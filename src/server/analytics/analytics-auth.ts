@@ -13,6 +13,7 @@ export interface AnalyticsAuthResult {
   isMultiBranchAuthorized: boolean;
   hasFinancialAccess: boolean;
   currency: string;
+  timezone: string;
 }
 
 /**
@@ -95,15 +96,32 @@ export async function requireAnalyticsAccess(
     .filter((b) => authContext.authorizedBranchIds.includes(b.branchId))
     .map((b) => ({ id: b.branchId, name: b.branchName }));
 
-  // 6. Fetch canonical business currency
+  // 6. Fetch canonical business currency and timezone
   const admin = createAdminClient();
   const { data: biz } = await admin
     .from('businesses')
-    .select('default_currency')
+    .select('default_currency, timezone')
     .eq('id', authContext.businessId)
     .maybeSingle();
 
-  const currency = (biz?.default_currency || 'USD').toUpperCase();
+  let currency = (biz?.default_currency || 'USD').toUpperCase();
+  let timezone = biz?.timezone || 'UTC';
+
+  // If scoped to a single branch, check if branch overrides currency or timezone
+  if (authorizedTargetBranches.length === 1) {
+    const { data: branchData } = await admin
+      .from('branches')
+      .select('currency, timezone')
+      .eq('id', authorizedTargetBranches[0])
+      .maybeSingle();
+
+    if (branchData?.currency) {
+      currency = branchData.currency.toUpperCase();
+    }
+    if (branchData?.timezone) {
+      timezone = branchData.timezone;
+    }
+  }
 
   return {
     authContext,
@@ -113,6 +131,7 @@ export async function requireAnalyticsAccess(
     isMultiBranchAuthorized,
     hasFinancialAccess,
     currency,
+    timezone,
   };
 }
 

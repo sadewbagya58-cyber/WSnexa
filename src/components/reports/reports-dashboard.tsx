@@ -137,7 +137,7 @@ export function ReportsDashboard() {
           setEndDate(end);
         }}
         onBranchChange={setSelectedBranchId}
-        timezoneLabel={data?.summary.resolvedDateRange.timezone || 'Asia/Colombo'}
+        timezoneLabel={data?.summary.resolvedDateRange.timezone || 'UTC'}
         isLoading={isLoading}
       />
 

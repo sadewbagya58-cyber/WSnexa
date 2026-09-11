@@ -117,7 +117,7 @@ export default async function EditRecipePage({ params }: EditRecipePageProps) {
         availableItems={availableItems}
         availableMenuItems={availableMenuItems}
         availableSubRecipes={availableSubRecipes}
-        currency={recipe.currency || context.business.defaultCurrency || 'USD'}
+        currency={recipe.currency || context.activeBranch?.currency || context.business.defaultCurrency || 'USD'}
         initialRecipe={initialRecipeData}
       />
     </div>

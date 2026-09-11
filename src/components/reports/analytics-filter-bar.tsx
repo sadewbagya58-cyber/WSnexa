@@ -27,7 +27,7 @@ export function AnalyticsFilterBar({
   onBranchChange,
   authorizedBranches,
   isMultiBranchAuthorized,
-  timezoneLabel = 'Asia/Colombo',
+  timezoneLabel = 'UTC',
   isLoading = false,
 }: AnalyticsFilterBarProps) {
   const presets: { key: AnalyticsDatePreset; label: string }[] = [

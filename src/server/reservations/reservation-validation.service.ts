@@ -10,13 +10,13 @@ export class ReservationValidationService {
   /**
    * Helper to derive branch-local reservation date (YYYY-MM-DD) from UTC timestamp and branch timezone.
    */
-  static deriveBranchReservationDate(isoTimestamp: string, branchTimezone: string = 'Asia/Colombo'): string {
+  static deriveBranchReservationDate(isoTimestamp: string, branchTimezone: string = 'UTC'): string {
     const d = new Date(isoTimestamp);
     if (isNaN(d.getTime())) return new Date().toISOString().split('T')[0];
 
     try {
       const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: branchTimezone || 'Asia/Colombo',
+        timeZone: branchTimezone || 'UTC',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -52,7 +52,7 @@ export class ReservationValidationService {
       settings,
       isStaffCreation = false,
       intent,
-      branchTimezone = 'Asia/Colombo',
+      branchTimezone = 'UTC',
     } = options;
 
     const validationIntent: ReservationValidationIntent =

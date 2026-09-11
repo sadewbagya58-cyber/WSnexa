@@ -1,6 +1,6 @@
 import { AnalyticsDateRange, ResolvedDateRange } from './analytics-types';
 
-export const DEFAULT_BRANCH_TIMEZONE = 'Asia/Colombo';
+export const DEFAULT_BRANCH_TIMEZONE = 'UTC';
 
 /**
  * Resolves an AnalyticsDateRange input into strict UTC start/end boundaries [startUtc, endUtc)

@@ -108,7 +108,7 @@ export default async function NewPurchaseOrderPage({ searchParams }: NewPurchase
     }
   }
 
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">

@@ -113,7 +113,7 @@ export default async function InventoryHubPage() {
     InventoryService.getInventoryOverview(
       context.business.id,
       context.activeBranch.id,
-      context.business.defaultCurrency || 'USD',
+      context.activeBranch?.currency || context.business.defaultCurrency || 'USD',
       hasCostPermission
     ),
     InventoryService.getExpiringBatches(
@@ -179,7 +179,7 @@ export default async function InventoryHubPage() {
       {/* Near-Expiry & Perishable Alerts */}
       <InventoryExpiryAlerts
         summary={expiringSummary}
-        currency={context.business.defaultCurrency || 'USD'}
+        currency={context.activeBranch?.currency || context.business.defaultCurrency || 'USD'}
         hasCostPermission={hasCostPermission}
       />
 

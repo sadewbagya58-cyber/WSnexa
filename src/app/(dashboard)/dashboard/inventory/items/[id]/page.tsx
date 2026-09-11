@@ -67,7 +67,7 @@ export default async function InventoryItemDetailPage({ params }: ItemDetailPage
     notFound();
   }
 
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   const formatCurrency = (cents: number | null, currCode = currency) => {
     if (cents === null) return '—';

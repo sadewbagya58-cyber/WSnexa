@@ -53,7 +53,7 @@ export default async function DashboardOverviewPage() {
       business.id,
       activeBranch,
       model,
-      business.defaultCurrency || 'USD'
+      activeBranch?.currency || business.defaultCurrency || 'USD'
     ),
     (model.showSetupChecklist || model.isBusinessOwner)
       ? SetupJourneyService.resolveSetupJourney(business.id, activeBranch, authContext)

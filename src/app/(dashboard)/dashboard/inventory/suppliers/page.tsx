@@ -69,7 +69,7 @@ export default async function SuppliersPage() {
   }
 
   const suppliers = await PurchasingService.getSuppliers();
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">

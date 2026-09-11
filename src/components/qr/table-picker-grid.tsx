@@ -132,7 +132,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
     return null;
   }, [serviceAreaName, effectiveAreaId, serviceAreas]);
 
-  const isTablePinRequired = (table: TableItem) => Boolean(requireTablePin || table.has_pin);
+  const isTablePinRequired = (table: TableItem) => Boolean(requireTablePin && (table.has_pin ?? true));
 
   const executeVerification = async (targetTable: TableItem, pin?: string) => {
     setIsVerifying(true);
@@ -515,7 +515,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
                         )}
                       </div>
 
-                      {(requireTablePin || table.has_pin) && (
+                      {Boolean(requireTablePin && (table.has_pin ?? true)) && (
                         <div
                           className={`mt-1 text-[9px] font-bold ${
                             isSelected ? 'text-amber-300' : 'text-amber-700'

@@ -311,14 +311,14 @@ export async function getCancellationAnalytics(
 
   // Helper date formatter in branch timezone
   const dateFmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: dateRange.timezone || 'Asia/Colombo',
+    timeZone: dateRange.timezone || 'UTC',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   });
 
   const displayDateFmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: dateRange.timezone || 'Asia/Colombo',
+    timeZone: dateRange.timezone || 'UTC',
     month: 'short',
     day: 'numeric',
   });

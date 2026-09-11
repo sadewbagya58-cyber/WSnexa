@@ -173,7 +173,7 @@ export default async function GoodsReceivingPage({ searchParams }: GoodsReceivin
     PurchasingService.getSupplierReturns(),
   ]);
 
-  const currency = context.business.defaultCurrency || 'USD';
+  const currency = context.activeBranch?.currency || context.business.defaultCurrency || 'USD';
 
   return (
     <div className="space-y-6">

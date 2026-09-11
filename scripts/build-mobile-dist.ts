@@ -6,7 +6,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { build } from 'esbuild';
 
 function loadEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return;
@@ -203,35 +202,7 @@ html, body {
   fs.writeFileSync(path.resolve(outDir, 'app.css'), appCssContent);
   console.log('✓ Generated app.css');
 
-  // 5. Bundle app.tsx with esbuild
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-
-  console.log('Bundling app.tsx with esbuild...');
-  await build({
-    entryPoints: [path.resolve(rootDir, 'src/mobile/app.tsx')],
-    outfile: path.resolve(outDir, 'app.js'),
-    bundle: true,
-    minify: true,
-    sourcemap: false,
-    format: 'esm',
-    target: ['es2022', 'chrome100'],
-    define: {
-      'process.env.NODE_ENV': '"production"',
-      '__ENV__': JSON.stringify({
-        NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
-        NEXT_PUBLIC_APP_URL: appUrl,
-      }),
-    },
-    loader: {
-      '.png': 'file',
-      '.svg': 'file',
-    },
-  });
-
-  console.log('✓ Successfully bundled mobile-dist/app.js');
+  console.log('✓ Offline fallback shell assets ready');
   console.log('🎉 WSNexa Mobile Distribution Ready!');
 }
 

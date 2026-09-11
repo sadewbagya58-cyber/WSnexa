@@ -14,10 +14,12 @@ export const OfflineBanner: React.FC<OfflineBannerProps> = ({
   onOpenSyncDetails,
   className = '',
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [network, setNetwork] = useState<NetworkState>(() => networkStatus.getState());
   const [stats, setStats] = useState<SyncEngineStats>(() => syncQueue.getStats());
 
   useEffect(() => {
+    setMounted(true);
     const unsubNet = networkStatus.subscribe((state) => {
       setNetwork(state);
     });
@@ -30,6 +32,10 @@ export const OfflineBanner: React.FC<OfflineBannerProps> = ({
       unsubQueue();
     };
   }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   const isOffline = !network.connected;
   const hasPending = stats.pending_count > 0;

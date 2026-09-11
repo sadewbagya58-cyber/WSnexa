@@ -65,9 +65,24 @@ async function runTests() {
   assert('Android', 'INTERNET permission declared', manifestContent.includes('android.permission.INTERNET'));
   assert('Android', 'ACCESS_NETWORK_STATE permission declared', manifestContent.includes('android.permission.ACCESS_NETWORK_STATE'));
 
+  const mainActivityPath = path.resolve(rootDir, 'android/app/src/main/java/com/wsnexa/app/MainActivity.java');
+  assert('Android', 'MainActivity.java exists', fs.existsSync(mainActivityPath));
+  const mainActivityContent = fs.readFileSync(mainActivityPath, 'utf-8');
+  assert('Android', 'MainActivity overrides onBackPressed for native web history', mainActivityContent.includes('onBackPressed'));
+  assert('Android', 'Cleartext traffic enabled for local dev/inspection', manifestContent.includes('android:usesCleartextTraffic="true"'));
+
   const stringsPath = path.resolve(rootDir, 'android/app/src/main/res/values/strings.xml');
   const stringsContent = fs.readFileSync(stringsPath, 'utf-8');
   assert('Android', 'App string name is WSNexa', stringsContent.includes('<string name="app_name">WSNexa</string>'));
+
+  assert('Config', 'Server URL configured to WSNexa web app', capConfigContent.includes('w-snexa.vercel.app'));
+  assert('Config', 'Internal navigation preserved in allowNavigation', capConfigContent.includes('allowNavigation'));
+
+  const rootLayoutPath = path.resolve(rootDir, 'src/app/layout.tsx');
+  const rootLayoutContent = fs.readFileSync(rootLayoutPath, 'utf-8');
+  assert('Web', 'OfflineBanner mounted in root layout', rootLayoutContent.includes('<OfflineBanner />'));
+  assert('Web', 'Clean branded offline fallback index.html present', fs.existsSync(path.resolve(rootDir, 'src/mobile/index.html')));
+  assert('Web', 'Separate mobile-terminal app.tsx removed', !fs.existsSync(path.resolve(rootDir, 'src/mobile/app.tsx')));
 
   // -------------------------------------------------------------
   // SUITE 2: Branding & Asset Pipeline

@@ -1,8 +1,8 @@
 /**
  * WSNexa Android Icon & Splash Generator
  * Generates all Android mipmap icons and splash drawables using the official WSNexa assets.
- * Source Mark: image/1000041108.png
- * Source Logo: image/1000041106.png
+ * Source App Icon / Mark: image/1000041441.png
+ * Source Full Logo: image/1000041430.png
  */
 
 import * as fs from 'fs';
@@ -36,42 +36,88 @@ const SPLASH_LAND_SIZES: { folder: string; width: number; height: number }[] = [
 async function generateBranding() {
   const rootDir = process.cwd();
   const resDir = path.resolve(rootDir, 'android/app/src/main/res');
-  const markPath = path.resolve(rootDir, 'image/1000041108.png');
-  const logoPath = path.resolve(rootDir, 'image/1000041106.png');
+  const markPath = path.resolve(rootDir, 'image/1000041441.png');
+  const logoPath = path.resolve(rootDir, 'image/1000041430.png');
 
   if (!fs.existsSync(resDir)) {
     throw new Error(`Android resources directory does not exist at ${resDir}`);
   }
+  if (!fs.existsSync(markPath)) {
+    throw new Error(`Official launcher icon source does not exist at ${markPath}`);
+  }
 
-  console.log('🎨 Generating Official WSNexa Android Launcher Icons...');
+  console.log('🎨 Generating Official WSNexa Android Launcher Icons (source: image/1000041441.png)...');
 
-  // 1. Generate Mipmap Icons from WS Mark (1000041108.png)
+  // Load raw 1000041441.png and extract the white WS mark to transparent RGBA buffer.
+  // The supplied image has solid black background and white mark.
+  // Using luminance as alpha preserves exact anti-aliasing and avoids opaque box artifacts on Xiaomi HyperOS.
+  const rawSource = await sharp(markPath).raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = rawSource;
+  const rgbaBuffer = Buffer.alloc(info.width * info.height * 4);
+  for (let i = 0, j = 0; i < data.length; i += info.channels, j += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const lum = Math.round(r * 0.299 + g * 0.587 + b * 0.114);
+    rgbaBuffer[j] = 255;     // Pure white
+    rgbaBuffer[j + 1] = 255;
+    rgbaBuffer[j + 2] = 255;
+    rgbaBuffer[j + 3] = lum; // Alpha from luminance
+  }
+
+  const transparentMark = await sharp(rgbaBuffer, {
+    raw: { width: info.width, height: info.height, channels: 4 }
+  }).png().toBuffer();
+
+  // 1. Generate Mipmap Icons
   for (const { folder, size } of ICON_SIZES) {
     const targetDir = path.resolve(resDir, folder);
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    const resizedBuffer = await sharp(markPath)
-      .resize(size, size, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 1 } })
+    // A. Legacy non-adaptive launcher icons (ic_launcher.png & ic_launcher_round.png)
+    // Solid black #000000 background with white mark scaled to 72%
+    const legacyInnerSize = Math.round(size * 0.72);
+    const legacyInnerMark = await sharp(transparentMark)
+      .resize(legacyInnerSize, legacyInnerSize, { fit: 'contain' })
+      .toBuffer();
+
+    const legacyIcon = await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 1 },
+      },
+    })
+      .composite([{ input: legacyInnerMark, gravity: 'center' }])
       .png()
       .toBuffer();
 
-    // ic_launcher.png
-    fs.writeFileSync(path.resolve(targetDir, 'ic_launcher.png'), resizedBuffer);
-    // ic_launcher_round.png
-    fs.writeFileSync(path.resolve(targetDir, 'ic_launcher_round.png'), resizedBuffer);
-    // ic_launcher_foreground.png (transparent background)
-    const fgBuffer = await sharp(markPath)
-      .resize(Math.round(size * 0.72), Math.round(size * 0.72), { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .extend({
-        top: Math.round(size * 0.14),
-        bottom: Math.round(size * 0.14),
-        left: Math.round(size * 0.14),
-        right: Math.round(size * 0.14),
+    fs.writeFileSync(path.resolve(targetDir, 'ic_launcher.png'), legacyIcon);
+    fs.writeFileSync(path.resolve(targetDir, 'ic_launcher_round.png'), legacyIcon);
+
+    // B. Android Adaptive Icon Foreground (ic_launcher_foreground.png):
+    // Android adaptive icon specification:
+    // Canvas: 108dp x 108dp. Safe zone: center 66dp diameter (61.1%).
+    // Scaled to 65% ensures the mark occupies ~60.5% width, perfectly inside the safe zone.
+    // Background is 100% transparent so the system background (@color/ic_launcher_background: #000000)
+    // fills the entire masked squircle/circle, preventing Xiaomi HyperOS from wrapping in a white box.
+    const fgInnerSize = Math.round(size * 0.65);
+    const fgInnerMark = await sharp(transparentMark)
+      .resize(fgInnerSize, fgInnerSize, { fit: 'contain' })
+      .toBuffer();
+
+    const fgBuffer = await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 4,
         background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .resize(size, size)
+      },
+    })
+      .composite([{ input: fgInnerMark, gravity: 'center' }])
       .png()
       .toBuffer();
 
@@ -79,14 +125,14 @@ async function generateBranding() {
     console.log(`✓ Generated ${folder} (${size}x${size}px)`);
   }
 
-  console.log('🎨 Generating Official WSNexa Android Splash Screens...');
+  console.log('🎨 Generating Official WSNexa Android Splash Screens (source: image/1000041430.png)...');
 
   // 2. Base drawable/splash.png
   const drawableDir = path.resolve(resDir, 'drawable');
   if (!fs.existsSync(drawableDir)) fs.mkdirSync(drawableDir, { recursive: true });
 
   const baseSplash = await sharp(logoPath)
-    .resize(480, 240, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 1 } })
+    .resize(480, 240, { fit: 'contain', background: { r: 9, g: 9, b: 11, alpha: 1 } })
     .png()
     .toBuffer();
   fs.writeFileSync(path.resolve(drawableDir, 'splash.png'), baseSplash);
@@ -101,7 +147,7 @@ async function generateBranding() {
     const logoH = Math.round(logoW / 3);
 
     const logoBuffer = await sharp(logoPath)
-      .resize(logoW, logoH, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 0 } })
+      .resize(logoW, logoH, { fit: 'contain', background: { r: 9, g: 9, b: 11, alpha: 0 } })
       .toBuffer();
 
     const splash = await sharp({
@@ -109,7 +155,7 @@ async function generateBranding() {
         width,
         height,
         channels: 4,
-        background: { r: 15, g: 23, b: 42, alpha: 1 },
+        background: { r: 9, g: 9, b: 11, alpha: 1 },
       },
     })
       .composite([{ input: logoBuffer, gravity: 'center' }])
@@ -129,7 +175,7 @@ async function generateBranding() {
     const logoH = Math.round(logoW / 3);
 
     const logoBuffer = await sharp(logoPath)
-      .resize(logoW, logoH, { fit: 'contain', background: { r: 15, g: 23, b: 42, alpha: 0 } })
+      .resize(logoW, logoH, { fit: 'contain', background: { r: 9, g: 9, b: 11, alpha: 0 } })
       .toBuffer();
 
     const splash = await sharp({
@@ -137,7 +183,7 @@ async function generateBranding() {
         width,
         height,
         channels: 4,
-        background: { r: 15, g: 23, b: 42, alpha: 1 },
+        background: { r: 9, g: 9, b: 11, alpha: 1 },
       },
     })
       .composite([{ input: logoBuffer, gravity: 'center' }])

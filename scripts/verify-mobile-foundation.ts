@@ -64,6 +64,8 @@ async function runTests() {
   const manifestContent = fs.readFileSync(manifestPath, 'utf-8');
   assert('Android', 'INTERNET permission declared', manifestContent.includes('android.permission.INTERNET'));
   assert('Android', 'ACCESS_NETWORK_STATE permission declared', manifestContent.includes('android.permission.ACCESS_NETWORK_STATE'));
+  assert('Android', 'ACCESS_COARSE_LOCATION permission declared', manifestContent.includes('android.permission.ACCESS_COARSE_LOCATION'));
+  assert('Android', 'ACCESS_FINE_LOCATION permission declared', manifestContent.includes('android.permission.ACCESS_FINE_LOCATION'));
 
   const mainActivityPath = path.resolve(rootDir, 'android/app/src/main/java/com/wsnexa/app/MainActivity.java');
   assert('Android', 'MainActivity.java exists', fs.existsSync(mainActivityPath));
@@ -75,24 +77,33 @@ async function runTests() {
   const stringsContent = fs.readFileSync(stringsPath, 'utf-8');
   assert('Android', 'App string name is WSNexa', stringsContent.includes('<string name="app_name">WSNexa</string>'));
 
-  assert('Config', 'Server URL configured to WSNexa web app', capConfigContent.includes('w-snexa.vercel.app'));
-  assert('Config', 'Internal navigation preserved in allowNavigation', capConfigContent.includes('allowNavigation'));
+  assert('Config', 'Server URL configured to canonical WSNexa Web App', capConfigContent.includes("url: 'https://w-snexa.vercel.app'"));
+  assert('Config', 'Offline fallback HTML bundled into mobile-dist', fs.existsSync(path.resolve(rootDir, 'mobile-dist/offline.html')));
+  assert('Config', 'Official WS mark branding bundled into mobile-dist', fs.existsSync(path.resolve(rootDir, 'mobile-dist/assets/ws-mark.png')));
+  assert('Config', 'Native assets public dir synchronized with offline fallback', fs.existsSync(path.resolve(rootDir, 'android/app/src/main/assets/public/offline.html')));
+  assert('Android', 'MainActivity handles display cutout short edges (no top black bar)', mainActivityContent.includes('LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES'));
+  assert('Android', 'MainActivity sets decor fits system windows false', mainActivityContent.includes('setDecorFitsSystemWindows(window, false)'));
+  assert('Android', 'MainActivity checks active network connectivity before offline redirect', mainActivityContent.includes('isOnline()'));
+  assert('Android', 'MainActivity provides AndroidDownloadBridge for CSV/Excel export', mainActivityContent.includes('AndroidDownloadBridge'));
+  assert('Android', 'MainActivity provides AndroidPrintBridge for native receipts/reports', mainActivityContent.includes('AndroidPrintBridge'));
+  assert('Android', 'MainActivity bridges Geolocation permissions to WebView', mainActivityContent.includes('onGeolocationPermissionsShowPrompt'));
 
   const rootLayoutPath = path.resolve(rootDir, 'src/app/layout.tsx');
   const rootLayoutContent = fs.readFileSync(rootLayoutPath, 'utf-8');
   assert('Web', 'OfflineBanner mounted in root layout', rootLayoutContent.includes('<OfflineBanner />'));
-  assert('Web', 'Clean branded offline fallback index.html present', fs.existsSync(path.resolve(rootDir, 'src/mobile/index.html')));
-  assert('Web', 'Separate mobile-terminal app.tsx removed', !fs.existsSync(path.resolve(rootDir, 'src/mobile/app.tsx')));
+  assert('Web', 'Clean branded offline fallback index.html present in src/mobile', fs.existsSync(path.resolve(rootDir, 'src/mobile/index.html')));
 
   // -------------------------------------------------------------
   // SUITE 2: Branding & Asset Pipeline
   // -------------------------------------------------------------
   console.log('\nSuite 2: Branding & Asset Pipeline');
   
-  const markSrc = path.resolve(rootDir, 'image/1000041108.png');
-  const logoSrc = path.resolve(rootDir, 'image/1000041106.png');
-  assert('Branding', 'Official WS mark asset exists', fs.existsSync(markSrc));
-  assert('Branding', 'Official WSNexa full logo asset exists', fs.existsSync(logoSrc));
+  const markSrc = path.resolve(rootDir, 'image/1000041419.png');
+  const launcherMarkSrc = path.resolve(rootDir, 'image/1000041441.png');
+  const logoSrc = path.resolve(rootDir, 'image/1000041430.png');
+  assert('Branding', 'Official WS mark asset exists (1000041419.png)', fs.existsSync(markSrc));
+  assert('Branding', 'Official Android launcher icon asset exists (1000041441.png)', fs.existsSync(launcherMarkSrc));
+  assert('Branding', 'Official WSNexa full logo asset exists (1000041430.png)', fs.existsSync(logoSrc));
 
   const mipmaps = ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'];
   for (const m of mipmaps) {

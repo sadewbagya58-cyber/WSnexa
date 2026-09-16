@@ -115,11 +115,16 @@ body {
     display: none !important;
   }
 
-  /* 2. When an Area QR modal is open, completely hide the underlying page, settings, and branch card */
-  body:has([data-area-qr-modal]) [data-branch-qr-page],
+  /* 2. When an Area QR modal is open, completely hide the branch card and page header (do NOT hide [data-branch-qr-page] as it is the parent of the modal) */
   body:has([data-area-qr-modal]) .branch-qr-card,
   body:has([data-area-qr-modal]) [data-page-header] {
     display: none !important;
+  }
+
+  /* 3. Ensure area modal grid expands cleanly for print */
+  [data-area-qr-modal] .grid {
+    display: block !important;
+    width: 100% !important;
   }
 
   /* 3. Neutralize modal backdrop & positioning for print */

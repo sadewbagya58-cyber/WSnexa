@@ -201,9 +201,9 @@ export function AreaQrModal({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start print:block print:w-full">
           {/* Printable Area QR Card Preview */}
-          <div className="flex justify-center w-full">
+          <div className="flex justify-center w-full print:block print:w-full">
             <div className="w-full max-w-[280px] sm:max-w-xs rounded-2xl border-2 border-zinc-900 bg-white p-4 sm:p-6 text-center shadow-md space-y-3 sm:space-y-4 qr-print-card print:border-2 print:shadow-none print:p-6 print:max-w-sm">
               {/* Header Branding */}
               <div className="space-y-1">

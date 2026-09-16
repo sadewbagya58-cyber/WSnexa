@@ -169,8 +169,8 @@ export function AreaQrModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 animate-in fade-in duration-150 overflow-y-auto">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-zinc-200 space-y-5 sm:space-y-6 my-auto print:p-0 print:border-none print:shadow-none print:m-0 print:max-h-none print:overflow-visible">
+    <div data-area-qr-modal data-modal-backdrop className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 animate-in fade-in duration-150 overflow-y-auto">
+      <div data-modal-dialog className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-zinc-200 space-y-5 sm:space-y-6 my-auto print:p-0 print:border-none print:shadow-none print:m-0 print:max-h-none print:overflow-visible">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3 sm:pb-4 print:hidden">
           <div className="space-y-1 min-w-0">
@@ -204,7 +204,7 @@ export function AreaQrModal({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 items-start">
           {/* Printable Area QR Card Preview */}
           <div className="flex justify-center w-full">
-            <div className="w-full max-w-[280px] sm:max-w-xs rounded-2xl border-2 border-zinc-900 bg-white p-4 sm:p-6 text-center shadow-md space-y-3 sm:space-y-4 print:border-2 print:shadow-none print:p-6 print:max-w-sm">
+            <div className="w-full max-w-[280px] sm:max-w-xs rounded-2xl border-2 border-zinc-900 bg-white p-4 sm:p-6 text-center shadow-md space-y-3 sm:space-y-4 qr-print-card print:border-2 print:shadow-none print:p-6 print:max-w-sm">
               {/* Header Branding */}
               <div className="space-y-1">
                 <span className="text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">

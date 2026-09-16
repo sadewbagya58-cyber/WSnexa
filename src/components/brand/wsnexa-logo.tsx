@@ -43,6 +43,7 @@ export const WSNexaLogo: React.FC<WSNexaLogoProps> = ({
           height={48}
           className="w-full h-full object-contain rounded-lg"
           priority={priority}
+          unoptimized={true}
         />
       </div>
     );
@@ -68,6 +69,7 @@ export const WSNexaLogo: React.FC<WSNexaLogoProps> = ({
         height={70}
         className="w-full h-full object-contain"
         priority={priority}
+        unoptimized={true}
       />
     </div>
   );

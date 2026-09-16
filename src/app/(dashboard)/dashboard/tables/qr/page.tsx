@@ -33,16 +33,18 @@ export default async function BranchQrPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="QR Codes & Ordering Settings"
-        description={`Manage Area QR codes, Venue entry QR code, and guest table PIN settings for ${tenantContext.activeBranch.name}.`}
-        breadcrumbs={[
-          { label: 'Tables', href: '/dashboard/tables' },
-          { label: 'QR Codes & Settings' },
-        ]}
-        backHref="/dashboard/tables"
-        helpSlug="generate-qr-codes"
-      />
+      <div data-page-header className="print:hidden">
+        <PageHeader
+          title="QR Codes & Ordering Settings"
+          description={`Manage Area QR codes, Venue entry QR code, and guest table PIN settings for ${tenantContext.activeBranch.name}.`}
+          breadcrumbs={[
+            { label: 'Tables', href: '/dashboard/tables' },
+            { label: 'QR Codes & Settings' },
+          ]}
+          backHref="/dashboard/tables"
+          helpSlug="generate-qr-codes"
+        />
+      </div>
 
       <BranchQrManager
         businessName={tenantContext.business.name}

@@ -1,37 +1,62 @@
 import QRCode from 'qrcode';
 
 /**
- * Standards-compliant ISO/IEC 18004 QR Code SVG Generator for WSNexa.
- * Generates valid, high-contrast vector SVG strings readable by Google Lens,
+ * Standards-compliant ISO/IEC 18004 QR Code Vector SVG Generator for WSNexa.
+ * Generates crisp, pixel-perfect filled vector SVGs readable by Google Lens,
  * Android Camera, iOS Camera, and physical 2D barcode scanners.
  *
- * IMPORTANT: The returned SVG intentionally has NO fixed width/height attributes.
- * It uses viewBox only so it scales crispy to any container size — critical for
- * print/PDF quality where pixel-sized SVGs become blurry when scaled by the
- * browser print engine.
+ * Architecture & Print Optimization:
+ * - Uses solid filled rectangular path runs (fill="#09090b") instead of strokes.
+ *   Strokes centered on half-pixels cause severe sub-pixel blurring and merged
+ *   modules in print engines; filled vectors render with razor-sharp edges.
+ * - Standard ISO/IEC 18004 4-module quiet zone (margin: 4) ensures instant scanner lock.
+ * - Error correction level 'Q' (Quality, ~25% recovery) guarantees reliable reads
+ *   even with minor print wear or low contrast.
+ * - viewBox only (no fixed width/height) allows infinite, clean vector scaling.
  */
-export async function generateQrSvgString(url: string, size: number = 256): Promise<string> {
+export async function generateQrSvgString(
+  url: string,
+  _ignoredSize: number = 256,
+  options?: { errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H'; margin?: number }
+): Promise<string> {
   try {
-    const svgString = await QRCode.toString(url, {
-      type: 'svg',
-      width: size,
-      margin: 2,
-      errorCorrectionLevel: 'M',
-      color: {
-        dark: '#09090b',
-        light: '#ffffff',
-      },
-    });
-    // Remove fixed width/height attributes so the SVG is purely viewBox-driven.
-    // This makes it infinitely scalable in CSS containers and print without
-    // interpolation artifacts (merged modules, blurry edges).
-    return svgString
-      .replace(/\s+width="[^"]*"/g, '')
-      .replace(/\s+height="[^"]*"/g, '');
+    const errorCorrectionLevel = options?.errorCorrectionLevel || 'Q';
+    const margin = options?.margin !== undefined ? options.margin : 4;
+    const qr = QRCode.create(url, { errorCorrectionLevel });
+    const modCount = qr.modules.size;
+    const totalSize = modCount + margin * 2;
+
+    // Merge horizontal runs of dark modules on each row into single rectangular path segments
+    let pathData = '';
+    for (let r = 0; r < modCount; r++) {
+      let runStart = -1;
+      for (let c = 0; c < modCount; c++) {
+        const isDark = qr.modules.get(r, c);
+        if (isDark) {
+          if (runStart === -1) runStart = c;
+        } else {
+          if (runStart !== -1) {
+            const w = c - runStart;
+            pathData += `M${runStart + margin} ${r + margin}h${w}v1h-${w}z`;
+            runStart = -1;
+          }
+        }
+      }
+      if (runStart !== -1) {
+        const w = modCount - runStart;
+        pathData += `M${runStart + margin} ${r + margin}h${w}v1h-${w}z`;
+      }
+    }
+
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalSize} ${totalSize}" shape-rendering="crispEdges">` +
+      `<rect width="${totalSize}" height="${totalSize}" fill="#ffffff"/>` +
+      `<path fill="#09090b" d="${pathData}"/>` +
+      `</svg>`
+    );
   } catch (err) {
     console.error('Failed to generate QR SVG string:', err);
-    // Fallback basic SVG frame if generation fails
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="#ffffff"/></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 41 41" shape-rendering="crispEdges"><rect width="41" height="41" fill="#ffffff"/></svg>`;
   }
 }
 

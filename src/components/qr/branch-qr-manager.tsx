@@ -247,7 +247,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div data-branch-qr-page className="space-y-6">
       {/* Branch Settings & Readiness Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 print:hidden">
         {/* Branch Ordering Settings Card */}
@@ -453,7 +453,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
       </div>
 
       {/* Main Branch QR Actions & Card Display Grid (General Venue / Reception Browsing) */}
-      <div className="space-y-2 pt-4 border-t border-zinc-200">
+      <div className="space-y-2 pt-4 border-t border-zinc-200 print:hidden">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-bold text-zinc-950">Branch Entry QR Code</h2>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
@@ -553,7 +553,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
 
         {/* Printable Branch Card Preview */}
         <div className="lg:col-span-2 flex justify-center">
-          <div className="w-full max-w-sm rounded-2xl border-2 border-zinc-900 bg-white p-8 text-center shadow-lg space-y-6 print:border-2 print:shadow-none print:m-0 print:p-8">
+          <div className="w-full max-w-sm rounded-2xl border-2 border-zinc-900 bg-white p-8 text-center shadow-lg space-y-6 qr-print-card branch-qr-card print:border-2 print:shadow-none print:m-0 print:p-8">
             {/* Header Branding */}
             <div className="space-y-1">
               <span className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">

@@ -341,7 +341,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       )}
 
       {/* ── Top Bar Header ──────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 header-safe-top pb-1 sm:pb-0">
+      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 header-safe-top pb-1 sm:pb-0 print:hidden">
 
         {/* Left: Logo + (mobile) business badge | (desktop) business + branch switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -503,14 +503,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       <div className="flex flex-1 min-w-0">
 
         {/* Desktop Sidebar */}
-        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem-env(safe-area-inset-top,0px))] sticky top-[calc(4rem+env(safe-area-inset-top,0px))]">
+        <aside className="hidden w-64 border-r border-zinc-200 bg-white p-4 lg:block shrink-0 overflow-y-auto max-h-[calc(100vh-4rem-env(safe-area-inset-top,0px))] sticky top-[calc(4rem+env(safe-area-inset-top,0px))] print:hidden">
           <NavSearchTrigger onClick={() => setIsSearchOpen(true)} className="mb-4" />
           {renderDesktopNavLinks()}
         </aside>
 
         {/* Mobile Drawer Overlay */}
         {mobileOpen && (
-          <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 z-50 flex lg:hidden print:hidden">
             {/* Backdrop */}
             <div
               role="button"
@@ -648,7 +648,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         {(() => {
           const meta = getPageMetadata(pathname);
           const layoutVariant = meta.layoutVariant || 'standard';
-          let mainClasses = 'flex-1 min-w-0 w-full';
+          let mainClasses = 'flex-1 min-w-0 w-full dashboard-main-content';
           if (layoutVariant === 'workspace') {
             mainClasses += ' p-2 sm:p-4 lg:p-6 max-w-full';
           } else if (layoutVariant === 'wide') {

@@ -85,26 +85,114 @@ body {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--sab, 0px)) !important;
 }
 
-/* ── QR Code Print Quality ────────────────────────────────────────────────── */
-/*
- * Ensures QR SVG modules print with full black density (no browser print
- * optimization that lightens dark fills). The SVG is viewBox-only (no fixed
- * width/height) so it fills its CSS container exactly without raster scaling.
- */
+/* ── Print Isolation & QR Card Formatting ─────────────────────────────────── */
 @media print {
-  [data-qr-container] svg,
-  [data-qr-container] img {
-    width: 100% !important;
-    height: 100% !important;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-    color-adjust: exact;
-    image-rendering: crisp-edges;
+  @page {
+    size: auto;
+    margin: 10mm;
   }
 
-  [data-qr-container] {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  /* 1. Eliminate application chrome, layout containers, headers, footers, sidebars */
+  header,
+  nav,
+  aside,
+  footer,
+  .header-safe-top,
+  .bottom-safe-area,
+  [data-page-header],
+  [data-print-hide],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* 2. When an Area QR modal is open, completely hide the underlying page, settings, and branch card */
+  body:has([data-area-qr-modal]) [data-branch-qr-page],
+  body:has([data-area-qr-modal]) .branch-qr-card,
+  body:has([data-area-qr-modal]) [data-page-header] {
+    display: none !important;
+  }
+
+  /* 3. Neutralize modal backdrop & positioning for print */
+  [data-modal-backdrop],
+  [data-area-qr-modal] {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  [data-modal-dialog] {
+    position: static !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+    max-width: 100% !important;
+    max-height: none !important;
+  }
+
+  /* 4. Strict isolation of the printable QR card */
+  .qr-print-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 10mm auto !important;
+    max-width: 320px !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    border: 2px solid #09090b !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    box-shadow: none !important;
+    text-align: center !important;
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* 5. QR SVG Container in print */
+  [data-qr-container] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #ffffff !important;
+    border: 1px solid #e4e4e7 !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    margin: 12px auto !important;
+    width: 200px !important;
+    height: 200px !important;
+    overflow: visible !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  [data-qr-container] svg {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    shape-rendering: crispEdges !important;
   }
 }

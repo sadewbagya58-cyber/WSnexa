@@ -39,6 +39,7 @@ interface DashboardShellProps {
   activeBranch: BranchInfo | null;
   branches: BranchInfo[];
   subscription?: TenantSubscriptionInfo;
+  isSuperAdmin?: boolean;
 }
 
 function formatRoleLabel(role: string, customRoleName?: string | null): string {
@@ -71,6 +72,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   activeBranch,
   branches,
   subscription,
+  isSuperAdmin = false,
 }) => {
   const pathname = usePathname();
   const router = useRouter();
@@ -339,7 +341,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       )}
 
       {/* ── Top Bar Header ──────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 pt-[env(safe-area-inset-top,0px)] pb-1 sm:pb-0">
+      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur min-w-0 header-safe-top pb-1 sm:pb-0">
 
         {/* Left: Logo + (mobile) business badge | (desktop) business + branch switcher */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -452,6 +454,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   >
                     🛍️ Switch to Customer
                   </Link>
+                  {isSuperAdmin && (
+                    <Link
+                      href="/admin"
+                      role="menuitem"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-black text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-700 transition-colors border border-amber-500/30 mt-1"
+                    >
+                      🛡️ Super Admin Panel
+                    </Link>
+                  )}
                 </div>
                 <div className="py-1">
                   <form action="/api/auth/logout" method="POST">
@@ -608,6 +620,15 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   >
                     🛍️ Switch to Customer
                   </Link>
+                  {isSuperAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex min-h-[44px] items-center gap-2 px-3 py-2 rounded-xl text-xs font-black text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-700 transition-colors border border-amber-500/30"
+                    >
+                      🛡️ Super Admin Panel
+                    </Link>
+                  )}
                 </div>
 
                 <form action="/api/auth/logout" method="POST">

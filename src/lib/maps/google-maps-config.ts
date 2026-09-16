@@ -135,6 +135,40 @@ export function requestBrowserLocation(
     return;
   }
 
+  // ── Android-only: proactively check device Location Services (GPS toggle) ──
+  // If the device master GPS toggle is OFF, getCurrentPosition() will immediately
+  // fail with POSITION_UNAVAILABLE. We detect this before the call, open device
+  // location settings, and return error code 4 so the UI can show a targeted
+  // "Enable Location Services" button with a Retry action.
+  if (typeof window !== 'undefined') {
+    const locationBridge = (window as unknown as {
+      AndroidLocationBridge?: { isLocationEnabled: () => boolean; openLocationSettings: () => void };
+    }).AndroidLocationBridge;
+    if (locationBridge && typeof locationBridge.isLocationEnabled === 'function') {
+      let locationServicesOn = false;
+      try {
+        locationServicesOn = locationBridge.isLocationEnabled();
+      } catch {
+        locationServicesOn = true; // assume on if bridge call fails
+      }
+      if (!locationServicesOn) {
+        // Open settings so the user can enable GPS, then they tap Retry
+        try {
+          locationBridge.openLocationSettings();
+        } catch {
+          // Ignore if settings can't open
+        }
+        onError({
+          code: 4,
+          title: 'Location Services Disabled',
+          message:
+            'Your device Location Services (GPS) are turned off. WSNexa needs GPS to find venues near you. Please enable Location Services in device Settings, return to the app, and tap Retry.',
+        });
+        return;
+      }
+    }
+  }
+
   activeCallbacks = [{ onSuccess, onError }];
 
   const notifySuccess = (coords: GeolocationCoords) => {
@@ -191,6 +225,9 @@ export function requestBrowserLocation(
         return;
       }
 
+      // On both primary and fallback failure with POSITION_UNAVAILABLE,
+      // the location fix could not be obtained from GPS or network.
+      // The proactive check at call-site already handles location-services-off.
       notifyError({
         code: 2,
         title: 'Device Location Unavailable',

@@ -48,23 +48,69 @@ export function ExportCenterModal({
         return;
       }
 
+      // Android Native Bridge Detection
+      const win = typeof window !== 'undefined' ? (window as unknown as {
+        AndroidDownloadBridge?: {
+          saveFile: (content: string, mimeType: string, filename: string) => void;
+          saveFileBase64: (base64Content: string, mimeType: string, filename: string) => void;
+        };
+        AndroidPrintBridge?: { printHtml: (html: string, title: string) => void };
+      }) : undefined;
+      const androidDownload = win?.AndroidDownloadBridge;
+      const androidPrint = win?.AndroidPrintBridge;
+
       if (format === 'pdf') {
-        const blob = new Blob([res.fileContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const win = window.open(url, '_blank');
-        if (win) {
-          win.onload = () => win.print();
+        if (androidPrint && typeof androidPrint.printHtml === 'function') {
+          androidPrint.printHtml(res.fileContent, res.filename || 'WSNexa Report');
+        } else {
+          const blob = new Blob([res.fileContent], { type: 'text/html' });
+          const url = URL.createObjectURL(blob);
+          const win = window.open(url, '_blank');
+          if (win) {
+            win.onload = () => win.print();
+          }
+        }
+      } else if (format === 'xlsx') {
+        // XLSX is binary — must transfer as base64 to preserve byte integrity
+        if (androidDownload && typeof androidDownload.saveFileBase64 === 'function') {
+          // fileContent is a binary string from the server action (xlsx bytes)
+          // Convert to base64 safely handling non-Latin1 bytes
+          const bytes = new Uint8Array(res.fileContent.length);
+          for (let i = 0; i < res.fileContent.length; i++) {
+            bytes[i] = res.fileContent.charCodeAt(i) & 0xff;
+          }
+          const base64 = btoa(String.fromCharCode(...Array.from(bytes)));
+          androidDownload.saveFileBase64(
+            base64,
+            res.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            res.filename
+          );
+        } else {
+          const blob = new Blob([res.fileContent], { type: res.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = res.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
       } else {
-        const blob = new Blob([res.fileContent], { type: res.mimeType || 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = res.filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // CSV and other text formats
+        if (androidDownload && typeof androidDownload.saveFile === 'function') {
+          androidDownload.saveFile(res.fileContent, res.mimeType || 'text/plain', res.filename);
+        } else {
+          const blob = new Blob([res.fileContent], { type: res.mimeType || 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = res.filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
       }
 
       onClose();

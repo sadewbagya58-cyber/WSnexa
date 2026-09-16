@@ -53,6 +53,7 @@ export default async function DashboardLayout({
 
   const { resolveAuthorizationContext } = await import('@/server/auth');
   const { resolveDashboardNavigation } = await import('@/server/navigation/navigation-engine');
+  const { isSuperAdmin } = await import('@/server/auth/super-admin');
 
   let navSections = undefined;
   try {
@@ -61,6 +62,8 @@ export default async function DashboardLayout({
   } catch {
     navSections = undefined;
   }
+
+  const userIsSuperAdmin = await isSuperAdmin(user.id);
 
   return (
     <DashboardShell
@@ -76,6 +79,7 @@ export default async function DashboardLayout({
       userCustomRoleName={membership.customRoleName}
       navSections={navSections}
       subscription={subscription}
+      isSuperAdmin={userIsSuperAdmin}
     >
       {children}
     </DashboardShell>

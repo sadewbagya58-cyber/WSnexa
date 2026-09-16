@@ -33,7 +33,7 @@ export function AdminNavbar({ userEmail, userName, children }: AdminNavbarProps)
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col antialiased">
       {/* 1. Full-Width Sticky Top Bar Header */}
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur shrink-0 min-w-0">
+      <header className="sticky top-0 z-40 flex min-h-[4rem] w-full items-center justify-between border-b border-zinc-200 bg-white/95 px-3 sm:px-6 backdrop-blur shrink-0 min-w-0 header-safe-top">
         {/* Left: Brand + Platform Admin Badge */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link

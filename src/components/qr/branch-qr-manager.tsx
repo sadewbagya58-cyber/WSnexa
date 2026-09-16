@@ -175,12 +175,24 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
   const handleDownloadPng = async () => {
     try {
       const pngUrl = await generateQrPngDataUrl(publicUrl, 1024);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = pngUrl;
-      downloadLink.download = `Branch-QR-${branchCode}.png`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      // On Android WebView, anchor download doesn't work — use native bridge
+      const androidBridge = (typeof window !== 'undefined')
+        ? (window as unknown as { AndroidDownloadBridge?: { saveFileBase64: (b64: string, mime: string, name: string) => void } }).AndroidDownloadBridge
+        : undefined;
+      if (androidBridge && typeof androidBridge.saveFileBase64 === 'function') {
+        // pngUrl is "data:image/png;base64,<data>" — extract the base64 part
+        const base64Data = pngUrl.split(',')[1];
+        if (base64Data) {
+          androidBridge.saveFileBase64(base64Data, 'image/png', `Branch-QR-${branchCode}.png`);
+        }
+      } else {
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pngUrl;
+        downloadLink.download = `Branch-QR-${branchCode}.png`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
     } catch (err) {
       alert('Failed to generate PNG download: ' + err);
     }
@@ -561,6 +573,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
             <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-6 space-y-3">
               {qr?.is_active ? (
                 <div
+                  data-qr-container
                   className="h-56 w-56 bg-white p-2 border border-zinc-200 rounded-lg shadow-sm flex items-center justify-center"
                   dangerouslySetInnerHTML={{ __html: svgHtml }}
                 />

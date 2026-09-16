@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 :root {
+  /* Safe Area Insets for Native Mobile Shells */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
   /* Design Tokens - Light Theme Default */
   --bg-app: #ffffff;
   --bg-surface: #fafafa;
@@ -70,4 +74,37 @@ body {
   0%   { transform: translateX(-100%); }
   50%  { transform: translateX(0%); }
   100% { transform: translateX(100%); }
+}
+
+/* ── Safe Area Inset Utilities for Android Native Shell ───────────────────── */
+.header-safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), var(--sat, 0px)) !important;
+}
+
+.bottom-safe-area {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--sab, 0px)) !important;
+}
+
+/* ── QR Code Print Quality ────────────────────────────────────────────────── */
+/*
+ * Ensures QR SVG modules print with full black density (no browser print
+ * optimization that lightens dark fills). The SVG is viewBox-only (no fixed
+ * width/height) so it fills its CSS container exactly without raster scaling.
+ */
+@media print {
+  [data-qr-container] svg,
+  [data-qr-container] img {
+    width: 100% !important;
+    height: 100% !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    image-rendering: crisp-edges;
+  }
+
+  [data-qr-container] {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    overflow: visible !important;
+  }
 }

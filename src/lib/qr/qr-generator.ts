@@ -4,6 +4,11 @@ import QRCode from 'qrcode';
  * Standards-compliant ISO/IEC 18004 QR Code SVG Generator for WSNexa.
  * Generates valid, high-contrast vector SVG strings readable by Google Lens,
  * Android Camera, iOS Camera, and physical 2D barcode scanners.
+ *
+ * IMPORTANT: The returned SVG intentionally has NO fixed width/height attributes.
+ * It uses viewBox only so it scales crispy to any container size — critical for
+ * print/PDF quality where pixel-sized SVGs become blurry when scaled by the
+ * browser print engine.
  */
 export async function generateQrSvgString(url: string, size: number = 256): Promise<string> {
   try {
@@ -17,11 +22,16 @@ export async function generateQrSvgString(url: string, size: number = 256): Prom
         light: '#ffffff',
       },
     });
-    return svgString;
+    // Remove fixed width/height attributes so the SVG is purely viewBox-driven.
+    // This makes it infinitely scalable in CSS containers and print without
+    // interpolation artifacts (merged modules, blurry edges).
+    return svgString
+      .replace(/\s+width="[^"]*"/g, '')
+      .replace(/\s+height="[^"]*"/g, '');
   } catch (err) {
     console.error('Failed to generate QR SVG string:', err);
     // Fallback basic SVG frame if generation fails
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}"><rect width="256" height="256" fill="#ffffff"/></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" fill="#ffffff"/></svg>`;
   }
 }
 

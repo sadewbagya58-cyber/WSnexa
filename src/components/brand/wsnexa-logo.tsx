@@ -10,9 +10,9 @@ export interface WSNexaLogoProps {
 
 /**
  * Authoritative WSNexa Logo Component
- * - 'mark': Official compact WS symbol (image/1000041108.png, 1:1 aspect ratio).
+ * - 'mark': Official compact WS symbol (image/1000041419.png, 1:1 aspect ratio).
  *           Used for browser favicon, compact mobile headers, app icons, and small icon contexts.
- * - 'full': Official full WSNexa logo (image/1000041106.png, 3:1 aspect ratio).
+ * - 'full': Official full WSNexa logo (image/1000041430.png, 3:1 aspect ratio).
  *           Contains "WSNexa / Smart Hospitality. Simplified."
  *           Used for public header, footer, auth, legal, help center, and large brand surfaces.
  */

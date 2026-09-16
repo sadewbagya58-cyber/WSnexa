@@ -140,13 +140,25 @@ export function AreaQrModal({
     if (!rawToken || !publicUrl) return;
     try {
       const pngUrl = await generateQrPngDataUrl(publicUrl, 1024);
-      const downloadLink = document.createElement('a');
       const safeAreaName = area.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-      downloadLink.href = pngUrl;
-      downloadLink.download = `area-qr-${safeAreaName}-v${version}.png`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      const filename = `area-qr-${safeAreaName}-v${version}.png`;
+      // On Android WebView, anchor download doesn't work — use native bridge
+      const androidBridge = (typeof window !== 'undefined')
+        ? (window as unknown as { AndroidDownloadBridge?: { saveFileBase64: (b64: string, mime: string, name: string) => void } }).AndroidDownloadBridge
+        : undefined;
+      if (androidBridge && typeof androidBridge.saveFileBase64 === 'function') {
+        const base64Data = pngUrl.split(',')[1];
+        if (base64Data) {
+          androidBridge.saveFileBase64(base64Data, 'image/png', filename);
+        }
+      } else {
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pngUrl;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
     } catch (err) {
       setErrorMsg('Failed to generate PNG download: ' + String(err));
     }
@@ -214,6 +226,7 @@ export function AreaQrModal({
               <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-2">
                 {isActive && svgHtml ? (
                   <div
+                    data-qr-container
                     className="h-44 w-44 bg-white p-2 border border-zinc-200 rounded-lg shadow-2xs flex items-center justify-center"
                     dangerouslySetInnerHTML={{ __html: svgHtml }}
                   />

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { RouteProgress } from '@/components/ui/route-progress';
 import { OfflineBanner } from '@/components/mobile/offline-banner';
+import { ServiceWorkerRegister } from '@/components/mobile/service-worker-register';
 
 export const metadata: Metadata = {
   title: 'WSNexa — Smart Hospitality. Simplified.',
@@ -93,6 +94,7 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col bg-white text-zinc-950">
+        <ServiceWorkerRegister />
         <OfflineBanner />
         <RouteProgress />
         {children}

@@ -147,9 +147,21 @@ export async function POST(request: NextRequest) {
       if (updateErr) {
         dispatchResult = { success: false, message: updateErr.message };
       }
+    } else if (normalizedAction === 'update_kitchen_status' || normalizedAction === 'update_order_status') {
+      const { orderId, nextStatus } = payload as { orderId: string; nextStatus: string };
+      const { updateOrderStatusAction } = await import('@/server/actions/order');
+      dispatchResult = await updateOrderStatusAction(orderId || entity_id, nextStatus as any);
     } else if (normalizedAction === 'record_inventory_count' || entity_type === 'inventory_count') {
-      // Record count note in audit
-      dispatchResult = { success: true, data: { recorded: true } };
+      const countPayload = payload as { countId?: string; items?: any[] };
+      if (countPayload && countPayload.countId && Array.isArray(countPayload.items) && countPayload.items.length > 0) {
+        const { submitStockCountAction } = await import('@/server/actions/inventory');
+        dispatchResult = await submitStockCountAction({
+          countId: countPayload.countId,
+          items: countPayload.items,
+        });
+      } else {
+        dispatchResult = { success: true, data: { recorded: true } };
+      }
     } else {
       // Generic accepted operational event
       dispatchResult = { success: true, data: { action, entity_id } };

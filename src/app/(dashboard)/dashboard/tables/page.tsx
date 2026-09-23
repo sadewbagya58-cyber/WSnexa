@@ -52,6 +52,8 @@ export default async function TablesDashboardPage() {
       <TableGrid
         businessName={context.business.name}
         branchName={context.activeBranch.name}
+        businessId={context.business.id}
+        branchId={context.activeBranch.id}
         tablePinLength={context.activeBranch.table_pin_length ?? 4}
         initialTables={(tables as unknown as React.ComponentProps<typeof TableGrid>['initialTables']) || []}
         areas={areas || []}

@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { FormattedStockCount } from '@/server/services/inventory.service';
 import { submitStockCountAction, approveStockCountAction } from '@/server/actions/inventory';
+import { syncQueue } from '@/lib/offline/sync-queue';
+import { networkStatus } from '@/lib/offline/network-status';
 
 interface StockCountMobileSheetProps {
   count: FormattedStockCount;
@@ -72,22 +74,100 @@ export function StockCountMobileSheet({
       return;
     }
 
-    const res = await submitStockCountAction({
-      countId: count.id,
-      items: formattedEntries,
-    });
+    // Offline Path: Queue stock count draft locally
+    if (networkStatus.isOffline()) {
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-count-${Date.now()}`;
 
-    setIsSubmitting(false);
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'inventory_count',
+          entity_id: count.id,
+          action: 'record_inventory_count',
+          payload: {
+            countId: count.id,
+            items: formattedEntries,
+          },
+          business_id: count.businessId || 'default_biz',
+          branch_id: count.branchId || 'default_branch',
+          user_id: 'staff',
+        });
 
-    if (res.success) {
-      setFeedbackMsg({ type: 'success', text: 'Stock count submitted successfully for manager review.' });
-      router.refresh();
-    } else {
-      setFeedbackMsg({ type: 'error', text: res.message || 'Failed to submit count.' });
+        setIsSubmitting(false);
+        setFeedbackMsg({
+          type: 'success',
+          text: 'Stock count draft saved offline. It will synchronize automatically when connection is restored.',
+        });
+        return;
+      } catch {
+        setIsSubmitting(false);
+        setFeedbackMsg({ type: 'error', text: 'Failed to queue offline stock count. Please retry.' });
+        return;
+      }
+    }
+
+    // Online Path: Call server action with automatic offline fallback on network failure
+    try {
+      const res = await submitStockCountAction({
+        countId: count.id,
+        items: formattedEntries,
+      });
+
+      setIsSubmitting(false);
+
+      if (res.success) {
+        setFeedbackMsg({ type: 'success', text: 'Stock count submitted successfully for manager review.' });
+        router.refresh();
+      } else {
+        setFeedbackMsg({ type: 'error', text: res.message || 'Failed to submit count.' });
+      }
+    } catch {
+      // If network failed during submit, queue offline
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-count-${Date.now()}`;
+
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'inventory_count',
+          entity_id: count.id,
+          action: 'record_inventory_count',
+          payload: {
+            countId: count.id,
+            items: formattedEntries,
+          },
+          business_id: count.businessId || 'default_biz',
+          branch_id: count.branchId || 'default_branch',
+          user_id: 'staff',
+        });
+
+        setIsSubmitting(false);
+        setFeedbackMsg({
+          type: 'success',
+          text: 'Network interrupted. Stock count draft saved offline and will sync once connected.',
+        });
+      } catch {
+        setIsSubmitting(false);
+        setFeedbackMsg({ type: 'error', text: 'Failed to submit stock count.' });
+      }
     }
   };
 
   const handleApproveCount = async () => {
+    // Invariant: Approval must remain ONLINE_ONLY
+    if (networkStatus.isOffline()) {
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Internet connection required for manager stock count approval and ledger reconciliation.',
+      });
+      return;
+    }
+
     if (!confirm('Are you sure you want to approve this stock count? This will automatically generate variance stock movements and update your inventory balances.')) {
       return;
     }

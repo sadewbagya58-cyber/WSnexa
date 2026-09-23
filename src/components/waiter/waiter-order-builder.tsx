@@ -16,6 +16,9 @@ import {
   loadWaiterCartFromStorage,
   clearWaiterCartStorage,
 } from '@/features/cart/waiter-cart-storage';
+import { syncQueue } from '@/lib/offline/sync-queue';
+import { networkStatus } from '@/lib/offline/network-status';
+import { operationalCache } from '@/lib/offline/operational-cache';
 
 export interface WaiterAreaOption {
   id: string;
@@ -112,7 +115,13 @@ export function WaiterOrderBuilder({
         setOrderNotes(loaded.orderNotes || '');
       });
     }
-  }, [effectiveBizId, effectiveBranchId, userId, catalog.items, tables, areas]);
+
+    // Save operational read data to local cache for offline availability
+    if (catalog && tables && tables.length > 0) {
+      operationalCache.saveBranchCatalog(effectiveBizId, effectiveBranchId, catalog);
+      operationalCache.saveBranchTables(effectiveBizId, effectiveBranchId, tables, areas);
+    }
+  }, [effectiveBizId, effectiveBranchId, userId, catalog, tables, areas]);
 
   // Detect branch switch and reset client state safely
   useEffect(() => {
@@ -266,19 +275,59 @@ export function WaiterOrderBuilder({
     setIsSubmitting(true);
 
     startTransition(async () => {
-      try {
-        const orderItemsInput = cart.map((c) => ({
-          menuItemId: c.menuItemId,
-          quantity: c.quantity,
-          selectedModifiers: c.selectedModifiers.map((m) => ({
-            groupId: m.groupId,
-            optionId: m.optionId,
-            nameSnapshot: m.optionName,
-            priceSnapshot: m.additionalPriceCents / 100,
-          })),
-          notes: c.specialInstructions,
-        }));
+      const orderItemsInput = cart.map((c) => ({
+        menuItemId: c.menuItemId,
+        quantity: c.quantity,
+        selectedModifiers: c.selectedModifiers.map((m) => ({
+          groupId: m.groupId,
+          optionId: m.optionId,
+          nameSnapshot: m.optionName,
+          priceSnapshot: m.additionalPriceCents / 100,
+        })),
+        notes: c.specialInstructions,
+      }));
 
+      // Offline First Path: If device has lost connectivity, queue mutation locally
+      if (networkStatus.isOffline()) {
+        try {
+          const opId =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `op-order-${Date.now()}`;
+
+          await syncQueue.enqueue({
+            operation_id: opId,
+            entity_type: 'order',
+            entity_id: `offline-order-${Date.now()}`,
+            action: 'submit_waiter_order',
+            payload: {
+              tableId: selectedTableId,
+              items: orderItemsInput,
+              notes: orderNotes,
+            },
+            business_id: effectiveBizId,
+            branch_id: effectiveBranchId,
+            user_id: userId || 'waiter',
+          });
+
+          setIsSuccess(true);
+          setSuccessMsg('Order saved offline. It will sync automatically when connection is restored.');
+          clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
+          setCart([]);
+          setOrderNotes('');
+          setTimeout(() => {
+            router.push('/dashboard/waiter');
+          }, 1500);
+          return;
+        } catch (queueErr) {
+          setErrorMsg('Failed to queue offline order. Please retry.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Online Path: Call server action with automatic offline fallback on network failure
+      try {
         const res = await createWaiterOrderAction({
           tableId: selectedTableId,
           items: orderItemsInput,
@@ -300,9 +349,41 @@ export function WaiterOrderBuilder({
           setIsSubmitting(false);
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to place order.';
-        setErrorMsg(msg);
-        setIsSubmitting(false);
+        // If network dropped mid-request, save to offline queue instead of failing
+        try {
+          const opId =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `op-order-${Date.now()}`;
+
+          await syncQueue.enqueue({
+            operation_id: opId,
+            entity_type: 'order',
+            entity_id: `offline-order-${Date.now()}`,
+            action: 'submit_waiter_order',
+            payload: {
+              tableId: selectedTableId,
+              items: orderItemsInput,
+              notes: orderNotes,
+            },
+            business_id: effectiveBizId,
+            branch_id: effectiveBranchId,
+            user_id: userId || 'waiter',
+          });
+
+          setIsSuccess(true);
+          setSuccessMsg('Network interrupted. Order saved offline and will sync once connected.');
+          clearWaiterCartStorage(effectiveBizId, effectiveBranchId, userId);
+          setCart([]);
+          setOrderNotes('');
+          setTimeout(() => {
+            router.push('/dashboard/waiter');
+          }, 1500);
+        } catch {
+          const msg = err instanceof Error ? err.message : 'Failed to place order.';
+          setErrorMsg(msg);
+          setIsSubmitting(false);
+        }
       }
     });
   };

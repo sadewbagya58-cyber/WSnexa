@@ -14,6 +14,9 @@ import {
 } from '@/server/actions/table';
 import { BulkPrintPinModal } from './bulk-print-pin-modal';
 import { TableStatus } from '@/types/database.types';
+import { syncQueue } from '@/lib/offline/sync-queue';
+import { networkStatus } from '@/lib/offline/network-status';
+import { operationalCache } from '@/lib/offline/operational-cache';
 
 interface DiningTableItem {
   id: string;
@@ -33,6 +36,8 @@ interface DiningTableItem {
 interface TableGridProps {
   businessName: string;
   branchName: string;
+  businessId?: string;
+  branchId?: string;
   tablePinLength: number;
   initialTables: DiningTableItem[];
   areas: { id: string; name: string; code: string }[];
@@ -42,12 +47,32 @@ interface TableGridProps {
 export const TableGrid: React.FC<TableGridProps> = ({
   businessName,
   branchName,
+  businessId,
+  branchId,
   tablePinLength,
   initialTables,
   areas,
   canManage = true,
 }) => {
   const [tables, setTables] = useState<DiningTableItem[]>(initialTables);
+
+  // Cache table layout for offline availability
+  React.useEffect(() => {
+    if (businessId && branchId && initialTables.length > 0) {
+      operationalCache.saveBranchTables(
+        businessId,
+        branchId,
+        initialTables.map((t) => ({
+          id: t.id,
+          name: t.name,
+          tableNumber: t.table_number,
+          serviceAreaId: t.service_area_id,
+          status: t.status,
+        })),
+        areas.map((a) => ({ id: a.id, name: a.name }))
+      );
+    }
+  }, [businessId, branchId, initialTables, areas]);
   const [selectedArea, setSelectedArea] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -81,25 +106,74 @@ export const TableGrid: React.FC<TableGridProps> = ({
 
     const previousStatus = currentTable.status;
 
+    // 1. Optimistic UI update
     setTables((prev) =>
       prev.map((t) => (t.id === tableId ? { ...t, status: nextStatus } : t))
     );
 
+    // 2. Offline Path: Queue mutation locally if disconnected
+    if (networkStatus.isOffline()) {
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-table-${Date.now()}`;
+
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'table_status',
+          entity_id: tableId,
+          action: 'update_table_status',
+          payload: { status: nextStatus },
+          business_id: businessId || 'default_biz',
+          branch_id: branchId || 'default_branch',
+          user_id: 'staff',
+        });
+      } catch (err) {
+        console.warn('[TableGrid] Failed to enqueue table status mutation:', err);
+      }
+      return;
+    }
+
+    // 3. Online Path: Call server action with automatic offline fallback on network failure
     setPendingTableIds((prev) => new Set(prev).add(tableId));
+    try {
+      const res = await updateDiningTableStatusAction(tableId, nextStatus);
+      if (!res.success) {
+        setTables((prev) =>
+          prev.map((t) => (t.id === tableId ? { ...t, status: previousStatus } : t))
+        );
+        alert(res.message || 'Failed to update table status.');
+      }
+    } catch {
+      // If network dropped mid-request, save to offline queue instead of reverting
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-table-${Date.now()}`;
 
-    const res = await updateDiningTableStatusAction(tableId, nextStatus);
-
-    setPendingTableIds((prev) => {
-      const next = new Set(prev);
-      next.delete(tableId);
-      return next;
-    });
-
-    if (!res.success) {
-      setTables((prev) =>
-        prev.map((t) => (t.id === tableId ? { ...t, status: previousStatus } : t))
-      );
-      alert(res.message || 'Failed to update table status.');
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'table_status',
+          entity_id: tableId,
+          action: 'update_table_status',
+          payload: { status: nextStatus },
+          business_id: businessId || 'default_biz',
+          branch_id: branchId || 'default_branch',
+          user_id: 'staff',
+        });
+      } catch {
+        setTables((prev) =>
+          prev.map((t) => (t.id === tableId ? { ...t, status: previousStatus } : t))
+        );
+      }
+    } finally {
+      setPendingTableIds((prev) => {
+        const next = new Set(prev);
+        next.delete(tableId);
+        return next;
+      });
     }
   };
 

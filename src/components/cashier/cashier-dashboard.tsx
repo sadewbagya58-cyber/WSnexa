@@ -10,6 +10,8 @@ import { CashierOrderRecord } from '@/server/services/payment.service';
 import { acknowledgeBillRequestAction } from '@/server/actions/payment';
 import { useCashierRealtime } from '@/hooks/use-cashier-realtime';
 import { ContextualHelpButton } from '@/components/help/contextual-help-button';
+import { networkStatus } from '@/lib/offline/network-status';
+import { operationalCache } from '@/lib/offline/operational-cache';
 
 interface CashierDashboardProps {
   branchId: string;
@@ -37,10 +39,27 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
     return localStorage.getItem('wsnexa_cashier_sound') === 'enabled';
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [offlineAlert, setOfflineAlert] = useState<string | null>(null);
+
+  // Cache cashier orders for offline read access
+  React.useEffect(() => {
+    if (branchId && orders && orders.length > 0) {
+      operationalCache.saveActiveTickets(branchId, branchId, orders);
+    }
+  }, [branchId, orders]);
 
   // Settlement & Receipt Modal state
   const [selectedSettlementOrder, setSelectedSettlementOrder] = useState<CashierOrderRecord | null>(null);
   const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
+
+  const handleOpenSettlement = (order: CashierOrderRecord) => {
+    if (networkStatus.isOffline()) {
+      setOfflineAlert('Internet connection required for payment processing and financial settlements.');
+      setTimeout(() => setOfflineAlert(null), 5000);
+      return;
+    }
+    setSelectedSettlementOrder(order);
+  };
 
   const searchInputId = useId();
   const sortSelectId = useId();
@@ -226,6 +245,23 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
         </div>
       </div>
 
+      {/* Offline Barrier Warning Alert */}
+      {offlineAlert && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 p-3.5 text-xs font-bold text-rose-900 flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="text-base">💳 ❌</span>
+            <span>{offlineAlert}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOfflineAlert(null)}
+            className="text-xs text-rose-700 hover:text-rose-950 underline font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Tabs Row */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-zinc-100">
         {[
@@ -297,7 +333,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
               key={order.id}
               order={order}
               canRecordPayments={canRecordPayments}
-              onSettlePayment={(o) => setSelectedSettlementOrder(o)}
+              onSettlePayment={handleOpenSettlement}
               onPrintReceipt={(id) => setReceiptOrderId(id)}
               onAcknowledgeBill={handleAcknowledgeBill}
             />

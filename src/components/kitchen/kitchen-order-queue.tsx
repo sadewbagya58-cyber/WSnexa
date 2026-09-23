@@ -11,6 +11,9 @@ import { useRealtimeKitchen } from '@/hooks/use-realtime-kitchen';
 import { kitchenSoundEngine } from '@/lib/sound/kitchen-sound-engine';
 import { StaffCancelOrderModal } from '@/components/orders/staff-cancel-order-modal';
 import { StaffCancelItemModal } from '@/components/orders/staff-cancel-item-modal';
+import { syncQueue } from '@/lib/offline/sync-queue';
+import { networkStatus } from '@/lib/offline/network-status';
+import { operationalCache } from '@/lib/offline/operational-cache';
 
 interface KitchenOrderQueueProps {
   initialOrders: OrderRecord[];
@@ -42,6 +45,21 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   const [actionError, setActionError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(() => kitchenSoundEngine.isSoundMuted());
 
+  // Cache kitchen tickets for offline resilience
+  React.useEffect(() => {
+    if (branchId && orders && orders.length > 0) {
+      operationalCache.saveKitchenTickets(branchId, branchId, orders);
+    }
+  }, [branchId, orders]);
+
+  const handleOpenOrderCancel = (order: OrderRecord) => {
+    if (networkStatus.isOffline()) {
+      setActionError('Order cancellation requires active internet connection for authoritative inventory reconciliation.');
+      return;
+    }
+    setSelectedOrderForCancel(order);
+  };
+
   const handleSoundToggle = () => {
     const nextMuted = !isMuted;
     kitchenSoundEngine.setMuted(nextMuted);
@@ -66,6 +84,39 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
     setActionError(null);
     const key = `${orderId}:${nextStatus}`;
     setActionKey(key);
+
+    // Offline Path: Queue KDS status update locally
+    if (networkStatus.isOffline()) {
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-kds-${Date.now()}`;
+
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'kitchen_ticket',
+          entity_id: orderId,
+          action: 'update_kitchen_status',
+          payload: { orderId, nextStatus },
+          business_id: branchId,
+          branch_id: branchId,
+          user_id: 'kitchen_staff',
+        });
+
+        setTransientSuccessKey(key);
+        setTimeout(() => {
+          setTransientSuccessKey((curr) => (curr === key ? null : curr));
+        }, 1200);
+      } catch (queueErr) {
+        setActionError('Failed to queue offline kitchen update.');
+      } finally {
+        setActionKey(null);
+      }
+      return;
+    }
+
+    // Online Path: Call server action with fallback on network drop
     try {
       const res = await updateOrderStatusAction(orderId, nextStatus);
       if (!res.success) {
@@ -76,9 +127,31 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
           setTransientSuccessKey((curr) => (curr === key ? null : curr));
         }, 800);
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update order status';
-      setActionError(msg);
+    } catch {
+      try {
+        const opId =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `op-kds-${Date.now()}`;
+
+        await syncQueue.enqueue({
+          operation_id: opId,
+          entity_type: 'kitchen_ticket',
+          entity_id: orderId,
+          action: 'update_kitchen_status',
+          payload: { orderId, nextStatus },
+          business_id: branchId,
+          branch_id: branchId,
+          user_id: 'kitchen_staff',
+        });
+
+        setTransientSuccessKey(key);
+        setTimeout(() => {
+          setTransientSuccessKey((curr) => (curr === key ? null : curr));
+        }, 1200);
+      } catch {
+        setActionError('Failed to update order status.');
+      }
     } finally {
       setActionKey(null);
     }
@@ -442,7 +515,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                             <Button
                               variant="outline"
                               className="text-xs font-bold text-red-600 hover:bg-red-50 min-h-[44px] touch-manipulation active:scale-[0.98] transition-transform border-red-200"
-                              onClick={() => setSelectedOrderForCancel(order)}
+                              onClick={() => handleOpenOrderCancel(order)}
                               disabled={actionKey !== null}
                             >
                               Cancel Order
@@ -475,7 +548,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                             <Button
                               variant="outline"
                               className="text-xs font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 px-3 min-h-[44px] touch-manipulation border-zinc-200"
-                              onClick={() => setSelectedOrderForCancel(order)}
+                              onClick={() => handleOpenOrderCancel(order)}
                               disabled={actionKey !== null}
                               title="Cancel order"
                             >
@@ -509,7 +582,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                             <Button
                               variant="outline"
                               className="text-xs font-bold text-zinc-500 hover:text-red-600 hover:bg-red-50 px-3 min-h-[44px] touch-manipulation border-zinc-200"
-                              onClick={() => setSelectedOrderForCancel(order)}
+                              onClick={() => handleOpenOrderCancel(order)}
                               disabled={actionKey !== null}
                               title="Cancel order"
                             >

@@ -26,6 +26,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
@@ -81,13 +82,9 @@ public class MainActivity extends BridgeActivity {
 
             @Override
             public void onReceivedError(WebView webView) {
-                // If device has active network connectivity, NEVER redirect to offline screen.
-                // Normal route changes, branch switching, and subresource aborts are ignored.
-                if (isOnline()) {
-                    return;
-                }
-
-                loadOfflineFallback(webView);
+                // When connectivity is lost, NEVER redirect or replace the application with offline.html.
+                // The existing WSNexa Web App shell remains mounted and active.
+                // Offline status is seamlessly surfaced via the in-app OfflineBanner and offline sync engine.
             }
         });
 
@@ -124,9 +121,14 @@ public class MainActivity extends BridgeActivity {
             return insets;
         });
 
-        // Initialize bridges and custom WebChromeClient on the WebView
+        // Initialize bridges, caching, and custom WebChromeClient on the WebView
         if (this.bridge != null && this.bridge.getWebView() != null) {
             WebView webView = this.bridge.getWebView();
+            WebSettings settings = webView.getSettings();
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
             webView.addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             webView.addJavascriptInterface(new AndroidPrintBridge(), "AndroidPrintBridge");
             webView.addJavascriptInterface(new AndroidLocationBridge(), "AndroidLocationBridge");
@@ -163,28 +165,6 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             return true;
         }
-    }
-
-    private void loadOfflineFallback(WebView webView) {
-        if (webView == null) return;
-        webView.post(() -> {
-            try {
-                String cur = webView.getUrl();
-                if (cur != null && (cur.contains("offline") || cur.startsWith("file:///android_asset"))) {
-                    return;
-                }
-                InputStream is = getAssets().open("public/offline.html");
-                byte[] buffer = new byte[is.available()];
-                is.read(buffer);
-                is.close();
-                String offlineHtml = new String(buffer, StandardCharsets.UTF_8);
-                webView.loadDataWithBaseURL("https://w-snexa.vercel.app", offlineHtml, "text/html", "UTF-8", "https://w-snexa.vercel.app/offline");
-            } catch (Exception e) {
-                try {
-                    webView.loadUrl("file:///android_asset/public/offline.html");
-                } catch (Exception ignored) {}
-            }
-        });
     }
 
     private void injectSafeArea(WebView webView) {

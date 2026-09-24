@@ -60,7 +60,14 @@ export default function RootLayout({
             __html: `
 (function () {
   try {
-    if (typeof window === 'undefined' || window.location.pathname !== '/') return;
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/register')) {
+      if (window.AndroidAuthBridge && window.AndroidAuthBridge.setAuthenticated) {
+        try { window.AndroidAuthBridge.setAuthenticated(false); } catch (e) {}
+      }
+      return;
+    }
+    if (window.location.pathname !== '/') return;
     // Find any Supabase auth token in localStorage (key pattern: sb-*-auth-token)
     var found = false;
     for (var i = 0; i < localStorage.length; i++) {
@@ -83,8 +90,12 @@ export default function RootLayout({
       }
     }
     if (found) {
-      // Replace "/" with "/dashboard" before the public page paints.
-      // Server-side auth on /dashboard correctly resolves the workspace.
+      // Immediately hide marketing page DOM and show neutral dark splash before paint
+      document.documentElement.setAttribute('data-auth-restoring', 'true');
+      if (window.AndroidAuthBridge && window.AndroidAuthBridge.setAuthenticated) {
+        try { window.AndroidAuthBridge.setAuthenticated(true); } catch (e) {}
+      }
+      // Replace "/" with "/dashboard"
       window.location.replace('/dashboard');
     }
   } catch (e) {}
@@ -94,6 +105,23 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-full flex-col bg-white text-zinc-950">
+        {/* Startup splash guard: shown ONLY when an authenticated session is restoring from "/" */}
+        <div
+          id="auth-restoring-splash"
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#09090b] text-white"
+          style={{ display: 'none' }}
+        >
+          <div className="flex flex-col items-center gap-4 animate-in fade-in duration-200">
+            <div className="h-16 w-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center p-3 shadow-2xl">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/ws-mark.png" alt="WSNexa" className="h-full w-full object-contain" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-bold text-zinc-400 tracking-wider uppercase">Restoring Session...</span>
+            </div>
+          </div>
+        </div>
         <ServiceWorkerRegister />
         <OfflineBanner />
         <RouteProgress />

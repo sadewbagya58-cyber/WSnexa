@@ -24,8 +24,11 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -44,6 +47,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
 
 import java.io.File;
@@ -60,6 +64,27 @@ public class MainActivity extends BridgeActivity {
     private int safeAreaBottomDp = 0;
     private String pendingGeoOrigin = null;
     private GeolocationPermissions.Callback pendingGeoCallback = null;
+    private boolean hasRedirectedToDashboard = false;
+
+    private void checkAuthenticatedStartup(WebView webView) {
+        if (webView == null || hasRedirectedToDashboard) return;
+        try {
+            boolean wasAuth = getSharedPreferences("wsnexa_app_prefs", Context.MODE_PRIVATE)
+                .getBoolean("is_authenticated", false);
+            CookieManager cm = CookieManager.getInstance();
+            String cookies = cm.getCookie("https://w-snexa.vercel.app");
+            boolean hasAuthCookie = (cookies != null && (cookies.contains("auth-token") || cookies.contains("sb-")));
+
+            if (wasAuth || hasAuthCookie) {
+                String curUrl = webView.getUrl();
+                if (curUrl == null || curUrl.equals("about:blank") || curUrl.equals("https://w-snexa.vercel.app") || curUrl.equals("https://w-snexa.vercel.app/")) {
+                    hasRedirectedToDashboard = true;
+                    webView.stopLoading();
+                    webView.loadUrl("https://w-snexa.vercel.app/dashboard");
+                }
+            }
+        } catch (Exception ignored) {}
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,6 +95,7 @@ public class MainActivity extends BridgeActivity {
         bridgeBuilder.addWebViewListener(new WebViewListener() {
             @Override
             public void onPageStarted(WebView webView) {
+                checkAuthenticatedStartup(webView);
                 injectSafeArea(webView);
                 injectBridges(webView);
             }
@@ -129,10 +155,14 @@ public class MainActivity extends BridgeActivity {
             settings.setDatabaseEnabled(true);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
+            webView.addJavascriptInterface(new AndroidAuthBridge(), "AndroidAuthBridge");
             webView.addJavascriptInterface(new AndroidDownloadBridge(), "AndroidDownloadBridge");
             webView.addJavascriptInterface(new AndroidPrintBridge(), "AndroidPrintBridge");
             webView.addJavascriptInterface(new AndroidLocationBridge(), "AndroidLocationBridge");
             webView.setWebChromeClient(new CustomWebChromeClient(this.bridge));
+            this.bridge.setWebViewClient(new CustomWebViewClient(this.bridge));
+
+            checkAuthenticatedStartup(webView);
         }
     }
 
@@ -486,5 +516,231 @@ public class MainActivity extends BridgeActivity {
                 }
             });
         }
+    }
+
+    // ── JavaScript Bridge for Authentication State Persistence ────────────────
+
+    public class AndroidAuthBridge {
+        @JavascriptInterface
+        public void setAuthenticated(boolean isAuthenticated) {
+            try {
+                getSharedPreferences("wsnexa_app_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("is_authenticated", isAuthenticated)
+                    .apply();
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public boolean isAuthenticated() {
+            try {
+                return getSharedPreferences("wsnexa_app_prefs", Context.MODE_PRIVATE)
+                    .getBoolean("is_authenticated", false);
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+    }
+
+    // ── Custom WebViewClient with Safe Offline Fallback ──────────────────────
+
+    private class CustomWebViewClient extends BridgeWebViewClient {
+        public CustomWebViewClient(Bridge bridge) {
+            super(bridge);
+        }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            if (request != null && request.isForMainFrame()) {
+                // Main frame network failure (e.g. offline on uncached/unsupported route)
+                // NEVER display raw Chromium error page. Render brand-aligned connection required fallback.
+                String html = getConnectionRequiredHtml();
+                view.loadDataWithBaseURL("https://w-snexa.vercel.app", html, "text/html", "UTF-8", null);
+                return;
+            }
+            super.onReceivedError(view, request, error);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+            String html = getConnectionRequiredHtml();
+            view.loadDataWithBaseURL("https://w-snexa.vercel.app", html, "text/html", "UTF-8", null);
+        }
+    }
+
+    private String getConnectionRequiredHtml() {
+        int sat = Math.max(safeAreaTopDp, getStatusBarHeightDp());
+        int sab = safeAreaBottomDp;
+        return "<!DOCTYPE html>" +
+            "<html lang=\"en\">" +
+            "<head>" +
+            "  <meta charset=\"UTF-8\" />" +
+            "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover\" />" +
+            "  <title>WSNexa — Connection Required</title>" +
+            "  <style>" +
+            "    :root { --sat: " + sat + "px; --sab: " + sab + "px; }" +
+            "    * { box-sizing: border-box; margin: 0; padding: 0; }" +
+            "    body {" +
+            "      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;" +
+            "      background-color: #ffffff;" +
+            "      color: #09090b;" +
+            "      min-height: 100vh;" +
+            "      display: flex;" +
+            "      flex-direction: column;" +
+            "      padding-top: calc(max(env(safe-area-inset-top, 0px), var(--sat, 0px)) + 1rem);" +
+            "      padding-bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--sab, 0px)) + 1rem);" +
+            "      padding-left: 1rem;" +
+            "      padding-right: 1rem;" +
+            "    }" +
+            "    .header {" +
+            "      display: flex;" +
+            "      align-items: center;" +
+            "      justify-content: space-between;" +
+            "      max-width: 480px;" +
+            "      width: 100%;" +
+            "      margin: 0 auto 2rem auto;" +
+            "      padding: 0 0.5rem;" +
+            "    }" +
+            "    .logo-text {" +
+            "      font-size: 1.125rem;" +
+            "      font-weight: 900;" +
+            "      letter-spacing: -0.025em;" +
+            "      color: #09090b;" +
+            "    }" +
+            "    .offline-tag {" +
+            "      font-size: 0.6875rem;" +
+            "      font-weight: 800;" +
+            "      background-color: #fef3c7;" +
+            "      color: #92400e;" +
+            "      border: 1px solid #fde68a;" +
+            "      padding: 0.25rem 0.625rem;" +
+            "      border-radius: 9999px;" +
+            "      text-transform: uppercase;" +
+            "      letter-spacing: 0.05em;" +
+            "    }" +
+            "    .card {" +
+            "      max-width: 480px;" +
+            "      width: 100%;" +
+            "      margin: auto auto;" +
+            "      background: #ffffff;" +
+            "      border: 1px solid #e4e4e7;" +
+            "      border-radius: 1.25rem;" +
+            "      padding: 2rem 1.5rem;" +
+            "      text-align: center;" +
+            "      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);" +
+            "    }" +
+            "    .icon {" +
+            "      width: 3.5rem;" +
+            "      height: 3.5rem;" +
+            "      border-radius: 9999px;" +
+            "      background-color: #f4f4f5;" +
+            "      display: flex;" +
+            "      align-items: center;" +
+            "      justify-content: center;" +
+            "      font-size: 1.75rem;" +
+            "      margin: 0 auto 1.25rem auto;" +
+            "    }" +
+            "    h1 {" +
+            "      font-size: 1.25rem;" +
+            "      font-weight: 900;" +
+            "      color: #09090b;" +
+            "      margin-bottom: 0.5rem;" +
+            "    }" +
+            "    p {" +
+            "      font-size: 0.8125rem;" +
+            "      color: #71717a;" +
+            "      line-height: 1.5;" +
+            "      margin-bottom: 1.5rem;" +
+            "    }" +
+            "    .tool-group {" +
+            "      display: flex;" +
+            "      flex-direction: column;" +
+            "      gap: 0.625rem;" +
+            "      margin-bottom: 1.25rem;" +
+            "    }" +
+            "    .btn {" +
+            "      display: flex;" +
+            "      align-items: center;" +
+            "      justify-content: center;" +
+            "      width: 100%;" +
+            "      min-height: 46px;" +
+            "      padding: 0.75rem 1rem;" +
+            "      border-radius: 0.75rem;" +
+            "      font-size: 0.8125rem;" +
+            "      font-weight: 800;" +
+            "      text-decoration: none;" +
+            "      transition: all 0.15s ease;" +
+            "      touch-action: manipulation;" +
+            "      cursor: pointer;" +
+            "    }" +
+            "    .btn:active { transform: scale(0.98); }" +
+            "    .btn-dark {" +
+            "      background-color: #09090b;" +
+            "      color: #ffffff;" +
+            "      border: none;" +
+            "    }" +
+            "    .btn-outline {" +
+            "      background-color: #fafafa;" +
+            "      color: #18181b;" +
+            "      border: 1px solid #d4d4d8;" +
+            "    }" +
+            "    .btn-secondary {" +
+            "      background-color: transparent;" +
+            "      color: #71717a;" +
+            "      border: 1px solid #e4e4e7;" +
+            "      font-weight: 600;" +
+            "    }" +
+            "    .notice {" +
+            "      display: none;" +
+            "      margin-top: 0.75rem;" +
+            "      padding: 0.625rem;" +
+            "      background-color: #fef3c7;" +
+            "      border: 1px solid #fde68a;" +
+            "      border-radius: 0.75rem;" +
+            "      font-size: 0.75rem;" +
+            "      font-weight: 600;" +
+            "      color: #92400e;" +
+            "    }" +
+            "  </style>" +
+            "</head>" +
+            "<body>" +
+            "  <div class=\"header\">" +
+            "    <span class=\"logo-text\">WSNexa</span>" +
+            "    <span class=\"offline-tag\">Offline Mode</span>" +
+            "  </div>" +
+            "  <div class=\"card\">" +
+            "    <div class=\"icon\">🌐</div>" +
+            "    <h1>Connection Required</h1>" +
+            "    <p>This section requires an active internet connection. Your offline tools (Take Order, Dining Tables, KDS) remain fully operational.</p>" +
+            "    <div class=\"tool-group\">" +
+            "      <a href=\"/dashboard/waiter/order\" class=\"btn btn-dark\">Take Order (Offline Ready)</a>" +
+            "      <a href=\"/dashboard/tables\" class=\"btn btn-outline\">Dining Tables</a>" +
+            "    </div>" +
+            "    <div style=\"display: flex; gap: 0.5rem; flex-direction: column;\">" +
+            "      <button type=\"button\" onclick=\"handleRetry()\" class=\"btn btn-secondary\" id=\"retry-btn\">🔄 Try Again</button>" +
+            "      <a href=\"/dashboard\" class=\"btn btn-secondary\">Return to Dashboard</a>" +
+            "    </div>" +
+            "    <div id=\"offline-notice\" class=\"notice\">" +
+            "      Device is still offline. Please connect to Wi-Fi or mobile data to access this section." +
+            "    </div>" +
+            "  </div>" +
+            "  <script>" +
+            "    function handleRetry() {" +
+            "      var notice = document.getElementById('offline-notice');" +
+            "      var btn = document.getElementById('retry-btn');" +
+            "      if (!navigator.onLine) {" +
+            "        if (notice) notice.style.display = 'block';" +
+            "        return;" +
+            "      }" +
+            "      if (btn) btn.textContent = 'Retrying...';" +
+            "      window.location.reload();" +
+            "    }" +
+            "    window.addEventListener('online', function() {" +
+            "      window.location.reload();" +
+            "    });" +
+            "  </script>" +
+            "</body>" +
+            "</html>";
     }
 }

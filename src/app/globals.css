@@ -81,12 +81,22 @@ body {
   padding-top: max(env(safe-area-inset-top, 0px), var(--sat, 0px)) !important;
 }
 
-body:has([data-offline-banner]) .header-safe-top {
+body:has([data-offline-banner]) header.header-safe-top,
+body:has([data-offline-banner]) [data-page-header].header-safe-top {
   padding-top: 0 !important;
 }
 
 .bottom-safe-area {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--sab, 0px)) !important;
+}
+
+/* ── Authenticated App Cold-Start Splash Guard ────────────────────────────── */
+html[data-auth-restoring="true"] body > :not(#auth-restoring-splash) {
+  display: none !important;
+}
+
+html[data-auth-restoring="true"] #auth-restoring-splash {
+  display: flex !important;
 }
 
 /* ── Print Isolation & QR Card Formatting ─────────────────────────────────── */

@@ -312,21 +312,12 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(async () => {
-          // Device is offline: retrieve cached page if available
+          // Device is offline: retrieve cached page if this exact route was cached
           const cachedResponse = await caches.match(request);
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If specific route is not cached, check if cached /dashboard exists
-          const fallbackDashboard = await caches.match('/dashboard');
-          if (fallbackDashboard) {
-            return fallbackDashboard;
-          }
-          const fallbackRoot = await caches.match('/');
-          if (fallbackRoot) {
-            return fallbackRoot;
-          }
-          // Return in-app WSNexa "Connection Required" HTML (HTTP 200)
+          // For any uncached/unsupported route while offline, return in-app WSNexa "Connection Required" HTML (HTTP 200)
           return new Response(getConnectionRequiredHtml(), {
             status: 200,
             headers: {

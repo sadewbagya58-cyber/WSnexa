@@ -61,7 +61,12 @@ export const SyncStatusSheet: React.FC<SyncStatusSheetProps> = ({
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col overflow-hidden text-gray-900 animate-in slide-in-from-right">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 header-safe-top">
+        <div
+          style={{
+            paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--sat, 0px)) + 0.75rem)',
+          }}
+          className="px-4 pb-3.5 border-b border-gray-200 flex items-center justify-between bg-gray-50"
+        >
           <div>
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <span>Sync & Offline Status</span>
@@ -80,11 +85,12 @@ export const SyncStatusSheet: React.FC<SyncStatusSheetProps> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1.5 rounded-md hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+            className="h-10 w-10 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-gray-200/80 hover:bg-gray-300 active:bg-gray-400 text-gray-800 transition touch-manipulation cursor-pointer select-none"
           >
-            ✕
+            <span className="text-base font-black leading-none">✕</span>
           </button>
         </div>
 

@@ -86,10 +86,15 @@ function runChecks() {
   const syncSheetPath = path.join(root, 'src/components/mobile/sync-status-sheet.tsx');
   const syncSheetContent = fs.readFileSync(syncSheetPath, 'utf-8');
   assert(
-    syncSheetContent.includes('header-safe-top') &&
     syncSheetContent.includes('syncQueue.retryMutation') &&
     syncSheetContent.includes('syncQueue.discardMutation'),
     'SyncStatusSheet provides retry and discard controls for pending/failed mutations'
+  );
+
+  assert(
+    syncSheetContent.includes('calc(max(env(safe-area-inset-top, 0px), var(--sat, 0px)) + 0.75rem)') &&
+    syncSheetContent.includes('min-h-[44px] min-w-[44px]'),
+    'SyncStatusSheet applies explicit status-bar safe-area padding and 44x44px minimum tap target for close button'
   );
 
   // ── ISSUE 3: STATUS BAR SAFE-AREA SPACING ──────────────────────────────────
@@ -103,11 +108,12 @@ function runChecks() {
   const globalsCssPath = path.join(root, 'src/app/globals.css');
   const globalsCssContent = fs.readFileSync(globalsCssPath, 'utf-8');
   assert(
-    globalsCssContent.includes('body:has([data-offline-banner]) .header-safe-top'),
-    'globals.css suppresses double header padding when offline banner is mounted'
+    globalsCssContent.includes('body:has([data-offline-banner]) header.header-safe-top') &&
+    globalsCssContent.includes('body:has([data-offline-banner]) [data-page-header].header-safe-top'),
+    'globals.css scopes header padding suppression strictly to page headers, preserving modal/sheet safe areas'
   );
 
-  // ── ISSUE 4: SERVICE WORKER IN-APP FALLBACK (NO NET::ERR_FAILED) ───────────
+  // ── ISSUE 4: SERVICE WORKER & NATIVE IN-APP FALLBACK (NO NET::ERR_FAILED) ───
   console.log('\n--- Issue 4: In-App Connection Required Fallback ---');
   const swPath = path.join(root, 'public/sw.js');
   const swContent = fs.readFileSync(swPath, 'utf-8');
@@ -132,6 +138,15 @@ function runChecks() {
     'Service Worker never returns undefined in fetch handlers (eliminates net::ERR_FAILED)'
   );
 
+  const mainActivityPath = path.join(root, 'android/app/src/main/java/com/wsnexa/app/MainActivity.java');
+  const mainActivityContent = fs.readFileSync(mainActivityPath, 'utf-8');
+  assert(
+    mainActivityContent.includes('CustomWebViewClient extends BridgeWebViewClient') &&
+    mainActivityContent.includes('getConnectionRequiredHtml()') &&
+    mainActivityContent.includes('view.loadDataWithBaseURL("https://w-snexa.vercel.app"'),
+    'MainActivity sets CustomWebViewClient to render brand-aligned Connection Required fallback on main-frame failure'
+  );
+
   // ── ISSUE 5: FUNCTIONAL & RESPONSIVE TRY AGAIN ERROR HANDLING ─────────────
   console.log('\n--- Issue 5: Functional Try Again Error Handling ---');
   const rootErrorPath = path.join(root, 'src/app/error.tsx');
@@ -154,6 +169,32 @@ function runChecks() {
     dashboardErrorContent.includes('min-h-[44px]') &&
     dashboardErrorContent.includes('Take Order (Offline Ready)'),
     'Dashboard error.tsx implements offline check, transition feedback, router.refresh, and offline navigation'
+  );
+
+  // ── ISSUE 6: AUTHENTICATED APP COLD-START FLASH GUARD ─────────────────────
+  console.log('\n--- Issue 6: Authenticated Cold-Start Flash Guard ---');
+  const layoutPath = path.join(root, 'src/app/layout.tsx');
+  const layoutContent = fs.readFileSync(layoutPath, 'utf-8');
+  assert(
+    layoutContent.includes('data-auth-restoring') &&
+    layoutContent.includes("window.location.replace('/dashboard')") &&
+    layoutContent.includes('AndroidAuthBridge.setAuthenticated') &&
+    layoutContent.includes('id="auth-restoring-splash"'),
+    'Root layout.tsx includes synchronous head auth guard, AndroidAuthBridge notification, and dark splash'
+  );
+
+  assert(
+    globalsCssContent.includes('html[data-auth-restoring="true"] body > :not(#auth-restoring-splash)') &&
+    globalsCssContent.includes('display: none !important;'),
+    'globals.css suppresses marketing page rendering before first paint during auth restoration'
+  );
+
+  assert(
+    mainActivityContent.includes('AndroidAuthBridge') &&
+    mainActivityContent.includes('checkAuthenticatedStartup(webView)') &&
+    mainActivityContent.includes('wsnexa_app_prefs') &&
+    mainActivityContent.includes('loadUrl("https://w-snexa.vercel.app/dashboard")'),
+    'MainActivity checks persisted auth state and redirects directly to /dashboard on startup'
   );
 
   console.log(`\n========================================`);

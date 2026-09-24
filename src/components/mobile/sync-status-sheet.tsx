@@ -61,7 +61,7 @@ export const SyncStatusSheet: React.FC<SyncStatusSheetProps> = ({
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col overflow-hidden text-gray-900 animate-in slide-in-from-right">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 header-safe-top">
           <div>
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <span>Sync & Offline Status</span>

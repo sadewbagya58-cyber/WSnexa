@@ -429,7 +429,7 @@ export class QrService {
           .maybeSingle(),
         admin
           .from('dining_tables')
-          .select('id, name, code, table_number, capacity, service_area_id, is_active, deleted_at, table_pin_hash, display_order')
+          .select('id, name, code, table_number, capacity, service_area_id, is_active, deleted_at, table_pin_hash, display_order, status')
           .eq('business_id', businessId)
           .eq('branch_id', branchId)
           .eq('service_area_id', areaId)
@@ -577,13 +577,14 @@ export class QrService {
             display_order: area.display_order,
           },
         ],
-        dining_tables: (diningTables || []).map((t) => ({
+        dining_tables: (diningTables || []).map((t: any) => ({
           id: t.id,
           name: t.name,
           code: t.code,
           table_number: t.table_number,
           capacity: t.capacity,
           service_area_id: t.service_area_id,
+          status: t.status || 'available',
           has_pin: Boolean(t.table_pin_hash),
         })),
         categories: (categories || []).map((c) => ({

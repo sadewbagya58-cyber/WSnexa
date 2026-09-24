@@ -478,6 +478,25 @@ export class OrderService {
       }
     }
 
+    // 3b. Authoritative Dining Table Availability Enforcement
+    if (tableId && targetBranchId) {
+      const { data: dbTable } = await admin
+        .from('dining_tables')
+        .select('id, status, is_active, deleted_at, branch_id')
+        .eq('id', tableId)
+        .eq('branch_id', targetBranchId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (!dbTable || !dbTable.is_active || dbTable.status === 'unavailable') {
+        return {
+          success: false,
+          message: 'The selected table is currently unavailable for dining orders.',
+          errorType: 'TABLE_UNAVAILABLE',
+        };
+      }
+    }
+
     // 4. Execute atomic private service-role create_guest_order RPC
     const { data, error } = await admin.rpc('create_guest_order', {
       p_token_hash: rpcTokenHash,

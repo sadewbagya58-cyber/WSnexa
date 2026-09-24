@@ -56,6 +56,7 @@ interface PublicGuestMenuProps {
     table_number: number | null;
     capacity: number;
     service_area_id: string;
+    status?: string;
     has_pin: boolean;
   }>;
   categories: Array<{
@@ -191,7 +192,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
   React.useEffect(() => {
     if (initialTableId && !isTableAccessVerified(confirmedTable)) {
       const targetTable = dining_tables.find((t) => t.id === initialTableId);
-      if (targetTable) {
+      if (targetTable && targetTable.status !== 'unavailable') {
         if (!branch.require_table_pin) {
           setConfirmedTable({
             branchId: branch.id,

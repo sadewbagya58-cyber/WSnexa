@@ -14,6 +14,7 @@ export interface TableItem {
   capacity?: number;
   service_area_id?: string;
   has_pin?: boolean;
+  status?: string;
 }
 
 export interface ServiceAreaItem {
@@ -200,7 +201,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
   };
 
   const handleTableClick = (table: TableItem) => {
-    if (isVerifying) return;
+    if (isVerifying || table.status === 'unavailable') return;
     setSelectedTableId(table.id);
     setErrorMessage(null);
 
@@ -476,29 +477,32 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                 {filteredTables.map((table) => {
                   const isSelected = selectedTableId === table.id;
+                  const isUnavailable = table.status === 'unavailable';
 
                   return (
                     <button
                       key={table.id}
                       type="button"
                       onClick={() => handleTableClick(table)}
-                      disabled={isVerifying}
-                      className={`group relative flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-2xl border text-center transition-all min-h-[58px] cursor-pointer select-none touch-manipulation active:scale-[0.97] ${
-                        isSelected
-                          ? 'bg-zinc-950 text-white border-zinc-950 shadow-md ring-2 ring-zinc-950'
-                          : 'bg-white text-zinc-900 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/80 shadow-2xs'
+                      disabled={isVerifying || isUnavailable}
+                      className={`group relative flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-2xl border text-center transition-all min-h-[58px] select-none touch-manipulation active:scale-[0.97] ${
+                        isUnavailable
+                          ? 'bg-zinc-100/90 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60 shadow-none'
+                          : isSelected
+                          ? 'bg-zinc-950 text-white border-zinc-950 shadow-md ring-2 ring-zinc-950 cursor-pointer'
+                          : 'bg-white text-zinc-900 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/80 shadow-2xs cursor-pointer'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 font-black text-sm sm:text-base tracking-tight leading-none">
-                        <span>{table.name}</span>
-                        {isSelected && <span className="text-xs text-emerald-400">✓</span>}
+                        <span className={isUnavailable ? 'line-through decoration-zinc-400' : ''}>{table.name}</span>
+                        {isSelected && !isUnavailable && <span className="text-xs text-emerald-400">✓</span>}
                       </div>
 
                       <div className="flex items-center gap-1.5 mt-1">
                         {table.code && table.code !== table.name && (
                           <span
                             className={`text-[10px] font-bold uppercase tracking-wider ${
-                              isSelected ? 'text-zinc-300' : 'text-zinc-400'
+                              isUnavailable ? 'text-zinc-400' : isSelected ? 'text-zinc-300' : 'text-zinc-400'
                             }`}
                           >
                             {table.code}
@@ -507,7 +511,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
                         {table.capacity && table.capacity > 0 && (
                           <span
                             className={`text-[10px] font-medium ${
-                              isSelected ? 'text-zinc-400' : 'text-zinc-500'
+                              isUnavailable ? 'text-zinc-400' : isSelected ? 'text-zinc-400' : 'text-zinc-500'
                             }`}
                           >
                             • {table.capacity} {t('seats', 'ආසන')}
@@ -515,7 +519,11 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
                         )}
                       </div>
 
-                      {Boolean(requireTablePin && (table.has_pin ?? true)) && (
+                      {isUnavailable ? (
+                        <div className="mt-1 text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                          🚫 {t('Unavailable', 'අක්‍රියයි')}
+                        </div>
+                      ) : Boolean(requireTablePin && (table.has_pin ?? true)) ? (
                         <div
                           className={`mt-1 text-[9px] font-bold ${
                             isSelected ? 'text-amber-300' : 'text-amber-700'
@@ -523,7 +531,7 @@ export const TablePickerGrid: React.FC<TablePickerGridProps> = ({
                         >
                           🔒 {t('PIN required', 'PIN අවශ්‍යයි')}
                         </div>
-                      )}
+                      ) : null}
                     </button>
                   );
                 })}

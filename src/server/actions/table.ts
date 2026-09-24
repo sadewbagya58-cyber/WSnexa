@@ -731,24 +731,30 @@ export async function verifyTableAccessAction(
     }
   }
 
-  // If area scope is constrained, verify table belongs to expected service area
-  if (authoritativeAreaId) {
-    const { createAdminClient } = await import('@/lib/supabase/server');
-    const admin = createAdminClient();
-    const { data: tableArea } = await admin
-      .from('dining_tables')
-      .select('id, service_area_id, branch_id, is_active, deleted_at')
-      .eq('id', tableId)
-      .eq('branch_id', branchId)
-      .is('deleted_at', null)
-      .maybeSingle();
+  // Fetch table record and verify status and area constraints
+  const { createAdminClient } = await import('@/lib/supabase/server');
+  const admin = createAdminClient();
+  const { data: dbTable } = await admin
+    .from('dining_tables')
+    .select('id, service_area_id, branch_id, is_active, deleted_at, status')
+    .eq('id', tableId)
+    .eq('branch_id', branchId)
+    .is('deleted_at', null)
+    .maybeSingle();
 
-    if (!tableArea || tableArea.service_area_id !== authoritativeAreaId) {
-      return {
-        success: false,
-        message: 'Selected table does not belong to the active service area.',
-      };
-    }
+  if (!dbTable || !dbTable.is_active || dbTable.status === 'unavailable') {
+    return {
+      success: false,
+      message: 'This table is currently unavailable for seating or orders.',
+    };
+  }
+
+  // If area scope is constrained, verify table belongs to expected service area
+  if (authoritativeAreaId && dbTable.service_area_id !== authoritativeAreaId) {
+    return {
+      success: false,
+      message: 'Selected table does not belong to the active service area.',
+    };
   }
 
   const pinHash = inputPin ? hashTablePin(inputPin.trim()) : null;

@@ -81,6 +81,10 @@ body {
   padding-top: max(env(safe-area-inset-top, 0px), var(--sat, 0px)) !important;
 }
 
+body:has([data-offline-banner]) .header-safe-top {
+  padding-top: 0 !important;
+}
+
 .bottom-safe-area {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--sab, 0px)) !important;
 }

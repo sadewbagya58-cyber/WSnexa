@@ -1,10 +1,42 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { startTimer, stopTimer, logPerformanceMetric } from '@/lib/performance/logger';
+import {
+  PRODUCTION_CANONICAL_DOMAIN,
+  LEGACY_VERCEL_DOMAIN,
+} from '@/lib/utils/canonical-url';
 
 export async function proxy(request: NextRequest) {
   const startTime = startTimer();
   const pathname = request.nextUrl.pathname;
+
+  // 1. Canonical Domain Protection:
+  // If request arrives at the legacy deployment domain (w-snexa.vercel.app) or www,
+  // permanently redirect (308) to canonical production URL (https://wsnexa.app),
+  // preserving path and query strings, except for automated internal cron tasks.
+  const host = request.headers.get('host') || request.nextUrl.host;
+  const isLegacyVercel = host === LEGACY_VERCEL_DOMAIN || host === `www.${LEGACY_VERCEL_DOMAIN}`;
+  const isWwwProduction = host === `www.${PRODUCTION_CANONICAL_DOMAIN}`;
+
+  if ((isLegacyVercel || isWwwProduction) && !pathname.startsWith('/api/cron')) {
+    const canonicalUrl = new URL(request.url);
+    canonicalUrl.protocol = 'https:';
+    canonicalUrl.host = PRODUCTION_CANONICAL_DOMAIN;
+    canonicalUrl.port = '';
+    return NextResponse.redirect(canonicalUrl, { status: 308 });
+  }
+
+  // 2. OAuth Root Fallback Handler:
+  // If an OAuth provider or legacy configuration redirects with code to root '/',
+  // route directly to /auth/callback preserving all query params so session exchange
+  // completes rather than falling back to the public marketing page.
+  if (pathname === '/' && request.nextUrl.searchParams.has('code')) {
+    const callbackUrl = new URL('/auth/callback', request.url);
+    request.nextUrl.searchParams.forEach((val, key) => {
+      callbackUrl.searchParams.set(key, val);
+    });
+    return NextResponse.redirect(callbackUrl, { status: 307 });
+  }
 
   let response = NextResponse.next({
     request: {

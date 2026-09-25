@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Utility functions for validating and sanitizing external URLs.
  */
 
@@ -37,3 +37,6 @@ export function sanitizeExternalUrl(url?: string | null): string | null {
     return null;
   }
 }
+
+export * from './canonical-url';
+

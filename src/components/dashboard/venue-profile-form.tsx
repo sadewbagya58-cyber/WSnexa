@@ -338,7 +338,7 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
               required
             />
             <p className="text-[11px] text-zinc-500 font-medium break-all">
-              Web Address: <span className="font-mono text-amber-700 font-bold break-all">w-snexa.vercel.app/venues/{formData.slug || 'your-slug'}</span>
+              Web Address: <span className="font-mono text-amber-700 font-bold break-all">wsnexa.app/venues/{formData.slug || 'your-slug'}</span>
             </p>
           </div>
 

@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getCanonicalAppUrl } from '@/lib/utils/canonical-url';
 import {
   registerSchema,
   loginSchema,
@@ -42,14 +43,15 @@ export async function signUpAction(
 
   const { email, password, firstName, lastName } = parsed.data;
   const headerList = await headers();
-  const origin = headerList.get('origin') || 'http://localhost:3000';
+  const requestOrigin = headerList.get('origin') || headerList.get('host') || null;
+  const canonicalOrigin = getCanonicalAppUrl(requestOrigin);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback?next=/onboarding/account-type`,
+      emailRedirectTo: `${canonicalOrigin}/auth/callback?next=/onboarding/account-type`,
       data: {
         first_name: firstName,
         last_name: lastName || null,
@@ -94,13 +96,14 @@ export async function signUpAction(
  */
 export async function signInWithGoogleAction(): Promise<ActionResponse<{ url: string }>> {
   const headerList = await headers();
-  const origin = headerList.get('origin') || 'http://localhost:3000';
+  const requestOrigin = headerList.get('origin') || headerList.get('host') || null;
+  const canonicalOrigin = getCanonicalAppUrl(requestOrigin);
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${origin}/auth/callback`,
+      redirectTo: `${canonicalOrigin}/auth/callback`,
       queryParams: {
         access_type: 'offline',
         prompt: 'select_account',
@@ -201,13 +204,14 @@ export async function forgotPasswordAction(
 
   const { email } = parsed.data;
   const headerList = await headers();
-  const origin = headerList.get('origin') || 'http://localhost:3000';
+  const requestOrigin = headerList.get('origin') || headerList.get('host') || null;
+  const canonicalOrigin = getCanonicalAppUrl(requestOrigin);
 
   const supabase = await createClient();
 
   // Trigger reset email
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    redirectTo: `${canonicalOrigin}/auth/callback?next=/reset-password`,
   });
 
   // Always return generic success to prevent account enumeration

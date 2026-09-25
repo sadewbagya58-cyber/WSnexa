@@ -9,9 +9,13 @@ const config: CapacitorConfig = {
     cleartext: true,
     androidScheme: 'https',
     allowNavigation: [
+      'wsnexa.app',
+      '*.wsnexa.app',
+      'auth.wsnexa.app',
       'w-snexa.vercel.app',
       '*.supabase.co',
       'wfdzjyhgcrcgnjtfgoef.supabase.co',
+      'accounts.google.com',
     ],
   },
   plugins: {

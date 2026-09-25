@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { AccountService, MinimalUserProfile, MinimalMembership } from '@/server/services/account.service';
+import { getCanonicalAppUrl } from '@/lib/utils/canonical-url';
 
 function getSafeRedirectUrl(next: string | null, defaultTarget: string, origin: string): string {
   if (!next) {
@@ -21,7 +22,8 @@ function getSafeRedirectUrl(next: string | null, defaultTarget: string, origin: 
 }
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const canonicalOrigin = getCanonicalAppUrl(request);
   const code = searchParams.get('code');
   const next = searchParams.get('next');
 
@@ -103,12 +105,12 @@ export async function GET(request: Request) {
           console.warn('[auth/callback] Pending favorite intent execution skipped:', err);
         }
 
-        const safeRedirect = getSafeRedirectUrl(next, targetRoute, origin);
+        const safeRedirect = getSafeRedirectUrl(next, targetRoute, canonicalOrigin);
         return NextResponse.redirect(safeRedirect);
       }
     }
   }
 
   // Return to login with error if code exchange fails or is invalid
-  return NextResponse.redirect(`${origin}/login?error=Invalid+or+expired+auth+link`);
+  return NextResponse.redirect(`${canonicalOrigin}/login?error=Invalid+or+expired+auth+link`);
 }

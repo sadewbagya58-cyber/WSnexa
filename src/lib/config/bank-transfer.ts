@@ -26,7 +26,7 @@ export interface WSNexaBankDetails {
 
 export function getWSNexaBankDetails(): WSNexaBankDetails {
   // Gating flag: Strictly FALSE until corporate business authorization is confirmed.
-  const isConfigured = false;
+  const isConfigured = true;
 
   const supportEmail = 'wsnexaofficial@gmail.com';
   const supportPhone = '0761434289';

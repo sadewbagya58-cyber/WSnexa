@@ -606,6 +606,20 @@ export function SubscriptionCheckoutReviewClient({
                     <p className="font-mono font-black text-emerald-800 text-sm">{bankDetails.accountNumber}</p>
                   </div>
                 </div>
+
+                {/* Step-by-Step Deposit Instructions */}
+                {bankDetails.instructions && bankDetails.instructions.length > 0 && (
+                  <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-xs space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900 block flex items-center gap-1.5">
+                      <span>📌</span> Step-by-Step Payment Instructions
+                    </span>
+                    <ol className="list-decimal list-inside space-y-1.5 text-zinc-700 text-[11px] leading-relaxed font-medium">
+                      {bankDetails.instructions.map((step, idx) => (
+                        <li key={idx} className="pl-1">{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
           </Card>

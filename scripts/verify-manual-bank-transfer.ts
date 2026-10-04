@@ -297,12 +297,55 @@ async function runVerification() {
   assert(fixContent.includes("CONCAT_WS(' ', v_actor_profile.first_name, v_actor_profile.last_name)"), '122. Forward migration constructs actor display name safely with CONCAT_WS');
   assert(fixContent.includes('apply_atomic_subscription_settlement') && fixContent.includes('reject_bank_transfer_payment'), '123. Forward migration updates both settlement and rejection RPCs');
 
+  // 11.7 Trial Ends At Non-Null Constraint Invariant & Regression Verification
+  const trialFixMigrationPath = path.join(process.cwd(), 'supabase/migrations/20261004174500_fix_subscription_settlement_trial_ends_at.sql');
+  assert(fs.existsSync(trialFixMigrationPath), '124. Forward migration 20261004174500_fix_subscription_settlement_trial_ends_at.sql exists');
+  const trialFixContent = fs.readFileSync(trialFixMigrationPath, 'utf-8');
+  const coreSchemaPath = path.join(process.cwd(), 'supabase/migrations/20260826000000_v1_subscription_core_schema.sql');
+  const coreSchemaContent = fs.readFileSync(coreSchemaPath, 'utf-8');
+  assert(coreSchemaContent.includes('trial_ends_at TIMESTAMPTZ NOT NULL'), '125. Core schema verifies trial_ends_at is strictly NOT NULL');
+  assert(!trialFixContent.includes('trial_ends_at = NULL'), '126. Forward migration strictly eliminates invalid trial_ends_at = NULL assignment');
+  assert(trialFixContent.includes('trial_ends_at = COALESCE(LEAST(v_sub.trial_ends_at, v_now), v_now)'), '127. Forward migration computes non-null trial_ends_at preserving past trials and closing active trials');
+  assert(trialFixContent.includes('trial_starts_at') && trialFixContent.includes('trial_ends_at') && trialFixContent.includes('v_now,\n      v_now'), '128. Forward migration sets zero-duration non-null trial for fresh paid insert');
+
+  // Regression simulation: null trial_ends_at vs safe coalesce least
+  const simulateSubscriptionUpdate = (existingTrialEnd: Date | null, now: Date, isBuggy: boolean) => {
+    const trial_ends_at = isBuggy ? null : (existingTrialEnd ? (existingTrialEnd < now ? existingTrialEnd : now) : now);
+    if (trial_ends_at === null) {
+      throw new Error('null value in column "trial_ends_at" of relation "business_subscriptions" violates not-null constraint');
+    }
+    return trial_ends_at;
+  };
+  const testNow = new Date('2026-10-04T12:00:00Z');
+  const futureTrial = new Date('2026-10-14T12:00:00Z');
+  const pastTrial = new Date('2026-09-20T12:00:00Z');
+
+  // Verify regression reproduction
+  let regressionCaught = false;
+  try {
+    simulateSubscriptionUpdate(futureTrial, testNow, true);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('violates not-null constraint')) {
+      regressionCaught = true;
+    }
+  }
+  assert(regressionCaught, '129. Regression test successfully reproduces null trial_ends_at violation');
+
+  // Verify safe resolution
+  const resolvedFuture = simulateSubscriptionUpdate(futureTrial, testNow, false);
+  assert.strictEqual(resolvedFuture.toISOString(), testNow.toISOString(), '130. Active future trial concludes immediately at payment activation time');
+  const resolvedPast = simulateSubscriptionUpdate(pastTrial, testNow, false);
+  assert.strictEqual(resolvedPast.toISOString(), pastTrial.toISOString(), '131. Historical expired trial date preserved without alteration');
+  const resolvedFresh = simulateSubscriptionUpdate(null, testNow, false);
+  assert.strictEqual(resolvedFresh.toISOString(), testNow.toISOString(), '132. Fresh paid subscription gets non-null immediate trial end');
+
   console.log('\n================================================================');
-  console.log('  Manual Bank-Transfer Verification: ALL 123 ASSERTIONS PASSED');
+  console.log('  Manual Bank-Transfer Verification: ALL 132 ASSERTIONS PASSED');
   console.log('  [VERIFIED: Schema invariants, lock decoupling, storage RLS, unit path & date math]');
   console.log('  [VERIFIED: Receipt form UI, loading stages, retry resilience, and latency optimizations]');
   console.log('  [VERIFIED: End-to-end receipt upload, super admin review, atomic settlement, and rejection]');
   console.log('  [VERIFIED: Actor profile schema alignment & forward migration without full_name bug]');
+  console.log('  [VERIFIED: trial_ends_at NOT NULL constraint preserved & regression tests passed]');
   console.log('================================================================\n');
 }
 

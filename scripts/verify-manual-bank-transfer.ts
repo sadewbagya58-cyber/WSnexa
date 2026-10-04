@@ -288,11 +288,21 @@ async function runVerification() {
   assert(realtimeContent.includes("table: 'business_subscriptions'"), '117. Realtime listener monitors business_subscriptions');
   assert(realtimeContent.includes('SUSPENDED'), '118. Realtime listener handles suspension and reactivation dynamically');
 
+  // 11.6 Actor Profile Schema Alignment & Bug Fix Verification
+  const fixMigrationPath = path.join(process.cwd(), 'supabase/migrations/20261004170000_fix_subscription_settlement_actor_profile.sql');
+  assert(fs.existsSync(fixMigrationPath), '119. Forward migration 20261004170000_fix_subscription_settlement_actor_profile.sql exists');
+  const fixContent = fs.readFileSync(fixMigrationPath, 'utf-8');
+  assert(fixContent.includes('SELECT id, first_name, last_name INTO v_actor_profile'), '120. Forward migration queries existing first_name and last_name from user_profiles');
+  assert(!fixContent.includes('SELECT id, full_name') && !fixContent.includes('v_actor_profile.full_name'), '121. Forward migration strictly eliminates non-existent full_name column query');
+  assert(fixContent.includes("CONCAT_WS(' ', v_actor_profile.first_name, v_actor_profile.last_name)"), '122. Forward migration constructs actor display name safely with CONCAT_WS');
+  assert(fixContent.includes('apply_atomic_subscription_settlement') && fixContent.includes('reject_bank_transfer_payment'), '123. Forward migration updates both settlement and rejection RPCs');
+
   console.log('\n================================================================');
-  console.log('  Manual Bank-Transfer Verification: ALL 118 ASSERTIONS PASSED');
+  console.log('  Manual Bank-Transfer Verification: ALL 123 ASSERTIONS PASSED');
   console.log('  [VERIFIED: Schema invariants, lock decoupling, storage RLS, unit path & date math]');
   console.log('  [VERIFIED: Receipt form UI, loading stages, retry resilience, and latency optimizations]');
   console.log('  [VERIFIED: End-to-end receipt upload, super admin review, atomic settlement, and rejection]');
+  console.log('  [VERIFIED: Actor profile schema alignment & forward migration without full_name bug]');
   console.log('================================================================\n');
 }
 

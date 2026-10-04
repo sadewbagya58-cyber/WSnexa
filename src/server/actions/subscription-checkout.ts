@@ -64,12 +64,20 @@ export async function previewSubscriptionCheckoutAction(input: {
     }
 
     const admin = createAdminClient();
-    const { data: business } = await admin
-      .from('businesses')
-      .select('status')
-      .eq('id', authContext.businessId)
-      .maybeSingle();
+    const [businessRes, subContext, eligibility] = await Promise.all([
+      admin
+        .from('businesses')
+        .select('status')
+        .eq('id', authContext.businessId)
+        .maybeSingle(),
+      SubscriptionService.resolveSubscriptionContext(authContext.businessId),
+      SubscriptionService.validateDowngradeEligibility(
+        authContext.businessId,
+        input.planCode
+      ),
+    ]);
 
+    const business = businessRes.data;
     if (business && (business.status === 'suspended' || business.status === 'archived')) {
       return {
         success: false,
@@ -78,14 +86,7 @@ export async function previewSubscriptionCheckoutAction(input: {
       };
     }
 
-    const subContext = await SubscriptionService.resolveSubscriptionContext(authContext.businessId);
     const currentPlanCode = subContext.subscription.plan_code;
-
-    // Downgrade Eligibility Check
-    const eligibility = await SubscriptionService.validateDowngradeEligibility(
-      authContext.businessId,
-      input.planCode
-    );
 
     // Calculate canonical quote server-side
     const quote = SubscriptionPricingService.calculateSubscriptionPrice({
@@ -136,12 +137,29 @@ export async function createSubscriptionPaymentIntentAction(input: {
     }
 
     const admin = createAdminClient();
-    const { data: business } = await admin
-      .from('businesses')
-      .select('status')
-      .eq('id', authContext.businessId)
-      .maybeSingle();
+    const attemptTag = input.checkoutAttemptId || 'default';
+    const idempotencyKey = `sub_intent_${authContext.businessId}_${input.planCode}_${attemptTag}`;
 
+    const [businessRes, eligibility, subContext, existingIntentRes] = await Promise.all([
+      admin
+        .from('businesses')
+        .select('status')
+        .eq('id', authContext.businessId)
+        .maybeSingle(),
+      SubscriptionService.validateDowngradeEligibility(
+        authContext.businessId,
+        input.planCode
+      ),
+      SubscriptionService.resolveSubscriptionContext(authContext.businessId),
+      admin
+        .from('business_subscription_payments')
+        .select('*')
+        .eq('business_id', authContext.businessId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle(),
+    ]);
+
+    const business = businessRes.data;
     if (business && (business.status === 'suspended' || business.status === 'archived')) {
       return {
         success: false,
@@ -149,12 +167,6 @@ export async function createSubscriptionPaymentIntentAction(input: {
         message: 'Platform workspace access is suspended. Cannot create subscription payment intent.',
       };
     }
-
-    // Downgrade Eligibility Validation
-    const eligibility = await SubscriptionService.validateDowngradeEligibility(
-      authContext.businessId,
-      input.planCode
-    );
 
     if (!eligibility.allowed) {
       return {
@@ -181,19 +193,7 @@ export async function createSubscriptionPaymentIntentAction(input: {
     }
 
     const snapshot = SubscriptionPricingService.createPricingSnapshot(quote);
-    const subContext = await SubscriptionService.resolveSubscriptionContext(authContext.businessId);
-
-    // Stable Idempotency Key Generation
-    const attemptTag = input.checkoutAttemptId || 'default';
-    const idempotencyKey = `sub_intent_${authContext.businessId}_${input.planCode}_${attemptTag}`;
-
-    // Check for existing pending intent with matching idempotency key
-    const { data: existingIntent } = await admin
-      .from('business_subscription_payments')
-      .select('*')
-      .eq('business_id', authContext.businessId)
-      .eq('idempotency_key', idempotencyKey)
-      .maybeSingle();
+    const existingIntent = existingIntentRes.data;
 
     if (existingIntent) {
       return {

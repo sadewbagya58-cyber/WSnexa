@@ -23,34 +23,32 @@ interface PageProps {
 }
 
 export default async function OwnerSubscriptionPage({ searchParams }: PageProps) {
-  const context = await resolveActiveBusinessContext();
+  const sParams = await searchParams;
+  const page = parseInt(sParams.page || '1', 10) || 1;
+
+  const [context, authContext] = await Promise.all([
+    resolveActiveBusinessContext(),
+    resolveAuthorizationContext().catch(() => null),
+  ]);
+
   if (!context || context.membership?.role !== 'business_owner') {
     return <AccessDenied workspaceRoute={resolveDefaultWorkspaceRoute(context?.membership?.role, context?.membership?.customRoleId)} />;
   }
 
-  const sParams = await searchParams;
-  const page = parseInt(sParams.page || '1', 10) || 1;
-
-  let authContext: Awaited<ReturnType<typeof resolveAuthorizationContext>> | null = null;
-  try {
-    authContext = await resolveAuthorizationContext();
-  } catch {
-    // Fallback if needed
-  }
-
-  const navPermissions = await resolveSettingsSubNavPermissions(
-    authContext,
-    context.activeBranch?.id,
-    context.business.id
-  );
-
-  const subContext = await SubscriptionService.resolveSubscriptionContext(context.business.id);
-  const usage = await SubscriptionService.getUsageSnapshot(context.business.id);
-  const paymentHistory = await SubscriptionPaymentQueryService.listOwnerSubscriptionPayments({
-    businessId: context.business.id,
-    page,
-    limit: 10,
-  });
+  const [navPermissions, subContext, usage, paymentHistory] = await Promise.all([
+    resolveSettingsSubNavPermissions(
+      authContext,
+      context.activeBranch?.id,
+      context.business.id
+    ),
+    SubscriptionService.resolveSubscriptionContext(context.business.id),
+    SubscriptionService.getUsageSnapshot(context.business.id),
+    SubscriptionPaymentQueryService.listOwnerSubscriptionPayments({
+      businessId: context.business.id,
+      page,
+      limit: 10,
+    }),
+  ]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

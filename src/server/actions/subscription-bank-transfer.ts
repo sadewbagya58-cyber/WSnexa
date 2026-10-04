@@ -89,13 +89,30 @@ export async function createBankTransferIntentAction(input: {
     const businessId = authContext.businessId;
     const admin = createAdminClient();
 
-    // Check platform suspension
-    const { data: business } = await admin
-      .from('businesses')
-      .select('status')
-      .eq('id', businessId)
-      .maybeSingle();
+    // Parallelize independent readiness and existing intent queries
+    const [businessRes, downgradeCheck, existingIntentRes, currentSubRes] = await Promise.all([
+      admin
+        .from('businesses')
+        .select('status')
+        .eq('id', businessId)
+        .maybeSingle(),
+      SubscriptionService.validateDowngradeEligibility(businessId, input.planCode),
+      admin
+        .from('business_subscription_payments')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('plan_code', input.planCode)
+        .eq('payment_method', 'manual_bank_transfer')
+        .eq('status', 'pending')
+        .maybeSingle(),
+      admin
+        .from('business_subscriptions')
+        .select('id')
+        .eq('business_id', businessId)
+        .maybeSingle(),
+    ]);
 
+    const business = businessRes.data;
     if (business && (business.status === 'suspended' || business.status === 'archived')) {
       return {
         success: false,
@@ -104,8 +121,6 @@ export async function createBankTransferIntentAction(input: {
       };
     }
 
-    // Downgrade eligibility validation
-    const downgradeCheck = await SubscriptionService.validateDowngradeEligibility(businessId, input.planCode);
     if (!downgradeCheck.allowed) {
       return {
         success: false,
@@ -123,16 +138,7 @@ export async function createBankTransferIntentAction(input: {
     });
     const snapshot = SubscriptionPricingService.createPricingSnapshot(pricing);
 
-    // Check for existing pending bank transfer intent for this business and plan
-    const { data: existingIntent } = await admin
-      .from('business_subscription_payments')
-      .select('*')
-      .eq('business_id', businessId)
-      .eq('plan_code', input.planCode)
-      .eq('payment_method', 'manual_bank_transfer')
-      .eq('status', 'pending')
-      .maybeSingle();
-
+    const existingIntent = existingIntentRes.data;
     if (existingIntent && existingIntent.amount_lkr === pricing.total) {
       return {
         success: true,
@@ -151,12 +157,7 @@ export async function createBankTransferIntentAction(input: {
       };
     }
 
-    // Get current subscription ID if available
-    const { data: currentSub } = await admin
-      .from('business_subscriptions')
-      .select('id')
-      .eq('business_id', businessId)
-      .maybeSingle();
+    const currentSub = currentSubRes.data;
 
     const idempotencyKey = `manual_bt_${businessId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -284,34 +285,38 @@ export async function getBankTransferDetailsAction(
 
     const admin = createAdminClient();
 
-    const { data: payment, error: pError } = await admin
-      .from('business_subscription_payments')
-      .select('*')
-      .eq('id', paymentId)
-      .eq('business_id', authContext.businessId)
-      .single();
+    const [paymentRes, proofRes, claimRes] = await Promise.all([
+      admin
+        .from('business_subscription_payments')
+        .select('*')
+        .eq('id', paymentId)
+        .eq('business_id', authContext.businessId)
+        .single(),
+      admin
+        .from('business_subscription_proofs')
+        .select('*')
+        .eq('payment_id', paymentId)
+        .eq('business_id', authContext.businessId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from('business_subscription_payment_reference_claims')
+        .select('*')
+        .eq('payment_id', paymentId)
+        .eq('business_id', authContext.businessId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    if (pError || !payment) {
+    const payment = paymentRes.data;
+    if (paymentRes.error || !payment) {
       return { success: false, error: 'PAYMENT_NOT_FOUND' };
     }
 
-    const { data: proof } = await admin
-      .from('business_subscription_proofs')
-      .select('*')
-      .eq('payment_id', paymentId)
-      .eq('business_id', authContext.businessId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const { data: claim } = await admin
-      .from('business_subscription_payment_reference_claims')
-      .select('*')
-      .eq('payment_id', paymentId)
-      .eq('business_id', authContext.businessId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const proof = proofRes.data;
+    const claim = claimRes.data;
 
     return {
       success: true,

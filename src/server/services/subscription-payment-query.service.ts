@@ -33,20 +33,9 @@ export class SubscriptionPaymentQueryService {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
     const offset = (safePage - 1) * safeLimit;
-
-    const countQuery = admin
+    const { data, count, error } = await admin
       .from('business_subscription_payments')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId);
-
-    const { count, error: countError } = await countQuery;
-    if (countError) {
-      throw new Error(`Failed to count owner payment records: ${countError.message}`);
-    }
-
-    const { data, error } = await admin
-      .from('business_subscription_payments')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('business_id', businessId)
       .order('created_at', { ascending: false })
       .range(offset, offset + safeLimit - 1);

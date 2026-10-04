@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import Link from 'next/link';
@@ -13,12 +13,14 @@ interface HelpArticleViewProps {
   article: HelpArticle;
   category?: HelpCategory;
   relatedArticles: HelpArticle[];
+  basePath?: string;
 }
 
 export const HelpArticleView: React.FC<HelpArticleViewProps> = ({
   article,
   category,
   relatedArticles,
+  basePath = '/dashboard/help',
 }) => {
   const { t, tArray } = useHelpLanguage();
 
@@ -31,14 +33,14 @@ export const HelpArticleView: React.FC<HelpArticleViewProps> = ({
       {/* Top Header Row: Breadcrumbs & Language Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs font-bold text-zinc-500 flex-wrap">
-          <Link href="/dashboard/help" className="hover:text-zinc-950 transition-colors">
+          <Link href={basePath} className="hover:text-zinc-950 transition-colors">
             Help Center
           </Link>
           <span>/</span>
           {category && (
             <>
               <Link
-                href={`/dashboard/help/category/${category.id}`}
+                href={`${basePath}/category/${category.id}`}
                 className="hover:text-zinc-950 transition-colors"
               >
                 {t(category.title, category.titleSiEn)}
@@ -183,7 +185,7 @@ export const HelpArticleView: React.FC<HelpArticleViewProps> = ({
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {relatedArticles.map((rel) => (
-              <HelpArticleCard key={rel.slug} article={rel} compact />
+              <HelpArticleCard key={rel.slug} article={rel} compact basePath={basePath} />
             ))}
           </div>
         </div>

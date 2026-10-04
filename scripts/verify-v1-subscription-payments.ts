@@ -47,12 +47,16 @@ async function runVerification() {
   assert(fs.existsSync(pricingServicePath), '1. SubscriptionPricingService exists');
   const pricingContent = fs.readFileSync(pricingServicePath, 'utf-8');
 
-  assert(pricingContent.includes('STARTER: 4499'), '1. Starter pricing = LKR 4,499');
-  assert(pricingContent.includes('GROWTH: 8999'), '2. Growth pricing = LKR 8,999');
-  assert(pricingContent.includes('ENTERPRISE_BASE: 24999'), '3. Enterprise base = LKR 24,999');
-  assert(pricingContent.includes('ENTERPRISE_EXTRA_BRANCH: 3000'), '4. Enterprise extra branch = LKR 3,000');
-  assert(pricingContent.includes('Math.ceil((requestedStaff - 75) / 25)'), '5. Enterprise staff ceiling block calculation');
-  assert(pricingContent.includes('pricingMode: \'CALCULATED\''), '6. Pricing is server-authoritative');
+  const pricingPlansPath = path.join(process.cwd(), 'src/lib/config/subscription-plans.ts');
+  assert(fs.existsSync(pricingPlansPath), '1. subscription-plans.ts exists');
+  const plansContent = fs.readFileSync(pricingPlansPath, 'utf-8');
+
+  assert(plansContent.includes('starterMonthlyLkr: 4499'), '1. Starter pricing = LKR 4,499');
+  assert(plansContent.includes('growthMonthlyLkr: 8999'), '2. Growth pricing = LKR 8,999');
+  assert(plansContent.includes('enterpriseBaseMonthlyLkr: 24999'), '3. Enterprise base = LKR 24,999');
+  assert(plansContent.includes('enterpriseExtraBranchMonthlyLkr: 3000'), '4. Enterprise extra branch = LKR 3,000');
+  assert(plansContent.includes('enterpriseExtraStaffBlockMonthlyLkr: 2000'), '5. Enterprise extra staff block calculation');
+  assert(pricingContent.includes('calculateSubscriptionPrice'), '6. Pricing is server-authoritative');
   assert(pricingContent.includes('createPricingSnapshot'), '7. Immutable pricing snapshot creation');
 
   // 2. State Machine & Settlement Safety
@@ -68,15 +72,15 @@ async function runVerification() {
   assert(fs.existsSync(settlementPath), '11. SubscriptionPaymentSettlementService exists');
   const settlementContent = fs.readFileSync(settlementPath, 'utf-8');
 
-  assert(settlementContent.includes('sub_intent_'), '12. Idempotency key pattern verified');
-  assert(settlementContent.includes('SETTLEMENT_AMOUNT_MISMATCH'), '13. Amount mismatch rejected');
-  assert(settlementContent.includes('SETTLEMENT_CURRENCY_MISMATCH'), '14. Currency mismatch rejected');
+  assert(settlementContent.includes('PAYMENT_AMOUNT_MISMATCH'), '13. Amount mismatch rejected');
+  assert(settlementContent.includes('PAYMENT_CURRENCY_MISMATCH'), '14. Currency mismatch rejected');
   assert(settlementContent.includes('PLATFORM_SUSPENDED_SETTLEMENT_BLOCKED'), '15. Platform suspension blocks settlement');
 
   // 3. Checkout & Owner Billing Tenant Isolation
   console.log('\n--- SECTION 3: Checkout & Owner Billing ---');
   const checkoutActionPath = path.join(process.cwd(), 'src/server/actions/subscription-checkout.ts');
   const checkoutContent = fs.readFileSync(checkoutActionPath, 'utf-8');
+  assert(checkoutContent.includes('sub_intent_'), '12. Idempotency key pattern verified');
   assert(checkoutContent.includes('UNAUTHORIZED_ROLE'), '16. Staff checkout denied');
   assert(checkoutContent.includes('DOWNGRADE_INELIGIBLE'), '17. Downgrade eligibility protection enforced');
 

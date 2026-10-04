@@ -20,6 +20,7 @@ export interface GetAdminPaymentsInput {
   provider?: string;
   purpose?: string;
   plan?: string;
+  paymentMethod?: string;
   search?: string;
   businessId?: string;
 }

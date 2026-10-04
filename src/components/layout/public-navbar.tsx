@@ -36,6 +36,9 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
           <Link href="/explore" className="hover:text-zinc-950 transition-colors">
             Explore Venues
           </Link>
+          <Link href="/pricing" className="hover:text-zinc-950 transition-colors">
+            Pricing
+          </Link>
         </nav>
 
         {/* Desktop Auth Actions */}
@@ -118,6 +121,13 @@ export const PublicNavbar: React.FC<PublicNavbarProps> = ({
               className="flex min-h-[44px] items-center rounded-lg px-3 hover:bg-zinc-50"
             >
               Explore Venues
+            </Link>
+            <Link
+              href="/pricing"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center rounded-lg px-3 hover:bg-zinc-50"
+            >
+              Pricing
             </Link>
           </nav>
 

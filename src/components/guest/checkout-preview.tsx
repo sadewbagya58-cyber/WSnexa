@@ -844,7 +844,29 @@ export const CheckoutPreview: React.FC<CheckoutPreviewProps> = ({
               );
             })()}
 
-            <Link href={`/m/${token}`} className="block text-center">
+            {/* Dining Guest Policy Disclosures */}
+            <div className="pt-2 text-center text-[10px] text-zinc-500 font-medium space-y-1">
+              <p>
+                {t(
+                  'By placing this dining order, you agree to the venue’s order cancellation policy and the WSNexa ',
+                  'මෙම ඇණවුම තහවුරු කිරීමෙන්, ඔබ අවන්හලේ අවලංගු කිරීමේ කොන්දේසි සහ WSNexa '
+                )}
+                <Link href="/legal/terms" target="_blank" className="font-bold underline text-zinc-700 hover:text-zinc-950">
+                  {t('Terms', 'කොන්දේසි')}
+                </Link>
+                {', '}
+                <Link href="/legal/privacy" target="_blank" className="font-bold underline text-zinc-700 hover:text-zinc-950">
+                  {t('Privacy', 'පෞද්ගලිකත්වය')}
+                </Link>
+                {t(' & ', ' සහ ')}
+                <Link href="/legal/refund-cancellation" target="_blank" className="font-bold underline text-zinc-700 hover:text-zinc-950">
+                  {t('Refund Policy', 'මුදල් ආපසු ගෙවීමේ ප්‍රතිපත්තිය')}
+                </Link>
+                .
+              </p>
+            </div>
+
+            <Link href={`/m/${token}`} className="block text-center pt-1">
               <span className="text-xs font-bold text-zinc-600 hover:text-zinc-950 underline">
                 {t('← Return to Branch Menu', '← නැවත මෙනුවට')}
               </span>

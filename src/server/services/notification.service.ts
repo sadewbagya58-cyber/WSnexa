@@ -5,7 +5,7 @@ import { can } from '@/server/auth/policy-engine';
 export interface NotificationDTO {
   id: string;
   businessId: string;
-  branchId: string;
+  branchId: string | null;
   branchName?: string;
   recipientUserId: string;
   notificationType: string;
@@ -212,7 +212,7 @@ export class NotificationService {
     return (data as NotificationRowWithBranch[]).map((row) => ({
       id: String(row.id),
       businessId: String(row.business_id),
-      branchId: String(row.branch_id),
+      branchId: row.branch_id ? String(row.branch_id) : null,
       branchName: row.branches?.name || undefined,
       recipientUserId: String(row.recipient_user_id),
       notificationType: String(row.notification_type),
@@ -227,6 +227,89 @@ export class NotificationService {
       readAt: (row.read_at as string | null) || null,
       createdAt: String(row.created_at),
     }));
+  }
+
+  /**
+   * Dispatches a business-level notification (e.g. subscription lifecycle, payment status)
+   * to active business owners without requiring a branch assignment.
+   */
+  static async createBusinessNotification(input: {
+    businessId: string;
+    recipientUserId?: string | null;
+    notificationType: string;
+    priority?: 'normal' | 'high' | 'urgent';
+    title: string;
+    message: string;
+    entityType: string;
+    entityId: string;
+    actionUrl: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ insertedCount: number }> {
+    const {
+      businessId,
+      recipientUserId,
+      notificationType,
+      priority = 'normal',
+      title,
+      message,
+      entityType,
+      entityId,
+      actionUrl,
+      metadata = {},
+    } = input;
+
+    const admin = createAdminClient();
+    const recipientUserIds: string[] = [];
+
+    if (recipientUserId) {
+      recipientUserIds.push(recipientUserId);
+    } else {
+      const { data: owners } = await admin
+        .from('business_memberships')
+        .select('user_id')
+        .eq('business_id', businessId)
+        .eq('role', 'owner')
+        .eq('membership_status', 'active');
+
+      if (owners && owners.length > 0) {
+        for (const o of owners) {
+          if (o.user_id && !recipientUserIds.includes(o.user_id)) {
+            recipientUserIds.push(o.user_id);
+          }
+        }
+      }
+    }
+
+    if (recipientUserIds.length === 0) {
+      return { insertedCount: 0 };
+    }
+
+    const rowsToInsert = recipientUserIds.map((userId) => ({
+      business_id: businessId,
+      branch_id: null,
+      recipient_user_id: userId,
+      notification_type: notificationType,
+      priority,
+      title,
+      message,
+      entity_type: entityType,
+      entity_id: entityId,
+      action_url: actionUrl,
+      dedupe_key: `${notificationType}:${entityId}:${userId}`,
+      metadata,
+    }));
+
+    const { data: inserted, error: insertError } = await admin
+      .from('notifications')
+      .upsert(rowsToInsert, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+      .select('id');
+
+    if (insertError) {
+      console.warn('[NotificationService.createBusinessNotification] Failed to insert notification:', insertError.message);
+      return { insertedCount: 0 };
+    }
+
+    return { insertedCount: inserted ? inserted.length : 0 };
   }
 
   /**

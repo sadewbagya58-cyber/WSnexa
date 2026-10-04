@@ -12,7 +12,7 @@ export type SubscriptionPaymentStatus =
   | 'expired'
   | 'refunded';
 
-export type SubscriptionPaymentProvider = 'dialog' | string | null;
+export type SubscriptionPaymentProvider = 'onepay' | 'dialog' | 'payhere' | string | null;
 
 export type SubscriptionBillingInterval = 'monthly';
 

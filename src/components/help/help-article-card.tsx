@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import Link from 'next/link';
@@ -9,11 +9,13 @@ import { useHelpLanguage } from './help-language-context';
 interface HelpArticleCardProps {
   article: HelpArticle;
   compact?: boolean;
+  basePath?: string;
 }
 
 export const HelpArticleCard: React.FC<HelpArticleCardProps> = ({
   article,
   compact = false,
+  basePath = '/dashboard/help',
 }) => {
   const { t } = useHelpLanguage();
 
@@ -22,7 +24,7 @@ export const HelpArticleCard: React.FC<HelpArticleCardProps> = ({
 
   return (
     <Link
-      href={`/dashboard/help/${article.slug}`}
+      href={`${basePath}/${article.slug}`}
       className={`group block rounded-2xl border border-zinc-200 bg-white transition-all hover:border-zinc-300 hover:shadow-xs active:scale-[0.98] cursor-pointer ${
         compact ? 'p-4' : 'p-5 space-y-3'
       }`}

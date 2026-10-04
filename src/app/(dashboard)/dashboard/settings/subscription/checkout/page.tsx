@@ -78,6 +78,7 @@ export default async function SubscriptionCheckoutPage({ searchParams }: Checkou
 
   return (
     <SubscriptionCheckoutReviewClient
+      businessId={context.business.id}
       businessName={context.business.name}
       planCode={planCode}
       enterpriseConfig={enterpriseConfig}

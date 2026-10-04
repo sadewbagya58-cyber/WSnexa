@@ -77,6 +77,14 @@ export class SubscriptionPaymentSettlementService {
       }
     }
 
+    // 2.5 Ensure manual bank transfer payments cannot be settled by online payment gateways
+    if ((paymentIntent as Record<string, unknown>).payment_method === 'manual_bank_transfer') {
+      throw new PaymentProviderError(
+        'INVALID_PAYMENT_METHOD',
+        'Cannot settle manual bank transfer payment intent via online payment gateway settlement engine'
+      );
+    }
+
     // 3. Assert Legal State Machine Transition
     assertLegalPaymentStateTransition(paymentIntent.status, verification.paymentStatus);
 

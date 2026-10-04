@@ -71,7 +71,7 @@ export default function PublicHelpCenterPage() {
             {popularArticles.map((art) => (
               <Link
                 key={art.slug}
-                href={`/dashboard/help/${art.slug}`}
+                href={`/help/${art.slug}`}
                 className="bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-2xs group flex flex-col justify-between"
               >
                 <div className="space-y-2">
@@ -126,7 +126,7 @@ export default function PublicHelpCenterPage() {
                 </div>
                 <div className="pt-4 mt-4 border-t border-zinc-100">
                   <Link
-                    href={`/dashboard/help/category/${cat.id}`}
+                    href={`/help/category/${cat.id}`}
                     className="text-xs font-bold text-zinc-950 hover:underline inline-flex items-center gap-1"
                   >
                     View Category Guides →
@@ -150,7 +150,7 @@ export default function PublicHelpCenterPage() {
               {troubleshooting.map((art) => (
                 <Link
                   key={art.slug}
-                  href={`/dashboard/help/${art.slug}`}
+                  href={`/help/${art.slug}`}
                   className="bg-white p-5 rounded-2xl border border-zinc-200 hover:border-zinc-950 transition-all shadow-2xs flex flex-col justify-between group"
                 >
                   <div className="space-y-2">

@@ -13,6 +13,10 @@ export interface SubscriptionPaymentItem {
   amount_lkr: number;
   currency: string;
   status: string;
+  payment_method?: string | null;
+  review_status?: string | null;
+  verified_at?: string | null;
+  reconciliation_notes?: string | null;
   payment_purpose: string;
   provider: string | null;
   provider_transaction_id: string | null;
@@ -49,7 +53,21 @@ export function OwnerBillingHistoryClient({
   const [isCancelling, setIsCancelling] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const renderStatusBadge = (status: string) => {
+  const renderStatusBadge = (status: string, reviewStatus?: string | null) => {
+    if (reviewStatus === 'under_review') {
+      return (
+        <Badge variant="solid" className="bg-amber-500 text-white border border-amber-600 font-black text-[10px] px-2 py-0.5">
+          UNDER REVIEW
+        </Badge>
+      );
+    }
+    if (reviewStatus === 'pending_proof') {
+      return (
+        <Badge variant="solid" className="bg-blue-100 text-blue-900 border border-blue-300 font-black text-[10px] px-2 py-0.5">
+          PENDING SLIP
+        </Badge>
+      );
+    }
     const s = (status || '').toLowerCase();
     switch (s) {
       case 'pending':
@@ -138,7 +156,7 @@ export function OwnerBillingHistoryClient({
                       {item.plan_code} Plan
                     </span>
                   </div>
-                  {renderStatusBadge(item.status)}
+                  {renderStatusBadge(item.status, item.review_status)}
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-100">
@@ -201,9 +219,13 @@ export function OwnerBillingHistoryClient({
                     <td className="py-3 px-3 font-mono font-black text-zinc-950">
                       LKR {item.amount_lkr.toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 whitespace-nowrap">{renderStatusBadge(item.status)}</td>
+                    <td className="py-3 px-3 whitespace-nowrap">{renderStatusBadge(item.status, item.review_status)}</td>
                     <td className="py-3 px-3 text-zinc-500 font-medium">
-                      {item.provider ? item.provider.toUpperCase() : 'Not connected'}
+                      {item.payment_method === 'manual_bank_transfer'
+                        ? '🏦 Bank Transfer'
+                        : item.provider
+                        ? item.provider.toUpperCase()
+                        : 'Online Gateway'}
                     </td>
                     <td className="py-3 px-3 font-mono text-zinc-500 text-[11px]">
                       #{item.id.slice(0, 8)}
@@ -279,7 +301,7 @@ export function OwnerBillingHistoryClient({
               <div className="grid grid-cols-2 gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Status</span>
-                  <div className="mt-1">{renderStatusBadge(selectedPayment.status)}</div>
+                  <div className="mt-1">{renderStatusBadge(selectedPayment.status, selectedPayment.review_status)}</div>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Total Amount</span>
@@ -303,28 +325,54 @@ export function OwnerBillingHistoryClient({
                 </div>
               </div>
 
-              {/* Provider Info */}
-              <div className="space-y-1 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                <span className="text-[10px] uppercase font-bold text-zinc-400">Gateway Information</span>
-                <div className="flex justify-between text-zinc-700">
-                  <span>Provider:</span>
-                  <span className="font-mono font-bold text-zinc-950">
-                    {selectedPayment.provider ? selectedPayment.provider.toUpperCase() : 'Not connected'}
-                  </span>
+              {/* Provider / Payment Method Info */}
+              {selectedPayment.payment_method === 'manual_bank_transfer' ? (
+                <div className="space-y-2 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200">
+                  <span className="text-[10px] uppercase font-bold text-emerald-800">Bank Transfer Verification</span>
+                  <div className="flex justify-between text-zinc-700">
+                    <span>Payment Method:</span>
+                    <span className="font-bold text-emerald-950">🏦 Direct Bank Transfer</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-700">
+                    <span>Review Status:</span>
+                    <span className="font-extrabold uppercase text-emerald-900">
+                      {selectedPayment.review_status || 'none'}
+                    </span>
+                  </div>
+                  {selectedPayment.review_status === 'pending_proof' && (
+                    <div className="pt-2">
+                      <a
+                        href={`/dashboard/settings/subscription/checkout?plan=${selectedPayment.plan_code}`}
+                        className="block w-full py-2 text-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs"
+                      >
+                        Upload Transfer Slip & Reference →
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {selectedPayment.provider_transaction_id && (
+              ) : (
+                <div className="space-y-1 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Gateway Information</span>
                   <div className="flex justify-between text-zinc-700">
-                    <span>Transaction ID:</span>
-                    <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_transaction_id}</span>
+                    <span>Provider:</span>
+                    <span className="font-mono font-bold text-zinc-950">
+                      {selectedPayment.provider ? selectedPayment.provider.toUpperCase() : 'Not connected'}
+                    </span>
                   </div>
-                )}
-                {selectedPayment.provider_reference && (
-                  <div className="flex justify-between text-zinc-700">
-                    <span>Reference:</span>
-                    <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_reference}</span>
-                  </div>
-                )}
-              </div>
+                  {selectedPayment.provider_transaction_id && (
+                    <div className="flex justify-between text-zinc-700">
+                      <span>Transaction ID:</span>
+                      <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_transaction_id}</span>
+                    </div>
+                  )}
+                  {selectedPayment.provider_reference && (
+                    <div className="flex justify-between text-zinc-700">
+                      <span>Reference:</span>
+                      <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_reference}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Enterprise Snapshot if present */}
               {(() => {

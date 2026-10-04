@@ -15,6 +15,7 @@ export interface AdminPaymentFilterInput {
   provider?: string;
   purpose?: string;
   plan?: string;
+  paymentMethod?: string;
   search?: string;
   businessId?: string;
 }
@@ -104,6 +105,7 @@ export class SubscriptionPaymentQueryService {
     plan,
     search,
     businessId,
+    paymentMethod,
   }: AdminPaymentFilterInput) {
     const admin = createAdminClient();
     const safePage = Math.max(1, page);
@@ -143,6 +145,10 @@ export class SubscriptionPaymentQueryService {
 
       if (plan && plan !== 'all') {
         baseQuery = baseQuery.eq('plan_code', plan);
+      }
+
+      if (paymentMethod && paymentMethod !== 'all') {
+        baseQuery = baseQuery.eq('payment_method', paymentMethod);
       }
 
       if (search && search.trim()) {

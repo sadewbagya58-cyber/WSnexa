@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import Link from 'next/link';
@@ -11,11 +11,13 @@ import { useHelpLanguage } from './help-language-context';
 interface HelpCategoryViewProps {
   category: HelpCategory;
   articles: HelpArticle[];
+  basePath?: string;
 }
 
 export const HelpCategoryView: React.FC<HelpCategoryViewProps> = ({
   category,
   articles,
+  basePath = '/dashboard/help',
 }) => {
   const { t } = useHelpLanguage();
 
@@ -27,7 +29,7 @@ export const HelpCategoryView: React.FC<HelpCategoryViewProps> = ({
       {/* Breadcrumbs & Language Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs font-bold text-zinc-500 flex-wrap">
-          <Link href="/dashboard/help" className="hover:text-zinc-950 transition-colors">
+          <Link href={basePath} className="hover:text-zinc-950 transition-colors">
             Help Center
           </Link>
           <span>/</span>
@@ -65,7 +67,7 @@ export const HelpCategoryView: React.FC<HelpCategoryViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {articles.map((article) => (
-              <HelpArticleCard key={article.slug} article={article} />
+              <HelpArticleCard key={article.slug} article={article} basePath={basePath} />
             ))}
           </div>
         )}

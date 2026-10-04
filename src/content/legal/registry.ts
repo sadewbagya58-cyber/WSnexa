@@ -414,7 +414,7 @@ export const LEGAL_DOCUMENTS: LegalDocumentMetadata[] = [
         paragraphs: [
           'Production Payment Gateway Status: WSNexa has not yet activated a production online payment gateway. All online payment gateway integrations are currently in pre-commercial development and are not active for automated self-service card or mobile wallet processing.',
           'Pilot & Evaluation Billing: During current pilot and evaluation phases, subscription billing and account activations are coordinated directly between WSNexa and the Business Owner via approved direct settlement or manual invoicing arrangements.',
-          'Future Gateway Integrations: Technical adapters for major Sri Lankan payment methods (including local card networks, Dialog Genie / eZ Cash, and direct bank transfer processors) are engineered in the platform and will be activated upon formal commercial release.',
+          'Future Gateway Integrations: Technical adapters for major Sri Lankan digital payment channels (including local card schemes, mobile payment networks, and direct bank transfer processors approved by the Central Bank of Sri Lanka) are engineered in the platform and will be activated upon formal commercial release.',
         ],
       },
       {

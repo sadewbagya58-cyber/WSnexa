@@ -9,6 +9,12 @@ import {
   cancelPendingPaymentIntentAction,
   expirePendingPaymentIntentAction,
 } from '@/server/actions/subscription-payment-admin';
+import {
+  approveBankTransferPaymentAdminAction,
+  rejectBankTransferPaymentAdminAction,
+  getAdminBankTransferReviewDetailsAction,
+  AdminBankTransferReviewDetails,
+} from '@/server/actions/subscription-bank-transfer-admin';
 
 export interface AdminPaymentRecord {
   id: string;
@@ -17,6 +23,11 @@ export interface AdminPaymentRecord {
   amount_lkr: number;
   currency: string;
   status: string;
+  payment_method?: string | null;
+  review_status?: string | null;
+  verified_at?: string | null;
+  reconciliation_notes?: string | null;
+  bank_statement_ref?: string | null;
   payment_purpose: string;
   provider: string | null;
   provider_transaction_id: string | null;
@@ -53,6 +64,7 @@ interface AdminSubscriptionPaymentsClientProps {
     provider: string;
     purpose: string;
     plan: string;
+    paymentMethod?: string;
     search: string;
   };
 }
@@ -69,12 +81,57 @@ export function AdminSubscriptionPaymentsClient({
   const [selectedProvider, setSelectedProvider] = useState(filters.provider || 'all');
   const [selectedPurpose, setSelectedPurpose] = useState(filters.purpose || 'all');
   const [selectedPlan, setSelectedPlan] = useState(filters.plan || 'all');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(filters.paymentMethod || 'all');
 
   const [selectedPayment, setSelectedPayment] = useState<AdminPaymentRecord | null>(null);
   const [adminReason, setAdminReason] = useState('');
   const [adminActionType, setAdminActionType] = useState<'cancel' | 'expire' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Bank transfer review state
+  const [reviewDossier, setReviewDossier] = useState<AdminBankTransferReviewDetails | null>(null);
+  const [isLoadingDossier, setIsLoadingDossier] = useState(false);
+  const [settlementStatementRef, setSettlementStatementRef] = useState('');
+  const [settlementReconciliationNote, setSettlementReconciliationNote] = useState('');
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [isSettling, setIsSettling] = useState(false);
+
+  const closeModal = () => {
+    setSelectedPayment(null);
+    setReviewDossier(null);
+    setAdminActionType(null);
+    setAdminReason('');
+    setActionError(null);
+    setSettlementStatementRef('');
+    setSettlementReconciliationNote('');
+    setRejectionReasonInput('');
+  };
+
+  const openModal = async (item: AdminPaymentRecord) => {
+    setSelectedPayment(item);
+    setReviewDossier(null);
+    setAdminActionType(null);
+    setAdminReason('');
+    setActionError(null);
+    setSettlementStatementRef('');
+    setSettlementReconciliationNote('');
+    setRejectionReasonInput('');
+
+    if (item.payment_method === 'manual_bank_transfer') {
+      setIsLoadingDossier(true);
+      try {
+        const res = await getAdminBankTransferReviewDetailsAction(item.id);
+        if (res.success && res.data) {
+          setReviewDossier(res.data);
+        }
+      } catch (err) {
+        console.warn('Failed to load review dossier:', err);
+      } finally {
+        setIsLoadingDossier(false);
+      }
+    }
+  };
 
   const applyFilters = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -92,6 +149,9 @@ export function AdminSubscriptionPaymentsClient({
 
     if (selectedPlan !== 'all') params.set('plan', selectedPlan);
     else params.delete('plan');
+
+    if (selectedPaymentMethod !== 'all') params.set('paymentMethod', selectedPaymentMethod);
+    else params.delete('paymentMethod');
 
     params.set('page', '1');
     router.push(`/admin/subscription-payments?${params.toString()}`);
@@ -123,16 +183,87 @@ export function AdminSubscriptionPaymentsClient({
     setIsSubmitting(false);
 
     if (res.success && res.data) {
-      setSelectedPayment(null);
-      setAdminActionType(null);
-      setAdminReason('');
+      closeModal();
       router.refresh();
     } else {
       setActionError(res.message || 'Action failed.');
     }
   };
 
-  const renderStatusBadge = (status: string) => {
+  const handleApproveBankTransfer = async () => {
+    if (!selectedPayment) return;
+    if (!settlementStatementRef.trim()) {
+      setActionError('External bank statement transaction reference is required.');
+      return;
+    }
+    if (!settlementReconciliationNote.trim()) {
+      setActionError('Reconciliation audit note is required.');
+      return;
+    }
+
+    setIsSettling(true);
+    setActionError(null);
+
+    try {
+      const res = await approveBankTransferPaymentAdminAction({
+        paymentId: selectedPayment.id,
+        expectedPlanId: selectedPayment.plan_code,
+        expectedAmountLkr: selectedPayment.amount_lkr,
+        externalBankStatementRef: settlementStatementRef.trim(),
+        reconciliationNote: settlementReconciliationNote.trim(),
+      });
+
+      if (res.success) {
+        closeModal();
+        router.refresh();
+      } else {
+        setActionError(res.message || res.error || 'Settlement failed.');
+      }
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Settlement failed.');
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  const handleRejectBankTransfer = async () => {
+    if (!selectedPayment) return;
+    if (!rejectionReasonInput.trim()) {
+      setActionError('A rejection reason is required.');
+      return;
+    }
+
+    setIsSettling(true);
+    setActionError(null);
+
+    try {
+      const res = await rejectBankTransferPaymentAdminAction({
+        paymentId: selectedPayment.id,
+        rejectionReason: rejectionReasonInput.trim(),
+      });
+
+      if (res.success) {
+        closeModal();
+        router.refresh();
+      } else {
+        setActionError(res.message || res.error || 'Rejection failed.');
+      }
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Rejection failed.');
+    } finally {
+      setIsSettling(false);
+    }
+  };
+
+  const renderStatusBadge = (status: string, reviewStatus?: string | null) => {
+    if (reviewStatus === 'under_review') {
+      return (
+        <Badge variant="solid" className="bg-amber-500 text-white border border-amber-600 font-black text-[10px] px-2 py-0.5">
+          UNDER REVIEW
+        </Badge>
+      );
+    }
+
     const s = (status || '').toLowerCase();
     switch (s) {
       case 'pending':
@@ -154,97 +285,143 @@ export function AdminSubscriptionPaymentsClient({
     }
   };
 
+  const renderMethodBadge = (item: AdminPaymentRecord) => {
+    if (item.payment_method === 'manual_bank_transfer') {
+      return (
+        <span className="inline-flex items-center gap-1 font-bold text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+          🏦 Bank Transfer
+        </span>
+      );
+    }
+    if (item.provider) {
+      return (
+        <span className="inline-flex items-center gap-1 font-bold text-[10px] text-zinc-700 bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded-md">
+          💳 {item.provider.toUpperCase()}
+        </span>
+      );
+    }
+    return <span className="text-zinc-400 font-mono text-[11px]">—</span>;
+  };
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-200 pb-5">
         <div>
-          <h1 className="text-2xl font-black text-zinc-950 tracking-tight">SaaS Subscription Payments</h1>
-          <p className="text-xs text-zinc-600 font-medium mt-1">
-            Platform-wide SaaS commercial subscription payment activity, intents, and gateway audit history.
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
+              Super Admin Console
+            </span>
+            <span className="text-xs text-zinc-500 font-medium">SaaS Subscription Ledger</span>
+          </div>
+          <h1 className="text-2xl font-black text-zinc-950 tracking-tight mt-1">Subscription Payments</h1>
+          <p className="text-xs text-zinc-600 font-medium mt-0.5">
+            Platform-wide transaction history, bank transfer verification, and audit reconciliation.
           </p>
         </div>
-        <div className="text-xs font-bold text-zinc-600 bg-zinc-100 px-3 py-1.5 rounded-xl border border-zinc-200">
-          Total Intents: <span className="font-mono text-zinc-950 font-black">{initialData.total}</span>
+
+        <div className="flex items-center gap-3">
+          <Badge variant="neutral" className="text-xs px-3 py-1 font-black">
+            {initialData.total} Total Payments
+          </Badge>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-        <input
-          type="text"
-          placeholder="Search ID, Tx ID, Ref..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-          className="h-9 px-3 text-xs bg-white border border-zinc-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-950 font-medium text-zinc-950"
-        />
+      {/* Filter Toolbar */}
+      <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+          {/* Search Input */}
+          <div className="sm:col-span-2">
+            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+              Search Reference / ID
+            </label>
+            <input
+              type="text"
+              placeholder="Filter by #reference, ID, or tx ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+              className="w-full h-9 px-3 text-xs bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+            />
+          </div>
 
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="h-9 px-2 text-xs bg-white border border-zinc-300 rounded-xl font-medium text-zinc-950 cursor-pointer"
-        >
-          <option value="all">All Statuses</option>
-          <option value="pending">PENDING</option>
-          <option value="processing">PROCESSING</option>
-          <option value="paid">PAID</option>
-          <option value="failed">FAILED</option>
-          <option value="cancelled">CANCELLED</option>
-          <option value="expired">EXPIRED</option>
-          <option value="refunded">REFUNDED</option>
-        </select>
+          {/* Status Filter */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Status</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full h-9 px-2 text-xs bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="paid">Paid</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
 
-        <select
-          value={selectedProvider}
-          onChange={(e) => setSelectedProvider(e.target.value)}
-          className="h-9 px-2 text-xs bg-white border border-zinc-300 rounded-xl font-medium text-zinc-950 cursor-pointer"
-        >
-          <option value="all">All Providers</option>
-          <option value="onepay">OnePay</option>
-          <option value="dialog">Dialog</option>
-          <option value="payhere">PayHere</option>
-          <option value="none">No Provider (Pending)</option>
-        </select>
+          {/* Payment Method Filter */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Method</label>
+            <select
+              value={selectedPaymentMethod}
+              onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+              className="w-full h-9 px-2 text-xs bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+            >
+              <option value="all">All Methods</option>
+              <option value="manual_bank_transfer">🏦 Bank Transfer</option>
+              <option value="online_gateway">💳 Online Gateway</option>
+            </select>
+          </div>
 
-        <select
-          value={selectedPurpose}
-          onChange={(e) => setSelectedPurpose(e.target.value)}
-          className="h-9 px-2 text-xs bg-white border border-zinc-300 rounded-xl font-medium text-zinc-950 cursor-pointer"
-        >
-          <option value="all">All Purposes</option>
-          <option value="new_subscription">New Subscription</option>
-          <option value="upgrade">Upgrade</option>
-          <option value="downgrade">Downgrade</option>
-          <option value="renewal">Renewal</option>
-          <option value="reactivation">Reactivation</option>
-        </select>
+          {/* Plan Filter */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-1">Plan</label>
+            <select
+              value={selectedPlan}
+              onChange={(e) => setSelectedPlan(e.target.value)}
+              className="w-full h-9 px-2 text-xs bg-white border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+            >
+              <option value="all">All Plans</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+        </div>
 
-        <select
-          value={selectedPlan}
-          onChange={(e) => setSelectedPlan(e.target.value)}
-          className="h-9 px-2 text-xs bg-white border border-zinc-300 rounded-xl font-medium text-zinc-950 cursor-pointer"
-        >
-          <option value="all">All Plans</option>
-          <option value="starter">Starter</option>
-          <option value="growth">Growth</option>
-          <option value="enterprise">Enterprise</option>
-        </select>
-
-        <Button
-          type="button"
-          onClick={applyFilters}
-          className="h-9 text-xs bg-zinc-950 hover:bg-zinc-800 text-white font-extrabold rounded-xl transition-all cursor-pointer"
-        >
-          Filter Results ⚡
-        </Button>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setSearch('');
+              setSelectedStatus('all');
+              setSelectedProvider('all');
+              setSelectedPurpose('all');
+              setSelectedPlan('all');
+              setSelectedPaymentMethod('all');
+              router.push('/admin/subscription-payments');
+            }}
+            className="text-xs h-8"
+          >
+            Reset Filters
+          </Button>
+          <Button type="button" onClick={applyFilters} className="text-xs h-8 bg-zinc-950 text-white hover:bg-zinc-800">
+            Apply Filters
+          </Button>
+        </div>
       </div>
 
-      {/* Table */}
+      {/* Payments Table */}
       {initialData.data.length === 0 ? (
-        <div className="p-12 text-center border border-dashed border-zinc-200 rounded-2xl space-y-2 bg-white">
-          <p className="text-sm font-bold text-zinc-700">No subscription payments found.</p>
-          <p className="text-xs text-zinc-400">No payment intent records match the selected filter criteria.</p>
+        <div className="p-12 text-center bg-white rounded-2xl border border-zinc-200 space-y-2">
+          <div className="text-3xl">🧾</div>
+          <div className="text-sm font-extrabold text-zinc-900">No payment records found</div>
+          <p className="text-xs text-zinc-500">Try adjusting your filters or search terms.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -254,10 +431,9 @@ export function AdminSubscriptionPaymentsClient({
                 <th className="py-3.5 px-4">Date</th>
                 <th className="py-3.5 px-4">Business</th>
                 <th className="py-3.5 px-4">Plan</th>
-                <th className="py-3.5 px-4">Purpose</th>
+                <th className="py-3.5 px-4">Method</th>
                 <th className="py-3.5 px-4">Amount</th>
                 <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">Provider</th>
                 <th className="py-3.5 px-4">Ref / Tx ID</th>
                 <th className="py-3.5 px-4 text-right">Action</th>
               </tr>
@@ -285,31 +461,25 @@ export function AdminSubscriptionPaymentsClient({
                     )}
                   </td>
                   <td className="py-3 px-4 font-extrabold capitalize text-zinc-900">{item.plan_code}</td>
-                  <td className="py-3 px-4 capitalize text-zinc-700">
-                    {(item.payment_purpose || 'new_subscription').replace('_', ' ')}
-                  </td>
+                  <td className="py-3 px-4 whitespace-nowrap">{renderMethodBadge(item)}</td>
                   <td className="py-3 px-4 font-mono font-black text-zinc-950">
                     LKR {item.amount_lkr.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 whitespace-nowrap">{renderStatusBadge(item.status)}</td>
-                  <td className="py-3 px-4 text-zinc-500 font-medium">
-                    {item.provider ? item.provider.toUpperCase() : '—'}
-                  </td>
+                  <td className="py-3 px-4 whitespace-nowrap">{renderStatusBadge(item.status, item.review_status)}</td>
                   <td className="py-3 px-4 font-mono text-zinc-500 text-[11px]">
                     {item.provider_transaction_id ? item.provider_transaction_id : `#${item.id.slice(0, 8)}`}
                   </td>
                   <td className="py-3 px-4 text-right whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedPayment(item);
-                        setAdminActionType(null);
-                        setAdminReason('');
-                        setActionError(null);
-                      }}
-                      className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-[11px] transition-all cursor-pointer shadow-2xs"
+                      onClick={() => openModal(item)}
+                      className={`px-3 py-1 rounded-lg font-extrabold text-[11px] transition-all cursor-pointer shadow-2xs ${
+                        item.review_status === 'under_review'
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-400/30'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                      }`}
                     >
-                      View Detail
+                      {item.review_status === 'under_review' ? 'Verify Slip 🔍' : 'View Detail'}
                     </button>
                   </td>
                 </tr>
@@ -326,15 +496,15 @@ export function AdminSubscriptionPaymentsClient({
             <div className="flex justify-between items-start border-b border-zinc-100 pb-4">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
-                  Super Admin Detail View
+                  Super Admin Settlement Desk
                 </span>
                 <h3 className="text-xl font-black text-zinc-950 tracking-tight mt-1">
-                  Payment Intent #{selectedPayment.id}
+                  Payment #{selectedPayment.id.slice(0, 13)}
                 </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedPayment(null)}
+                onClick={closeModal}
                 className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-black text-sm flex items-center justify-center cursor-pointer"
               >
                 ✕
@@ -357,7 +527,7 @@ export function AdminSubscriptionPaymentsClient({
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Status</span>
-                  <div className="mt-1">{renderStatusBadge(selectedPayment.status)}</div>
+                  <div className="mt-1">{renderStatusBadge(selectedPayment.status, selectedPayment.review_status)}</div>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-zinc-400">Total Amount</span>
@@ -366,70 +536,179 @@ export function AdminSubscriptionPaymentsClient({
                   </div>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-zinc-400">Plan / Purpose</span>
-                  <div className="font-semibold capitalize text-zinc-800 mt-0.5">
-                    {selectedPayment.plan_code} ({(selectedPayment.payment_purpose || 'new_subscription').replace('_', ' ')})
-                  </div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Method</span>
+                  <div className="mt-1">{renderMethodBadge(selectedPayment)}</div>
                 </div>
               </div>
 
-              {/* Gateway Snapshot */}
-              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-zinc-400">Gateway Information</span>
-                <div className="flex justify-between">
-                  <span>Provider:</span>
-                  <span className="font-mono font-bold text-zinc-950">
-                    {selectedPayment.provider ? selectedPayment.provider.toUpperCase() : 'None (Pending Gateway)'}
-                  </span>
-                </div>
-                {selectedPayment.provider_transaction_id && (
-                  <div className="flex justify-between">
-                    <span>Provider Tx ID:</span>
-                    <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_transaction_id}</span>
+              {/* SECTION: Bank Transfer Verification Dossier */}
+              {selectedPayment.payment_method === 'manual_bank_transfer' && (
+                <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                    <span className="text-xs font-black uppercase text-emerald-950">
+                      🏦 Bank Transfer Review Dossier
+                    </span>
+                    {isLoadingDossier && (
+                      <span className="text-[10px] font-bold text-emerald-700 animate-pulse">
+                        Loading receipt & claims...
+                      </span>
+                    )}
                   </div>
-                )}
-                {selectedPayment.provider_reference && (
-                  <div className="flex justify-between">
-                    <span>Provider Ref:</span>
-                    <span className="font-mono font-bold text-zinc-950">{selectedPayment.provider_reference}</span>
-                  </div>
-                )}
-              </div>
 
-              {/* Enterprise Snapshot if present */}
-              {(() => {
-                const breakdown = (selectedPayment.pricing_snapshot as {
-                  breakdown?: {
-                    basePrice?: number;
-                    extraBranches?: number;
-                    extraBranchCharge?: number;
-                    extraStaffBlocks?: number;
-                    extraStaffCharge?: number;
-                  };
-                } | null)?.breakdown;
-                if (!breakdown) return null;
-                return (
-                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1 text-purple-950">
-                    <span className="text-[10px] font-black uppercase text-purple-800">Enterprise Charge Breakdown</span>
-                    <div className="flex justify-between">
-                      <span>Base Enterprise (5/75):</span>
-                      <span className="font-mono font-bold">LKR {breakdown.basePrice?.toLocaleString()}</span>
+                  {reviewDossier && (
+                    <div className="space-y-3">
+                      {/* Conflict Alert */}
+                      {reviewDossier.claim?.claimStatus === 'disputed_conflict' && (
+                        <div className="p-3 bg-amber-100 border border-amber-300 rounded-xl text-amber-950 space-y-1">
+                          <div className="font-extrabold text-xs flex items-center gap-1">
+                            <span>⚠️</span> CONFLICT DETECTED: MULTIPLE BUSINESS CLAIMS
+                          </div>
+                          <p className="text-[11px] leading-relaxed">
+                            Another business has submitted this identical bank reference. Check your bank statement meticulously to verify which customer actually made the deposit before approving.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Reference Details */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-zinc-500">Customer Reference</span>
+                          <p className="font-mono font-bold text-zinc-900">{reviewDossier.claim?.rawReference || '—'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-zinc-500">Normalized Reference</span>
+                          <p className="font-mono font-bold text-zinc-900">{reviewDossier.claim?.normalizedReference || '—'}</p>
+                        </div>
+                      </div>
+
+                      {/* Resource Audit */}
+                      <div className="p-2.5 bg-white rounded-xl border border-emerald-200/80 text-[11px] space-y-1">
+                        <span className="text-[10px] font-black uppercase text-zinc-500">Current Resource Audit</span>
+                        <div className="flex justify-between">
+                          <span>Active Branches in Workspace:</span>
+                          <span className="font-bold text-zinc-900">{reviewDossier.resourceAudit.activeBranches}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Active Staff Members:</span>
+                          <span className="font-bold text-zinc-900">{reviewDossier.resourceAudit.activeStaff}</span>
+                        </div>
+                      </div>
+
+                      {/* Deposit Slip Viewer */}
+                      {reviewDossier.proof?.signedUrl ? (
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[10px] font-black uppercase text-zinc-600">Uploaded Deposit Slip:</span>
+                          <div className="rounded-xl overflow-hidden border border-zinc-300 bg-white">
+                            {reviewDossier.proof.mimeType === 'application/pdf' ? (
+                              <div className="p-4 text-center space-y-2">
+                                <span className="text-2xl">📄</span>
+                                <p className="text-xs font-bold text-zinc-800">PDF Bank Slip Document</p>
+                                <a
+                                  href={reviewDossier.proof.signedUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block text-xs font-bold text-emerald-700 underline hover:no-underline"
+                                >
+                                  Open PDF Document in New Tab ↗
+                                </a>
+                              </div>
+                            ) : (
+                              <a
+                                href={reviewDossier.proof.signedUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block group relative"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={reviewDossier.proof.signedUrl}
+                                  alt="Deposit Slip"
+                                  className="w-full max-h-56 object-contain bg-zinc-900/5 group-hover:opacity-95 transition-opacity"
+                                />
+                                <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 text-white rounded text-[10px] font-bold">
+                                  Click to view full size ↗
+                                </div>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-zinc-100 rounded-xl text-zinc-500 text-center text-xs">
+                          {isLoadingDossier ? 'Loading slip...' : 'No proof file uploaded yet.'}
+                        </div>
+                      )}
+
+                      {/* Verification & Settlement Form (Only for pending / processing / under_review) */}
+                      {selectedPayment.status !== 'paid' && selectedPayment.review_status !== 'approved' && (
+                        <div className="p-3 bg-white rounded-xl border border-emerald-300 space-y-3 mt-2">
+                          <div className="text-xs font-extrabold text-emerald-950">
+                            Verify Bank Statement & Approve Settlement
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-zinc-600 mb-1">
+                              External Bank Statement Tx ID / Narration <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. CBS-0947192, COMB-DEPOSIT-20261003"
+                              value={settlementStatementRef}
+                              onChange={(e) => setSettlementStatementRef(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs bg-zinc-50 border border-zinc-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-zinc-600 mb-1">
+                              Reconciliation Audit Note <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Verified deposit in Commercial Bank account by admin"
+                              value={settlementReconciliationNote}
+                              onChange={(e) => setSettlementReconciliationNote(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs bg-zinc-50 border border-zinc-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                            />
+                          </div>
+
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              type="button"
+                              disabled={isSettling || !settlementStatementRef.trim() || !settlementReconciliationNote.trim()}
+                              onClick={handleApproveBankTransfer}
+                              className="flex-1 h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs"
+                            >
+                              {isSettling ? 'Settling Atomically...' : 'Approve & Activate Subscription ⚡'}
+                            </Button>
+                          </div>
+
+                          {/* Rejection Option */}
+                          <div className="pt-2 border-t border-zinc-100 space-y-2">
+                            <span className="text-[10px] font-bold text-rose-700 uppercase">Or Reject Payment:</span>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Rejection reason (e.g. Deposit not found in statement)..."
+                                value={rejectionReasonInput}
+                                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                                className="flex-1 h-8 px-2 text-xs bg-zinc-50 border border-zinc-300 rounded-lg text-rose-900"
+                              />
+                              <Button
+                                type="button"
+                                disabled={isSettling || !rejectionReasonInput.trim()}
+                                onClick={handleRejectBankTransfer}
+                                className="h-8 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold"
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    {typeof breakdown.extraBranches === 'number' && breakdown.extraBranches > 0 && (
-                      <div className="flex justify-between">
-                        <span>Extra Branches ({breakdown.extraBranches}):</span>
-                        <span className="font-mono font-bold">+LKR {breakdown.extraBranchCharge?.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {typeof breakdown.extraStaffBlocks === 'number' && breakdown.extraStaffBlocks > 0 && (
-                      <div className="flex justify-between">
-                        <span>Extra Staff Blocks ({breakdown.extraStaffBlocks}):</span>
-                        <span className="font-mono font-bold">+LKR {breakdown.extraStaffCharge?.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+                  )}
+                </div>
+              )}
 
               {/* Admin Reason if recorded */}
               {selectedPayment.admin_reason && (
@@ -500,7 +779,7 @@ export function AdminSubscriptionPaymentsClient({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setSelectedPayment(null)}
+                onClick={closeModal}
                 className="text-xs ml-auto"
               >
                 Close

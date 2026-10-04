@@ -12,6 +12,7 @@ interface PageProps {
     provider?: string;
     purpose?: string;
     plan?: string;
+    paymentMethod?: string;
     search?: string;
     businessId?: string;
   }>;
@@ -35,6 +36,7 @@ export default async function AdminSubscriptionPaymentsPage({ searchParams }: Pa
     provider: sParams.provider,
     purpose: sParams.purpose,
     plan: sParams.plan,
+    paymentMethod: sParams.paymentMethod,
     search: sParams.search,
     businessId: sParams.businessId,
   });
@@ -47,6 +49,7 @@ export default async function AdminSubscriptionPaymentsPage({ searchParams }: Pa
         provider: sParams.provider || 'all',
         purpose: sParams.purpose || 'all',
         plan: sParams.plan || 'all',
+        paymentMethod: sParams.paymentMethod || 'all',
         search: sParams.search || '',
       }}
     />

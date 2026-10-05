@@ -80,7 +80,7 @@ export function SubscriptionRealtimeListener({
 
             if (effective === 'SUSPENDED' || effective === 'CANCELLED') {
               if (userRole === 'business_owner') {
-                if (currentPath !== '/dashboard/settings/subscription') {
+                if (!currentPath.startsWith('/dashboard/settings/subscription')) {
                   router.replace('/dashboard/settings/subscription');
                 } else {
                   router.refresh();

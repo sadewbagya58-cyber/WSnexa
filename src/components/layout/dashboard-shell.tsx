@@ -79,10 +79,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Suspended Business Owner redirection to subscription settings
+  // Suspended Business Owner redirection to subscription settings (preserves checkout sub-route)
   useEffect(() => {
     const isSuspended = subscription?.effectiveStatus === 'SUSPENDED' || subscription?.effectiveStatus === 'CANCELLED';
-    if (isSuspended && userRole === 'business_owner' && pathname !== '/dashboard/settings/subscription') {
+    if (isSuspended && userRole === 'business_owner' && (!pathname || !pathname.startsWith('/dashboard/settings/subscription'))) {
       router.replace('/dashboard/settings/subscription');
     }
   }, [subscription?.effectiveStatus, userRole, pathname, router]);

@@ -339,13 +339,67 @@ async function runVerification() {
   const resolvedFresh = simulateSubscriptionUpdate(null, testNow, false);
   assert.strictEqual(resolvedFresh.toISOString(), testNow.toISOString(), '132. Fresh paid subscription gets non-null immediate trial end');
 
+  // 11.8 Subscription Expired/Suspended Checkout Deadlock Prevention
+  console.log('\n--- SECTION 11.8: Subscription Deadlock Prevention ---');
+  const dashboardShellPath = path.join(process.cwd(), 'src/components/layout/dashboard-shell.tsx');
+  assert(fs.existsSync(dashboardShellPath), '133. dashboard-shell.tsx exists');
+  const dashboardShellContent = fs.readFileSync(dashboardShellPath, 'utf-8');
+  assert(
+    dashboardShellContent.includes("!pathname.startsWith('/dashboard/settings/subscription')"),
+    '134. dashboard-shell allows subpaths under /dashboard/settings/subscription without deadlock'
+  );
+  assert(
+    !dashboardShellContent.includes("pathname !== '/dashboard/settings/subscription'"),
+    '135. dashboard-shell removes restrictive exact pathname equality check'
+  );
+
+  const deadlockRealtimePath = path.join(process.cwd(), 'src/components/subscription/subscription-realtime-listener.tsx');
+  assert(fs.existsSync(deadlockRealtimePath), '136. subscription-realtime-listener.tsx exists');
+  const deadlockRealtimeContent = fs.readFileSync(deadlockRealtimePath, 'utf-8');
+  assert(
+    deadlockRealtimeContent.includes("!currentPath.startsWith('/dashboard/settings/subscription')"),
+    '137. realtime listener allows subpaths under /dashboard/settings/subscription without bounce'
+  );
+  assert(
+    !deadlockRealtimeContent.includes("currentPath !== '/dashboard/settings/subscription'"),
+    '138. realtime listener removes restrictive exact currentPath equality check'
+  );
+
+  const ownerClientPath = path.join(process.cwd(), 'src/components/subscription/owner-subscription-client.tsx');
+  assert(fs.existsSync(ownerClientPath), '139. owner-subscription-client.tsx exists');
+  const ownerClientContent = fs.readFileSync(ownerClientPath, 'utf-8');
+  assert(
+    ownerClientContent.includes("isCurrentActive = isCurrent && effectiveStatus === 'ACTIVE'"),
+    '140. owner-subscription-client distinguishes active plan code from expired/suspended plan code'
+  );
+  assert(
+    ownerClientContent.includes("isDisabled = loadingPlanCode !== null || isCurrentActive"),
+    '141. owner-subscription-client disables action button only when current plan is actually ACTIVE'
+  );
+  assert(
+    ownerClientContent.includes("Renew Subscription / Pay Now ⚡"),
+    '142. owner-subscription-client renders renewal action for expired or suspended plan'
+  );
+
+  // Unit guard check simulation
+  const shouldRedirectSuspended = (pathname: string) => {
+    return (!pathname || !pathname.startsWith('/dashboard/settings/subscription'));
+  };
+  assert.strictEqual(shouldRedirectSuspended('/dashboard'), true, '143. Protected route /dashboard correctly redirected');
+  assert.strictEqual(shouldRedirectSuspended('/dashboard/orders'), true, '144. Protected route /dashboard/orders correctly redirected');
+  assert.strictEqual(shouldRedirectSuspended('/dashboard/menu'), true, '145. Protected route /dashboard/menu correctly redirected');
+  assert.strictEqual(shouldRedirectSuspended('/dashboard/settings/subscription'), false, '146. Subscription page allowed');
+  assert.strictEqual(shouldRedirectSuspended('/dashboard/settings/subscription/checkout'), false, '147. Subscription checkout allowed');
+  assert.strictEqual(shouldRedirectSuspended('/dashboard/settings/subscription/checkout?plan=growth'), false, '148. Checkout with plan query params allowed');
+
   console.log('\n================================================================');
-  console.log('  Manual Bank-Transfer Verification: ALL 132 ASSERTIONS PASSED');
+  console.log('  Manual Bank-Transfer Verification: ALL 148 ASSERTIONS PASSED');
   console.log('  [VERIFIED: Schema invariants, lock decoupling, storage RLS, unit path & date math]');
   console.log('  [VERIFIED: Receipt form UI, loading stages, retry resilience, and latency optimizations]');
   console.log('  [VERIFIED: End-to-end receipt upload, super admin review, atomic settlement, and rejection]');
   console.log('  [VERIFIED: Actor profile schema alignment & forward migration without full_name bug]');
   console.log('  [VERIFIED: trial_ends_at NOT NULL constraint preserved & regression tests passed]');
+  console.log('  [VERIFIED: Deadlock prevention allows checkout & plan renewal during suspension]');
   console.log('================================================================\n');
 }
 

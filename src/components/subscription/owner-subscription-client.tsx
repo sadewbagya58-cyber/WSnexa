@@ -172,24 +172,91 @@ export function OwnerSubscriptionClient({
           {(Object.keys(SUBSCRIPTION_PLANS) as SubscriptionPlanCode[]).map((code) => {
             const item = SUBSCRIPTION_PLANS[code];
             const isCurrent = subscription.plan_code === code;
+            const isCurrentActive = isCurrent && effectiveStatus === 'ACTIVE';
             const isLoadingThis = loadingPlanCode === code;
-            const isDisabled = loadingPlanCode !== null || isCurrent;
+            const isDisabled = loadingPlanCode !== null || isCurrentActive;
+
+            const renderPlanBadge = () => {
+              if (isCurrentActive) {
+                return (
+                  <Badge variant="solid" className="bg-zinc-950 text-white font-extrabold text-[10px] border border-zinc-700 px-2.5 py-0.5">
+                    CURRENT
+                  </Badge>
+                );
+              }
+              if (isCurrent) {
+                if (effectiveStatus === 'GRACE_PERIOD') {
+                  return (
+                    <Badge variant="solid" className="bg-amber-600 text-white font-extrabold text-[10px] px-2.5 py-0.5">
+                      RENEWAL DUE
+                    </Badge>
+                  );
+                }
+                if (effectiveStatus === 'SUSPENDED') {
+                  return (
+                    <Badge variant="solid" className="bg-rose-600 text-white font-extrabold text-[10px] px-2.5 py-0.5">
+                      SUSPENDED
+                    </Badge>
+                  );
+                }
+                if (effectiveStatus === 'CANCELLED') {
+                  return (
+                    <Badge variant="solid" className="bg-zinc-900 text-white font-extrabold text-[10px] border border-zinc-700 px-2.5 py-0.5">
+                      CANCELLED
+                    </Badge>
+                  );
+                }
+                if (effectiveStatus === 'TRIALING') {
+                  return (
+                    <Badge variant="solid" className="bg-blue-600 text-white font-extrabold text-[10px] px-2.5 py-0.5">
+                      CURRENT TRIAL
+                    </Badge>
+                  );
+                }
+                return (
+                  <Badge variant="solid" className="bg-zinc-700 text-white font-extrabold text-[10px] px-2.5 py-0.5">
+                    EXPIRED
+                  </Badge>
+                );
+              }
+              return null;
+            };
+
+            const getActionButtonText = () => {
+              if (isCurrent) {
+                if (effectiveStatus === 'GRACE_PERIOD') {
+                  return 'Renew Subscription ⚡';
+                }
+                if (effectiveStatus === 'TRIALING') {
+                  return `Activate ${item.name} ⚡`;
+                }
+                return 'Renew Subscription / Pay Now ⚡';
+              }
+              if (code === 'enterprise') {
+                return 'Configure Enterprise ⚡';
+              }
+              return `Select ${item.name} ⚡`;
+            };
 
             return (
               <div
                 key={code}
                 className={`rounded-2xl border bg-white p-6 shadow-sm flex flex-col justify-between space-y-6 ${
-                  isCurrent ? 'border-zinc-950 ring-2 ring-zinc-950' : 'border-zinc-200'
+                  isCurrentActive
+                    ? 'border-zinc-950 ring-2 ring-zinc-950'
+                    : isCurrent
+                    ? effectiveStatus === 'GRACE_PERIOD'
+                      ? 'border-amber-400 ring-2 ring-amber-400/40'
+                      : effectiveStatus === 'TRIALING'
+                      ? 'border-blue-400 ring-2 ring-blue-400/40'
+                      : 'border-rose-400 ring-2 ring-rose-400/40'
+                    : 'border-zinc-200'
                 }`}
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-black text-zinc-950">{item.name}</h3>
-                    {isCurrent && (
-                      <Badge variant="solid" className="bg-zinc-950 text-white font-extrabold text-[10px] border border-zinc-700 px-2.5 py-0.5">
-                        CURRENT
-                      </Badge>
-                    )}
+                    {renderPlanBadge()}
                   </div>
                   <div className="text-2xl font-black text-zinc-900">
                     {item.priceLkrMonthly !== null ? (
@@ -210,7 +277,7 @@ export function OwnerSubscriptionClient({
                 </div>
 
                 <div>
-                  {isCurrent ? (
+                  {isCurrentActive ? (
                     <button
                       disabled
                       aria-disabled="true"
@@ -223,7 +290,15 @@ export function OwnerSubscriptionClient({
                       type="button"
                       disabled={isDisabled}
                       onClick={() => handleSelectPlan(code)}
-                      className="w-full h-11 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 active:scale-[0.98] text-white font-extrabold text-xs transition-all duration-150 shadow-xs hover:shadow-md cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2"
+                      className={`w-full h-11 rounded-xl text-white font-extrabold text-xs transition-all duration-150 shadow-xs hover:shadow-md cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        isCurrent
+                          ? effectiveStatus === 'GRACE_PERIOD'
+                            ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 focus:ring-amber-500'
+                            : effectiveStatus === 'TRIALING'
+                            ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 focus:ring-blue-500'
+                            : 'bg-rose-700 hover:bg-rose-800 active:bg-rose-900 focus:ring-rose-600'
+                          : 'bg-zinc-950 hover:bg-zinc-800 active:bg-zinc-900 focus:ring-zinc-950'
+                      }`}
                     >
                       {isLoadingThis ? (
                         <>
@@ -234,7 +309,7 @@ export function OwnerSubscriptionClient({
                           <span>Opening Checkout...</span>
                         </>
                       ) : (
-                        <span>{code === 'enterprise' ? 'Configure Enterprise ⚡' : `Select ${item.name} ⚡`}</span>
+                        <span>{getActionButtonText()}</span>
                       )}
                     </button>
                   )}

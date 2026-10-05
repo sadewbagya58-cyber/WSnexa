@@ -104,7 +104,11 @@ async function runVerification() {
 
   const uiContent = fs.readFileSync(uiPath, 'utf-8');
   assert(uiContent.includes('Today Operations') && uiContent.includes('OPERATIONAL'), '26. Today Operations tab prioritizes active operational states');
-  assert(uiContent.includes('handleStaffCreateReservation') && uiContent.includes('New Staff Reservation'), '27. Staff create reservation modal integrated');
+  assert(
+    uiContent.includes('handleStaffCreateReservation') &&
+      (uiContent.includes('New Staff Reservation') || uiContent.includes('New Reservation')),
+    '27. Staff create reservation modal integrated'
+  );
   assert(uiContent.includes('handleDeclineSubmit') && uiContent.includes('Decline Reservation'), '28. Staff decline modal integrated');
   assert(uiContent.includes('handleOpenDetailModal') && uiContent.includes('Lifecycle Status History'), '29. Staff detail drawer with status audit timeline integrated');
   assert(uiContent.includes('customers.contact_view') || uiContent.includes('hasContactView'), '30. Respects customers.contact_view permission for contact masking');

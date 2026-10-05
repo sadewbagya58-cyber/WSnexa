@@ -75,8 +75,17 @@ async function runSuite() {
     isClosed: false,
     opensAt: '18:00',
     closesAt: '02:00',
+    isOvernight: true,
   });
-  assert(crossMidnightHours.success, 'Cross-midnight hours accepted (18:00 - 02:00)');
+  assert(crossMidnightHours.success, 'Cross-midnight hours accepted (18:00 - 02:00 with isOvernight: true)');
+
+  const invalidCrossMidnightHours = operatingDaySchema.safeParse({
+    dayOfWeek: 5,
+    isClosed: false,
+    opensAt: '18:00',
+    closesAt: '02:00',
+  });
+  assert(!invalidCrossMidnightHours.success, 'Cross-midnight hours without isOvernight flag safely rejected');
 
   const twentyFourHours = operatingDaySchema.safeParse({
     dayOfWeek: 6,

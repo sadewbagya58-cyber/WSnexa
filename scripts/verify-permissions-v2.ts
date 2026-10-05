@@ -90,9 +90,21 @@ async function verifyPermissionsV2() {
 
   // 4. Route Permission Guard Resolution
   console.log('\n4. Testing Route Permission Resolution...');
-  assert(getRequiredPermissionForRoute('/dashboard/waiter/order') === 'waiter.orders.create', '/dashboard/waiter/order requires waiter.orders.create');
-  assert(getRequiredPermissionForRoute('/dashboard/menu/categories') === 'menu.categories.manage', '/dashboard/menu/categories requires menu.categories.manage');
-  assert(getRequiredPermissionForRoute('/dashboard/business') === 'business.settings.manage', '/dashboard/business requires business.settings.manage');
+  const waiterPerm = getRequiredPermissionForRoute('/dashboard/waiter/order');
+  assert(
+    Array.isArray(waiterPerm) ? waiterPerm.includes('waiter.orders.create') : waiterPerm === 'waiter.orders.create',
+    '/dashboard/waiter/order requires waiter.orders.create'
+  );
+  const menuCatPerm = getRequiredPermissionForRoute('/dashboard/menu/categories');
+  assert(
+    Array.isArray(menuCatPerm) ? menuCatPerm.includes('menu.categories.manage') : menuCatPerm === 'menu.categories.manage',
+    '/dashboard/menu/categories requires menu.categories.manage'
+  );
+  const bizPerm = getRequiredPermissionForRoute('/dashboard/business');
+  assert(
+    Array.isArray(bizPerm) ? bizPerm.includes('business.settings.manage') : bizPerm === 'business.settings.manage',
+    '/dashboard/business requires business.settings.manage'
+  );
 
   // 5. Database Schema Inspection
   console.log('\n5. Inspecting Supabase Public Permissions Table...');

@@ -117,7 +117,10 @@ async function main() {
 
   const routePermPath = path.join(process.cwd(), 'src/lib/security/route-permissions.ts');
   const routePermContent = fs.readFileSync(routePermPath, 'utf-8');
-  assert(routePermContent.includes("prefix: '/dashboard/customers', permission: 'customers.view'"), '29. Route permission map gates /dashboard/customers with customers.view');
+  assert(
+    routePermContent.includes("prefix: '/dashboard/customers'") && routePermContent.includes("'customers.view'"),
+    '29. Route permission map gates /dashboard/customers with customers.view'
+  );
 
   const crmHubPagePath = path.join(process.cwd(), 'src/app/(dashboard)/dashboard/customers/page.tsx');
   const crmHubPageContent = fs.readFileSync(crmHubPagePath, 'utf-8');

@@ -135,7 +135,10 @@ async function runLiveOnboardingVerificationSuite() {
   assert(!invalidTimezone.success, 'Test 9: Invalid timezone rejected');
 
   const invalidHours = operatingDaySchema.safeParse({ dayOfWeek: 1, isClosed: false, opensAt: '22:00', closesAt: '08:00' });
-  assert(!invalidHours.success, 'Test 10: Invalid operating hours (closing <= opening) rejected');
+  assert(!invalidHours.success, 'Test 10: Invalid operating hours (closing <= opening without isOvernight) rejected');
+
+  const validOvernight = operatingDaySchema.safeParse({ dayOfWeek: 1, isClosed: false, opensAt: '22:00', closesAt: '08:00', isOvernight: true });
+  assert(validOvernight.success, 'Test 10b: Valid explicit overnight operating hours accepted');
 
   const closedDay = operatingDaySchema.safeParse({ dayOfWeek: 0, isClosed: true, opensAt: '00:00', closesAt: '00:00' });
   assert(closedDay.success, 'Test 11: Closed day requires no open/close time validation');

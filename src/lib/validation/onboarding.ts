@@ -123,11 +123,21 @@ export const operatingDaySchema = z.object({
   isClosed: z.boolean().default(false),
   opensAt: z.string().default('08:00'),
   closesAt: z.string().default('22:00'),
+  isOvernight: z.boolean().optional(),
 }).refine((data) => {
   if (data.isClosed) return true;
-  return typeof data.opensAt === 'string' && typeof data.closesAt === 'string' && data.opensAt.trim().length > 0 && data.closesAt.trim().length > 0;
+  if (!data.opensAt || !data.closesAt) return false;
+  if (typeof data.opensAt !== 'string' || typeof data.closesAt !== 'string') return false;
+  if (data.opensAt.trim().length === 0 || data.closesAt.trim().length === 0) return false;
+
+  if (data.isOvernight) {
+    // Explicit overnight shift: opens on one day and closes the next day (opensAt > closesAt)
+    return data.opensAt > data.closesAt;
+  }
+  // Standard same-day shift: closing must be strictly after opening
+  return data.opensAt < data.closesAt;
 }, {
-  message: 'Valid opening and closing times are required',
+  message: 'Invalid operating hours: closing time must be after opening time, or marked as overnight',
   path: ['closesAt'],
 });
 

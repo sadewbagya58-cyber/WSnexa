@@ -89,6 +89,19 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
     if (!res.success) {
       setErrorMsg(res.message || 'Failed to create modifier group.');
     } else {
+      const createdGroup: ModifierGroupItem = res.data?.group || {
+        id: res.data?.groupId || Date.now().toString(),
+        name: groupForm.name.trim(),
+        description: groupForm.description.trim() || null,
+        selection_type: groupForm.selectionType,
+        is_required: groupForm.isRequired,
+        min_selections: groupForm.isRequired ? Math.max(1, groupForm.minSelections) : groupForm.minSelections,
+        max_selections: groupForm.selectionType === 'single' ? 1 : groupForm.maxSelections,
+        display_order: groups.length,
+        is_active: true,
+        modifier_options: [],
+      };
+      setGroups((prev) => [...prev, createdGroup]);
       setGroupForm({
         name: '',
         description: '',
@@ -97,7 +110,6 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
         minSelections: 0,
         maxSelections: 1,
       });
-      window.location.reload();
     }
     setGroupLoading(false);
   };
@@ -135,8 +147,22 @@ export const ModifierManager: React.FC<ModifierManagerProps> = ({
     if (!res.success) {
       alert(res.message || 'Failed to add option.');
     } else {
-      setOptionForms({ ...optionForms, [groupId]: { name: '', price: '' } });
-      window.location.reload();
+      const createdOption: ModifierOptionItem = res.data?.option || {
+        id: res.data?.optionId || Date.now().toString(),
+        name: form.name.trim(),
+        additional_price_cents: Math.round(numPrice * 100),
+        display_order: 0,
+        is_active: true,
+      };
+
+      setGroups((prevGroups) =>
+        prevGroups.map((g) =>
+          g.id === groupId
+            ? { ...g, modifier_options: [...g.modifier_options, createdOption] }
+            : g
+        )
+      );
+      setOptionForms((prev) => ({ ...prev, [groupId]: { name: '', price: '' } }));
     }
     setOptionLoading(null);
   };

@@ -20,6 +20,9 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const isSubmittingRef = useRef(false);
@@ -47,17 +50,23 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
     setErrorMsg(null);
     setSuccessMsg(null);
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
+    if (!validTypes.includes(file.type.toLowerCase())) {
       setErrorMsg('Invalid image format. PNG, JPG, and WEBP supported.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       setErrorMsg('Image size exceeds 5MB limit.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setUploading(true);
+    setUploadStatus('uploading');
+    setUploadFileName(file.name);
 
     try {
       const supabase = createClient();
@@ -70,7 +79,9 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
 
       if (uploadError) {
         setErrorMsg(`Upload failed: ${uploadError.message}`);
+        setUploadStatus('error');
         setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
 
@@ -79,11 +90,21 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
       } = supabase.storage.from('business-assets').getPublicUrl(filePath);
 
       setImageUrl(publicUrl);
+      setUploadStatus('success');
     } catch {
-      setErrorMsg('Error uploading image.');
+      setErrorMsg('Error uploading image to storage.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleRemoveImage = () => {
+    setImageUrl(null);
+    setUploadStatus('idle');
+    setUploadFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleQuickCreateCategory = async (e: React.FormEvent) => {
@@ -318,21 +339,59 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
       <div>
         <label className="block text-xs font-medium text-zinc-700">Item Image (Optional)</label>
         <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 overflow-hidden">
-            {imageUrl ? (
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 overflow-hidden relative">
+            {uploadStatus === 'uploading' ? (
+              <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-100 p-1 text-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950" />
+                <span className="text-[9px] font-bold text-zinc-600 mt-1">Uploading</span>
+              </div>
+            ) : imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={imageUrl} alt="Preview" className="h-full w-full object-cover" />
             ) : (
               <span className="text-[10px] text-zinc-400">No Image</span>
             )}
           </div>
-          <input
-            type="file"
-            accept="image/png, image/jpeg, image/webp"
-            onChange={handleImageUpload}
-            disabled={uploading}
-            className="text-xs text-zinc-500 max-w-full file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 cursor-pointer"
-          />
+          <div className="space-y-1.5 flex-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png, image/jpeg, image/webp"
+              onChange={handleImageUpload}
+              disabled={uploading || loading}
+              className="text-xs text-zinc-500 max-w-full file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 cursor-pointer disabled:opacity-50"
+            />
+            {uploadStatus === 'uploading' && (
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 w-fit animate-pulse">
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                <span>Uploading {uploadFileName ? `"${uploadFileName}"` : 'image'} to storage...</span>
+              </div>
+            )}
+            {uploadStatus === 'success' && imageUrl && (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  ✅ Image uploaded successfully
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                >
+                  Remove Image
+                </button>
+              </div>
+            )}
+            {uploadStatus === 'error' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-rose-600">
+                  Upload failed. Please choose another image or retry.
+                </span>
+              </div>
+            )}
+            <p className="text-[11px] text-zinc-400">
+              Supported: PNG, JPG, WEBP up to 5MB.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -358,7 +417,7 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
         <button
           type="button"
           onClick={() => router.push('/dashboard/menu/items')}
-          disabled={loading}
+          disabled={loading || uploading}
           className="min-h-[44px] px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl"
         >
           Cancel
@@ -370,14 +429,14 @@ export const CreateItemForm: React.FC<CreateItemFormProps> = ({ categories: init
           disabled={loading || uploading}
           className="min-h-[44px] px-4 py-2 font-bold text-xs border-zinc-300 text-zinc-800 hover:bg-zinc-100"
         >
-          {loading ? 'Saving…' : 'Save & Add Another +'}
+          {uploading ? 'Uploading Image…' : loading ? 'Saving…' : 'Save & Add Another +'}
         </Button>
         <Button
           type="submit"
           disabled={loading || uploading}
           className="min-h-[44px] px-5 py-2 font-bold text-xs bg-zinc-950 hover:bg-zinc-800 text-white"
         >
-          {loading ? 'Saving…' : 'Add Menu Item'}
+          {uploading ? 'Uploading Image…' : loading ? 'Saving…' : 'Add Menu Item'}
         </Button>
       </div>
 

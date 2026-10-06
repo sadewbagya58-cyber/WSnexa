@@ -14,6 +14,7 @@ import { bulkGenerateBranchTablePinsAction } from '@/server/actions/table';
 import { generateQrSvgString, generateQrPngDataUrl } from '@/lib/qr/qr-generator';
 import { AreaQrModal } from './area-qr-modal';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export interface AreaQrSummary {
   areaId: string;
@@ -67,13 +68,18 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
   areaQrs = [],
   canManage = true,
 }) => {
+  const router = useRouter();
   const [qr, setQr] = useState(initialQr);
   const [rawToken, setRawToken] = useState<string | null>(initialQr?.rawToken || null);
+  const [areaList, setAreaList] = useState<AreaQrSummary[]>(areaQrs);
   const [selectedAreaForQr, setSelectedAreaForQr] = useState<AreaQrSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [svgHtml, setSvgHtml] = useState<string>('');
 
+  useEffect(() => {
+    setAreaList(areaQrs);
+  }, [areaQrs]);
 
   // Settings State
   const [requireTableSelection, setRequireTableSelection] = useState<boolean>(initialSelection);
@@ -196,6 +202,44 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
     } catch (err) {
       alert('Failed to generate PNG download: ' + err);
     }
+  };
+
+  const handleAreaQrChange = (data: {
+    areaId: string;
+    rawToken: string | null;
+    version: number;
+    isActive: boolean;
+    qrUrl?: string;
+  }) => {
+    setAreaList((prev) =>
+      prev.map((a) =>
+        a.areaId === data.areaId
+          ? {
+              ...a,
+              hasActiveQr: data.isActive,
+              rawToken: data.rawToken,
+              version: data.version,
+              qrUrl: data.qrUrl || (data.rawToken ? `${baseUrl}/m/${data.rawToken}` : null),
+              tokenPrefix: data.rawToken ? data.rawToken.substring(0, 8) : null,
+              generatedAt: data.isActive ? new Date().toISOString() : a.generatedAt,
+            }
+          : a
+      )
+    );
+    setSelectedAreaForQr((prev) =>
+      prev && prev.areaId === data.areaId
+        ? {
+            ...prev,
+            hasActiveQr: data.isActive,
+            rawToken: data.rawToken,
+            version: data.version,
+            qrUrl: data.qrUrl || (data.rawToken ? `${baseUrl}/m/${data.rawToken}` : null),
+            tokenPrefix: data.rawToken ? data.rawToken.substring(0, 8) : null,
+            generatedAt: data.isActive ? new Date().toISOString() : prev.generatedAt,
+          }
+        : prev
+    );
+    router.refresh();
   };
 
   const handleSettingChange = async (updates: {
@@ -394,7 +438,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
           </Link>
         </div>
 
-        {areaQrs.length === 0 ? (
+        {areaList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center space-y-2">
             <div className="text-2xl">📍</div>
             <div className="text-sm font-bold text-zinc-900">No Service Areas Found</div>
@@ -410,7 +454,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {areaQrs.map((area) => (
+            {areaList.map((area) => (
               <Card key={area.areaId} className="p-5 flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-colors">
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -617,6 +661,7 @@ export const BranchQrManager: React.FC<BranchQrManagerProps> = ({
           initialRawToken={selectedAreaForQr.rawToken}
           initialVersion={selectedAreaForQr.version}
           canManage={canManage}
+          onQrChange={handleAreaQrChange}
         />
       )}
     </div>

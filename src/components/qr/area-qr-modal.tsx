@@ -7,6 +7,7 @@ import {
   generateAreaQrAction,
   regenerateAreaQrAction,
   disableAreaQrAction,
+  getActiveAreaQrAction,
 } from '@/server/actions/qr';
 import { generateQrSvgString, generateQrPngDataUrl } from '@/lib/qr/qr-generator';
 
@@ -25,6 +26,13 @@ export interface AreaQrModalProps {
   initialRawToken?: string | null;
   initialVersion?: number;
   canManage?: boolean;
+  onQrChange?: (data: {
+    areaId: string;
+    rawToken: string | null;
+    version: number;
+    isActive: boolean;
+    qrUrl?: string;
+  }) => void;
 }
 
 export function AreaQrModal({
@@ -37,10 +45,12 @@ export function AreaQrModal({
   initialRawToken = null,
   initialVersion = 1,
   canManage = true,
+  onQrChange,
 }: AreaQrModalProps) {
   const [rawToken, setRawToken] = useState<string | null>(initialRawToken);
   const [version, setVersion] = useState<number>(initialVersion);
   const [isActive, setIsActive] = useState<boolean>(Boolean(initialRawToken));
+  const [isLoadingInitial, setIsLoadingInitial] = useState<boolean>(false);
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   const [isPending, startTransition] = useTransition();
@@ -51,15 +61,46 @@ export function AreaQrModal({
 
   const publicUrl = rawToken ? `${baseUrl}/m/${rawToken}` : '';
 
-  // Synchronize state when modal opens or initial token props change
+  // Synchronize state when modal opens or initial token props change, fetching live from DB if token not supplied
   useEffect(() => {
+    let isCancelled = false;
+
     if (isOpen) {
-      setRawToken(initialRawToken);
-      setVersion(initialVersion || 1);
-      setIsActive(Boolean(initialRawToken));
       setErrorMsg(null);
+      if (initialRawToken) {
+        setRawToken(initialRawToken);
+        setVersion(initialVersion || 1);
+        setIsActive(true);
+      } else {
+        setIsLoadingInitial(true);
+        getActiveAreaQrAction(area.id)
+          .then((res) => {
+            if (isCancelled) return;
+            if (res && res.rawToken && res.is_active) {
+              setRawToken(res.rawToken);
+              setVersion(res.version || 1);
+              setIsActive(true);
+            } else {
+              setRawToken(null);
+              setVersion(initialVersion || 1);
+              setIsActive(false);
+            }
+          })
+          .catch(() => {
+            if (isCancelled) return;
+            setRawToken(null);
+            setIsActive(false);
+          })
+          .finally(() => {
+            if (!isCancelled) setIsLoadingInitial(false);
+          });
+      }
     }
-  }, [isOpen, initialRawToken, initialVersion]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, area.id, initialRawToken, initialVersion]);
 
   // Generate SVG only when a genuine cryptographic rawToken is active
   useEffect(() => {
@@ -86,6 +127,13 @@ export function AreaQrModal({
         setRawToken(res.rawToken);
         setIsActive(true);
         setVersion(1);
+        onQrChange?.({
+          areaId: area.id,
+          rawToken: res.rawToken,
+          version: 1,
+          isActive: true,
+          qrUrl: res.qrUrl,
+        });
       } else {
         setErrorMsg(res.message || 'Failed to generate Area QR code.');
       }
@@ -105,9 +153,17 @@ export function AreaQrModal({
     startTransition(async () => {
       const res = await regenerateAreaQrAction(area.id, version);
       if (res.success && res.rawToken) {
+        const nextVersion = res.version || version + 1;
         setRawToken(res.rawToken);
-        setVersion(res.version || version + 1);
+        setVersion(nextVersion);
         setIsActive(true);
+        onQrChange?.({
+          areaId: area.id,
+          rawToken: res.rawToken,
+          version: nextVersion,
+          isActive: true,
+          qrUrl: res.qrUrl,
+        });
       } else {
         setErrorMsg(res.message || 'Failed to regenerate Area QR code.');
       }
@@ -123,6 +179,12 @@ export function AreaQrModal({
       if (res.success) {
         setIsActive(false);
         setRawToken(null);
+        onQrChange?.({
+          areaId: area.id,
+          rawToken: null,
+          version,
+          isActive: false,
+        });
       } else {
         setErrorMsg(res.message || 'Failed to revoke Area QR code.');
       }
@@ -224,7 +286,12 @@ export function AreaQrModal({
 
               {/* QR Code Container */}
               <div className="flex flex-col items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 space-y-2">
-                {isActive && svgHtml ? (
+                {isLoadingInitial ? (
+                  <div className="h-44 w-44 flex flex-col items-center justify-center rounded-lg border border-zinc-200 bg-white text-center text-xs text-zinc-500 p-3 space-y-2">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950" />
+                    <span className="font-semibold text-zinc-600">Checking QR code...</span>
+                  </div>
+                ) : isActive && svgHtml ? (
                   <div
                     data-qr-container
                     className="h-44 w-44 bg-white p-2 border border-zinc-200 rounded-lg shadow-2xs flex items-center justify-center"

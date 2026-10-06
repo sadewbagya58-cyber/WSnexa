@@ -21,7 +21,21 @@ import { ActionResponse } from './auth';
  */
 export async function createModifierGroupAction(
   formData: CreateModifierGroupInput
-): Promise<ActionResponse<{ groupId: string }>> {
+): Promise<ActionResponse<{
+  groupId: string;
+  group?: {
+    id: string;
+    name: string;
+    description: string | null;
+    selection_type: 'single' | 'multiple';
+    is_required: boolean;
+    min_selections: number;
+    max_selections: number | null;
+    display_order: number;
+    is_active: boolean;
+    modifier_options: [];
+  };
+}>> {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
@@ -107,7 +121,21 @@ export async function createModifierGroupAction(
   return {
     success: true,
     message: 'Modifier group created successfully!',
-    data: { groupId: group.id },
+    data: {
+      groupId: group.id,
+      group: {
+        id: group.id,
+        name: group.name,
+        description: group.description,
+        selection_type: group.selection_type as 'single' | 'multiple',
+        is_required: group.is_required,
+        min_selections: group.min_selections,
+        max_selections: group.max_selections,
+        display_order: group.display_order,
+        is_active: group.is_active,
+        modifier_options: [],
+      },
+    },
   };
 }
 
@@ -210,7 +238,16 @@ export async function archiveModifierGroupAction(groupId: string): Promise<Actio
  */
 export async function createModifierOptionAction(
   formData: CreateModifierOptionInput
-): Promise<ActionResponse<{ optionId: string }>> {
+): Promise<ActionResponse<{
+  optionId: string;
+  option?: {
+    id: string;
+    name: string;
+    additional_price_cents: number;
+    display_order: number;
+    is_active: boolean;
+  };
+}>> {
   const authContext = await resolveAuthorizationContext();
   if (!authContext || !authContext.activeBranchId) {
     return { success: false, message: 'Unauthorized or branch context not found.' };
@@ -283,7 +320,16 @@ export async function createModifierOptionAction(
   return {
     success: true,
     message: 'Modifier option created successfully!',
-    data: { optionId: option.id },
+    data: {
+      optionId: option.id,
+      option: {
+        id: option.id,
+        name: option.name,
+        additional_price_cents: option.additional_price_cents,
+        display_order: option.display_order,
+        is_active: option.is_active,
+      },
+    },
   };
 }
 

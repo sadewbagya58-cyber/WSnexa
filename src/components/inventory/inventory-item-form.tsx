@@ -42,10 +42,14 @@ export function InventoryItemForm({
   const [trackExpiry, setTrackExpiry] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isRedirecting) return;
+
     if (!name.trim()) {
       setErrorMsg('Item name is required.');
       return;
@@ -53,6 +57,7 @@ export function InventoryItemForm({
 
     setIsSubmitting(true);
     setErrorMsg(null);
+    setSuccessMsg(null);
 
     const costCents = Math.round((parseFloat(costPerUnit) || 0) * 100);
     const minStock = parseFloat(minStockLevel) || 0;
@@ -76,22 +81,28 @@ export function InventoryItemForm({
       trackExpiry,
     });
 
-    setIsSubmitting(false);
-
     if (res.success) {
-      if ('item' in res && res.item && typeof res.item === 'object' && 'id' in res.item && res.item.id) {
-        router.push(`/dashboard/inventory/items/${res.item.id}`);
-      } else {
-        router.push('/dashboard/inventory/items');
-      }
-      router.refresh();
+      setIsRedirecting(true);
+      setSuccessMsg(`Stock item "${name.trim()}" created successfully! Redirecting...`);
+      const targetUrl =
+        'item' in res && res.item && typeof res.item === 'object' && 'id' in res.item && res.item.id
+          ? `/dashboard/inventory/items/${res.item.id}`
+          : '/dashboard/inventory/items';
+      router.push(targetUrl);
     } else {
+      setIsSubmitting(false);
       setErrorMsg(res.message || 'Failed to create inventory item.');
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl bg-white border border-zinc-200 rounded-2xl p-5 sm:p-7 shadow-xs">
+      {successMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          <span>{successMsg}</span>
+        </div>
+      )}
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-700">
           {errorMsg}
@@ -353,16 +364,17 @@ export function InventoryItemForm({
           type="button"
           variant="outline"
           onClick={() => router.back()}
+          disabled={isSubmitting || isRedirecting}
           className="text-xs font-bold min-h-[44px]"
         >
           Cancel
         </Button>
         <Button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isRedirecting}
           className="text-xs font-bold bg-zinc-950 text-white min-h-[44px] px-6"
         >
-          {isSubmitting ? 'Saving…' : 'Add Ingredient'}
+          {isRedirecting ? '✓ Saved! Redirecting…' : isSubmitting ? 'Saving…' : 'Add Ingredient'}
         </Button>
       </div>
     </form>

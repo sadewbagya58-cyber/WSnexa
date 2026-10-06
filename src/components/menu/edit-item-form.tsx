@@ -63,12 +63,15 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(item.primary_image_url || null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadFileName, setUploadFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleImageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -78,22 +81,64 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!validTypes.includes(file.type.toLowerCase())) {
       setErrorMsg('Invalid image format. PNG, JPG, and WEBP supported.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       setErrorMsg('Image size exceeds 5MB limit.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
-    setImageFile(file);
+    setUploadingImage(true);
+    setUploadStatus('uploading');
+    setUploadFileName(file.name);
     setImagePreviewUrl(URL.createObjectURL(file));
+
+    try {
+      const supabase = createClient();
+      const fileExt = file.name.split('.').pop();
+      const filePath = `menu-items/${businessId}/${branchId}/items/item-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('business-assets')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        setErrorMsg(`Image upload failed: ${uploadError.message}`);
+        setUploadStatus('error');
+        setUploadingImage(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('business-assets').getPublicUrl(filePath);
+
+      setImageUrl(publicUrl);
+      setImagePreviewUrl(publicUrl);
+      setImageFile(null);
+      setUploadStatus('success');
+    } catch {
+      setErrorMsg('Error uploading image to storage.');
+      setUploadStatus('error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleRemoveImage = () => {
     setImageFile(null);
     setImagePreviewUrl(null);
     setImageUrl(null);
+    setUploadStatus('idle');
+    setUploadFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSaveItem = async (e: React.FormEvent) => {
@@ -381,8 +426,13 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
             Item Image
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-2xl border border-zinc-200 bg-zinc-50">
-            <div className="h-20 w-20 rounded-xl border border-zinc-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
-              {imagePreviewUrl ? (
+            <div className="h-20 w-20 rounded-xl border border-zinc-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
+              {uploadingImage ? (
+                <div className="flex flex-col items-center justify-center h-full w-full bg-zinc-100 p-1 text-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950" />
+                  <span className="text-[10px] font-bold text-zinc-600 mt-1">Uploading</span>
+                </div>
+              ) : imagePreviewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={imagePreviewUrl} alt="Item Preview" className="h-full w-full object-cover" />
               ) : (
@@ -392,20 +442,41 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
 
             <div className="space-y-2 flex-1">
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/png, image/jpeg, image/jpg, image/webp"
                 onChange={handleImageFileSelect}
                 disabled={uploadingImage || loading}
-                className="text-xs text-zinc-600 max-w-full file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-zinc-200 file:text-zinc-800 hover:file:bg-zinc-300 cursor-pointer"
+                className="text-xs text-zinc-600 max-w-full file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-zinc-200 file:text-zinc-800 hover:file:bg-zinc-300 cursor-pointer disabled:opacity-50"
               />
+              {uploadingImage && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 w-fit animate-pulse">
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-600 border-t-transparent" />
+                  <span>Uploading {uploadFileName ? `"${uploadFileName}"` : 'image'} to storage...</span>
+                </div>
+              )}
+              {uploadStatus === 'success' && !uploadingImage && (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    ✅ Image uploaded successfully
+                  </span>
+                </div>
+              )}
+              {uploadStatus === 'error' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-rose-600">
+                    Upload failed. Please choose another image or retry.
+                  </span>
+                </div>
+              )}
               <p className="text-[11px] text-zinc-500">
                 Supported: PNG, JPG, WEBP up to 5MB. Uploading replaces the current image.
               </p>
-              {imagePreviewUrl && (
+              {imagePreviewUrl && !uploadingImage && (
                 <button
                   type="button"
                   onClick={handleRemoveImage}
-                  className="text-xs font-bold text-rose-600 hover:underline inline-block touch-manipulation min-h-[32px]"
+                  className="text-xs font-bold text-rose-600 hover:underline inline-block touch-manipulation min-h-[32px] cursor-pointer"
                 >
                   Remove Image
                 </button>
@@ -420,7 +491,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
             <button
               type="button"
               onClick={() => setShowDeleteModal(true)}
-              disabled={loading || isDeleting}
+              disabled={loading || isDeleting || uploadingImage}
               className="w-full sm:w-auto flex items-center justify-center min-h-[44px] px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 rounded-xl transition-colors touch-manipulation"
             >
               Delete Item
@@ -447,7 +518,7 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
               disabled={loading || uploadingImage}
               className="w-full sm:w-auto min-h-[44px] px-6 font-black text-xs bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl shadow-xs"
             >
-              {loading || uploadingImage ? 'Saving Changes…' : 'Save Changes'}
+              {uploadingImage ? 'Uploading Image…' : loading ? 'Saving Changes…' : 'Save Changes'}
             </Button>
           </div>
         </div>

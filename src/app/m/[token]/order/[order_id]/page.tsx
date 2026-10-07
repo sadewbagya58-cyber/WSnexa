@@ -49,6 +49,13 @@ export default async function OrderConfirmationPage({ params, searchParams }: Or
       ? (menuData.business as { name: string }).name
       : 'WSNexa Venue';
 
+  const timezone =
+    menuData && typeof menuData.branch === 'object' && menuData.branch !== null && (menuData.branch as { timezone?: string }).timezone
+      ? (menuData.branch as { timezone?: string }).timezone
+      : menuData && typeof menuData.business === 'object' && menuData.business !== null && (menuData.business as { timezone?: string }).timezone
+      ? (menuData.business as { timezone?: string }).timezone
+      : 'UTC';
+
   return (
     <GuestLanguageProvider>
       <RealtimeOrderTracker
@@ -57,6 +64,7 @@ export default async function OrderConfirmationPage({ params, searchParams }: Or
         businessName={businessName}
         accessToken={access_token || order.access_token}
         currentUserId={user ? user.id : null}
+        timezone={timezone}
       />
     </GuestLanguageProvider>
   );

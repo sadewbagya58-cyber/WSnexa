@@ -89,6 +89,7 @@ export default async function WaiterPage() {
         assignedAreaIds={assignedAreaIds}
         canManageRequests={canManageRequests}
         currentStaff={currentStaff}
+        timezone={tenantContext.activeBranch.timezone || tenantContext.business.timezone || 'UTC'}
       />
     </div>
   );

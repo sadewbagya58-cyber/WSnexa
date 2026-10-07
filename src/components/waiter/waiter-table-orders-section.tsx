@@ -7,16 +7,19 @@ import { getActiveTableOrdersAction } from '@/server/actions/waiter-approval';
 import { StaffCancelOrderModal } from '@/components/orders/staff-cancel-order-modal';
 import { StaffCancelItemModal } from '@/components/orders/staff-cancel-item-modal';
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { formatBusinessTime } from '@/lib/utils/date';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface WaiterTableOrdersSectionProps {
   branchId: string;
   canManageOrders?: boolean;
+  timezone?: string;
 }
 
 export function WaiterTableOrdersSection({
   branchId,
   canManageOrders = true,
+  timezone = 'UTC',
 }: WaiterTableOrdersSectionProps) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -212,7 +215,7 @@ export function WaiterTableOrdersSection({
                         {getStatusLabel(order.status)}
                       </Badge>
                       <span className="text-[10px] text-zinc-400 font-medium block mt-1">
-                        {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {formatBusinessTime(order.created_at, timezone)}
                       </span>
                     </div>
                   </div>

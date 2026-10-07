@@ -14,12 +14,14 @@ import { StaffCancelItemModal } from '@/components/orders/staff-cancel-item-moda
 import { syncQueue } from '@/lib/offline/sync-queue';
 import { networkStatus } from '@/lib/offline/network-status';
 import { operationalCache } from '@/lib/offline/operational-cache';
+import { formatBusinessTime } from '@/lib/utils/date';
 
 interface KitchenOrderQueueProps {
   initialOrders: OrderRecord[];
   branchName: string;
   branchId: string;
   canUpdate?: boolean;
+  timezone?: string;
 }
 
 export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
@@ -27,6 +29,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
   branchName,
   branchId,
   canUpdate = true,
+  timezone = 'UTC',
 }) => {
   const router = useRouter();
   const { orders, connectionStatus, recentCancellations, acknowledgeCancellation } = useRealtimeKitchen(initialOrders, branchId);
@@ -39,6 +42,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
     unitPriceCents: number;
     quantity: number;
     cancelledQuantity: number;
+    currency?: string;
   } | null>(null);
   const [transientSuccessKey, setTransientSuccessKey] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -236,9 +240,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
 
                 <div className="pt-2 border-t border-zinc-100 flex items-center justify-between">
                   <span className="text-[10px] text-zinc-400 font-mono">
-                    {new Date(notice.cancelledAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
+                    {formatBusinessTime(notice.cancelledAt, timezone, {
                       second: '2-digit',
                     })}
                   </span>
@@ -373,10 +375,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                     <div className="text-[11px] text-zinc-500 flex items-center justify-between">
                       <span>
                         Received:{' '}
-                        {new Date(order.created_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatBusinessTime(order.created_at, timezone)}
                       </span>
                       <span className="font-semibold text-zinc-700">
                         {Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000)}m ago
@@ -461,6 +460,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
                                             unitPriceCents: item.unit_price_cents_snapshot,
                                             quantity: item.quantity,
                                             cancelledQuantity: item.cancelled_quantity || 0,
+                                            currency: order.currency,
                                           })}
                                           className="text-[10px] text-zinc-400 hover:text-red-600 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors cursor-pointer"
                                           title="Adjust or cancel item"
@@ -675,6 +675,7 @@ export const KitchenOrderQueue: React.FC<KitchenOrderQueueProps> = ({
           quantity={selectedItemForCancel.quantity}
           cancelledQuantity={selectedItemForCancel.cancelledQuantity}
           channel="kitchen_kds"
+          currency={selectedItemForCancel.currency}
           onSuccess={() => {
             setSelectedItemForCancel(null);
             router.refresh();

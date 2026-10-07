@@ -65,6 +65,7 @@ export default async function KitchenPage() {
         branchName={tenantContext.activeBranch.name}
         branchId={tenantContext.activeBranch.id}
         canUpdate={canUpdate}
+        timezone={tenantContext.activeBranch.timezone || tenantContext.business.timezone || 'UTC'}
       />
     </div>
   );

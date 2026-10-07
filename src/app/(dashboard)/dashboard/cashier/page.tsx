@@ -55,6 +55,7 @@ export default async function CashierDashboardPage() {
         businessName={tenantContext.business.name}
         initialOrders={initialOrders}
         canRecordPayments={canRecordPayments}
+        timezone={tenantContext.activeBranch.timezone || tenantContext.business.timezone || 'UTC'}
       />
     </div>
   );

@@ -647,6 +647,7 @@ export const PublicGuestMenu: React.FC<PublicGuestMenuProps> = ({
           loyaltyAccount={loyaltyAccount}
           availableRewards={availableRewards}
           subtotalCents={0}
+          currency={branch.currency || business.currency || 'USD'}
         />
       )}
     </div>

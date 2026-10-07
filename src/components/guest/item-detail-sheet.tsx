@@ -129,6 +129,11 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
 
   const isOutOfStock = item.availability_status === 'out_of_stock';
   const previewImageUrl = getMenuThumbnailUrl(item.primary_image_url, 400);
+  const [imageError, setImageError] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageError(false);
+  }, [item.primary_image_url]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +196,7 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
           </div>
 
           {/* Item Image */}
-          {previewImageUrl && (
+          {previewImageUrl && !imageError && (
             <div className="h-44 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -199,6 +204,7 @@ export const ItemDetailSheet = React.memo(function ItemDetailSheet({
                 alt={item.name}
                 loading="lazy"
                 decoding="async"
+                onError={() => setImageError(true)}
                 className="h-full w-full object-cover"
               />
             </div>

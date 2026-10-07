@@ -2,6 +2,7 @@ import { ExecutiveOverviewDTO } from '@/server/analytics/analytics.service';
 import { InsightEngine } from '@/server/insights/insight-engine';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { generateCSV } from '@/lib/export/export-engine';
+import { formatBusinessDateTime } from '@/lib/utils/date';
 import {
   AnalyticsReportDataset,
   AnalyticsReportMetadata,
@@ -386,7 +387,7 @@ function generateReportPrintHtml(dataset: AnalyticsReportDataset): string {
             <p>${metadata.businessName} — ${metadata.branchScopeLabel}</p>
           </div>
           <div style="text-align: right; font-size: 11px; color: #71717a;">
-            Generated: ${new Date(metadata.generatedAt).toLocaleString()}
+            Generated: ${formatBusinessDateTime(metadata.generatedAt, metadata.timezone)}
           </div>
         </div>
 

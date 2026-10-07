@@ -3,13 +3,15 @@
 import React from 'react';
 import { TimeSeriesBucket } from '@/server/services/report.service';
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { formatBusinessDate } from '@/lib/utils/date';
 
 interface RevenueTrendChartProps {
   series: TimeSeriesBucket[];
   currency: string;
+  timezone?: string;
 }
 
-export function RevenueTrendChart({ series, currency }: RevenueTrendChartProps) {
+export function RevenueTrendChart({ series, currency, timezone = 'UTC' }: RevenueTrendChartProps) {
   if (!series || series.length === 0) {
     return (
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 flex flex-col items-center justify-center min-h-[300px]">
@@ -92,15 +94,15 @@ export function RevenueTrendChart({ series, currency }: RevenueTrendChartProps) 
           {points.map((p, i) => (
             <g key={i} className="group cursor-pointer">
               <circle cx={p.x} cy={p.y} r="4" fill="#f59e0b" className="transition-all group-hover:r-6" />
-              <title>{`${new Date(p.item.bucket).toLocaleDateString()}: ${formatCurrency(p.item.gross_sales_cents, currency)} (${p.item.orders_count} orders)`}</title>
+              <title>{`${formatBusinessDate(p.item.bucket, timezone)}: ${formatCurrency(p.item.gross_sales_cents, currency)} (${p.item.orders_count} orders)`}</title>
             </g>
           ))}
         </svg>
       </div>
 
       <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-800 text-xs text-zinc-500">
-        <span>Start: {new Date(series[0]?.bucket).toLocaleDateString()}</span>
-        <span>End: {new Date(series[series.length - 1]?.bucket).toLocaleDateString()}</span>
+        <span>Start: {series[0]?.bucket ? formatBusinessDate(series[0].bucket, timezone) : ''}</span>
+        <span>End: {series[series.length - 1]?.bucket ? formatBusinessDate(series[series.length - 1].bucket, timezone) : ''}</span>
       </div>
     </div>
   );

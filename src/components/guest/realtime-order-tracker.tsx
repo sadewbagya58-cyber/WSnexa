@@ -12,6 +12,7 @@ import { WaiterRequestType } from '@/lib/validation/waiter';
 import { SaveOrderButton } from '@/components/guest/save-order-button';
 import { useGuestLanguage, GuestLanguageToggle } from '@/features/qr/guest-language-context';
 import { CustomerCancelOrderModal } from '@/components/guest/customer-cancel-order-modal';
+import { formatBusinessTime } from '@/lib/utils/date';
 
 interface RealtimeOrderTrackerProps {
   initialOrder: OrderRecord;
@@ -19,6 +20,7 @@ interface RealtimeOrderTrackerProps {
   businessName: string;
   accessToken?: string;
   currentUserId?: string | null;
+  timezone?: string;
 }
 
 export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
@@ -27,6 +29,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
   businessName,
   accessToken,
   currentUserId,
+  timezone = 'UTC',
 }) => {
   const { t } = useGuestLanguage();
   const { order, connectionStatus, refetchOrderState, setOrder } = useRealtimeOrder(initialOrder, accessToken);
@@ -388,7 +391,7 @@ export const RealtimeOrderTracker: React.FC<RealtimeOrderTrackerProps> = ({
           <div className="flex items-center justify-between text-sm text-zinc-600">
             <span>{t('Placed At:', 'වේලාව:')}</span>
             <span className="font-mono text-xs">
-              {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatBusinessTime(order.created_at, timezone)}
             </span>
           </div>
           {order.guest_name && (

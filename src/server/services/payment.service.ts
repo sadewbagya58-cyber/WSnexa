@@ -57,6 +57,7 @@ export interface ReceiptData {
   business: {
     name: string;
     logo_url: string | null;
+    timezone?: string;
   };
   branch: {
     id: string;
@@ -65,6 +66,7 @@ export interface ReceiptData {
     phone: string | null;
     address: string | null;
     city: string | null;
+    timezone?: string;
   };
   order: {
     id: string;
@@ -472,6 +474,7 @@ export class PaymentService {
       business: {
         name: context.business.name,
         logo_url: bizObj.logo_url || null,
+        timezone: context.business.timezone || 'UTC',
       },
       branch: {
         id: context.activeBranch.id,
@@ -480,6 +483,7 @@ export class PaymentService {
         phone: context.activeBranch.phone || null,
         address: branchObj.address || null,
         city: context.activeBranch.city || null,
+        timezone: context.activeBranch.timezone || context.business.timezone || 'UTC',
       },
       order: {
         id: order.id,

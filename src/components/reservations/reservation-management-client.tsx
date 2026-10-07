@@ -35,11 +35,13 @@ import {
   ReservationSettingsDTO,
   ReservationStatusEventDTO,
 } from '@/lib/reservations/reservation-types';
+import { formatBusinessDateTime, formatBusinessTime } from '@/lib/utils/date';
 
 interface BranchOption {
   id: string;
   name: string;
   code: string;
+  timezone?: string;
 }
 
 interface ReservationManagementClientProps {
@@ -68,6 +70,8 @@ export function ReservationManagementClient({
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
     branches.length > 0 ? branches[0].id : ''
   );
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId);
+  const tz = selectedBranch?.timezone || 'UTC';
   const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'waitlist' | 'settings'>('today');
   const [statusFilter, setStatusFilter] = useState<string>('OPERATIONAL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -664,7 +668,7 @@ export function ReservationManagementClient({
 
                   {/* Primary Info: Time & Party Size */}
                   <div className="flex items-center gap-3 text-xs font-semibold text-slate-800 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                    <span>⏰ {new Date(r.reservationStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>⏰ {formatBusinessTime(r.reservationStartAt, tz)}</span>
                     <span>👥 {r.partySize} Guests</span>
                   </div>
 
@@ -824,7 +828,7 @@ export function ReservationManagementClient({
                   <td className="p-3.5 font-mono">{w.guestPhoneMasked || w.guestPhone || '-'}</td>
                   <td className="p-3.5 font-bold">{w.status}</td>
                   <td className="p-3.5 font-mono text-slate-500">
-                    {new Date(w.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatBusinessTime(w.createdAt, tz)}
                   </td>
                   <td className="p-3.5">
                     {w.status === 'WAITING' && hasWaitlistPermission && (
@@ -1280,7 +1284,7 @@ export function ReservationManagementClient({
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 block uppercase font-sans">Start Time</span>
-                <span>{new Date(detailModalRes.reservationStartAt).toLocaleString()}</span>
+                <span>{formatBusinessDateTime(detailModalRes.reservationStartAt, tz)}</span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 block uppercase font-sans">Contact</span>
@@ -1324,7 +1328,7 @@ export function ReservationManagementClient({
                     {detailModalRes.declinedAt && (
                       <div className="flex justify-between text-slate-500 text-[11px]">
                         <span>Time:</span>
-                        <span>{new Date(detailModalRes.declinedAt).toLocaleString()}</span>
+                        <span>{formatBusinessDateTime(detailModalRes.declinedAt, tz)}</span>
                       </div>
                     )}
                   </>
@@ -1343,7 +1347,7 @@ export function ReservationManagementClient({
                     {detailModalRes.cancelledAt && (
                       <div className="flex justify-between text-slate-500 text-[11px]">
                         <span>Time:</span>
-                        <span>{new Date(detailModalRes.cancelledAt).toLocaleString()}</span>
+                        <span>{formatBusinessDateTime(detailModalRes.cancelledAt, tz)}</span>
                       </div>
                     )}
                   </>
@@ -1362,7 +1366,7 @@ export function ReservationManagementClient({
                     {detailModalRes.noShowAt && (
                       <div className="flex justify-between text-slate-500 text-[11px]">
                         <span>Time:</span>
-                        <span>{new Date(detailModalRes.noShowAt).toLocaleString()}</span>
+                        <span>{formatBusinessDateTime(detailModalRes.noShowAt, tz)}</span>
                       </div>
                     )}
                   </>
@@ -1377,7 +1381,7 @@ export function ReservationManagementClient({
                     {detailModalRes.completedAt && (
                       <div className="flex justify-between text-slate-500 text-[11px]">
                         <span>Time:</span>
-                        <span>{new Date(detailModalRes.completedAt).toLocaleString()}</span>
+                        <span>{formatBusinessDateTime(detailModalRes.completedAt, tz)}</span>
                       </div>
                     )}
                   </>
@@ -1397,7 +1401,7 @@ export function ReservationManagementClient({
                       </span>
                       <span className="text-[10px] text-slate-500 ml-2">via {ev.actorType}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400">{new Date(ev.createdAt).toLocaleTimeString()}</span>
+                    <span className="text-[10px] text-slate-400">{formatBusinessTime(ev.createdAt, tz)}</span>
                   </div>
                 ))}
                 {detailStatusHistory.length === 0 && (

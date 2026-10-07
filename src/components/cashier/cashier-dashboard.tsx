@@ -19,6 +19,7 @@ interface CashierDashboardProps {
   businessName: string;
   initialOrders: CashierOrderRecord[];
   canRecordPayments?: boolean;
+  timezone?: string;
 }
 
 type TabFilter = 'all' | 'unpaid' | 'partially_paid' | 'paid' | 'completed' | 'cancelled';
@@ -29,6 +30,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
   businessName,
   initialOrders,
   canRecordPayments = true,
+  timezone = 'UTC',
 }) => {
   const [orders, setOrders] = useState<CashierOrderRecord[]>(initialOrders);
   const [activeTab, setActiveTab] = useState<TabFilter>('unpaid');
@@ -336,6 +338,7 @@ export const CashierDashboard: React.FC<CashierDashboardProps> = ({
               onSettlePayment={handleOpenSettlement}
               onPrintReceipt={(id) => setReceiptOrderId(id)}
               onAcknowledgeBill={handleAcknowledgeBill}
+              timezone={timezone}
             />
           ))}
         </div>

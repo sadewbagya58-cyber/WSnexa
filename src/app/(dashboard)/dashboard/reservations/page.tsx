@@ -50,6 +50,7 @@ export default async function ReservationsDashboardPage() {
     id: b.id,
     name: b.name,
     code: b.code,
+    timezone: b.timezone,
   }));
 
   const activeBranchId = branches.length > 0 ? branches[0].id : '';

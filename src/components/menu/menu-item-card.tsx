@@ -56,6 +56,7 @@ export const MenuItemCard = React.memo(function MenuItemCard({
   const addedQuantity = propAddedQuantity !== undefined ? propAddedQuantity : storeQuantity;
 
   const [isJustAdded, setIsJustAdded] = React.useState(false);
+  const [imageError, setImageError] = React.useState(false);
   const addTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
@@ -64,11 +65,16 @@ export const MenuItemCard = React.memo(function MenuItemCard({
     };
   }, []);
 
+  React.useEffect(() => {
+    setImageError(false);
+  }, [item.primary_image_url]);
+
   const itemCurrency = currency || item.currency || 'USD';
   const isAvailable = item.is_available ?? (item.availability_status === 'available');
   const isSoldOut = !isAvailable || item.availability_status === 'out_of_stock';
   const hasModifiers = item.modifier_groups && item.modifier_groups.length > 0;
   const thumbUrl = getMenuThumbnailUrl(item.primary_image_url, 160);
+  const showImage = Boolean(thumbUrl) && !imageError;
 
   const handleItemClick = () => {
     if (onClick) onClick(item);
@@ -139,21 +145,22 @@ export const MenuItemCard = React.memo(function MenuItemCard({
       <div className="flex flex-col items-end gap-2 shrink-0">
         {/* Image / Fallback Container */}
         <div className="h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-100 relative shadow-2xs">
-          {thumbUrl ? (
+          {showImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={thumbUrl}
+              src={thumbUrl!}
               alt={item.name}
               loading="lazy"
               decoding="async"
               width={80}
               height={80}
+              onError={() => setImageError(true)}
               className={`h-full w-full object-cover ${
                 isSoldOut ? 'grayscale brightness-90' : ''
               }`}
             />
           ) : (
-            <div className="h-full w-full flex items-center justify-center text-xl sm:text-2xl text-zinc-400 bg-zinc-50">
+            <div className="h-full w-full flex items-center justify-center text-xl sm:text-2xl text-zinc-400 bg-zinc-50 select-none">
               🍽️
             </div>
           )}

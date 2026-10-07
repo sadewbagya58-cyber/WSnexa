@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { CashierOrderRecord } from '@/server/services/payment.service';
+import { formatBusinessTime } from '@/lib/utils/date';
 
 interface OrderPaymentCardProps {
   order: CashierOrderRecord;
@@ -12,6 +13,7 @@ interface OrderPaymentCardProps {
   onPrintReceipt: (orderId: string) => void;
   onAcknowledgeBill?: (requestId: string) => void;
   canRecordPayments?: boolean;
+  timezone?: string;
 }
 
 export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
@@ -20,6 +22,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
   onPrintReceipt,
   onAcknowledgeBill,
   canRecordPayments = true,
+  timezone = 'UTC',
 }) => {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
 
@@ -33,10 +36,7 @@ export const OrderPaymentCard: React.FC<OrderPaymentCardProps> = ({
     }
   };
 
-  const formattedTime = new Date(order.created_at).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const formattedTime = formatBusinessTime(order.created_at, timezone);
 
   const getKitchenBadge = (status: string) => {
     switch (status) {

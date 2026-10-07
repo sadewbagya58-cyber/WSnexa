@@ -14,6 +14,7 @@ import { WaiterOperationalActivity } from './waiter-operational-activity';
 import { WaiterTableOrdersSection } from './waiter-table-orders-section';
 import { EntityTimelineDialog } from '@/components/audit/entity-timeline-dialog';
 import { IconHistory } from '@/components/audit/audit-icons';
+import { formatBusinessTime } from '@/lib/utils/date';
 import {
   getPendingApprovalsAction,
   approveGuestOrderAction,
@@ -31,6 +32,7 @@ interface WaiterRequestCenterProps {
     name: string;
     role?: string | null;
   };
+  timezone?: string;
 }
 
 export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
@@ -40,6 +42,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
   assignedAreaIds,
   canManageRequests = true,
   currentStaff,
+  timezone = 'UTC',
 }) => {
   const router = useRouter();
   const { requests, setRequests, connectionStatus, refreshRequests } = useRealtimeWaiterRequests(
@@ -183,7 +186,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
       {activeTab === 'activity' ? (
         <WaiterOperationalActivity branchId={branchId} assignedAreaIds={assignedAreaIds} />
       ) : activeTab === 'orders' ? (
-        <WaiterTableOrdersSection branchId={branchId} canManageOrders={canManageRequests} />
+        <WaiterTableOrdersSection branchId={branchId} canManageOrders={canManageRequests} timezone={timezone} />
       ) : (
         <>
           {/* Pending Guest Order Approvals Section */}
@@ -289,10 +292,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                       <div className="text-[11px] text-zinc-500 flex items-center justify-between">
                         <span>
                           Received:{' '}
-                          {new Date(req.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatBusinessTime(req.created_at, timezone)}
                         </span>
                         <button
                           type="button"
@@ -322,7 +322,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                           </div>
                           {req.accepted_at && (
                             <span className="text-[10px] text-purple-500 font-mono shrink-0">
-                              {new Date(req.accepted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatBusinessTime(req.accepted_at, timezone)}
                             </span>
                           )}
                         </div>
@@ -346,7 +346,7 @@ export const WaiterRequestCenter: React.FC<WaiterRequestCenterProps> = ({
                           </div>
                           {req.resolved_at && (
                             <span className="text-[10px] text-emerald-500 font-mono shrink-0">
-                              {new Date(req.resolved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatBusinessTime(req.resolved_at, timezone)}
                             </span>
                           )}
                         </div>

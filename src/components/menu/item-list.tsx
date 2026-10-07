@@ -13,6 +13,7 @@ import {
   archiveMenuItemAction,
 } from '@/server/actions/menu';
 import { createClient } from '@/lib/supabase/client';
+import { resolveMenuImageUrl } from '@/lib/image-optimizer';
 
 interface MenuItem {
   id: string;
@@ -393,12 +394,15 @@ export const ItemList: React.FC<ItemListProps> = ({
                     </p>
                   </div>
 
-                  {item.primary_image_url && (
+                  {resolveMenuImageUrl(item.primary_image_url) && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={item.primary_image_url}
+                      src={resolveMenuImageUrl(item.primary_image_url)!}
                       alt={item.name}
                       className="h-16 w-16 rounded-lg object-cover border border-zinc-200 shrink-0"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = 'none';
+                      }}
                     />
                   )}
                 </div>

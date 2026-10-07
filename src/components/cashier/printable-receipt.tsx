@@ -3,6 +3,7 @@
 import React from 'react';
 import { formatCurrency } from '@/features/cart/cart-calculations';
 import { ReceiptData } from '@/server/services/payment.service';
+import { formatBusinessDateTime, formatBusinessTime } from '@/lib/utils/date';
 
 interface PrintableReceiptProps {
   data: ReceiptData;
@@ -10,11 +11,9 @@ interface PrintableReceiptProps {
 
 export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ data }) => {
   const { business, branch, order, items, payments } = data;
+  const timezone = branch.timezone || business.timezone || 'UTC';
 
-  const formattedDate = new Date(order.created_at).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+  const formattedDate = formatBusinessDateTime(order.created_at, timezone);
 
   return (
     <div className="w-full max-w-[80mm] mx-auto bg-white p-4 font-mono text-xs text-zinc-950 leading-tight print:p-0 print:max-w-none">
@@ -135,7 +134,7 @@ export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ data }) => {
         ) : (
           payments.map((p, idx) => {
             const pTime = p.created_at
-              ? new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              ? formatBusinessTime(p.created_at, timezone)
               : '';
             const cashierText = (p as unknown as { cashier_name?: string }).cashier_name;
 

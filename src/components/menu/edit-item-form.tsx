@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { updateMenuItemAction, archiveMenuItemAction } from '@/server/actions/menu';
 import { createClient } from '@/lib/supabase/client';
+import { resolveMenuImageUrl } from '@/lib/image-optimizer';
 
 export interface EditableMenuItem {
   id: string;
@@ -434,7 +435,14 @@ export const EditItemForm: React.FC<EditItemFormProps> = ({
                 </div>
               ) : imagePreviewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={imagePreviewUrl} alt="Item Preview" className="h-full w-full object-cover" />
+                <img
+                  src={resolveMenuImageUrl(imagePreviewUrl) || imagePreviewUrl}
+                  alt="Item Preview"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
               ) : (
                 <span className="text-[11px] text-zinc-400 font-semibold text-center px-1">No Image</span>
               )}

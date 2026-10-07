@@ -29,7 +29,7 @@ export const createMenuItemSchema = z.object({
   price: z
     .number({ message: 'Price must be a valid number' })
     .min(0, 'Price cannot be negative'),
-  currency: z.string().trim().length(3).default('USD'),
+  currency: z.string().trim().length(3).optional(),
   preparationTimeMinutes: z.number().int().min(0).optional().nullable(),
   availabilityStatus: z.enum(AVAILABILITY_STATUSES).default('available'),
   isFeatured: z.boolean().default(false),

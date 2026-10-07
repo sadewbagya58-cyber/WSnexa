@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { LoyaltyRewardRecord, CustomerLoyaltyAccountRecord } from '@/lib/validation/loyalty';
 import { useCart } from '@/features/cart/cart-context';
+import { formatCurrency } from '@/features/cart/cart-calculations';
 
 interface RewardsDrawerProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface RewardsDrawerProps {
   loyaltyAccount: CustomerLoyaltyAccountRecord | null;
   availableRewards: LoyaltyRewardRecord[];
   subtotalCents: number;
+  currency?: string;
 }
 
 export const RewardsDrawer = React.memo(function RewardsDrawer({
@@ -23,6 +25,7 @@ export const RewardsDrawer = React.memo(function RewardsDrawer({
   loyaltyAccount,
   availableRewards,
   subtotalCents,
+  currency = 'USD',
 }: RewardsDrawerProps) {
   const pathname = usePathname();
   const { state: cartState, setSelectedReward } = useCart();
@@ -125,7 +128,7 @@ export const RewardsDrawer = React.memo(function RewardsDrawer({
 
               let typeLabel = '';
               if (reward.rewardType === 'fixed_discount' && reward.discountAmountCents) {
-                typeLabel = `LKR ${(reward.discountAmountCents / 100).toLocaleString()} OFF`;
+                typeLabel = `${formatCurrency(reward.discountAmountCents, currency)} OFF`;
               } else if (reward.rewardType === 'percentage_discount' && reward.discountPercentage) {
                 typeLabel = `${reward.discountPercentage}% OFF`;
               } else if (reward.rewardType === 'free_item') {
@@ -158,7 +161,7 @@ export const RewardsDrawer = React.memo(function RewardsDrawer({
                       )}
                       {reward.minOrderValueCents > 0 && (
                         <p className="text-[11px] text-zinc-500 font-semibold">
-                          Min. spend required: LKR {(reward.minOrderValueCents / 100).toLocaleString()}
+                          Min. spend required: {formatCurrency(reward.minOrderValueCents, currency)}
                         </p>
                       )}
                     </div>
@@ -197,7 +200,7 @@ export const RewardsDrawer = React.memo(function RewardsDrawer({
                       >
                         {minSpendMet
                           ? `Use ${reward.pointsRequired} Points`
-                          : `Min order LKR ${(reward.minOrderValueCents / 100).toLocaleString()} required`}
+                          : `Min order ${formatCurrency(reward.minOrderValueCents, currency)} required`}
                       </Button>
                     ) : (
                       <div className="w-full text-center py-3 px-4 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-600 text-xs font-bold min-h-[44px] flex items-center justify-center">

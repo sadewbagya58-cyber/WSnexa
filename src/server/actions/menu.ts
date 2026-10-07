@@ -320,6 +320,16 @@ export async function createMenuItemAction(
 
   const priceCents = parseDecimalToMinorUnits(price);
 
+  let effectiveCurrency = currency;
+  if (!effectiveCurrency) {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('default_currency')
+      .eq('id', authContext.businessId)
+      .maybeSingle();
+    effectiveCurrency = biz?.default_currency || 'USD';
+  }
+
   const { data: item, error } = await supabase
     .from('menu_items')
     .insert({
@@ -330,7 +340,7 @@ export async function createMenuItemAction(
       slug,
       description: description || null,
       price_cents: priceCents,
-      currency: currency || 'USD',
+      currency: effectiveCurrency,
       preparation_time_minutes: preparationTimeMinutes || null,
       availability_status: availabilityStatus,
       is_featured: isFeatured,

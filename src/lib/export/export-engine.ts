@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/features/cart/cart-calculations';
+import { formatBusinessDateTime } from '@/lib/utils/date';
 
 /**
  * Sanitizes cell values to prevent CSV / Excel formula injection security vulnerabilities (=, +, -, @).
@@ -41,7 +42,8 @@ export function generateXLSXTable(
   branchName: string,
   headers: string[],
   rows: (string | number | boolean | null | undefined)[][],
-  totals?: { label: string; value: string }[]
+  totals?: { label: string; value: string }[],
+  timezone: string = 'UTC'
 ): string {
   const headerHtml = headers
     .map((h) => `<th style="background-color:#18181b;color:#ffffff;font-weight:bold;padding:8px;border:1px solid #27272a;">${sanitizeExportCell(h)}</th>`)
@@ -77,7 +79,7 @@ export function generateXLSXTable(
       </head>
       <body>
         <h2>${sanitizeExportCell(title)}</h2>
-        <p><strong>Business:</strong> ${sanitizeExportCell(businessName)} | <strong>Branch:</strong> ${sanitizeExportCell(branchName)} | <strong>Exported:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Business:</strong> ${sanitizeExportCell(businessName)} | <strong>Branch:</strong> ${sanitizeExportCell(branchName)} | <strong>Exported:</strong> ${formatBusinessDateTime(new Date(), timezone)}</p>
         <table>
           <thead><tr>${headerHtml}</tr></thead>
           <tbody>
@@ -99,6 +101,7 @@ export function generateExecutivePDFHtml(data: {
   branchName: string;
   dateRangeLabel: string;
   currency: string;
+  timezone?: string;
   summary: {
     totalOrders: number;
     completedOrders: number;
@@ -112,7 +115,7 @@ export function generateExecutivePDFHtml(data: {
   tableHeaders: string[];
   tableRows: (string | number)[][];
 }): string {
-  const { title, businessName, branchName, dateRangeLabel, currency, summary, tableHeaders, tableRows } = data;
+  const { title, businessName, branchName, dateRangeLabel, currency, timezone = 'UTC', summary, tableHeaders, tableRows } = data;
 
   return `
     <!DOCTYPE html>
@@ -144,7 +147,7 @@ export function generateExecutivePDFHtml(data: {
             <p>${businessName} — ${branchName} (${dateRangeLabel})</p>
           </div>
           <div style="text-align: right; font-size: 11px; color: #71717a;">
-            Generated: ${new Date().toLocaleString()}
+            Generated: ${formatBusinessDateTime(new Date(), timezone)}
           </div>
         </div>
 

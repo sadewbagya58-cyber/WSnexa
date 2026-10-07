@@ -418,13 +418,13 @@ export class QrService {
           .maybeSingle(),
         admin
           .from('branches')
-          .select('id, name, code, phone, address_line_1, city, status, deleted_at, require_table_selection, require_table_pin, table_pin_length')
+          .select('id, name, code, phone, address_line_1, city, status, deleted_at, require_table_selection, require_table_pin, table_pin_length, timezone')
           .eq('id', branchId)
           .is('deleted_at', null)
           .maybeSingle(),
         admin
           .from('businesses')
-          .select('id, name, logo_url, description, default_currency')
+          .select('id, name, logo_url, description, default_currency, timezone')
           .eq('id', businessId)
           .maybeSingle(),
         admin
@@ -557,6 +557,7 @@ export class QrService {
           logo_url: business.logo_url,
           description: business.description,
           currency: business.default_currency,
+          timezone: business.timezone || 'UTC',
         },
         branch: {
           id: branch.id,
@@ -568,6 +569,7 @@ export class QrService {
           require_table_selection: branch.require_table_selection,
           require_table_pin: branch.require_table_pin,
           table_pin_length: branch.table_pin_length,
+          timezone: branch.timezone || business.timezone || 'UTC',
         },
         service_areas: [
           {
@@ -622,6 +624,25 @@ export class QrService {
     const tableId = (payload.table_id as string) || null;
 
     if (branchObj && branchObj.id) {
+      const { createAdminClient } = await import('@/lib/supabase/server');
+      const admin = createAdminClient();
+      const { data: branchData } = await admin
+        .from('branches')
+        .select('timezone, businesses(timezone)')
+        .eq('id', branchObj.id)
+        .maybeSingle();
+
+      if (branchData) {
+        const bizTz = (branchData.businesses as unknown as { timezone?: string })?.timezone || 'UTC';
+        const branchTz = branchData.timezone || bizTz || 'UTC';
+        if (payload.branch && typeof payload.branch === 'object') {
+          (payload.branch as Record<string, unknown>).timezone = branchTz;
+        }
+        if (payload.business && typeof payload.business === 'object') {
+          (payload.business as Record<string, unknown>).timezone = bizTz;
+        }
+      }
+
       const { OrderSecurityService } = await import('./order-security.service');
       const sessionRes = await OrderSecurityService.createQrVisitSession(
         branchObj.id,

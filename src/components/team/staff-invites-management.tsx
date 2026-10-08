@@ -107,6 +107,11 @@ export function StaffInvitesManagement({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const isOwner = userRole === 'business_owner';
+  const isBranchManager = userRole === 'branch_manager';
+  const canManageInvites = isOwner || isBranchManager;
+
+  const canManageThisInvite = (inv: FormattedInvitation) =>
+    isOwner || (isBranchManager && Boolean(inv.branchId) && branches.some((b) => b.id === inv.branchId));
 
   // Refresh active custom roles when modal opens to ensure any freshly created custom role appears immediately
   useEffect(() => {
@@ -135,10 +140,10 @@ export function StaffInvitesManagement({
   const selectedCustomRole = customRoles.find((cr) => `custom:${cr.id}` === selectedRoleKey);
   const isCustomRole = Boolean(selectedCustomRole);
   const isWaiterSelected = selectedRoleKey === 'builtin:waiter';
-  const isOrgScopeRole = selectedCustomRole?.defaultScope === 'ORGANIZATION';
+  const isOrgScopeRole = isOwner && selectedCustomRole?.defaultScope === 'ORGANIZATION';
   const isDeptScopeRole = selectedCustomRole?.defaultScope === 'DEPARTMENT';
   const isAreaScopeRole = selectedCustomRole?.defaultScope === 'AREA_TEAM';
-  const canChooseOrgScope = selectedCustomRole?.maxScope === 'ORGANIZATION' && !isOrgScopeRole;
+  const canChooseOrgScope = isOwner && selectedCustomRole?.maxScope === 'ORGANIZATION' && !isOrgScopeRole;
 
   const filteredPositions = positions.filter((p) => !p.branchId || p.branchId === branchId);
   const selectedPosition = positions.find((p) => p.id === positionId);
@@ -169,6 +174,17 @@ export function StaffInvitesManagement({
     } else {
       assignedRole = selectedRoleKey as StaffRole;
       scopeType = 'PROPERTY';
+    }
+
+    if (!isOwner) {
+      if ((assignedRole as string) === 'business_owner' || assignedRole === 'branch_manager') {
+        setErrorMsg('Branch managers cannot invite business owners or branch managers.');
+        return;
+      }
+      if (scopeType === 'ORGANIZATION') {
+        setErrorMsg('Branch managers cannot create organization-scoped invitations.');
+        return;
+      }
     }
 
     if (scopeType === 'DEPARTMENT' && !departmentId) {
@@ -339,7 +355,7 @@ export function StaffInvitesManagement({
           </p>
         </div>
 
-        {isOwner && (
+        {canManageInvites && (
           <Button
             type="button"
             variant="primary"
@@ -360,7 +376,7 @@ export function StaffInvitesManagement({
           <div className="p-12 text-center text-zinc-500 text-xs space-y-2">
             <div className="text-3xl mb-2">🔑</div>
             <div>No staff invitations generated yet.</div>
-            {isOwner && (
+            {canManageInvites && (
               <div className="text-[11px] text-zinc-400">
                 Click <strong>Invite Staff</strong> to create new access codes.
               </div>
@@ -468,7 +484,7 @@ export function StaffInvitesManagement({
                         {new Date(inv.expiresAt).toLocaleDateString()} {new Date(inv.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="py-3 px-4 text-right space-x-2">
-                        {isOwner && inv.status === 'pending' && (
+                        {canManageThisInvite(inv) && inv.status === 'pending' && (
                           <>
                             <button
                               type="button"
@@ -565,7 +581,7 @@ export function StaffInvitesManagement({
                   <div className="flex items-center justify-between pt-1 border-t border-zinc-100 text-[11px] text-zinc-400">
                     <span>Expires {new Date(inv.expiresAt).toLocaleDateString()}</span>
                     <div className="space-x-2">
-                      {isOwner && inv.status === 'pending' && (
+                      {canManageThisInvite(inv) && inv.status === 'pending' && (
                         <>
                           <button
                             type="button"
@@ -629,18 +645,20 @@ export function StaffInvitesManagement({
                   required
                 >
                   <optgroup label="Built-in Roles">
-                    <option value="builtin:branch_manager">Branch Manager</option>
+                    {isOwner && <option value="builtin:branch_manager">Branch Manager</option>}
                     <option value="builtin:cashier">Cashier</option>
                     <option value="builtin:kitchen_staff">Kitchen Staff</option>
                     <option value="builtin:waiter">Waiter</option>
                   </optgroup>
-                  {customRoles.length > 0 && (
+                  {customRoles.filter((cr) => isOwner || (cr.defaultScope !== 'ORGANIZATION' && cr.maxScope !== 'ORGANIZATION')).length > 0 && (
                     <optgroup label="Custom Roles">
-                      {customRoles.map((cr) => (
-                        <option key={cr.id} value={`custom:${cr.id}`}>
-                          {cr.name} ({cr.defaultScope || 'PROPERTY'})
-                        </option>
-                      ))}
+                      {customRoles
+                        .filter((cr) => isOwner || (cr.defaultScope !== 'ORGANIZATION' && cr.maxScope !== 'ORGANIZATION'))
+                        .map((cr) => (
+                          <option key={cr.id} value={`custom:${cr.id}`}>
+                            {cr.name} ({cr.defaultScope || 'PROPERTY'})
+                          </option>
+                        ))}
                     </optgroup>
                   )}
                 </select>

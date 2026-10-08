@@ -6,6 +6,7 @@ import {
   decryptInvitationCode,
 } from '@/lib/security/invite-token';
 import { CreateInvitationInput, StaffRole } from '@/lib/validation/staff-invitation';
+import type { AuthorizationContext } from '@/types/authorization.types';
 
 export interface FormattedInvitation {
   id: string;
@@ -133,6 +134,22 @@ export class StaffInvitationService {
       effectiveScope = input.scopeType || 'PROPERTY';
     }
 
+    // 2a. Role Ceiling & Privilege Escalation Protection for Non-Owners
+    if (!authContext.isBusinessOwner && authContext.membershipRole !== 'business_owner') {
+      if ((input.assignedRole as string) === 'business_owner' || input.assignedRole === 'branch_manager') {
+        return {
+          success: false,
+          message: 'Forbidden: Branch managers cannot invite business owners or branch managers.',
+        };
+      }
+      if (targetMaxScope === 'ORGANIZATION' || effectiveScope === 'ORGANIZATION') {
+        return {
+          success: false,
+          message: 'Forbidden: Non-owner administrators cannot invite roles with organization-wide scope.',
+        };
+      }
+    }
+
     // 2b. Validate Inviter Authority (Administrative Reach)
     try {
       validateAdministrativeReach({
@@ -141,6 +158,7 @@ export class StaffInvitationService {
         targetBranchId: input.branchId || undefined,
         targetDepartmentId: input.departmentId || undefined,
         targetServiceAreaId: input.serviceAreaIds?.[0],
+        permissionKey: 'staff.invite',
       });
     } catch (err: unknown) {
       return {
@@ -992,7 +1010,7 @@ export class StaffInvitationService {
   static async verifyStaffManagementAccess(
     userId: string,
     businessId: string
-  ): Promise<{ authorized: boolean; error?: string }> {
+  ): Promise<{ authorized: boolean; error?: string; authContext?: AuthorizationContext }> {
     const { can, resolveAuthorizationContext } = await import('@/server/auth');
     let authContext;
     try {
@@ -1014,7 +1032,7 @@ export class StaffInvitationService {
     if (!canManage) {
       return { authorized: false, error: 'Forbidden: Missing permission to manage staff.' };
     }
-    return { authorized: true };
+    return { authorized: true, authContext };
   }
 
   /**
@@ -1025,12 +1043,32 @@ export class StaffInvitationService {
     businessId: string,
     invitationId: string
   ): Promise<{ success: boolean; message?: string }> {
-    const { authorized, error } = await this.verifyStaffManagementAccess(userId, businessId);
-    if (!authorized) {
+    const { authorized, error, authContext } = await this.verifyStaffManagementAccess(userId, businessId);
+    if (!authorized || !authContext) {
       return { success: false, message: error || 'Unauthorized to revoke invitations.' };
     }
 
     const admin = createAdminClient();
+
+    const { data: invite } = await admin
+      .from('staff_invitations')
+      .select('id, branch_id, status')
+      .eq('id', invitationId)
+      .eq('business_id', businessId)
+      .single();
+
+    if (!invite) {
+      return { success: false, message: 'Invitation not found.' };
+    }
+
+    if (!authContext.isBusinessOwner && authContext.membershipRole !== 'business_owner') {
+      if (invite.branch_id && !authContext.authorizedBranchIds.includes(invite.branch_id)) {
+        return { success: false, message: 'Forbidden: Cannot manage invitations for an unassigned branch.' };
+      }
+      if (!invite.branch_id) {
+        return { success: false, message: 'Forbidden: Non-owner administrators cannot manage organization-scoped invitations.' };
+      }
+    }
 
     const now = new Date().toISOString();
     const { error: updateErr } = await admin
@@ -1073,8 +1111,8 @@ export class StaffInvitationService {
     rawCode?: string;
     tokenPrefix?: string;
   }> {
-    const { authorized, error } = await this.verifyStaffManagementAccess(userId, businessId);
-    if (!authorized) {
+    const { authorized, error, authContext } = await this.verifyStaffManagementAccess(userId, businessId);
+    if (!authorized || !authContext) {
       return { success: false, message: error || 'Unauthorized to regenerate invitations.' };
     }
 
@@ -1089,6 +1127,15 @@ export class StaffInvitationService {
 
     if (!invite || invite.status !== 'pending') {
       return { success: false, message: 'Only pending invitations can be regenerated.' };
+    }
+
+    if (!authContext.isBusinessOwner && authContext.membershipRole !== 'business_owner') {
+      if (invite.branch_id && !authContext.authorizedBranchIds.includes(invite.branch_id)) {
+        return { success: false, message: 'Forbidden: Cannot manage invitations for an unassigned branch.' };
+      }
+      if (!invite.branch_id) {
+        return { success: false, message: 'Forbidden: Non-owner administrators cannot manage organization-scoped invitations.' };
+      }
     }
 
     const invitationType = invite.invitation_type;

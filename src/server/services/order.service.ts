@@ -525,6 +525,7 @@ export class OrderService {
         updateData.status = 'pending';
       } else if (secEvalResult) {
         updateData.approval_status = 'approved';
+        updateData.status = 'confirmed';
       }
       if (secEvalResult?.qrVisitSessionId) {
         updateData.qr_visit_session_id = secEvalResult.qrVisitSessionId;
@@ -755,7 +756,7 @@ export class OrderService {
     }
 
     const admin = createAdminClient();
-    const { data: order } = await admin.from('orders').select('id, status, branch_id, business_id').eq('id', orderId).single();
+    const { data: order } = await admin.from('orders').select('id, status, branch_id, business_id, approval_status').eq('id', orderId).single();
     if (!order || order.business_id !== authContext.businessId) {
       return { success: false, message: 'Order not found in active business.' };
     }
@@ -765,6 +766,10 @@ export class OrderService {
     }
     if (order.status === 'completed') {
       return { success: false, message: 'Completed orders are immutable and cannot be updated.' };
+    }
+
+    if (order.approval_status === 'pending_waiter_approval' && nextStatus !== 'cancelled') {
+      return { success: false, message: 'Forbidden: Order is awaiting waiter approval.' };
     }
 
     let isAuthorized = false;
@@ -786,7 +791,7 @@ export class OrderService {
         actorUserId: authContext.userId,
       });
       return { success: res.success, message: res.message };
-    } else if (nextStatus === 'preparing' || nextStatus === 'ready') {
+    } else if (nextStatus === 'confirmed' || nextStatus === 'preparing' || nextStatus === 'ready') {
       isAuthorized =
         (await can({ context: authContext, permission: 'kitchen.update', resource })) ||
         (await can({ context: authContext, permission: 'orders.update_status', resource }));

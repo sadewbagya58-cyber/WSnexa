@@ -324,15 +324,22 @@ export function validateAdministrativeReach(options: ValidateAdministrativeReach
     );
   }
 
-  // 4. Non-owner actors must possess roles.manage or permissions.override.manage
+  // 4. Non-owner actors must possess roles.manage or permissions.override.manage,
+  // or staff.invite / staff.manage if delegating staff invitations
+  const isStaffInvite = permissionKey === 'staff.invite';
   const hasRoleAdmin =
     actorContext.rolePermissions.includes('roles.manage') ||
     actorContext.rolePermissions.includes('permissions.override.manage');
+  const hasStaffInviteAdmin =
+    actorContext.rolePermissions.includes('staff.invite') ||
+    actorContext.rolePermissions.includes('staff.manage');
 
-  if (!hasRoleAdmin) {
+  if (!hasRoleAdmin && !(isStaffInvite && hasStaffInviteAdmin)) {
     throw new AuthorizationContextError(
       'PERMISSION_DENIED',
-      'Actor lacks roles.manage or permissions.override.manage authority.'
+      isStaffInvite
+        ? 'Actor lacks staff.invite or staff.manage authority.'
+        : 'Actor lacks roles.manage or permissions.override.manage authority.'
     );
   }
 

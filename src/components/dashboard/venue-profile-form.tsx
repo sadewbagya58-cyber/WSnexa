@@ -593,6 +593,58 @@ export function VenueProfileForm({ initialProfile, branches }: VenueProfileFormP
           )}
         </div>
 
+        {/* Public Contact Information */}
+        <div className="border-t border-zinc-100 pt-6 space-y-4">
+          <div>
+            <h3 className="text-xs font-black uppercase tracking-wider text-zinc-950 flex items-center gap-2">
+              <span>📞 Public Contact Information</span>
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Phone number and contact email displayed on your public venue profile for customer reservations and inquiries.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label htmlFor="phonePublic" className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                Public Contact Phone
+              </label>
+              <input
+                id="phonePublic"
+                name="phonePublic"
+                type="tel"
+                value={formData.phonePublic}
+                onChange={handleChange}
+                placeholder="e.g. +94 11 234 5678"
+                maxLength={30}
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+              <p className="text-[11px] text-zinc-500">
+                Guests can click to call your venue directly.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="emailPublic" className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                Public Contact Email
+              </label>
+              <input
+                id="emailPublic"
+                name="emailPublic"
+                type="email"
+                value={formData.emailPublic}
+                onChange={handleChange}
+                placeholder="e.g. reservations@aurahotel.com"
+                maxLength={100}
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950 focus:border-amber-500 focus:outline-hidden"
+              />
+              <p className="text-[11px] text-zinc-500">
+                Guests can click to email your venue directly.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* External Links & Booking Section */}
         <div className="border-t border-zinc-100 pt-4 space-y-4">
           <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Website & External Hotel Booking Links</h3>

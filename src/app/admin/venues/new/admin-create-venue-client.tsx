@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,13 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
   const [geoLoading, setGeoLoading] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     businessId: '',
@@ -46,6 +54,52 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
   });
 
   const [isSlugEdited, setIsSlugEdited] = useState(false);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setMessage({ success: false, text: 'Invalid logo format. Please upload JPG, PNG, or WEBP.' });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ success: false, text: 'Logo image size exceeds 5 MB limit.' });
+      return;
+    }
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const handleRemoveLogo = () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(null);
+    setLogoPreview(null);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setMessage({ success: false, text: 'Invalid cover image format. Please upload JPG, PNG, or WEBP.' });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setMessage({ success: false, text: 'Cover image size exceeds 8 MB limit.' });
+      return;
+    }
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
+
+  const handleRemoveCover = () => {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverFile(null);
+    setCoverPreview(null);
+    if (coverInputRef.current) coverInputRef.current.value = '';
+  };
 
   const isLocComplete = Boolean(
     formData.addressPublic &&
@@ -116,16 +170,32 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
     const latVal = formData.latitude !== '' && formData.latitude != null ? Number(formData.latitude) : undefined;
     const lngVal = formData.longitude !== '' && formData.longitude != null ? Number(formData.longitude) : undefined;
 
-    const payload = {
-      ...formData,
-      slug: normalizeVenueSlug(formData.slug || formData.displayName),
-      venueType: formData.venueType as VenueType,
-      latitude: latVal,
-      longitude: lngVal,
-      isPublished: shouldPublish,
-    };
+    const fd = new FormData();
+    if (formData.businessId) fd.append('businessId', formData.businessId);
+    if (formData.newBusinessName) fd.append('newBusinessName', formData.newBusinessName);
+    fd.append('displayName', formData.displayName);
+    fd.append('slug', normalizeVenueSlug(formData.slug || formData.displayName));
+    fd.append('venueType', formData.venueType);
+    if (formData.shortDescription) fd.append('shortDescription', formData.shortDescription);
+    if (formData.description) fd.append('description', formData.description);
+    if (formData.phonePublic) fd.append('phonePublic', formData.phonePublic);
+    if (formData.emailPublic) fd.append('emailPublic', formData.emailPublic);
+    if (formData.websiteUrl) fd.append('websiteUrl', formData.websiteUrl);
+    if (formData.addressPublic) fd.append('addressPublic', formData.addressPublic);
+    fd.append('city', formData.city);
+    fd.append('country', formData.country);
+    if (latVal != null && !isNaN(latVal)) fd.append('latitude', String(latVal));
+    if (lngVal != null && !isNaN(lngVal)) fd.append('longitude', String(lngVal));
+    fd.append('priceLevel', String(formData.priceLevel));
+    if (formData.bookingUrl) fd.append('bookingUrl', formData.bookingUrl);
+    if (formData.agodaUrl) fd.append('agodaUrl', formData.agodaUrl);
+    if (formData.externalBookingUrl) fd.append('externalBookingUrl', formData.externalBookingUrl);
+    fd.append('isPilotDemo', String(formData.isPilotDemo));
+    fd.append('isPublished', String(shouldPublish));
+    if (logoFile) fd.append('logoFile', logoFile);
+    if (coverFile) fd.append('coverFile', coverFile);
 
-    const res = await createAdminVenueAction(payload);
+    const res = await createAdminVenueAction(fd);
     setLoading(false);
 
     if (res.success) {
@@ -324,6 +394,123 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
               placeholder="Luxury beachfront sanctuary with digital ordering..."
               className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
             />
+          </div>
+
+          {/* Logo & Cover Image Uploads */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-zinc-100">
+            {/* Logo Upload */}
+            <div className="space-y-2 p-3.5 rounded-2xl border border-zinc-200 bg-zinc-50/50">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-800">Venue Logo</label>
+                <span className="text-[10px] font-semibold text-zinc-400">Max 5MB (JPG/PNG/WEBP)</span>
+              </div>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleLogoChange}
+                className="hidden"
+                id="admin-venue-logo-input"
+              />
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-2xl border border-zinc-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  {logoPreview ? (
+                    <Image
+                      src={logoPreview}
+                      alt="Logo Preview"
+                      width={64}
+                      height={64}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <span className="text-zinc-300 text-2xl font-black">🏢</span>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => logoInputRef.current?.click()}
+                      className="text-xs font-bold py-1.5 px-3 min-h-[36px] bg-white border-zinc-200 hover:bg-zinc-100 cursor-pointer"
+                    >
+                      {logoFile ? 'Change Logo' : 'Upload Logo'}
+                    </Button>
+                    {logoFile && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleRemoveLogo}
+                        className="text-xs font-bold py-1.5 px-2.5 min-h-[36px] text-red-600 border-red-200 hover:bg-red-50 cursor-pointer"
+                      >
+                        ✕ Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 truncate">
+                    {logoFile ? logoFile.name : 'No logo selected'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cover Photo Upload */}
+            <div className="space-y-2 p-3.5 rounded-2xl border border-zinc-200 bg-zinc-50/50">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-800">Cover Photo</label>
+                <span className="text-[10px] font-semibold text-zinc-400">Max 8MB (JPG/PNG/WEBP)</span>
+              </div>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleCoverChange}
+                className="hidden"
+                id="admin-venue-cover-input"
+              />
+              <div className="flex items-center gap-3">
+                <div className="w-20 h-16 rounded-2xl border border-zinc-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                  {coverPreview ? (
+                    <Image
+                      src={coverPreview}
+                      alt="Cover Preview"
+                      width={80}
+                      height={64}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    <span className="text-zinc-300 text-2xl font-black">🖼️</span>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="text-xs font-bold py-1.5 px-3 min-h-[36px] bg-white border-zinc-200 hover:bg-zinc-100 cursor-pointer"
+                    >
+                      {coverFile ? 'Change Cover' : 'Upload Cover'}
+                    </Button>
+                    {coverFile && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleRemoveCover}
+                        className="text-xs font-bold py-1.5 px-2.5 min-h-[36px] text-red-600 border-red-200 hover:bg-red-50 cursor-pointer"
+                      >
+                        ✕ Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 truncate">
+                    {coverFile ? coverFile.name : 'No cover photo selected'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -554,14 +741,38 @@ export function AdminCreateVenueClient({ existingBusinesses }: AdminCreateVenueC
             <div><span className="font-bold text-zinc-500">Slug:</span> /{formData.slug}</div>
             <div><span className="font-bold text-zinc-500">City:</span> {formData.city}, {formData.country}</div>
             <div><span className="font-bold text-zinc-500">Address:</span> {formData.addressPublic || 'Not set'}</div>
+            <div><span className="font-bold text-zinc-500">Contact Phone:</span> {formData.phonePublic || 'Not set'}</div>
+            <div><span className="font-bold text-zinc-500">Contact Email:</span> {formData.emailPublic || 'Not set'}</div>
             <div>
               <span className="font-bold text-zinc-500">Coordinates:</span>{' '}
               {formData.latitude !== '' && formData.longitude !== ''
                 ? `${formData.latitude}, ${formData.longitude}`
                 : '⚠ Missing coordinates'}
             </div>
+            <div className="flex items-center gap-4 pt-1 border-t border-zinc-200/60">
+              <div>
+                <span className="font-bold text-zinc-500 block mb-1">Logo:</span>
+                {logoPreview ? (
+                  <div className="w-12 h-12 rounded-xl border border-zinc-200 overflow-hidden bg-white">
+                    <Image src={logoPreview} alt="Logo" width={48} height={48} className="w-full h-full object-cover" unoptimized />
+                  </div>
+                ) : (
+                  <span className="text-zinc-400">None</span>
+                )}
+              </div>
+              <div>
+                <span className="font-bold text-zinc-500 block mb-1">Cover:</span>
+                {coverPreview ? (
+                  <div className="w-16 h-12 rounded-xl border border-zinc-200 overflow-hidden bg-white">
+                    <Image src={coverPreview} alt="Cover" width={64} height={48} className="w-full h-full object-cover" unoptimized />
+                  </div>
+                ) : (
+                  <span className="text-zinc-400">None</span>
+                )}
+              </div>
+            </div>
             {formData.isPilotDemo && (
-              <div className="text-purple-700 font-extrabold">🧪 Marked as Pilot / Demo Venue</div>
+              <div className="text-purple-700 font-extrabold pt-1">🧪 Marked as Pilot / Demo Venue</div>
             )}
           </div>
 

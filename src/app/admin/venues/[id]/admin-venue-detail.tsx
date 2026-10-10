@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -381,6 +382,30 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700">Public Phone</label>
+                  <input
+                    type="text"
+                    value={formData.phonePublic}
+                    onChange={(e) => setFormData({ ...formData, phonePublic: e.target.value })}
+                    placeholder="+94 11 234 5678"
+                    className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700">Public Email</label>
+                  <input
+                    type="email"
+                    value={formData.emailPublic}
+                    onChange={(e) => setFormData({ ...formData, emailPublic: e.target.value })}
+                    placeholder="contact@venue.com"
+                    className="w-full rounded-2xl border border-zinc-200 p-3 text-xs font-semibold text-zinc-950"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-zinc-700">Latitude (-90 to 90)</label>
                   <input
                     type="number"
@@ -489,6 +514,68 @@ export function AdminVenueDetailClient({ venue: initialVenue }: AdminVenueDetail
                         ? `${venue.latitude}, ${venue.longitude}`
                         : '⚠ Not configured'}
                     </p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 space-y-1">
+                    <span className="font-bold text-zinc-400 uppercase text-[10px]">Contact Phone</span>
+                    <p className="font-bold text-zinc-950">
+                      {venue.phonePublic ? (
+                        <a href={`tel:${venue.phonePublic}`} className="hover:underline text-amber-600">
+                          {venue.phonePublic}
+                        </a>
+                      ) : (
+                        'Not set'
+                      )}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-100 space-y-1">
+                    <span className="font-bold text-zinc-400 uppercase text-[10px]">Contact Email</span>
+                    <p className="font-bold text-zinc-950">
+                      {venue.emailPublic ? (
+                        <a href={`mailto:${venue.emailPublic}`} className="hover:underline text-amber-600">
+                          {venue.emailPublic}
+                        </a>
+                      ) : (
+                        'Not set'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Media Assets (Logo & Cover) */}
+              <div className="space-y-3 border-t border-zinc-100 pt-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">Media Assets</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-xl border border-zinc-200 overflow-hidden bg-white shrink-0 shadow-2xs">
+                      {venue.logoUrl ? (
+                        <Image src={venue.logoUrl} alt="Logo" width={56} height={56} className="w-full h-full object-cover" unoptimized />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300 text-xl font-black">🏢</div>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-zinc-400">Venue Logo</span>
+                      <p className="text-xs font-bold text-zinc-950 truncate max-w-[180px]">
+                        {venue.logoUrl ? 'Active Logo' : 'No logo uploaded'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center gap-3">
+                    <div className="w-20 h-14 rounded-xl border border-zinc-200 overflow-hidden bg-white shrink-0 shadow-2xs">
+                      {venue.coverImageUrl ? (
+                        <Image src={venue.coverImageUrl} alt="Cover" width={80} height={56} className="w-full h-full object-cover" unoptimized />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300 text-xl font-black">🖼️</div>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-zinc-400">Cover Photo</span>
+                      <p className="text-xs font-bold text-zinc-950 truncate max-w-[180px]">
+                        {venue.coverImageUrl ? 'Active Cover' : 'No cover uploaded'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

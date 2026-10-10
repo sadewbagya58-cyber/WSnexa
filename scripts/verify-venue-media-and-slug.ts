@@ -1,3 +1,15 @@
+// Bypass server-only guard for direct tsx execution
+try {
+  /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
+  // @ts-ignore
+  require.cache[require.resolve('server-only')] = {
+    id: require.resolve('server-only'),
+    filename: require.resolve('server-only'),
+    loaded: true,
+    exports: {},
+  };
+} catch {}
+
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';

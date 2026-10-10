@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 import { isVenueLocationComplete, normalizeVenueSlug, VenueType } from '@/lib/validation/venue';
 import { PilotOnboardingService } from './pilot-onboarding.service';
+import { VenueMediaService } from './venue-media.service';
 
 export interface AdminOverviewData {
   metrics: {
@@ -112,6 +113,8 @@ export interface CreateAdminVenuePayload {
   description?: string;
   logoUrl?: string;
   coverImageUrl?: string;
+  logoFile?: File | Blob | null;
+  coverFile?: File | Blob | null;
   phonePublic?: string;
   emailPublic?: string;
   websiteUrl?: string;
@@ -538,6 +541,63 @@ export class SuperAdminService {
       return { success: false, message: 'This venue URL slug is already taken by another venue.' };
     }
 
+    // 3. Handle media uploads if provided
+    const uploadedUrls: string[] = [];
+    const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (input.logoFile && (input.logoFile instanceof Blob || typeof (input.logoFile as any)?.arrayBuffer === 'function') && input.logoFile.size > 0) {
+      const mime = input.logoFile.type;
+      if (!ALLOWED_MEDIA_TYPES.includes(mime.toLowerCase())) {
+        return { success: false, message: 'Invalid logo format. Only JPG, PNG, and WEBP images are allowed.' };
+      }
+      if (input.logoFile.size > 5 * 1024 * 1024) {
+        return { success: false, message: 'Logo file size exceeds the 5 MB maximum limit.' };
+      }
+      const buffer = Buffer.from(await input.logoFile.arrayBuffer());
+      const ext = mime.split('/')[1] === 'jpeg' ? 'jpg' : mime.split('/')[1] || 'webp';
+      const fileUuid = crypto.randomUUID();
+      const storagePath = `businesses/${targetBusinessId}/venue-profile/logo/${fileUuid}.${ext}`;
+      const { error: uploadErr } = await admin.storage.from('venue-media').upload(storagePath, buffer, {
+        contentType: mime,
+        cacheControl: '3600',
+        upsert: true,
+      });
+      if (uploadErr) {
+        return { success: false, message: `Failed to upload logo: ${uploadErr.message}` };
+      }
+      const { data: publicUrlData } = admin.storage.from('venue-media').getPublicUrl(storagePath);
+      input.logoUrl = publicUrlData.publicUrl;
+      uploadedUrls.push(publicUrlData.publicUrl);
+    }
+
+    if (input.coverFile && (input.coverFile instanceof Blob || typeof (input.coverFile as any)?.arrayBuffer === 'function') && input.coverFile.size > 0) {
+      const mime = input.coverFile.type;
+      if (!ALLOWED_MEDIA_TYPES.includes(mime.toLowerCase())) {
+        for (const u of uploadedUrls) await VenueMediaService.deleteStorageObjectByUrl(admin, u);
+        return { success: false, message: 'Invalid cover image format. Only JPG, PNG, and WEBP images are allowed.' };
+      }
+      if (input.coverFile.size > 8 * 1024 * 1024) {
+        for (const u of uploadedUrls) await VenueMediaService.deleteStorageObjectByUrl(admin, u);
+        return { success: false, message: 'Cover image file size exceeds the 8 MB maximum limit.' };
+      }
+      const buffer = Buffer.from(await input.coverFile.arrayBuffer());
+      const ext = mime.split('/')[1] === 'jpeg' ? 'jpg' : mime.split('/')[1] || 'webp';
+      const fileUuid = crypto.randomUUID();
+      const storagePath = `businesses/${targetBusinessId}/venue-profile/cover/${fileUuid}.${ext}`;
+      const { error: uploadErr } = await admin.storage.from('venue-media').upload(storagePath, buffer, {
+        contentType: mime,
+        cacheControl: '3600',
+        upsert: true,
+      });
+      if (uploadErr) {
+        for (const u of uploadedUrls) await VenueMediaService.deleteStorageObjectByUrl(admin, u);
+        return { success: false, message: `Failed to upload cover image: ${uploadErr.message}` };
+      }
+      const { data: publicUrlData } = admin.storage.from('venue-media').getPublicUrl(storagePath);
+      input.coverImageUrl = publicUrlData.publicUrl;
+      uploadedUrls.push(publicUrlData.publicUrl);
+    }
+
     const payload = {
       business_id: targetBusinessId,
       slug: normalizedSlug,
@@ -572,6 +632,9 @@ export class SuperAdminService {
       .single();
 
     if (error || !upserted) {
+      for (const u of uploadedUrls) {
+        await VenueMediaService.deleteStorageObjectByUrl(admin, u);
+      }
       return { success: false, message: `Failed to save venue profile: ${error?.message || 'Database error'}` };
     }
 

@@ -29,6 +29,7 @@ export class VenueMediaService {
    * Upload logo or cover photo to Supabase Storage with strict tenant and permission validation.
    */
   static async uploadImage({
+    userId,
     businessId,
     imageType,
     fileBuffer,
@@ -55,34 +56,50 @@ export class VenueMediaService {
       }
 
       // 3. Server-side permission validation
-      const { can, resolveAuthorizationContext } = await import('@/server/auth');
-      let authContext;
-      try {
-        authContext = await resolveAuthorizationContext();
-      } catch {
-        return {
-          success: false,
-          message: 'Unauthorized session.',
-        };
+      let isSuperAdmin = false;
+      if (userId) {
+        const adminClient = createAdminClient();
+        const { data: profile } = await adminClient
+          .from('user_profiles')
+          .select('is_super_admin')
+          .eq('id', userId)
+          .maybeSingle();
+        isSuperAdmin = Boolean(profile?.is_super_admin);
       }
 
-      if (!authContext || authContext.businessId !== businessId) {
-        return {
-          success: false,
-          message: 'Tenant mismatch or unauthorized business context.',
-        };
-      }
+      if (!isSuperAdmin) {
+        const { can, resolveAuthorizationContext } = await import('@/server/auth');
+        let authContext;
+        try {
+          authContext = await resolveAuthorizationContext({
+            overrideUserId: userId,
+            requestedBusinessId: businessId,
+          });
+        } catch {
+          return {
+            success: false,
+            message: 'You do not have permission to upload photos for this venue.',
+          };
+        }
 
-      const hasPerm = await can({
-        context: authContext,
-        permission: 'venue_profile.manage',
-      });
+        if (!authContext || authContext.businessId !== businessId) {
+          return {
+            success: false,
+            message: 'You do not have permission to upload photos for this venue.',
+          };
+        }
 
-      if (!hasPerm) {
-        return {
-          success: false,
-          message: 'You do not have permission to upload photos for this venue.',
-        };
+        const hasPerm = await can({
+          context: authContext,
+          permission: 'venue_profile.manage',
+        });
+
+        if (!hasPerm) {
+          return {
+            success: false,
+            message: 'You do not have permission to upload photos for this venue.',
+          };
+        }
       }
 
       const admin = createAdminClient();
@@ -169,34 +186,50 @@ export class VenueMediaService {
     imageType: 'logo' | 'cover'
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const { can, resolveAuthorizationContext } = await import('@/server/auth');
-      let authContext;
-      try {
-        authContext = await resolveAuthorizationContext();
-      } catch {
-        return {
-          success: false,
-          message: 'Unauthorized session.',
-        };
+      let isSuperAdmin = false;
+      if (userId) {
+        const adminClient = createAdminClient();
+        const { data: profile } = await adminClient
+          .from('user_profiles')
+          .select('is_super_admin')
+          .eq('id', userId)
+          .maybeSingle();
+        isSuperAdmin = Boolean(profile?.is_super_admin);
       }
 
-      if (!authContext || authContext.businessId !== businessId) {
-        return {
-          success: false,
-          message: 'Tenant mismatch or unauthorized business context.',
-        };
-      }
+      if (!isSuperAdmin) {
+        const { can, resolveAuthorizationContext } = await import('@/server/auth');
+        let authContext;
+        try {
+          authContext = await resolveAuthorizationContext({
+            overrideUserId: userId,
+            requestedBusinessId: businessId,
+          });
+        } catch {
+          return {
+            success: false,
+            message: 'You do not have permission to remove photos for this venue.',
+          };
+        }
 
-      const hasPerm = await can({
-        context: authContext,
-        permission: 'venue_profile.manage',
-      });
+        if (!authContext || authContext.businessId !== businessId) {
+          return {
+            success: false,
+            message: 'You do not have permission to remove photos for this venue.',
+          };
+        }
 
-      if (!hasPerm) {
-        return {
-          success: false,
-          message: 'You do not have permission to remove photos for this venue.',
-        };
+        const hasPerm = await can({
+          context: authContext,
+          permission: 'venue_profile.manage',
+        });
+
+        if (!hasPerm) {
+          return {
+            success: false,
+            message: 'You do not have permission to remove photos for this venue.',
+          };
+        }
       }
 
       const admin = createAdminClient();
@@ -240,7 +273,7 @@ export class VenueMediaService {
   /**
    * Helper to delete storage object from public URL safely.
    */
-  private static async deleteStorageObjectByUrl(admin: ReturnType<typeof createAdminClient>, url: string) {
+  public static async deleteStorageObjectByUrl(admin: ReturnType<typeof createAdminClient>, url: string) {
     try {
       const parts = url.split('/venue-media/');
       if (parts.length < 2) return;

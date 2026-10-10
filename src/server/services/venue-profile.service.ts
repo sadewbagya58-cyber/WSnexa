@@ -28,7 +28,7 @@ export class VenueProfileService {
   ): Promise<{ success: boolean; message: string; data?: VenuePublicProfileRecord }> {
     const admin = createAdminClient();
 
-    const targetSlug = input.slug?.trim() || normalizeVenueSlug(input.displayName);
+    const targetSlug = normalizeVenueSlug(input.slug?.trim() || input.displayName);
 
     if (!isValidVenueSlug(targetSlug)) {
       return {
@@ -50,6 +50,13 @@ export class VenueProfileService {
         message: 'This venue URL is already in use. Please choose another one.',
       };
     }
+
+    // Fetch existing profile to preserve existing fields if omitted in partial updates
+    const { data: existingProfile } = await admin
+      .from('venue_public_profiles')
+      .select('*')
+      .eq('business_id', businessId)
+      .maybeSingle();
 
     // Validation for publish status: require minimum mandatory fields & location coordinates
     if (input.isPublished) {
@@ -106,28 +113,28 @@ export class VenueProfileService {
       business_id: businessId,
       slug: targetSlug,
       display_name: input.displayName,
-      short_description: input.shortDescription || null,
-      description: input.description || null,
-      venue_type: input.venueType,
-      logo_url: input.logoUrl || null,
-      cover_image_url: input.coverImageUrl || null,
-      phone_public: input.phonePublic || null,
-      email_public: input.emailPublic || null,
-      website_url: input.websiteUrl || null,
-      address_public: input.addressPublic || null,
-      city: input.city,
-      country: input.country || 'US',
-      latitude: input.latitude || null,
-      longitude: input.longitude || null,
-      price_level: input.priceLevel || 2,
-      is_published: input.isPublished || false,
-      is_accepting_orders: input.isAcceptingOrders ?? true,
-      public_reservations_enabled: input.publicReservationsEnabled ?? true,
-      public_menu_enabled: input.publicMenuEnabled ?? true,
-      featured_branch_id: input.featuredBranchId || null,
-      booking_url: input.bookingUrl || null,
-      agoda_url: input.agodaUrl || null,
-      external_booking_url: input.externalBookingUrl || null,
+      short_description: input.shortDescription !== undefined ? (input.shortDescription || null) : (existingProfile?.short_description ?? null),
+      description: input.description !== undefined ? (input.description || null) : (existingProfile?.description ?? null),
+      venue_type: input.venueType || existingProfile?.venue_type || 'restaurant',
+      logo_url: input.logoUrl !== undefined ? (input.logoUrl || null) : (existingProfile?.logo_url ?? null),
+      cover_image_url: input.coverImageUrl !== undefined ? (input.coverImageUrl || null) : (existingProfile?.cover_image_url ?? null),
+      phone_public: input.phonePublic !== undefined ? (input.phonePublic ? input.phonePublic.trim() : null) : (existingProfile?.phone_public ?? null),
+      email_public: input.emailPublic !== undefined ? (input.emailPublic ? input.emailPublic.trim() : null) : (existingProfile?.email_public ?? null),
+      website_url: input.websiteUrl !== undefined ? (input.websiteUrl || null) : (existingProfile?.website_url ?? null),
+      address_public: input.addressPublic !== undefined ? (input.addressPublic || null) : (existingProfile?.address_public ?? null),
+      city: input.city || existingProfile?.city,
+      country: input.country || existingProfile?.country || 'US',
+      latitude: input.latitude !== undefined ? input.latitude : (existingProfile?.latitude ?? null),
+      longitude: input.longitude !== undefined ? input.longitude : (existingProfile?.longitude ?? null),
+      price_level: input.priceLevel || existingProfile?.price_level || 2,
+      is_published: input.isPublished !== undefined ? input.isPublished : (existingProfile?.is_published ?? false),
+      is_accepting_orders: input.isAcceptingOrders !== undefined ? input.isAcceptingOrders : (existingProfile?.is_accepting_orders ?? true),
+      public_reservations_enabled: input.publicReservationsEnabled !== undefined ? input.publicReservationsEnabled : (existingProfile?.public_reservations_enabled ?? true),
+      public_menu_enabled: input.publicMenuEnabled !== undefined ? input.publicMenuEnabled : (existingProfile?.public_menu_enabled ?? true),
+      featured_branch_id: input.featuredBranchId !== undefined ? (input.featuredBranchId || null) : (existingProfile?.featured_branch_id ?? null),
+      booking_url: input.bookingUrl !== undefined ? (input.bookingUrl || null) : (existingProfile?.booking_url ?? null),
+      agoda_url: input.agodaUrl !== undefined ? (input.agodaUrl || null) : (existingProfile?.agoda_url ?? null),
+      external_booking_url: input.externalBookingUrl !== undefined ? (input.externalBookingUrl || null) : (existingProfile?.external_booking_url ?? null),
       updated_at: new Date().toISOString(),
     };
 

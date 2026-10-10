@@ -13,6 +13,7 @@ interface VenueDetailActionsProps {
     displayName: string;
     venueType: string;
     phonePublic: string | null;
+    emailPublic?: string | null;
     addressPublic: string | null;
     city: string;
     latitude: number | null;
@@ -84,6 +85,14 @@ export function VenueDetailActions({ venue }: VenueDetailActionsProps) {
           <a href={`tel:${venue.phonePublic}`} className={ctaOutline}>
             <span aria-hidden>📞</span>
             <span>Call Venue</span>
+          </a>
+        )}
+
+        {/* Email Venue CTA */}
+        {venue.emailPublic && (
+          <a href={`mailto:${venue.emailPublic}`} className={ctaOutline}>
+            <span aria-hidden>✉️</span>
+            <span>Email Venue</span>
           </a>
         )}
 

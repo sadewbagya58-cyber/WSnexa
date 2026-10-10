@@ -34,9 +34,52 @@ export async function getAdminVenueDetailAction(venueId: string) {
   return { success: true, venue };
 }
 
-export async function createAdminVenueAction(input: CreateAdminVenuePayload) {
+export async function createAdminVenueAction(input: CreateAdminVenuePayload | FormData) {
   const { user } = await requireSuperAdmin();
-  const result = await SuperAdminService.createVenue(input, user.id);
+  let payload: CreateAdminVenuePayload;
+
+  if (typeof (input as FormData)?.get === 'function') {
+    const fd = input as FormData;
+    const logoFile = fd.get('logoFile') as File | null;
+    const coverFile = fd.get('coverFile') as File | null;
+    const latStr = fd.get('latitude') as string | null;
+    const lngStr = fd.get('longitude') as string | null;
+    const priceStr = fd.get('priceLevel') as string | null;
+
+    payload = {
+      businessId: (fd.get('businessId') as string) || undefined,
+      newBusinessName: (fd.get('newBusinessName') as string) || undefined,
+      displayName: (fd.get('displayName') as string) || '',
+      slug: (fd.get('slug') as string) || undefined,
+      venueType: ((fd.get('venueType') as string) || 'restaurant') as VenueType,
+      shortDescription: (fd.get('shortDescription') as string) || undefined,
+      description: (fd.get('description') as string) || undefined,
+      logoUrl: (fd.get('logoUrl') as string) || undefined,
+      coverImageUrl: (fd.get('coverImageUrl') as string) || undefined,
+      logoFile: logoFile && logoFile.size > 0 ? logoFile : null,
+      coverFile: coverFile && coverFile.size > 0 ? coverFile : null,
+      phonePublic: (fd.get('phonePublic') as string) || undefined,
+      emailPublic: (fd.get('emailPublic') as string) || undefined,
+      websiteUrl: (fd.get('websiteUrl') as string) || undefined,
+      addressPublic: (fd.get('addressPublic') as string) || undefined,
+      city: (fd.get('city') as string) || '',
+      country: (fd.get('country') as string) || 'US',
+      latitude: latStr && latStr.trim() !== '' ? Number(latStr) : null,
+      longitude: lngStr && lngStr.trim() !== '' ? Number(lngStr) : null,
+      priceLevel: priceStr ? parseInt(priceStr, 10) : 2,
+      isPublished: fd.get('isPublished') === 'true',
+      isAcceptingOrders: fd.get('isAcceptingOrders') !== 'false',
+      isPilotDemo: fd.get('isPilotDemo') === 'true',
+      featuredBranchId: (fd.get('featuredBranchId') as string) || undefined,
+      bookingUrl: (fd.get('bookingUrl') as string) || undefined,
+      agodaUrl: (fd.get('agodaUrl') as string) || undefined,
+      externalBookingUrl: (fd.get('externalBookingUrl') as string) || undefined,
+    };
+  } else {
+    payload = input as CreateAdminVenuePayload;
+  }
+
+  const result = await SuperAdminService.createVenue(payload, user.id);
 
   if (result.success) {
     revalidatePath('/admin');

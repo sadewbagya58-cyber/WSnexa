@@ -208,6 +208,7 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               displayName: venue.display_name,
               venueType: venue.venue_type,
               phonePublic: venue.phone_public,
+              emailPublic: venue.email_public,
               addressPublic: venue.address_public,
               city: venue.city,
               latitude: venue.latitude,
@@ -301,6 +302,44 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
                 }}
               />
             </div>
+
+            {/* Contact & Inquiries */}
+            {(venue.phone_public || venue.email_public) && (
+              <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xs space-y-4">
+                <div>
+                  <h3 className="text-base font-black text-zinc-950">Contact &amp; Inquiries</h3>
+                  <p className="text-xs font-semibold text-zinc-500">
+                    Direct contact channels for reservations, inquiries, and customer service.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {venue.phone_public && (
+                    <a
+                      href={`tel:${venue.phone_public}`}
+                      className="px-4 py-3 rounded-2xl bg-zinc-50 hover:bg-zinc-100 active:bg-zinc-200 border border-zinc-200 text-zinc-950 text-xs font-bold transition-colors flex items-center justify-between min-h-[48px] touch-manipulation group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden>📞</span>
+                        <span>{venue.phone_public}</span>
+                      </span>
+                      <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors text-[11px] font-semibold">Call Now ↗</span>
+                    </a>
+                  )}
+                  {venue.email_public && (
+                    <a
+                      href={`mailto:${venue.email_public}`}
+                      className="px-4 py-3 rounded-2xl bg-zinc-50 hover:bg-zinc-100 active:bg-zinc-200 border border-zinc-200 text-zinc-950 text-xs font-bold transition-colors flex items-center justify-between min-h-[48px] touch-manipulation group"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span aria-hidden>✉️</span>
+                        <span>{venue.email_public}</span>
+                      </span>
+                      <span className="text-zinc-400 group-hover:text-zinc-700 transition-colors text-[11px] font-semibold">Email Venue ↗</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Website & Online Bookings */}
             {hasExternalLinks && (
@@ -442,6 +481,12 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
               {venue.phone_public && (
                 <a href={`tel:${venue.phone_public}`} className={ctaOutline}>
                   <span aria-hidden>📞</span> Call Venue ({venue.phone_public})
+                </a>
+              )}
+
+              {venue.email_public && (
+                <a href={`mailto:${venue.email_public}`} className={ctaOutline}>
+                  <span aria-hidden>✉️</span> Email Venue ({venue.email_public})
                 </a>
               )}
 

@@ -3,9 +3,19 @@ import { notFound } from 'next/navigation';
 import { getLegalDocumentBySlug } from '@/content/legal/registry';
 import { LegalDocumentView } from '@/components/legal/legal-document-view';
 
-export const metadata = {
-  title: 'Privacy Policy | WSNexa',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Privacy Policy',
   description: 'Privacy Policy detailing data processing, multi-tenant controller/processor responsibilities, and Sri Lanka PDPA rights.',
+  alternates: {
+    canonical: '/legal/privacy',
+  },
+  openGraph: {
+    title: 'Privacy Policy | WSNexa',
+    description: 'Privacy Policy detailing data processing, multi-tenant controller/processor responsibilities, and Sri Lanka PDPA rights.',
+    url: '/legal/privacy',
+  },
 };
 
 export default function PrivacyPage() {

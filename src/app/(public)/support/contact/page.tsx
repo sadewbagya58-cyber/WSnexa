@@ -3,9 +3,24 @@ import Link from 'next/link';
 import { ContactSupportForm } from '@/components/support/contact-support-form';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 
-export const metadata = {
-  title: 'Contact Support | WSNexa',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Support Desk & Inquiries',
   description: 'Reach WSNexa support desk for operational assistance, menu setup, billing, and technical guidance.',
+  alternates: {
+    canonical: '/support/contact',
+  },
+  openGraph: {
+    title: 'Support Desk & Inquiries | WSNexa',
+    description: 'Reach WSNexa support desk for operational assistance, menu setup, billing, and technical guidance.',
+    url: '/support/contact',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Support Desk & Inquiries | WSNexa',
+    description: 'Reach WSNexa support desk for operational assistance, menu setup, billing, and technical guidance.',
+  },
 };
 
 export default function ContactSupportPage() {

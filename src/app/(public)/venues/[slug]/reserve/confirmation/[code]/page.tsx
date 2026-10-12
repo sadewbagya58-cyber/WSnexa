@@ -14,6 +14,10 @@ export async function generateMetadata({ params }: ConfirmationPageProps): Promi
   return {
     title: `Reservation ${code} Confirmed | WSNexa`,
     description: `View details for reservation ${code}`,
+    robots: {
+      index: false,
+      follow: false,
+    },
   };
 }
 

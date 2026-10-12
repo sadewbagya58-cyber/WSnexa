@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { VenueDiscoveryService } from '@/server/services/venue-discovery.service';
 import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
 
 export async function generateMetadata({
   params,
@@ -13,13 +15,45 @@ export async function generateMetadata({
 
   if (!venue || !venue.is_published || venue.public_menu_enabled === false) {
     return {
-      title: 'Menu Not Found | WSNexa',
+      title: 'Menu Not Found',
+      robots: {
+        index: false,
+        follow: false,
+      },
     };
   }
 
+  const title = `Digital Menu — ${venue.display_name}`;
+  const description =
+    venue.short_description ||
+    `Browse the digital menu for ${venue.display_name} in ${venue.city}. View dining categories, dishes, prices, and modifiers on WSNexa.`;
+  const canonicalUrl = `/venues/${venue.slug}/menu`;
+
+  const ogImages = venue.cover_image_url
+    ? [{ url: venue.cover_image_url, alt: `${venue.display_name} Menu` }]
+    : venue.logo_url
+    ? [{ url: venue.logo_url, alt: `${venue.display_name} Menu` }]
+    : undefined;
+
   return {
-    title: `Menu — ${venue.display_name} | WSNexa`,
-    description: venue.short_description || `Browse the menu for ${venue.display_name} on WSNexa.`,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Digital Menu — ${venue.display_name} | WSNexa`,
+      description,
+      url: canonicalUrl,
+      type: 'website',
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `Digital Menu — ${venue.display_name} | WSNexa`,
+      description,
+      ...(ogImages ? { images: [ogImages[0].url] } : {}),
+    },
   };
 }
 
@@ -42,6 +76,14 @@ export default async function VenuePublicMenuPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-950 font-sans pb-16">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Explore', url: '/explore' },
+          { name: venue.display_name, url: `/venues/${venue.slug}` },
+          { name: 'Menu', url: `/venues/${venue.slug}/menu` },
+        ])}
+      />
       {/* Header Bar */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200 shadow-2xs">
         <div className="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between gap-4">

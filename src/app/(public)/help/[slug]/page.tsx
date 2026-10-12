@@ -20,14 +20,42 @@ export async function generateStaticParams() {
   }));
 }
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
   const article = getArticleBySlug(slug);
-  if (!article) return { title: 'Guide Not Found | WSNexa Help' };
+  if (!article) {
+    return {
+      title: 'Guide Not Found',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const title = article.title;
+  const canonicalUrl = `/help/${article.slug}`;
 
   return {
-    title: `${article.title} | WSNexa Help Center`,
+    title,
     description: article.description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${article.title} | WSNexa`,
+      description: article.description,
+      url: canonicalUrl,
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${article.title} | WSNexa`,
+      description: article.description,
+    },
   };
 }
 
@@ -44,8 +72,16 @@ export default async function PublicHelpArticlePage({ params }: ArticlePageProps
     .map((s) => getArticleBySlug(s))
     .filter((a): a is NonNullable<typeof a> => Boolean(a));
 
+  const breadcrumbs = [
+    { name: 'Home', url: '/' },
+    { name: 'Help Center', url: '/help' },
+    ...(category ? [{ name: category.title, url: `/help/category/${category.id}` }] : []),
+    { name: article.title, url: `/help/${article.slug}` },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-50 py-10 px-4 sm:px-6 lg:px-8">
+      <JsonLd data={createBreadcrumbSchema(breadcrumbs)} />
       <HelpLanguageProvider>
         <HelpArticleView
           article={article}

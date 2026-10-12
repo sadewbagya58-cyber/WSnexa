@@ -3,9 +3,19 @@ import { notFound } from 'next/navigation';
 import { getLegalDocumentBySlug } from '@/content/legal/registry';
 import { LegalDocumentView } from '@/components/legal/legal-document-view';
 
-export const metadata = {
-  title: 'Acceptable Use Policy | WSNexa',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Acceptable Use Policy',
   description: 'Standards of conduct, anti-fraud rules, and prohibited operational activities on the WSNexa hospitality platform.',
+  alternates: {
+    canonical: '/legal/acceptable-use',
+  },
+  openGraph: {
+    title: 'Acceptable Use Policy | WSNexa',
+    description: 'Standards of conduct, anti-fraud rules, and prohibited operational activities on the WSNexa hospitality platform.',
+    url: '/legal/acceptable-use',
+  },
 };
 
 export default function AcceptableUsePage() {

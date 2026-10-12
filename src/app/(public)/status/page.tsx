@@ -3,11 +3,26 @@ import Link from 'next/link';
 import { SystemStatusService, SubsystemStatus } from '@/server/services/system-status.service';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 
+import type { Metadata } from 'next';
+
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'System & Service Status | WSNexa',
+export const metadata: Metadata = {
+  title: 'System & Service Status',
   description: 'Authoritative live operational status of WSNexa platform engines, database services, and operational components.',
+  alternates: {
+    canonical: '/status',
+  },
+  openGraph: {
+    title: 'System & Service Status | WSNexa',
+    description: 'Authoritative live operational status of WSNexa platform engines, database services, and operational components.',
+    url: '/status',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'System & Service Status | WSNexa',
+    description: 'Authoritative live operational status of WSNexa platform engines, database services, and operational components.',
+  },
 };
 
 function formatStatusBadge(status: SubsystemStatus) {

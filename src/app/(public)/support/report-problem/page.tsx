@@ -2,9 +2,24 @@ import React from 'react';
 import Link from 'next/link';
 import { ReportProblemForm } from '@/components/support/report-problem-form';
 
-export const metadata = {
-  title: 'Report a Problem | WSNexa Support',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Report a Problem — Bug Tracking',
   description: 'Report software bugs, display glitches, hardware issues, or ordering workflow problems to the WSNexa team.',
+  alternates: {
+    canonical: '/support/report-problem',
+  },
+  openGraph: {
+    title: 'Report a Problem — Bug Tracking | WSNexa',
+    description: 'Report software bugs, display glitches, hardware issues, or ordering workflow problems to the WSNexa team.',
+    url: '/support/report-problem',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Report a Problem — Bug Tracking | WSNexa',
+    description: 'Report software bugs, display glitches, hardware issues, or ordering workflow problems to the WSNexa team.',
+  },
 };
 
 export default function ReportProblemPage() {

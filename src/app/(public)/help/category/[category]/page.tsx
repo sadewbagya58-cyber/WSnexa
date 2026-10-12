@@ -20,14 +20,42 @@ export async function generateStaticParams() {
   }));
 }
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { category: categoryId } = await params;
   const category = getCategoryById(categoryId);
-  if (!category) return { title: 'Category Not Found | WSNexa Help' };
+  if (!category) {
+    return {
+      title: 'Category Not Found',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const title = `${category.title} Guides`;
+  const canonicalUrl = `/help/category/${category.id}`;
 
   return {
-    title: `${category.title} Guides | WSNexa Help Center`,
+    title,
     description: category.description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${category.title} Guides | WSNexa`,
+      description: category.description,
+      url: canonicalUrl,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${category.title} Guides | WSNexa`,
+      description: category.description,
+    },
   };
 }
 
@@ -43,6 +71,13 @@ export default async function PublicHelpCategoryPage({ params }: CategoryPagePro
 
   return (
     <div className="min-h-screen bg-zinc-50 py-10 px-4 sm:px-6 lg:px-8">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Help Center', url: '/help' },
+          { name: category.title, url: `/help/category/${category.id}` },
+        ])}
+      />
       <HelpLanguageProvider>
         <HelpCategoryView
           category={category}

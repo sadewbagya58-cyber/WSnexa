@@ -4,10 +4,28 @@ import { Metadata } from 'next';
 import { SUBSCRIPTION_PRICING_CONFIG } from '@/lib/config/subscription-plans';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createSoftwareApplicationSchema, createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 export const metadata: Metadata = {
-  title: 'Subscription Pricing & Plans | WSNexa',
+  title: 'Subscription Pricing & Plans',
   description:
-    'Transparent, honest subscription pricing in Sri Lankan Rupees (LKR) for hotels, restaurants, cafes, and hospitality venues. Includes a 14-day free evaluation trial.',
+    'Transparent subscription pricing in Sri Lankan Rupees (LKR) for restaurants, cafes, hotels, and hospitality venues. Explore Starter, Growth, and Enterprise plans with a 14-day free trial.',
+  alternates: {
+    canonical: '/pricing',
+  },
+  openGraph: {
+    title: 'Subscription Pricing & Plans | WSNexa',
+    description:
+      'Transparent subscription pricing in Sri Lankan Rupees (LKR) for restaurants, cafes, hotels, and hospitality venues. Includes a 14-day free evaluation trial.',
+    url: '/pricing',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Subscription Pricing & Plans | WSNexa',
+    description:
+      'Transparent subscription pricing in Sri Lankan Rupees (LKR) for restaurants, cafes, hotels, and hospitality venues.',
+  },
 };
 
 export default function PricingPage() {
@@ -121,6 +139,15 @@ export default function PricingPage() {
 
   return (
     <div className="bg-zinc-50 min-h-screen text-zinc-950 font-sans pb-20">
+      <JsonLd
+        data={[
+          createSoftwareApplicationSchema(),
+          createBreadcrumbSchema([
+            { name: 'Home', url: '/' },
+            { name: 'Pricing', url: '/pricing' },
+          ]),
+        ]}
+      />
       {/* Hero Header */}
       <section className="bg-white border-b border-zinc-200 py-16 px-4 sm:px-6 lg:px-8 text-center">
         <div className="max-w-4xl mx-auto space-y-4">

@@ -29,6 +29,9 @@ const ctaDark =
 const ctaOutline =
   'w-full flex items-center justify-center gap-1.5 min-h-[48px] px-4 py-3 rounded-2xl bg-white hover:bg-zinc-50 active:bg-zinc-100 border border-zinc-300 text-zinc-950 font-extrabold text-xs transition-colors touch-manipulation focus:outline-none focus:ring-2 focus:ring-zinc-300 focus:ring-offset-1';
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createVenueSchema, createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 interface VenuePageProps {
   params: Promise<{ slug: string }>;
 }
@@ -36,11 +39,48 @@ interface VenuePageProps {
 export async function generateMetadata({ params }: VenuePageProps): Promise<Metadata> {
   const { slug } = await params;
   const venue = await VenueDiscoveryService.getVenueBySlug(slug);
-  if (!venue) return { title: 'Venue Not Found | WSNexa' };
+
+  if (!venue || !venue.is_published) {
+    return {
+      title: 'Venue Not Found',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const title = `${venue.display_name} — Dining & Venue Details`;
+  const description =
+    venue.short_description ||
+    `Discover ${venue.display_name} in ${venue.city}. View digital menu, order via QR, and reserve dining tables on WSNexa.`;
+  const canonicalUrl = `/venues/${venue.slug}`;
+
+  const ogImages = venue.cover_image_url
+    ? [{ url: venue.cover_image_url, alt: venue.display_name }]
+    : venue.logo_url
+    ? [{ url: venue.logo_url, alt: venue.display_name }]
+    : undefined;
 
   return {
-    title: `${venue.display_name} | WSNexa Venue`,
-    description: venue.short_description || `Discover ${venue.display_name} in ${venue.city}`,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${venue.display_name} | WSNexa`,
+      description,
+      url: canonicalUrl,
+      type: 'website',
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${venue.display_name} | WSNexa`,
+      description,
+      ...(ogImages ? { images: [ogImages[0].url] } : {}),
+    },
   };
 }
 
@@ -98,6 +138,16 @@ export default async function PublicVenuePage({ params }: VenuePageProps) {
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between overflow-x-hidden max-w-full">
+      <JsonLd
+        data={[
+          createVenueSchema(venue),
+          createBreadcrumbSchema([
+            { name: 'Home', url: '/' },
+            { name: 'Explore', url: '/explore' },
+            { name: venue.display_name, url: `/venues/${venue.slug}` },
+          ]),
+        ]}
+      />
 
       {/* ── Hero Cover ───────────────────────────────────────────────── */}
       <div className="relative h-56 sm:h-72 w-full bg-zinc-950 overflow-hidden border-b border-zinc-200">

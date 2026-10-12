@@ -9,10 +9,28 @@ import { VenueCarousel } from '@/components/discovery/venue-carousel';
 import { ExploreViewSwitcher } from '@/components/discovery/explore-view-switcher';
 import { PublicBottomNav } from '@/components/discovery/public-bottom-nav';
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 export const metadata: Metadata = {
-  title: 'Explore Hospitality Venues & In-App Maps | WSNexa',
+  title: 'Explore Hospitality Venues & In-App Maps',
   description:
     'Discover nearby restaurants, cafes, hotels, resorts, and villas with in-app directions, menus, table reservations, and verified reviews on WSNexa.',
+  alternates: {
+    canonical: '/explore',
+  },
+  openGraph: {
+    title: 'Explore Hospitality Venues & In-App Maps | WSNexa',
+    description:
+      'Discover nearby restaurants, cafes, hotels, resorts, and villas with in-app directions, menus, table reservations, and verified reviews on WSNexa.',
+    url: '/explore',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Explore Hospitality Venues & In-App Maps | WSNexa',
+    description:
+      'Discover nearby restaurants, cafes, hotels, resorts, and villas with in-app directions, menus, table reservations, and verified reviews on WSNexa.',
+  },
 };
 
 import { VenueRankingMetrics } from '@/lib/validation/ranking';
@@ -154,6 +172,12 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased flex flex-col justify-between overflow-x-hidden max-w-full">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Explore Venues', url: '/explore' },
+        ])}
+      />
       {/* ── Main Explore Experience ─────────────────────────────────── */}
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 space-y-7 max-w-full">
 

@@ -3,10 +3,29 @@ import Link from 'next/link';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
-export const metadata = {
-  title: 'About WSNexa | Smart Hospitality. Simplified.',
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createOrganizationSchema, createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
+export const metadata: Metadata = {
+  title: 'About Us — Smart Hospitality',
   description:
-    'WSNexa is a modern hospitality management platform designed to simplify restaurant, hotel, cafe, and resort operations.',
+    'Learn about WSNexa, the integrated hospitality operating system engineered to eliminate operational friction across restaurants, cafes, hotels, and resorts.',
+  alternates: {
+    canonical: '/about',
+  },
+  openGraph: {
+    title: 'About Us — Smart Hospitality | WSNexa',
+    description:
+      'Learn about WSNexa, the integrated hospitality operating system engineered to eliminate operational friction across restaurants, cafes, hotels, and resorts.',
+    url: '/about',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'About Us — Smart Hospitality | WSNexa',
+    description:
+      'Learn about WSNexa, the integrated hospitality operating system engineered to eliminate operational friction across restaurants, cafes, hotels, and resorts.',
+  },
 };
 
 export default function AboutPage() {
@@ -32,6 +51,15 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 py-12 sm:py-16 px-4 sm:px-6 lg:px-8">
+      <JsonLd
+        data={[
+          createOrganizationSchema(),
+          createBreadcrumbSchema([
+            { name: 'Home', url: '/' },
+            { name: 'About', url: '/about' },
+          ]),
+        ]}
+      />
       <div className="max-w-5xl mx-auto space-y-16">
         {/* Hero Section */}
         <section className="text-center space-y-4 max-w-3xl mx-auto">

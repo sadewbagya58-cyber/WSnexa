@@ -1,7 +1,27 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { AccountService, MinimalUserProfile, MinimalMembership } from '@/server/services/account.service';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createOrganizationSchema, createSoftwareApplicationSchema } from '@/lib/seo/structured-data';
+
+export const metadata: Metadata = {
+  title: {
+    absolute: 'WSNexa — Smart Hospitality. Simplified.',
+  },
+  description:
+    'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues. Streamline dine-in table QR ordering, kitchen display systems, waiter apps, and billing.',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: 'WSNexa — Smart Hospitality. Simplified.',
+    description:
+      'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues. Streamline dine-in table QR ordering, kitchen display systems, waiter apps, and billing.',
+    url: '/',
+  },
+};
 
 export default async function Home() {
   const supabase = await createClient();
@@ -144,6 +164,7 @@ export default async function Home() {
 
   return (
     <div className="bg-white text-zinc-950 font-sans selection:bg-zinc-950 selection:text-white">
+      <JsonLd data={[createOrganizationSchema(), createSoftwareApplicationSchema()]} />
       {/* Hero Section */}
       <section className="mx-auto max-w-7xl px-4 pt-16 pb-20 sm:px-6 sm:pt-24 sm:pb-28 lg:px-8 text-center">
         <div className="mx-auto max-w-4xl space-y-8">

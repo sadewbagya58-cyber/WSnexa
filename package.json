@@ -16,6 +16,7 @@
     "cleanup:demo-venues": "tsx scripts/cleanup-demo-venues.ts",
     "verify:auth": "tsx scripts/verify-auth.ts",
     "verify:auth-domain": "tsx scripts/verify-auth-domain-migration.ts",
+    "verify:seo": "tsx scripts/verify-seo.ts",
     "verify:tenant": "tsx scripts/verify-tenant.ts",
     "verify:onboarding": "tsx scripts/verify-onboarding.ts",
     "verify:menu": "tsx scripts/verify-menu.ts",

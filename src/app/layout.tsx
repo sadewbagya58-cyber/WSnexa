@@ -4,10 +4,83 @@ import { RouteProgress } from '@/components/ui/route-progress';
 import { OfflineBanner } from '@/components/mobile/offline-banner';
 import { ServiceWorkerRegister } from '@/components/mobile/service-worker-register';
 
+import { PRODUCTION_CANONICAL_URL } from '@/lib/utils/canonical-url';
+
 export const metadata: Metadata = {
-  title: 'WSNexa — Smart Hospitality. Simplified.',
+  metadataBase: new URL(PRODUCTION_CANONICAL_URL),
+  title: {
+    default: 'WSNexa — Smart Hospitality. Simplified.',
+    template: '%s | WSNexa',
+  },
   description:
-    'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
+    'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues. Streamline dine-in table QR ordering, kitchen display systems, waiter apps, and billing.',
+  applicationName: 'WSNexa',
+  authors: [{ name: 'WSNexa' }],
+  generator: 'Next.js',
+  keywords: [
+    'hospitality software',
+    'restaurant POS',
+    'QR table ordering',
+    'digital menu',
+    'kitchen display system',
+    'KDS',
+    'waiter ordering app',
+    'hotel dining management',
+    'hospitality SaaS',
+    'WSNexa',
+  ],
+  referrer: 'origin-when-cross-origin',
+  creator: 'WSNexa',
+  publisher: 'WSNexa',
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  alternates: {
+    canonical: './',
+  },
+  openGraph: {
+    title: {
+      default: 'WSNexa — Smart Hospitality. Simplified.',
+      template: '%s | WSNexa',
+    },
+    description:
+      'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
+    url: PRODUCTION_CANONICAL_URL,
+    siteName: 'WSNexa',
+    locale: 'en_US',
+    type: 'website',
+    images: [
+      {
+        url: '/brand/wsnexa-full-logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'WSNexa — Smart Hospitality. Simplified.',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: {
+      default: 'WSNexa — Smart Hospitality. Simplified.',
+      template: '%s | WSNexa',
+    },
+    description:
+      'Multi-tenant Hospitality Operating System for restaurants, cafes, resorts, food courts, and hospitality venues.',
+    images: ['/brand/wsnexa-full-logo.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   icons: {
     icon: [
       { url: '/brand/ws-mark.png', sizes: 'any', type: 'image/png' },

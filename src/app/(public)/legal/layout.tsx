@@ -1,10 +1,21 @@
 import React from 'react';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 
-export const metadata = {
-  title: 'Legal & Policy Center | WSNexa',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Legal & Policy Center',
   description:
     'Authoritative terms, privacy policies, acceptable use standards, and compliance information for WSNexa hospitality platform.',
+  alternates: {
+    canonical: '/legal',
+  },
+  openGraph: {
+    title: 'Legal & Policy Center | WSNexa',
+    description:
+      'Authoritative terms, privacy policies, acceptable use standards, and compliance information for WSNexa hospitality platform.',
+    url: '/legal',
+  },
 };
 
 export default function LegalLayout({

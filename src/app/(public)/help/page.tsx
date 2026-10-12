@@ -4,10 +4,29 @@ import { getAllCategories, getPopularArticles, getTroubleshootingArticles } from
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
-export const metadata = {
-  title: 'Help Center & Documentation | WSNexa',
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
+export const metadata: Metadata = {
+  title: 'Help Center & Documentation',
   description:
     'Comprehensive guides, operational manuals, setup tutorials, and troubleshooting for the WSNexa hospitality platform.',
+  alternates: {
+    canonical: '/help',
+  },
+  openGraph: {
+    title: 'Help Center & Documentation | WSNexa',
+    description:
+      'Comprehensive guides, operational manuals, setup tutorials, and troubleshooting for the WSNexa hospitality platform.',
+    url: '/help',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Help Center & Documentation | WSNexa',
+    description:
+      'Comprehensive guides, operational manuals, setup tutorials, and troubleshooting for the WSNexa hospitality platform.',
+  },
 };
 
 export default function PublicHelpCenterPage() {
@@ -17,6 +36,12 @@ export default function PublicHelpCenterPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 pb-16">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Help Center', url: '/help' },
+        ])}
+      />
       {/* Hero Header */}
       <section className="bg-zinc-950 text-white py-16 px-4 sm:px-6 lg:px-8 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto text-center space-y-4">

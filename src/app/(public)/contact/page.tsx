@@ -3,14 +3,43 @@ import Link from 'next/link';
 import { OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 import { WSNexaLogo } from '@/components/brand/wsnexa-logo';
 
-export const metadata = {
-  title: 'Contact WSNexa | Corporate & Support Contact',
-  description: 'Connect with WSNexa for general business inquiries, customer support desk, or security disclosures.',
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createOrganizationSchema, createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
+export const metadata: Metadata = {
+  title: 'Contact Us — Support & Inquiries',
+  description:
+    'Connect with WSNexa for general business inquiries, customer support desk, pilot venue onboarding, or security disclosures.',
+  alternates: {
+    canonical: '/contact',
+  },
+  openGraph: {
+    title: 'Contact Us — Support & Inquiries | WSNexa',
+    description:
+      'Connect with WSNexa for general business inquiries, customer support desk, pilot venue onboarding, or security disclosures.',
+    url: '/contact',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Contact Us — Support & Inquiries | WSNexa',
+    description:
+      'Connect with WSNexa for general business inquiries, customer support desk, pilot venue onboarding, or security disclosures.',
+  },
 };
 
 export default function ContactPage() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 py-12 sm:py-16 px-4 sm:px-6 lg:px-8">
+      <JsonLd
+        data={[
+          createOrganizationSchema(),
+          createBreadcrumbSchema([
+            { name: 'Home', url: '/' },
+            { name: 'Contact', url: '/contact' },
+          ]),
+        ]}
+      />
       <div className="max-w-4xl mx-auto space-y-12">
         {/* Header */}
         <div className="text-center space-y-3 max-w-2xl mx-auto">

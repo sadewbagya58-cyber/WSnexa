@@ -3,9 +3,19 @@ import { notFound } from 'next/navigation';
 import { getLegalDocumentBySlug } from '@/content/legal/registry';
 import { LegalDocumentView } from '@/components/legal/legal-document-view';
 
-export const metadata = {
-  title: 'Subscription & Billing Policy | WSNexa',
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Subscription & Billing Policy',
   description: 'Pre-commercial billing terms, indicative Starter/Growth/Enterprise configurations in LKR, payment processing status, and renewal rules.',
+  alternates: {
+    canonical: '/legal/subscription-billing',
+  },
+  openGraph: {
+    title: 'Subscription & Billing Policy | WSNexa',
+    description: 'Pre-commercial billing terms, indicative Starter/Growth/Enterprise configurations in LKR, payment processing status, and renewal rules.',
+    url: '/legal/subscription-billing',
+  },
 };
 
 export default function SubscriptionBillingPage() {

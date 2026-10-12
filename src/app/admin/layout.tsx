@@ -3,11 +3,18 @@ import { redirect } from 'next/navigation';
 import { requireSuperAdmin } from '@/server/auth/super-admin';
 import { AdminNavbar } from './admin-navbar';
 
+import type { Metadata } from 'next';
+
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'WSNexa Super Admin — Platform Control',
   description: 'Enterprise administration, venue management, security controls, and diagnostic operations.',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
 };
 
 export default async function AdminLayout({

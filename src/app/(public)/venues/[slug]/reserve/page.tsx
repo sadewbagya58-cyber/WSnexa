@@ -8,6 +8,9 @@ import { VenueDiscoveryService } from '@/server/services/venue-discovery.service
 import { ReservationSettingsService } from '@/server/reservations/reservation-settings.service';
 import { GuestReservationBookingClient } from '@/components/discovery/guest-reservation-booking-client';
 
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
 interface ReservePageProps {
   params: Promise<{ slug: string }>;
 }
@@ -15,11 +18,48 @@ interface ReservePageProps {
 export async function generateMetadata({ params }: ReservePageProps): Promise<Metadata> {
   const { slug } = await params;
   const venue = await VenueDiscoveryService.getVenueBySlug(slug);
-  if (!venue) return { title: 'Venue Not Found | WSNexa' };
+
+  if (!venue || !venue.is_published || venue.public_reservations_enabled === false) {
+    return {
+      title: 'Reservations Not Available',
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const title = `Reserve a Table — ${venue.display_name}`;
+  const description =
+    venue.short_description ||
+    `Book a dining table at ${venue.display_name} in ${venue.city}. Reserve online with instant confirmation on WSNexa.`;
+  const canonicalUrl = `/venues/${venue.slug}/reserve`;
+
+  const ogImages = venue.cover_image_url
+    ? [{ url: venue.cover_image_url, alt: `Reserve at ${venue.display_name}` }]
+    : venue.logo_url
+    ? [{ url: venue.logo_url, alt: `Reserve at ${venue.display_name}` }]
+    : undefined;
 
   return {
-    title: `Reserve a Table at ${venue.display_name} | WSNexa`,
-    description: `Book your table at ${venue.display_name} in ${venue.city}`,
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `Reserve a Table — ${venue.display_name} | WSNexa`,
+      description,
+      url: canonicalUrl,
+      type: 'website',
+      ...(ogImages ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `Reserve a Table — ${venue.display_name} | WSNexa`,
+      description,
+      ...(ogImages ? { images: [ogImages[0].url] } : {}),
+    },
   };
 }
 
@@ -109,6 +149,14 @@ export default async function ReservePage({ params }: ReservePageProps) {
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans antialiased text-zinc-950">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Explore', url: '/explore' },
+          { name: venue.display_name, url: `/venues/${venue.slug}` },
+          { name: 'Reserve', url: `/venues/${venue.slug}/reserve` },
+        ])}
+      />
       <GuestReservationBookingClient
         venue={{
           display_name: venue.display_name,

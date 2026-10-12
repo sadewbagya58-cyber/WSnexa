@@ -2,10 +2,29 @@ import React from 'react';
 import Link from 'next/link';
 import { getAllLegalDocuments, OFFICIAL_BUSINESS_INFO } from '@/content/legal/registry';
 
-export const metadata = {
-  title: 'Legal & Policy Directory | WSNexa',
+import type { Metadata } from 'next';
+import { JsonLd } from '@/components/seo/json-ld';
+import { createBreadcrumbSchema } from '@/lib/seo/structured-data';
+
+export const metadata: Metadata = {
+  title: 'Legal & Policy Directory',
   description:
     'Complete directory of legal policies, data protection commitments, acceptable use standards, and terms of service for WSNexa.',
+  alternates: {
+    canonical: '/legal',
+  },
+  openGraph: {
+    title: 'Legal & Policy Directory | WSNexa',
+    description:
+      'Complete directory of legal policies, data protection commitments, acceptable use standards, and terms of service for WSNexa.',
+    url: '/legal',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Legal & Policy Directory | WSNexa',
+    description:
+      'Complete directory of legal policies, data protection commitments, acceptable use standards, and terms of service for WSNexa.',
+  },
 };
 
 export default function LegalHubPage() {
@@ -13,6 +32,12 @@ export default function LegalHubPage() {
 
   return (
     <div className="bg-white rounded-3xl border border-zinc-200 p-6 sm:p-10 shadow-xs space-y-10">
+      <JsonLd
+        data={createBreadcrumbSchema([
+          { name: 'Home', url: '/' },
+          { name: 'Legal Directory', url: '/legal' },
+        ])}
+      />
       {/* Header */}
       <div className="space-y-3 border-b border-zinc-200 pb-6">
         <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-700 text-[11px] font-extrabold uppercase tracking-wider">

@@ -87,7 +87,8 @@
     "verify:v1-notifications": "tsx scripts/verify-v1-notifications.ts",
     "verify:v1-subscriptions": "tsx scripts/verify-v1-subscriptions.ts",
     "verify:v1-subscription-payments": "tsx scripts/verify-v1-subscription-payments.ts",
-    "verify:manual-bank-transfer": "tsx scripts/verify-manual-bank-transfer.ts"
+    "verify:manual-bank-transfer": "tsx scripts/verify-manual-bank-transfer.ts",
+    "verify:notifications": "tsx scripts/verify-notifications.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

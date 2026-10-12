@@ -6,6 +6,7 @@ import {
   SubscriptionPlanLimits,
   getPlanDefinition,
 } from '@/lib/config/subscription-plans';
+import { EmailService } from '@/server/email/email.service';
 
 export const TRIAL_ENTITLEMENT_LIMITS: SubscriptionPlanLimits = {
   maxBranches: 3,
@@ -582,6 +583,66 @@ export class SubscriptionService {
   }
 
   /**
+   * Dispatches transactional lifecycle emails (Activation/Cancellation) to Business Admin
+   * (Wsnexaofficial@gmail.com) and the Tenant Owner.
+   */
+  private static async sendSubscriptionLifecycleEmail(
+    type: 'activated' | 'cancelled',
+    businessId: string,
+    planCode: SubscriptionPlanCode,
+    options?: { periodEndsAt?: string; reason?: string; activationSource?: string }
+  ): Promise<void> {
+    try {
+      const admin = createAdminClient();
+      const { data: business } = await admin
+        .from('businesses')
+        .select('name')
+        .eq('id', businessId)
+        .maybeSingle();
+
+      const { data: membership } = await admin
+        .from('business_memberships')
+        .select('user_id')
+        .eq('business_id', businessId)
+        .in('role', ['business_owner', 'owner'])
+        .eq('membership_status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      let ownerEmail: string | undefined;
+      if (membership?.user_id) {
+        const { data: authUser } = await admin.auth.admin.getUserById(membership.user_id);
+        ownerEmail = authUser?.user?.email;
+      }
+
+      if (type === 'activated') {
+        await EmailService.sendSubscriptionActivatedEmails({
+          businessId,
+          businessName: business?.name,
+          ownerEmail,
+          planCode,
+          periodEndsAt: options?.periodEndsAt || new Date().toISOString(),
+          activationSource: options?.activationSource || 'manual_admin',
+          timestamp: new Date().toISOString(),
+        });
+      } else if (type === 'cancelled') {
+        const now = new Date().toISOString();
+        await EmailService.sendSubscriptionCancelledEmails({
+          businessId,
+          businessName: business?.name,
+          ownerEmail,
+          planCode,
+          cancelledAt: now,
+          reason: options?.reason || 'Cancelled by administrator',
+          timestamp: now,
+        });
+      }
+    } catch (err) {
+      console.warn(`[SubscriptionService] Subscription ${type} email dispatch failed (non-fatal):`, err);
+    }
+  }
+
+  /**
    * Manually activates a commercial subscription for a business.
    */
   static async manualActivateSubscription({
@@ -656,6 +717,11 @@ export class SubscriptionService {
       'Subscription Activated',
       `Your WSNexa ${getPlanDefinition(planCode).name} subscription has been activated until ${periodEnd.toLocaleDateString()}.`
     );
+
+    await this.sendSubscriptionLifecycleEmail('activated', businessId, planCode, {
+      periodEndsAt: periodEnd.toISOString(),
+      activationSource: reason,
+    });
 
     return updated as BusinessSubscriptionRecord;
   }
@@ -749,6 +815,11 @@ export class SubscriptionService {
       'Subscription Payment Verified',
       `Your WSNexa ${getPlanDefinition(planCode).name} subscription payment was verified and active until ${periodEnd.toLocaleDateString()}.`
     );
+
+    await this.sendSubscriptionLifecycleEmail('activated', businessId, planCode, {
+      periodEndsAt: periodEnd.toISOString(),
+      activationSource: paymentPurpose || 'verified_gateway_payment',
+    });
 
     return updated as BusinessSubscriptionRecord;
   }
@@ -1189,6 +1260,10 @@ export class SubscriptionService {
       newStatus: 'cancelled',
       previousPlan: oldSub.plan_code,
       newPlan: oldSub.plan_code,
+      reason,
+    });
+
+    await this.sendSubscriptionLifecycleEmail('cancelled', businessId, oldSub.plan_code, {
       reason,
     });
 

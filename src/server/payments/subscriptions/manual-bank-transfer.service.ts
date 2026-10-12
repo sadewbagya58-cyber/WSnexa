@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NotificationService } from '@/server/services/notification.service';
+import { EmailService } from '@/server/email/email.service';
 
 export interface SubmitBankTransferProofInput {
   paymentId: string;
@@ -92,6 +93,44 @@ export class ManualBankTransferService {
         normalized_reference: string;
       };
 
+      // Non-blocking business notification email dispatch to Wsnexaofficial@gmail.com
+      try {
+        const admin = createAdminClient();
+        const { data: payment } = await admin
+          .from('business_subscription_payments')
+          .select('amount_lkr, plan_code')
+          .eq('id', paymentId)
+          .maybeSingle();
+
+        const { data: business } = await admin
+          .from('businesses')
+          .select('name')
+          .eq('id', businessId)
+          .maybeSingle();
+
+        let signedReceiptUrl: string | undefined;
+        try {
+          const url = await this.getSignedReceiptUrl(filePath);
+          if (url) signedReceiptUrl = url;
+        } catch {
+          // Non-fatal
+        }
+
+        await EmailService.sendBankTransferSubmittedAdminEmail({
+          paymentId,
+          businessId,
+          businessName: business?.name,
+          amountLkr: payment?.amount_lkr || 0,
+          planCode: payment?.plan_code || 'subscription',
+          rawReference: rawReference.trim(),
+          filePath,
+          notes: notes ? notes.trim() : undefined,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (emailErr) {
+        console.warn('[ManualBankTransferService.submitProof] Admin email dispatch failed (non-fatal):', emailErr);
+      }
+
       return {
         success: res.success,
         claimId: res.claim_id,
@@ -181,6 +220,47 @@ export class ManualBankTransferService {
       console.warn('[ManualBankTransferService.approvePayment] Notification dispatch failed (non-fatal):', notifErr);
     }
 
+    // Non-blocking transactional email dispatch to Business Admin (Wsnexaofficial@gmail.com) and Tenant Owner
+    try {
+      const admin = createAdminClient();
+      const { data: business } = await admin
+        .from('businesses')
+        .select('name')
+        .eq('id', res.business_id)
+        .maybeSingle();
+
+      const { data: membership } = await admin
+        .from('business_memberships')
+        .select('user_id')
+        .eq('business_id', res.business_id)
+        .in('role', ['business_owner', 'owner'])
+        .eq('membership_status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      let ownerEmail: string | undefined;
+      if (membership?.user_id) {
+        const { data: authUser } = await admin.auth.admin.getUserById(membership.user_id);
+        ownerEmail = authUser?.user?.email;
+      }
+
+      await EmailService.sendBankTransferSettledEmails({
+        paymentId: res.payment_id,
+        businessId: res.business_id,
+        businessName: business?.name,
+        planCode: res.plan_code,
+        amountLkr: input.expectedAmountLkr,
+        periodStartsAt: res.period_starts_at,
+        periodEndsAt: res.period_ends_at,
+        reconciliationNote: input.reconciliationNote.trim(),
+        externalBankStatementRef: input.externalBankStatementRef.trim(),
+        ownerEmail,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (emailErr) {
+      console.warn('[ManualBankTransferService.approvePayment] Email dispatch failed (non-fatal):', emailErr);
+    }
+
     return {
       success: res.success,
       paymentId: res.payment_id,
@@ -240,6 +320,42 @@ export class ManualBankTransferService {
       });
     } catch (notifErr) {
       console.warn('[ManualBankTransferService.rejectPayment] Notification dispatch failed (non-fatal):', notifErr);
+    }
+
+    // Non-blocking transactional email dispatch to Business Admin (Wsnexaofficial@gmail.com) and Tenant Owner
+    try {
+      const admin = createAdminClient();
+      const { data: business } = await admin
+        .from('businesses')
+        .select('name')
+        .eq('id', res.business_id)
+        .maybeSingle();
+
+      const { data: membership } = await admin
+        .from('business_memberships')
+        .select('user_id')
+        .eq('business_id', res.business_id)
+        .in('role', ['business_owner', 'owner'])
+        .eq('membership_status', 'active')
+        .limit(1)
+        .maybeSingle();
+
+      let ownerEmail: string | undefined;
+      if (membership?.user_id) {
+        const { data: authUser } = await admin.auth.admin.getUserById(membership.user_id);
+        ownerEmail = authUser?.user?.email;
+      }
+
+      await EmailService.sendBankTransferRejectedEmails({
+        paymentId: res.payment_id,
+        businessId: res.business_id,
+        businessName: business?.name,
+        ownerEmail,
+        rejectionReason: input.rejectionReason.trim(),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (emailErr) {
+      console.warn('[ManualBankTransferService.rejectPayment] Email dispatch failed (non-fatal):', emailErr);
     }
 
     return {

@@ -4,6 +4,7 @@ import { ProviderVerificationResult } from './subscription-payment-provider';
 import { PaymentProviderError } from './provider-registry';
 import { assertLegalPaymentStateTransition } from './payment-state-machine';
 import { SubscriptionService } from '@/server/services/subscription.service';
+import { EmailService } from '@/server/email/email.service';
 
 export interface SettlementOptions {
   paymentIntentId?: string;
@@ -177,6 +178,45 @@ export class SubscriptionPaymentSettlementService {
         paymentPurpose: paymentIntent.payment_purpose || 'new_subscription',
         actorId: paymentIntent.initiated_by_user_id || 'gateway_webhook',
       });
+    } else if (verification.paymentStatus === 'failed') {
+      // Non-blocking email dispatch to Business Admin (Wsnexaofficial@gmail.com) and Tenant Owner
+      try {
+        const { data: business } = await admin
+          .from('businesses')
+          .select('name')
+          .eq('id', paymentIntent.business_id)
+          .maybeSingle();
+
+        const { data: membership } = await admin
+          .from('business_memberships')
+          .select('user_id')
+          .eq('business_id', paymentIntent.business_id)
+          .in('role', ['business_owner', 'owner'])
+          .eq('membership_status', 'active')
+          .limit(1)
+          .maybeSingle();
+
+        let ownerEmail: string | undefined;
+        if (membership?.user_id) {
+          const { data: authUser } = await admin.auth.admin.getUserById(membership.user_id);
+          ownerEmail = authUser?.user?.email;
+        }
+
+        await EmailService.sendSubscriptionPaymentFailedEmails({
+          paymentId: paymentIntent.id,
+          businessId: paymentIntent.business_id,
+          businessName: business?.name,
+          ownerEmail,
+          planCode: paymentIntent.plan_code,
+          amountLkr: paymentIntent.amount_lkr,
+          failureCode: verification.failureCode,
+          failureMessage: verification.failureMessage || 'Card payment declined',
+          provider: verification.provider || 'payhere',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (emailErr) {
+        console.warn('[SubscriptionPaymentSettlementService] Payment failure email dispatch failed (non-fatal):', emailErr);
+      }
     }
 
     return {

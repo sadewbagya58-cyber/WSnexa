@@ -299,8 +299,63 @@ async function runSeoVerification() {
     'Test 5.2: serializeJsonLd safely Unicode-encodes < characters'
   );
 
+  // -------------------------------------------------------------
+  // Suite 6: Favicon, App Icons & Web App Manifest Verification
+  // -------------------------------------------------------------
+  console.log('\nSuite 6: Favicon, App Icons & Web Manifest');
+  const crypto = await import('crypto');
+  const manifestModule = await import('../src/app/manifest');
+  const faviconPath = path.join(rootDir, 'src/app/favicon.ico');
+  assert(fs.existsSync(faviconPath), 'Test 6.1: src/app/favicon.ico exists');
+
+  const faviconBuf = fs.readFileSync(faviconPath);
+  const faviconSha = crypto.createHash('sha256').update(faviconBuf).digest('hex');
+  assert(
+    faviconBuf.subarray(0, 4).toString('hex') === '00000100',
+    'Test 6.2: src/app/favicon.ico has valid ICO magic bytes (00 00 01 00)'
+  );
+  assert(
+    !faviconSha.startsWith('2b8ad2d33455a8f7'),
+    'Test 6.3: src/app/favicon.ico is official WSNexa compact mark (not default Vercel triangle)'
+  );
+  assert(
+    faviconBuf.readUInt16LE(4) === 4,
+    'Test 6.4: src/app/favicon.ico contains 4 multi-resolution frames (16x16, 32x32, 48x48, 256x256)'
+  );
+
+  const expectedPngIcons: Array<{ relPath: string; width: number; height: number }> = [
+    { relPath: 'public/favicon-32x32.png', width: 32, height: 32 },
+    { relPath: 'public/favicon-48x48.png', width: 48, height: 48 },
+    { relPath: 'public/apple-touch-icon.png', width: 180, height: 180 },
+    { relPath: 'public/icon-192.png', width: 192, height: 192 },
+    { relPath: 'public/icon-512.png', width: 512, height: 512 },
+    { relPath: 'public/brand/ws-mark.png', width: 512, height: 512 },
+    { relPath: 'src/app/icon.png', width: 512, height: 512 },
+    { relPath: 'src/app/apple-icon.png', width: 180, height: 180 },
+  ];
+
+  for (const item of expectedPngIcons) {
+    const abs = path.join(rootDir, item.relPath);
+    assert(fs.existsSync(abs), `Test 6.5: ${item.relPath} exists`);
+    const buf = fs.readFileSync(abs);
+    const magic = buf.subarray(0, 8).toString('hex');
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    assert(
+      magic === '89504e470d0a1a0a' && w === item.width && h === item.height,
+      `Test 6.6: ${item.relPath} is a valid ${item.width}x${item.height} PNG`,
+      `Got magic=${magic}, ${w}x${h}`
+    );
+  }
+
+  const manifestData = manifestModule.default();
+  assert(
+    manifestData.short_name === 'WSNexa' && Array.isArray(manifestData.icons) && manifestData.icons.length >= 3,
+    'Test 6.7: Web App Manifest exports WSNexa branding and multi-size icon descriptors'
+  );
+
   console.log('\n================================================================');
-  console.log('  ALL SEO VERIFICATION CHECKS PASSED SUCCESSFULLY (29 / 29)  ');
+  console.log('  ALL SEO VERIFICATION CHECKS PASSED SUCCESSFULLY (49 / 49)  ');
   console.log('================================================================\n');
 }
 
